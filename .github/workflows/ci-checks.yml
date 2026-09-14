@@ -1,0 +1,192 @@
+name: "CI Checks"
+
+# specs/0023 + specs/0028 — automatic quality gate on PRs. This is the ONLY
+# auto-running workflow; the old meetily build/release workflows were removed in
+# specs/0028 (release.sh is now the single source of truth for cutting releases).
+# Runs lint + tests so regressions like the recording-lifecycle data-loss/merge
+# bugs (specs/0019 WS6.1/WS6.7) are caught before merge.
+#
+# IMPORTANT — CI-green != transcription verified. The record -> live-transcript ->
+# summary critical path depends on the Parakeet/diarization models, which are NOT
+# downloaded on CI runners, so the model-gated `transcription_engine` test SKIPS
+# here and the `say`-synthesized audio-accuracy tests (vad_filter,
+# pipeline_integration) are environment-sensitive (their VAD thresholds vary by
+# macOS version) and run locally per CLAUDE.md, not as a CI gate. The end-to-end
+# transcription smoke test is a manual step — see CONTRIBUTING.md "Definition of
+# Done" gates 3-4. CI here proves the deterministic subset (lib unit tests +
+# db_lifecycle + diarization_persistence) plus lint/format/clippy stay green.
+
+on:
+  # Scoped to PRs into main only (specs/0028, tightened 2026-07-04): every change
+  # reaches main through a PR, so the post-merge `push: main` run was paying for
+  # the same premium macOS job twice per change. Feature-branch pushes never ran
+  # here either (macOS runner cost). Use workflow_dispatch for an ad-hoc main run.
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    name: Frontend lint + unit tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          # Kept explicit as a belt-and-suspenders pin alongside the
+          # `packageManager` field in frontend/package.json (which corepack and
+          # local dev read). pnpm 11 matches lockfileVersion 9.0.
+          version: 11
+          run_install: false
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: frontend/.nvmrc
+          cache: 'pnpm'
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      # pnpm-workspace.yaml is gitignored (it holds machine-local build-script
+      # approvals), so recreate the approval CI needs: esbuild (Vitest) + the
+      # toolchain's unrs-resolver. Without this, pnpm ignores their build scripts
+      # and install/test fails with ERR_PNPM_IGNORED_BUILDS. pnpm 11.9+ reads the
+      # `allowBuilds` map; `onlyBuiltDependencies` is kept for older pnpm.
+      - name: Approve native build scripts
+        run: |
+          cat > pnpm-workspace.yaml <<'EOF'
+          onlyBuiltDependencies:
+            - esbuild
+            - unrs-resolver
+          allowBuilds:
+            esbuild: true
+            unrs-resolver: true
+          EOF
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Unit tests
+        run: pnpm test
+
+      # specs/0057: no raw Tailwind palette classes in the UI — every colour goes
+      # through the semantic tokens so the Faceplate/Deck themes stay in parity.
+      # The job's working-directory is `frontend`, hence the `../` prefix.
+      - name: Semantic-token gate (specs/0057)
+        run: ../scripts/check-off-token-colors.sh
+
+      # Non-blocking supply-chain audit (specs/0028). Advisories are surfaced but
+      # do not fail the build yet — tighten to `--audit-level=high` once the tree
+      # is clean. `|| true` keeps it informational.
+      - name: pnpm audit (non-blocking)
+        run: pnpm audit --prod || true
+
+  # rustfmt never compiles anything, so it doesn't need the 10x-billed macOS
+  # runner — a bare ubuntu box with the pinned toolchain gives the same verdict
+  # in under a minute (2026-07-04 cost trim).
+  rustfmt:
+    name: Rustfmt check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # rustup reads rust-toolchain.toml (channel + rustfmt component) when
+      # cargo first runs, same as the macOS job below.
+      - name: Install Rust (pinned via rust-toolchain.toml)
+        uses: dtolnay/rust-toolchain@stable
+
+      # Cheap consistency gate (specs/0028): fails on unformatted Rust.
+      - name: Rustfmt check
+        working-directory: frontend/src-tauri
+        run: cargo fmt --check
+
+      # File-size ratchet (specs/0042 WS6): no production source file over
+      # 800 lines unless allowlisted, and allowlisted files may only shrink.
+      - name: File-size ratchet
+        run: scripts/check-file-size.sh
+
+  rust:
+    name: Rust clippy + lifecycle tests (macOS/Metal)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # rust-toolchain.toml at the repo root pins the channel + components; this
+      # action honours it. clippy/rustfmt are also listed there.
+      - name: Install Rust (pinned via rust-toolchain.toml)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      # The ort (onnxruntime) and sherpa-rs build scripts download their dylibs
+      # into ~/Library/Caches and record those ABSOLUTE paths in target/'s build
+      # fingerprints. Caching target/ without those dirs makes cache-hit runs
+      # skip the downloads and then fail at link time with
+      # "ld: library 'onnxruntime.…' not found" — so they must travel together.
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            ~/Library/Caches/ort.pyke.io
+            ~/Library/Caches/sherpa-rs
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      # The Tauri context macro validates the externalBin sidecars at compile time,
+      # so the crate (and its tests) won't build until llama-helper exists. Build it
+      # the same way the local build scripts do (build.rs auto-downloads the ffmpeg
+      # sidecar, now with SHA-256 verification scaffolding — see build/ffmpeg.rs).
+      - name: Build llama-helper sidecar (Metal)
+        run: |
+          cargo build --release -p llama-helper --features metal
+          TARGET=$(rustc -vV | grep "host:" | awk '{print $2}')
+          mkdir -p frontend/src-tauri/binaries
+          cp target/release/llama-helper "frontend/src-tauri/binaries/llama-helper-${TARGET}"
+
+      # -D warnings (specs/0028, Definition of Done #1): lint regressions now fail
+      # CI. --all-targets extends the gate to tests/benches/examples.
+      #
+      # NOTE (baseline): at spec-authoring time the tree carried ~6 pre-existing
+      # dead-code warnings. specs/0028's [rust-core] dead-code-removal tasks (e.g.
+      # dropping the localhost:5167 backend commands) clean those in the SAME PR.
+      # If clippy fails here on a leftover dead-code/unused warning, the fix is to
+      # remove/annotate the dead code — do NOT drop `-D warnings`.
+      - name: Clippy
+        working-directory: frontend/src-tauri
+        run: cargo clippy --features metal --all-targets -- -D warnings
+
+      # Deterministic, model-free tests only (see the header note on why the
+      # transcription critical path is not a CI gate). vad_filter /
+      # pipeline_integration synthesize fixtures via macOS `say`, whose output —
+      # and thus the VAD tuning thresholds — varies by OS version, so they run
+      # locally per CLAUDE.md. The lifecycle/data-integrity regressions
+      # (specs/0019 WS6.1/WS6.7) live in db_lifecycle + the lib unit tests, which
+      # are deterministic.
+      - name: Tests
+        working-directory: frontend/src-tauri
+        run: |
+          cargo test --features metal --lib \
+            --test db_lifecycle \
+            --test diarization_persistence
+
+      # Non-blocking dependency audit (specs/0028). cargo-audit is installed on
+      # demand; RUSTSEC advisories are surfaced but do not fail the build yet —
+      # tighten by dropping `|| true` once the advisory backlog is cleared.
+      - name: cargo audit (non-blocking)
+        run: |
+          cargo install cargo-audit --locked || true
+          cargo audit || true

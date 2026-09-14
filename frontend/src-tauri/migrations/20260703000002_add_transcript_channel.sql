@@ -1,0 +1,13 @@
+-- specs/0029 WS3.4: per-segment capture-channel tag.
+--
+-- The transcription pipeline mixes microphone + system audio before STT, which
+-- destroys channel identity. This column records which capture channel was
+-- DOMINANT (per-window RMS) while the segment's audio was captured:
+--   'microphone' — the local user's mic (the "You" track)
+--   'system'     — remote participants' system audio
+--   'mixed'      — both channels active with no clear dominance
+-- NULL for legacy rows (recorded before this migration) and for sources with no
+-- per-channel capture (imports, retranscription). The offline diarization pass
+-- uses this tag to keep mic-tagged segments attributed to "You" unconditionally
+-- instead of inferring "You" from system-turn overlap alone.
+ALTER TABLE transcripts ADD COLUMN channel TEXT;

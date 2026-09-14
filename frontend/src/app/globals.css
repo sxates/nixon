@@ -1,0 +1,344 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Motion is mechanical (specs/0057 §2): a short opacity fade, no travel. */
+@keyframes fade-in {
+  0% {
+    opacity: 0;
+  }
+
+  100% {
+    opacity: 1;
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 140ms ease-out;
+}
+
+@layer base {
+  /* ---- FACEPLATE (light, default) — brushed putty aluminum, warmed toward the walnut
+     cheek. Values are the specs/0057 round-2 mockup palette converted to HSL. ---- */
+  :root {
+    --background: 39 22% 87%;          /* #E6E1D8 */
+    --foreground: 30 10% 11%;          /* #201D1A */
+    --card: 40 33% 93%;                /* #F3EFE7 */
+    --card-foreground: 30 10% 11%;
+    --popover: 40 39% 95%;             /* #F8F5EF */
+    --popover-foreground: 30 10% 11%;
+    --primary: 30 10% 11%;             /* ink key, cream legend */
+    --primary-foreground: 40 39% 95%;
+    --secondary: 37 20% 84%;           /* = panel */
+    --secondary-foreground: 30 10% 14%;
+    --muted: 37 19% 82%;               /* #D9D2C7 */
+    --muted-foreground: 30 7% 37%;     /* #665F58 — 6.1:1 on background */
+    --accent: 36 17% 77%;              /* #CFC7BB */
+    --accent-foreground: 30 10% 11%;
+    --destructive: 4 59% 41%;          /* #A8332B */
+    --destructive-foreground: 40 39% 95%;
+    --border: 36 14% 73%;              /* #C4BCB0 */
+    --input: 36 17% 77%;
+    --ring: 31 84% 30%;
+    --radius: 0.25rem;
+
+    /* lamps — the only saturated colors on the panel */
+    --brand: 31 84% 30%;               /* ~#8C4E0C amber, armed/active/queue */
+    --brand-foreground: 40 39% 97%;
+    --record: 3 63% 44%;               /* #B8302A REC */
+    --record-foreground: 40 39% 97%;
+    --success: 131 39% 30%;            /* #2F6B3A READY */
+    --success-foreground: 40 39% 97%;
+
+    /* channels: CH1 is always the owner mic (specs/0046) */
+    --chart-1: 31 84% 30%;            /* ~#8C4E0C — CH1/owner, matches --brand */
+    --chart-2: 186 52% 29%;            /* #246A72 */
+    --chart-3: 214 35% 40%;            /* #42618A steel — retuned off --foreground (specs/0057) */
+    --chart-4: 22 62% 36%;             /* #954C23 */
+    --chart-5: 266 30% 45%;            /* #6E5095 */
+    --chart-6: 78 35% 30%;             /* #576732 olive */
+    --chart-7: 338 40% 42%;            /* #964060 plum-rose */
+    --chart-8: 140 40% 29%;            /* #2C6840 forest */
+
+    /* deck materials */
+    --panel: 37 20% 84%;               /* #DED8CE brushed rail */
+    --engrave: 30 7% 34%;              /* #5C5650 silkscreen ink */
+    --paper: 41 50% 94%;               /* #F7F2E7 typewriter paper (transcript, reel label) */
+    --paper-ink: 27 12% 15%;           /* #2A2521 */
+    --key: 39 27% 90%;                 /* #ECE7DE transport key face */
+    --well: 40 39% 95%;                /* #F8F5EF recessed counter/meter well */
+    --walnut: 22 38% 25%;              /* #5A3A28 */
+    --meter-over: 3 63% 44%;
+    --bevel-hi: 0 0% 100% / 0.85;
+    --bevel-lo: 0 0% 0% / 0.14;
+
+    --rail-h: 2.75rem; /* transport rail height (specs/0057 Plan 2) */
+  }
+
+  /* ---- DECK (dark) — anodized charcoal, cream silkscreen. Applied by ThemeProvider. ---- */
+  .dark {
+    --background: 30 8% 9%;            /* #1A1816 */
+    --foreground: 39 32% 88%;          /* #EAE3D6 */
+    --card: 15 6% 13%;                 /* #242120 */
+    --card-foreground: 39 32% 88%;
+    --popover: 24 6% 16%;              /* #2B2826 */
+    --popover-foreground: 39 32% 90%;
+    --primary: 39 32% 88%;             /* cream key, dark legend */
+    --primary-foreground: 30 8% 9%;
+    --secondary: 20 7% 16%;
+    --secondary-foreground: 39 20% 80%;
+    --muted: 20 8% 15%;                /* #2A2624 */
+    --muted-foreground: 33 9% 57%;     /* #9C9388 — 5.2:1 on background */
+    --accent: 17 7% 21%;               /* #383331 */
+    --accent-foreground: 39 32% 90%;
+    --destructive: 5 68% 54%;          /* #D9463A */
+    --destructive-foreground: 40 30% 96%;
+    --border: 17 6% 22%;               /* #3B3634 */
+    --input: 12 5% 20%;
+    --ring: 38 87% 55%;
+    --radius: 0.25rem;
+
+    --brand: 38 87% 55%;               /* #F0A72A */
+    --brand-foreground: 30 10% 8%;
+    --record: 5 74% 56%;               /* #E24A3D */
+    --record-foreground: 40 30% 96%;
+    --success: 127 29% 50%;            /* #5AA362 */
+    --success-foreground: 30 10% 8%;
+
+    --chart-1: 38 87% 55%;
+    --chart-2: 185 45% 52%;            /* #4FB3BC */
+    --chart-3: 214 45% 58%;            /* #648DC4 steel — retuned off --foreground (specs/0057) */
+    --chart-4: 22 61% 52%;             /* #D0703A */
+    --chart-5: 263 28% 68%;            /* #A896C4 */
+    --chart-6: 78 32% 55%;             /* #9BB168 olive */
+    --chart-7: 338 45% 62%;            /* #CA7292 plum-rose */
+    --chart-8: 140 35% 55%;            /* #64B47F forest */
+
+    --panel: 20 7% 16%;                /* #2C2826 */
+    --engrave: 36 10% 61%;             /* #A69E92 */
+    --paper: 26 10% 14%;               /* #26221F */
+    --paper-ink: 38 30% 84%;           /* #E3DACB */
+    --key: 22 11% 15%;                 /* #292421 */
+    --well: 0 6% 7%;                   /* #121010 */
+    --walnut: 22 38% 21%;              /* #4A3021 */
+    --meter-over: 5 74% 56%;
+    --bevel-hi: 0 0% 100% / 0.06;
+    --bevel-lo: 0 0% 0% / 0.45;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  /* html, */
+  body {
+    @apply bg-background text-foreground;
+    overflow: hidden;
+    height: 100%;
+  }
+
+  /* Nixon deck typography — Archivo is the panel/UI face. Apply `.font-display`
+     to title elements that aren't semantic h1/h2 (the app uses styled divs). */
+  h1,
+  h2,
+  .font-display {
+    font-family: var(--font-archivo), "Helvetica Neue", -apple-system, sans-serif;
+    font-weight: 600;
+    letter-spacing: -0.011em;
+  }
+
+  /* Lightweight "My Notes" contentEditable editor (components/NoteEditor). */
+  /* Pin the notes body to the app's base sans face/size explicitly, as a backstop
+     against residual styling in pasted or previously-stored content (0029 WS5.2 —
+     the sanitizer strips inline fonts; this covers anything that slips through and
+     inherits). The heading rule below still applies the Archivo display face. */
+  .note-editor {
+    font-family: var(--font-plex-sans), "Helvetica Neue", -apple-system, sans-serif;
+    font-size: 14px;
+  }
+  .note-editor:focus {
+    outline: none;
+  }
+  .note-editor:empty::before {
+    content: attr(data-ph);
+    color: hsl(var(--muted-foreground));
+    pointer-events: none;
+  }
+  .note-editor h1,
+  .note-editor h2,
+  .note-editor h3 {
+    font-family: var(--font-archivo), "Helvetica Neue", sans-serif;
+    font-size: 1.05rem;
+    font-weight: 600;
+    line-height: 1.3;
+    margin: 0.7em 0 0.3em;
+  }
+  .note-editor p,
+  .note-editor div {
+    margin: 0 0 0.5em;
+  }
+  .note-editor ul {
+    list-style: disc;
+    padding-left: 1.25em;
+    margin: 0.3em 0 0.6em;
+  }
+  .note-editor ol {
+    list-style: decimal;
+    padding-left: 1.4em;
+    margin: 0.3em 0 0.6em;
+  }
+  .note-editor li {
+    margin: 0.15em 0;
+  }
+  .note-editor b,
+  .note-editor strong {
+    font-weight: 600;
+  }
+
+  /* Make the window draggable */
+  .titlebar {
+    -webkit-app-region: drag;
+    app-region: drag;
+  }
+
+  .no-drag {
+    -webkit-app-region: no-drag;
+    app-region: no-drag;
+  }
+
+  /* Custom scrollbar styles */
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: hsl(var(--border));
+    border-radius: 3px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground));
+  }
+
+  /* Firefox scrollbar */
+  .custom-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--border)) transparent;
+  }
+
+  /* BlockNote Editor - Override fixed dimensions for responsive layout */
+  .bn-container {
+    width: 100% !important;
+    max-width: none !important;
+    overflow: visible !important;
+  }
+
+  .bn-editor {
+    width: 100% !important;
+    max-width: none !important;
+    overflow: visible !important;
+  }
+
+  /* Disable internal scrolling - let parent handle all scrolling */
+  .ProseMirror {
+    overflow: visible !important;
+  }
+
+  /* Ensure BlockNote content area is responsive */
+  .bn-block-outer {
+    max-width: 100% !important;
+  }
+
+  .bn-default-styles {
+    max-width: none !important;
+  }
+
+  /* Disable scrolling on any BlockNote wrapper elements */
+  [data-node-type] {
+    overflow: visible !important;
+  }
+
+  /* Meeting-details document view: the generated summary blends into the cream
+     page instead of sitting in BlockNote's default white editor card (matches the
+     mockup, and the "bare" notes treatment). Scoped to `.summary-doc` so other
+     BlockNote editors (live notes panel, etc.) are unaffected. */
+  /* BlockNote declares its `--bn-colors-*` variables ON `.bn-container` itself
+     (@blocknote/shadcn/style.css — the stylesheet this app actually imports, in
+     BlockNoteSummaryView.tsx / Editor.tsx; @blocknote/react ships the same tokens but isn't
+     the file loaded here), with `.bn-container[data-color-scheme=dark]` supplying
+     the dark values — and the editor gets that attribute from `theme={resolved}`. A
+     declaration on an ANCESTOR (`.summary-doc`) can therefore never win, so both overrides
+     target `.bn-container` directly: the light rule drops the white editor card, and the dark
+     rule replaces BlockNote's built-in dark-theme grey with the app's own foreground so the
+     summary reads as Deck's cream rather than a second, greyer text colour. */
+  .summary-doc .bn-container {
+    --bn-colors-editor-background: transparent;
+  }
+  .dark .summary-doc .bn-container {
+    --bn-colors-editor-background: transparent;
+    --bn-colors-editor-text: hsl(var(--foreground));
+  }
+  .summary-doc .bn-container,
+  .summary-doc .bn-editor,
+  .summary-doc .ProseMirror {
+    background: transparent !important;
+  }
+  /* Smaller, calmer summary text (default BlockNote size read too large).
+     Headings use em internally, so scaling the base scales them too. */
+  .summary-doc .bn-editor,
+  .summary-doc .ProseMirror {
+    font-family: var(--font-plex-sans), "Helvetica Neue", sans-serif;
+    font-size: 14px !important;
+  }
+  /* Remove BlockNote's 54px editor inset so the summary text aligns with the
+     title/tabs/toolbar at the column's own padding edge. */
+  .summary-doc .bn-editor {
+    padding-inline: 0 !important;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Typography tokens (Nixon deck). Shared text roles so labels/headings/meta
+   read consistently across screens. Color is applied per-use (e.g. text-brand)
+   so the same token works for muted and accent contexts.
+   --------------------------------------------------------------------------- */
+@layer components {
+  /* Engraved silkscreen label — every place a 1970 panel would have printed caps. */
+  .u-section-label {
+    @apply text-[10px] font-semibold uppercase tracking-[0.14em] text-engrave;
+    text-shadow: 0 -1px 0 hsl(0 0% 100% / 0.75);
+  }
+  .dark .u-section-label {
+    text-shadow: 0 1px 0 hsl(0 0% 100% / 0.06);
+  }
+  /* Section heading inside a document column ("Key points", "Decisions"). */
+  .u-doc-heading {
+    @apply font-display text-[18px] font-semibold text-foreground;
+  }
+  /* Muted secondary/metadata line (dates, durations, attendee summaries). */
+  .u-meta {
+    @apply text-[13px] text-muted-foreground;
+  }
+  /* Typewriter-on-paper: the transcript body and the reel label (specs/0057 decision 4). */
+  .u-typed {
+    @apply font-type text-[13.5px] leading-[1.5] text-paper-ink;
+  }
+  /* Tape-counter glyph (specs/0057 §3.3). Digits and colons are painted with generated
+     content so nothing the counter *draws* lands in its textContent — the readable value is
+     the single sr-only span at the counter root, which keeps `h:mm:ss` exact even though the
+     roll strip carries all ten digits per well. */
+  .tape-glyph::before {
+    content: attr(data-d);
+  }
+  /* Page root height under the persistent transport rail. Replaces bare full-viewport page
+     roots so nothing hides behind the rail. */
+  .h-page {
+    height: calc(100vh - var(--rail-h));
+  }
+}

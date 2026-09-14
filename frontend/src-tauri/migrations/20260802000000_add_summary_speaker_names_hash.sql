@@ -1,0 +1,12 @@
+-- specs/0044 WS3 — summary refresh on speaker naming.
+--
+-- `speaker_names_hash`: fingerprint (summary/refresh.rs `speaker_names_fingerprint`)
+-- of the sorted distinct resolved speaker display names the summary generation saw.
+-- When the user later names a speaker (rename / assign to person / assign to
+-- attendee / merge), the debounced trigger compares this against the CURRENT
+-- resolved name set: a mismatch on a pristine, completed summary auto-regenerates
+-- it so real names replace "Speaker N" placeholders. The regenerated run persists
+-- the new hash, so the trigger can never loop. NULL (legacy rows from before this
+-- migration) is treated as "names changed" — the pristine markdown guard
+-- (`generated_markdown_hash`, specs/0041) still protects user edits.
+ALTER TABLE summary_processes ADD COLUMN speaker_names_hash TEXT;

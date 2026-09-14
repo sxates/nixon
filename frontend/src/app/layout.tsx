@@ -1,0 +1,373 @@
+'use client'
+
+import './globals.css'
+import { Archivo, Archivo_Narrow, IBM_Plex_Sans, IBM_Plex_Mono, Courier_Prime } from 'next/font/google'
+import Sidebar from '@/components/Sidebar'
+import { SidebarProvider } from '@/components/Sidebar/SidebarProvider'
+import MainContent from '@/components/MainContent'
+import { Toaster, toast } from 'sonner'
+import "sonner/dist/styles.css"
+import { useState, useEffect, useCallback } from 'react'
+import { listen, UnlistenFn } from '@tauri-apps/api/event'
+import { invoke } from '@tauri-apps/api/core'
+import { safeListen, makeSafeUnlisten } from '@/lib/safe-listen'
+import { TooltipProvider } from '@/components/ui/tooltip'
+import { RecordingStateProvider } from '@/contexts/RecordingStateContext'
+import { ThemeProvider, useTheme } from '@/contexts/ThemeContext'
+import { OllamaDownloadProvider } from '@/contexts/OllamaDownloadContext'
+import { TranscriptProvider } from '@/contexts/TranscriptContext'
+import { ConfigProvider, useConfig } from '@/contexts/ConfigContext'
+import { OnboardingProvider } from '@/contexts/OnboardingContext'
+import { OnboardingFlow } from '@/components/onboarding'
+import { loadBetaFeatures } from '@/types/betaFeatures'
+import { DownloadProgressToastProvider } from '@/components/shared/DownloadProgressToast'
+import { RecordingPostProcessingProvider } from '@/contexts/RecordingPostProcessingProvider'
+import { ImportAudioDialog, ImportDropOverlay } from '@/components/ImportAudio'
+import CommandPalette from '@/components/CommandPalette'
+import { DeferredBacklogProvider } from '@/contexts/DeferredBacklogProvider'
+import { LlmActivityProvider } from '@/contexts/LlmActivityProvider'
+import { TransportRail } from '@/components/Transport/TransportRail'
+import ResumeRecordingPrompt from '@/components/ResumeRecordingPrompt'
+import ZoomAutoDetect from '@/components/ZoomAutoDetect'
+import NotificationPermissionBootstrap from '@/components/NotificationPermissionBootstrap'
+import CalendarAlerts from '@/components/Calendar/CalendarAlerts'
+import VoiceprintRetractionListener from '@/components/People/VoiceprintRetractionListener'
+import { ImportDialogProvider } from '@/contexts/ImportDialogContext'
+import { PermissionsModalProvider } from '@/contexts/PermissionsModalContext'
+import PermissionsModal from '@/components/PermissionsModal'
+import { isAudioExtension, getAudioFormatsDisplayList } from '@/constants/audioFormats'
+
+
+// specs/0057 — deck typography. Archivo is the panel/UI face (tabular figures for
+// counters), Archivo Narrow the meter scales, Plex Sans the reading face, Plex Mono
+// timecodes, Courier Prime the typewriter-on-paper transcript body.
+const archivo = Archivo({ subsets: ['latin'], weight: ['400', '500', '600', '700'], variable: '--font-archivo' })
+const archivoNarrow = Archivo_Narrow({ subsets: ['latin'], weight: ['400'], variable: '--font-archivo-narrow' })
+const plexSans = IBM_Plex_Sans({ subsets: ['latin'], weight: ['400', '500', '600'], variable: '--font-plex-sans' })
+const plexMono = IBM_Plex_Mono({ subsets: ['latin'], weight: ['400', '500', '700'], variable: '--font-plex-mono' })
+const courierPrime = Courier_Prime({ subsets: ['latin'], weight: ['400', '700'], variable: '--font-courier-prime' })
+
+// Module-level component — stable reference across RootLayout re-renders.
+// Defined here (not inside RootLayout) so React never sees a new function type
+// on re-render, which would cause unmount/remount and break initialization logic.
+function ConditionalImportDialog({
+  showImportDialog,
+  handleImportDialogClose,
+  importFilePath,
+}: {
+  showImportDialog: boolean;
+  handleImportDialogClose: (open: boolean) => void;
+  importFilePath: string | null;
+}) {
+  const { betaFeatures } = useConfig();
+
+  // Only mount ImportAudioDialog (and its hooks/listeners) when feature is enabled
+  if (!betaFeatures.importAndRetranscribe) {
+    return null;
+  }
+
+  return (
+    <ImportAudioDialog
+      open={showImportDialog}
+      onOpenChange={handleImportDialogClose}
+      preselectedFile={importFilePath}
+    />
+  );
+}
+
+// export { metadata } from './metadata'
+
+// specs/0057 — Sonner needs the resolved theme explicitly; it can't read our `.dark`
+// class. RootLayout itself renders <ThemeProvider>, so useTheme() has to be called from
+// a child component rendered inside it.
+function ThemedToaster({ offset }: { offset?: { bottom: string } }) {
+  const { resolved } = useTheme()
+  return (
+    <Toaster
+      position="bottom-center"
+      richColors
+      closeButton
+      theme={resolved}
+      offset={offset}
+      mobileOffset={offset}
+    />
+  )
+}
+
+/** specs/0057 — bottom-center toasts would land underneath the fixed transport rail, so they
+ *  clear its height plus the normal 16px gutter. Onboarding has no rail, hence no offset. */
+const RAIL_TOAST_OFFSET = { bottom: 'calc(var(--rail-h) + 16px)' }
+
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
+  const [showOnboarding, setShowOnboarding] = useState(false)
+  const [_onboardingCompleted, setOnboardingCompleted] = useState(false)
+
+  // Import audio state
+  const [showDropOverlay, setShowDropOverlay] = useState(false)
+  const [showImportDialog, setShowImportDialog] = useState(false)
+  const [importFilePath, setImportFilePath] = useState<string | null>(null)
+
+  useEffect(() => {
+    // Check onboarding status first
+    invoke<{ completed: boolean } | null>('get_onboarding_status')
+      .then((status) => {
+        const isComplete = status?.completed ?? false
+        setOnboardingCompleted(isComplete)
+
+        if (!isComplete) {
+          console.log('[Layout] Onboarding not completed, showing onboarding flow')
+          setShowOnboarding(true)
+        } else {
+          console.log('[Layout] Onboarding completed, showing main app')
+        }
+      })
+      .catch((error) => {
+        console.error('[Layout] Failed to check onboarding status:', error)
+        // Default to showing onboarding if we can't check
+        setShowOnboarding(true)
+        setOnboardingCompleted(false)
+      })
+  }, [])
+
+  // Disable context menu in production
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'production') {
+      const handleContextMenu = (e: MouseEvent) => e.preventDefault();
+      document.addEventListener('contextmenu', handleContextMenu);
+      return () => document.removeEventListener('contextmenu', handleContextMenu);
+    }
+  }, []);
+  useEffect(() => {
+    // Listen for tray recording toggle request
+    return safeListen('request-recording-toggle', () => {
+      console.log('[Layout] Received request-recording-toggle from tray');
+
+      if (showOnboarding) {
+        toast.error("Please complete setup first", {
+          description: "You need to finish onboarding before you can start recording."
+        });
+      } else {
+        // If in main app, forward to useRecordingStart via window event
+        console.log('[Layout] Forwarding to start-recording-from-sidebar');
+        window.dispatchEvent(new CustomEvent('start-recording-from-sidebar'));
+      }
+    });
+  }, [showOnboarding]);
+
+  // Handle file drop for audio import
+  const handleFileDrop = useCallback((paths: string[]) => {
+    // Check if beta features are enabled (read from localStorage directly since we're outside ConfigProvider)
+    const betaFeatures = loadBetaFeatures();
+
+    if (!betaFeatures.importAndRetranscribe) {
+      toast.error('Beta feature disabled', {
+        description: 'Enable "Import Audio & Retranscribe" in Settings > Beta to use this feature.'
+      });
+      return;
+    }
+
+    // Find the first audio file
+    const audioFile = paths.find(p => {
+      const ext = p.split('.').pop()?.toLowerCase();
+      return !!ext && isAudioExtension(ext);
+    });
+
+    if (audioFile) {
+      console.log('[Layout] Audio file dropped:', audioFile);
+      setImportFilePath(audioFile);
+      setShowImportDialog(true);
+    } else if (paths.length > 0) {
+      toast.error('Please drop an audio file', {
+        description: `Supported formats: ${getAudioFormatsDisplayList()}`
+      });
+    }
+  }, []);
+
+  // Listen for drag-drop events
+  useEffect(() => {
+    if (showOnboarding) return; // Don't handle drops during onboarding
+
+    const unlisteners: UnlistenFn[] = [];
+    const cleanedUpRef = { current: false };
+
+    const setupListeners = async () => {
+      // Drag enter/over - show overlay only if beta feature is enabled
+      const unlistenDragEnter = makeSafeUnlisten(await listen('tauri://drag-enter', () => {
+        if (loadBetaFeatures().importAndRetranscribe) {
+          setShowDropOverlay(true);
+        }
+      }));
+      if (cleanedUpRef.current) {
+        unlistenDragEnter();
+        return;
+      }
+      unlisteners.push(unlistenDragEnter);
+
+      // Drag leave - hide overlay
+      const unlistenDragLeave = makeSafeUnlisten(await listen('tauri://drag-leave', () => {
+        setShowDropOverlay(false);
+      }));
+      if (cleanedUpRef.current) {
+        unlistenDragLeave();
+        unlisteners.forEach(u => u());
+        return;
+      }
+      unlisteners.push(unlistenDragLeave);
+
+      // Drop - process files
+      const unlistenDrop = makeSafeUnlisten(await listen<{ paths: string[] }>('tauri://drag-drop', (event) => {
+        setShowDropOverlay(false);
+        handleFileDrop(event.payload.paths);
+      }));
+      if (cleanedUpRef.current) {
+        unlistenDrop();
+        unlisteners.forEach(u => u());
+        return;
+      }
+      unlisteners.push(unlistenDrop);
+    };
+
+    setupListeners();
+
+    return () => {
+      cleanedUpRef.current = true;
+      unlisteners.forEach((unlisten) => unlisten());
+    };
+  }, [showOnboarding, handleFileDrop]);
+
+  // Handle import dialog close
+  const handleImportDialogClose = useCallback((open: boolean) => {
+    setShowImportDialog(open);
+    if (!open) {
+      setImportFilePath(null);
+    }
+  }, []);
+
+  // Handler for ImportDialogProvider - opens import dialog from any child component
+  const handleOpenImportDialog = useCallback((filePath?: string | null) => {
+    setImportFilePath(filePath ?? null);
+    setShowImportDialog(true);
+  }, []);
+
+  const handleOnboardingComplete = () => {
+    console.log('[Layout] Onboarding completed, reloading app')
+    setShowOnboarding(false)
+    setOnboardingCompleted(true)
+    // Optionally reload the window to ensure all state is fresh
+    window.location.reload()
+  }
+
+  return (
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        {/* specs/0057 — apply the theme before first paint (static export has no .dark in the
+            prerendered HTML). Mirrors ThemeContext's resolution: stored 'light'|'dark' wins,
+            else the OS preference. Keep in sync with THEME_STORAGE_KEY. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var p=localStorage.getItem('nixon.theme');var d=p==='dark'||(p!=='light'&&window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches);if(d)document.documentElement.classList.add('dark');}catch(e){}})();`,
+          }}
+        />
+      </head>
+      <body className={`${archivo.variable} ${archivoNarrow.variable} ${plexSans.variable} ${plexMono.variable} ${courierPrime.variable} font-sans antialiased`}>
+        {/* specs/0057 — outermost so the .dark class (and therefore the Deck token
+            block) applies during onboarding too. */}
+        <ThemeProvider>
+          <RecordingStateProvider>
+            <TranscriptProvider>
+              <ConfigProvider>
+                <OllamaDownloadProvider>
+                  <OnboardingProvider>
+                    <SidebarProvider>
+                        <TooltipProvider>
+                          {/* spec 0051 WS2 — hoisted above RecordingPostProcessingProvider (and
+                              out of the showOnboarding ternary, so it's ALWAYS mounted): the
+                              tray / global-shortcut stop path runs through
+                              RecordingPostProcessingProvider, which calls useRecordingStop
+                              unconditionally, and useRecordingStop now reads useBacklog() to
+                              hand a 'process-now' meeting to the backlog. That handoff must be
+                              live outside onboarding too.
+
+                              Being always-mounted means the backlog's mount effect also
+                              fires DURING onboarding, when the Rust `AppState` is not yet
+                              managed. `api_list_deferred_meetings` therefore uses
+                              `try_state` and answers with an empty list on that path
+                              (spec 0051 final review, Finding 2) — with `state()` it
+                              panicked, and a panicking command never sends its IPC
+                              response, so the frontend promise hung forever and the
+                              backlog stayed dead for the session. */}
+                          <DeferredBacklogProvider>
+                          <RecordingPostProcessingProvider>
+                            <PermissionsModalProvider>
+                            <ImportDialogProvider onOpen={handleOpenImportDialog}>
+                              {/* Download progress toast provider - listens for background downloads */}
+                              <DownloadProgressToastProvider />
+
+                              {/* Show onboarding or main app */}
+                              {showOnboarding ? (
+                                <OnboardingFlow onComplete={handleOnboardingComplete} />
+                              ) : (
+                                <div className="flex">
+                                  {/* Scoped to the Sidebar and the transport rail deliberately
+                                      (specs/0052 + 0057): they are the only two consumers — the rail's
+                                      queue is the second (decision 8) — and every llm-activity-changed
+                                      event sets state here. Hoisting it above MainContent would
+                                      re-render the whole page tree on each background task transition
+                                      — a prep pass emits a burst of them. */}
+                                  <LlmActivityProvider>
+                                    <Sidebar />
+                                    {/* specs/0057 decision 7 — THE transport: fixed bottom rail on
+                                        every post-onboarding route, with the deck status, the REC/HOLD/
+                                        STOP keys and the one global queue. Replaces GlobalRecordingBar
+                                        and the deferred-backlog pill. */}
+                                    <TransportRail />
+                                  </LlmActivityProvider>
+                                  <MainContent>{children}</MainContent>
+                                  {/* ⌘K command palette — global, every route (post-onboarding) */}
+                                  <CommandPalette />
+                                  {/* Request OS notification permission up front (post-onboarding) */}
+                                  <NotificationPermissionBootstrap />
+                                  {/* Zoom auto-detection — global listeners for record/stop (post-onboarding) */}
+                                  <ZoomAutoDetect />
+                                  {/* Calendar "time to join" alerts — app-wide, fires before meetings (spec 0008) */}
+                                  <CalendarAlerts />
+                                  {/* Voiceprint retraction feedback — app-wide undo toast when a span
+                                      correction quarantines a person's polluted voice samples (spec 0039 WS3) */}
+                                  <VoiceprintRetractionListener />
+                                  {/* "Enable recording" permissions modal — opened from the sidebar
+                                      Permissions nav item (spec 0014) */}
+                                  <PermissionsModal />
+                                  {/* Relaunch recovery — prompt to resume a crash-interrupted
+                                      recording, one at a time (spec 0037) */}
+                                  <ResumeRecordingPrompt />
+                                </div>
+                              )}
+                              {/* Import audio overlay and dialog */}
+                              <ImportDropOverlay visible={showDropOverlay} />
+                              <ConditionalImportDialog
+                                showImportDialog={showImportDialog}
+                                handleImportDialogClose={handleImportDialogClose}
+                                importFilePath={importFilePath}
+                              />
+                            </ImportDialogProvider>
+                            </PermissionsModalProvider>
+                          </RecordingPostProcessingProvider>
+                          </DeferredBacklogProvider>
+                        </TooltipProvider>
+                      </SidebarProvider>
+                  </OnboardingProvider>
+
+                </OllamaDownloadProvider>
+              </ConfigProvider>
+            </TranscriptProvider>
+          </RecordingStateProvider>
+          <ThemedToaster offset={showOnboarding ? undefined : RAIL_TOAST_OFFSET} />
+        </ThemeProvider>
+      </body>
+    </html>
+  )
+}

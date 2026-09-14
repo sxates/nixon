@@ -1,0 +1,20 @@
+{
+  "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
+  "identifier": "ai.vinyl.app.debug",
+  "productName": "Dev Nixon",
+  "build": {
+    "runner": "scripts/cargo-dev-sign.sh"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Dev Nixon",
+        "width": 1100,
+        "height": 700,
+        "resizable": true,
+        "fullscreen": false,
+        "decorations": true
+      }
+    ]
+  }
+}

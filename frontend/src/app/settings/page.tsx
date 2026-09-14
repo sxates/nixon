@@ -1,0 +1,133 @@
+'use client';
+
+import React, { useState, useEffect } from 'react';
+import { invoke } from '@tauri-apps/api/core';
+import { TranscriptSettings } from '@/components/TranscriptSettings';
+import { RecordingSettings } from '@/components/RecordingSettings';
+import { AppearanceSettings } from '@/components/AppearanceSettings';
+import { PreferenceSettings } from '@/components/PreferenceSettings';
+import { RecordingPermissionsSettings } from '@/components/RecordingPermissionsSettings';
+import { CalendarSettings } from '@/components/CalendarSettings';
+import { OwnerEmailSettings } from '@/components/OwnerEmailSettings';
+import { SummaryModelSettings } from '@/components/SummaryModelSettings';
+import { TemplateSettings } from '@/components/TemplateSettings';
+import { BetaSettings } from '@/components/BetaSettings';
+import { About } from '@/components/About';
+import { useConfig } from '@/contexts/ConfigContext';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { PageHeader } from '@/components/ui/page-header';
+
+// Tabs configuration (constant)
+const TABS = [
+  { value: 'general', label: 'General' },
+  { value: 'recording', label: 'Recordings' },
+  { value: 'Transcriptionmodels', label: 'Transcription' },
+  { value: 'summaryModels', label: 'Summary' },
+  { value: 'templates', label: 'Templates' },
+  { value: 'beta', label: 'Beta' },
+  { value: 'about', label: 'About' }
+] as const;
+
+export default function SettingsPage() {
+  const { transcriptModelConfig, setTranscriptModelConfig } = useConfig();
+
+  const [activeTab, setActiveTab] = useState('general');
+
+  // Load saved transcript configuration on mount
+  useEffect(() => {
+    const loadTranscriptConfig = async () => {
+      try {
+        const config = await invoke('api_get_transcript_config') as any;
+        if (config) {
+          console.log('Loaded saved transcript config:', config);
+          setTranscriptModelConfig({
+            provider: config.provider || 'localWhisper',
+            model: config.model || 'large-v3',
+            // Masked hint only — raw keys never cross IPC (spec 0030 WS2)
+            apiKey: config.apiKeyMasked ?? null
+          });
+        }
+      } catch (error) {
+        console.error('Failed to load transcript config:', error);
+      }
+    };
+    loadTranscriptConfig();
+  }, [setTranscriptModelConfig]);
+
+  // The Tabs root is the page container so the TabsList can live in the fixed
+  // header while the TabsContent panels scroll below it.
+  return (
+    <Tabs
+      value={activeTab}
+      onValueChange={setActiveTab}
+      className="flex h-page flex-col bg-background"
+    >
+      {/* Fixed header — the shared PageHeader. The tab strip sits directly under
+          the title so it stays visible while the tab content scrolls. */}
+      <PageHeader title="Settings" className="pb-0" />
+
+      <div className="flex-shrink-0 px-7">
+        {/* Pure-CSS underline (specs/0057 Task 2): the active tab owns a 2px brand
+            border-bottom, the same formula as the meeting-details tab bar. The old
+            measured framer-motion bar could land in the wrong place on first paint. */}
+        <TabsList className="mt-3 h-auto rounded-none border-b border-border bg-transparent p-0">
+          {TABS.map((tab) => (
+            <TabsTrigger
+              key={tab.value}
+              value={tab.value}
+              className="-mb-px rounded-none border-0 border-b-2 border-transparent bg-transparent px-3 py-1.5 text-sm font-semibold text-muted-foreground transition-colors [transition-duration:140ms] hover:text-foreground data-[state=active]:border-brand data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
+            >
+              {tab.label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </div>
+
+      {/* Scrollable content — only this area scrolls. */}
+      <div className="flex-1 overflow-y-auto px-7 pb-12">
+        <div className="mx-auto max-w-[1080px] pt-6">
+          <TabsContent value="general" className="space-y-8">
+            {/* General order: Appearance → Notifications → Recording permissions →
+                Calendar → Your email → the rest. */}
+            {/* Appearance (specs/0057 decision 1) — Faceplate / Deck / System. */}
+            <AppearanceSettings />
+            <PreferenceSettings />
+            {/* Recording permissions (spec 0038 WS7.a) — mic + screen-recording
+                status with an action that opens the same first-run permissions
+                modal. Replaces the former top-level "Permissions" sidebar entry. */}
+            <RecordingPermissionsSettings />
+            {/* Calendar source (0008 EventKit + 0032 Google) — lives under General
+                because it's an app-wide source choice, not a recording knob. */}
+            <CalendarSettings />
+            {/* Owner addresses (specs/0018) — auto-filled with the Google account
+                email when Google Calendar connects (specs/0032). */}
+            <OwnerEmailSettings />
+          </TabsContent>
+          <TabsContent value="recording">
+            <RecordingSettings />
+          </TabsContent>
+          <TabsContent value="Transcriptionmodels">
+            <TranscriptSettings
+              transcriptModelConfig={transcriptModelConfig}
+              setTranscriptModelConfig={setTranscriptModelConfig}
+            />
+          </TabsContent>
+          <TabsContent value="summaryModels">
+            <SummaryModelSettings />
+          </TabsContent>
+          <TabsContent value="templates" className="mt-6">
+            <TemplateSettings />
+          </TabsContent>
+          <TabsContent value="beta" className="mt-6">
+            <BetaSettings />
+          </TabsContent>
+          {/* About (spec 0038 WS7.c) — version, credits, and links. Reuses the
+              same <About /> body that was previously a standalone modal. */}
+          <TabsContent value="about" className="mt-6">
+            <About />
+          </TabsContent>
+        </div>
+      </div>
+    </Tabs>
+  );
+};

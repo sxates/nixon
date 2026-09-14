@@ -1,0 +1,712 @@
+//! Day Agenda — a persistent, whole-day, unified meeting list (specs/0012).
+//!
+//! Replaces the ephemeral "upcoming meetings" strip (which dropped events once
+//! their start time passed) with a single time-ordered list of TODAY's items:
+//! calendar events (optionally linked to a recording) merged with ad-hoc
+//! recordings that have no calendar event. Each item carries attendees and a
+//! per-meeting processing status so the UI can show progress and offer one-click
+//! "Summarize" / "Identify speakers" actions without opening the meeting.
+//!
+//! Best-effort calendar: if calendar access is denied or EventKit errors, the
+//! agenda still returns today's recorded meetings (calendar layer logs + returns
+//! empty rather than failing).
+
+use chrono::{DateTime, Duration, Local, NaiveDate, TimeZone, Utc};
+use serde::Serialize;
+use tauri::{AppHandle, Manager, Runtime};
+
+use crate::calendar::eventkit::{self, Attendee, UpcomingMeeting};
+use crate::database::models::MeetingStatusRow;
+use crate::database::repositories::dismissed_calendar_event::DismissedCalendarEventsRepository;
+use crate::database::repositories::meeting::MeetingsRepository;
+use crate::state::AppState;
+
+/// Max attendees embedded inline per item (the full count is `attendee_count`).
+const MAX_INLINE_ATTENDEES: usize = 5;
+
+/// How far a recorded meeting's start may sit from a calendar event's start and
+/// still be considered the same meeting (recordings often begin late). Mirrors the
+/// ±-window approach used by `eventkit::event_attendees`, but tighter so two
+/// back-to-back calendar events don't both claim the same recording.
+const MATCH_WINDOW: Duration = Duration::minutes(90);
+
+/// The source of an agenda item.
+#[derive(Debug, Clone, Copy, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum AgendaSource {
+    /// A calendar event (possibly linked to a recorded meeting).
+    Calendar,
+    /// An ad-hoc recording with no matching calendar event.
+    Recording,
+}
+
+/// Per-meeting processing status flags (specs/0012). All four are best-effort
+/// derived from the DB in one query (see `MeetingsRepository::get_between_with_status`).
+#[derive(Debug, Clone, Copy, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgendaStatus {
+    /// Has a recording folder/audio.
+    pub recorded: bool,
+    /// Has ≥1 transcript segment.
+    pub transcribed: bool,
+    /// Has a generated summary.
+    pub summarized: bool,
+    /// Has ≥1 diarized speaker row.
+    pub speakers_identified: bool,
+}
+
+impl AgendaStatus {
+    fn empty() -> Self {
+        Self {
+            recorded: false,
+            transcribed: false,
+            summarized: false,
+            speakers_identified: false,
+        }
+    }
+
+    fn from_row(row: &MeetingStatusRow) -> Self {
+        Self {
+            recorded: row.has_folder != 0,
+            transcribed: row.has_transcript != 0,
+            summarized: row.has_summary != 0,
+            speakers_identified: row.has_speakers != 0,
+        }
+    }
+}
+
+/// One unified agenda item. Serialized camelCase for the frontend; the field
+/// names below are the exact wire contract (specs/0012).
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DayAgendaItem {
+    /// Stable key: the recorded `meeting_id` when present, else the calendar
+    /// event identifier (or a synthetic `evt-<hash>` fallback).
+    pub id: String,
+    pub title: String,
+    /// ISO-8601 start: the event start, or the recording start for ad-hoc items.
+    pub start_time: String,
+    /// ISO-8601 end, when known.
+    pub end_time: Option<String>,
+    pub source: AgendaSource,
+    /// Detected join link (Zoom), when present.
+    pub zoom_url: Option<String>,
+    /// First few attendees (cap `MAX_INLINE_ATTENDEES`); empty for ad-hoc recordings.
+    pub attendees: Vec<Attendee>,
+    /// Total attendee count (may exceed `attendees.len()`).
+    pub attendee_count: u32,
+    /// Recorded meeting row id when this item is/links to a recording.
+    pub meeting_id: Option<String>,
+    pub status: AgendaStatus,
+    /// User has hidden this calendar event from the agenda (specs/0026). The frontend
+    /// filters these out by default and reveals them under "Show hidden". Always false
+    /// for recordings and for calendar items that became recordings (you recorded it).
+    pub dismissed: bool,
+    /// The key to WRITE when hiding/unhiding this item (specs/0029 WS6.2). Prefers the
+    /// sync-stable `calendarItemExternalIdentifier` + occurrence start (EventKit's
+    /// `eventIdentifier` can be reissued by provider syncs, orphaning a stored
+    /// dismissal); falls back to `id`. Reads match EITHER this key or the legacy
+    /// `eventIdentifier`/synthetic key, so pre-existing dismissals keep working.
+    pub dismiss_key: String,
+    /// Recurring-series key (specs/0036): the event's `external_id` (iCalUID /
+    /// calendarItemExternalIdentifier), series-level for both calendar sources. The Today
+    /// view threads it into Join & Record and `api_ensure_scheduled_meeting` so recordings
+    /// group into their series. None for ad-hoc recordings (no calendar event).
+    pub series_key: Option<String>,
+}
+
+/// Local-day bounds as UTC instants `[start, end)` (midnight→midnight in the
+/// system local timezone) for a given day. `date` is a strict local `YYYY-MM-DD`;
+/// `None` means today (preserving the original `today_local_bounds` behaviour).
+/// Used to constrain the recordings query and to pin item start-times to the day.
+fn local_bounds_for(date: Option<&str>) -> anyhow::Result<(DateTime<Utc>, DateTime<Utc>)> {
+    let day = match date {
+        Some(s) => NaiveDate::parse_from_str(s, "%Y-%m-%d")
+            .map_err(|e| anyhow::anyhow!("invalid agenda date '{s}' (expected YYYY-MM-DD): {e}"))?,
+        None => Local::now().date_naive(),
+    };
+    let start_naive = day
+        .and_hms_opt(0, 0, 0)
+        .ok_or_else(|| anyhow::anyhow!("could not build local midnight"))?;
+    let start_local = Local
+        .from_local_datetime(&start_naive)
+        .single()
+        .ok_or_else(|| anyhow::anyhow!("ambiguous/absent local midnight (DST boundary)"))?;
+    let end_local = start_local + Duration::days(1);
+    Ok((
+        start_local.with_timezone(&Utc),
+        end_local.with_timezone(&Utc),
+    ))
+}
+
+/// Synthetic, stable id for a calendar-only item whose EventKit identifier is
+/// empty (defensive — EventKit normally supplies one).
+fn synthetic_event_id(title: &str, start: &str) -> String {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    title.hash(&mut hasher);
+    start.hash(&mut hasher);
+    format!("evt-{:016x}", hasher.finish())
+}
+
+/// Sync-stable dismissal key for a calendar event (specs/0029 WS6.2): the
+/// `calendarItemExternalIdentifier` (stable across provider re-syncs, unlike
+/// `eventIdentifier`) paired with the occurrence start (the external id is shared
+/// by every occurrence of a recurring event, so alone it would hide them all).
+/// None when EventKit supplied no external identifier — callers fall back to the
+/// legacy `eventIdentifier`/synthetic key.
+///
+/// `pub(crate)` since specs/0032: Google-sourced items carry the same iCalUID in
+/// `external_id` and the same UTC `to_rfc3339` start format, so this key is
+/// identical across sources — a dismissal survives switching the active source
+/// (EventKit ↔ Google). `google::sync` unit-tests that equivalence.
+pub(crate) fn stable_dismiss_key(event: &UpcomingMeeting) -> Option<String> {
+    event
+        .external_id
+        .as_deref()
+        .map(|ext| format!("ext:{ext}@{}", event.starts_at))
+}
+
+/// Build today's unified agenda. Pure given its inputs, so it is unit-testable
+/// without EventKit/DB: takes today's calendar events and today's recorded
+/// meetings (with status), plus an attendee fetcher invoked only for calendar
+/// items. Returns items sorted by start ascending.
+fn build_agenda(
+    events: Vec<UpcomingMeeting>,
+    recordings: Vec<MeetingStatusRow>,
+    dismissed: &std::collections::HashSet<String>,
+    mut fetch_attendees: impl FnMut(&str, &str) -> Vec<Attendee>,
+) -> Vec<DayAgendaItem> {
+    // Track which recordings have been claimed by a calendar event so the
+    // leftover ones become standalone "recording" items.
+    let mut claimed = vec![false; recordings.len()];
+
+    let mut items: Vec<DayAgendaItem> = Vec::with_capacity(events.len() + recordings.len());
+
+    for event in events {
+        // Match a recorded meeting by title (case-insensitive, trimmed) within the
+        // ±MATCH_WINDOW around the event start; pick the closest unclaimed one.
+        let event_start = event.starts_at.parse::<DateTime<Utc>>().ok();
+        let want_title = event.title.trim().to_lowercase();
+
+        let mut best: Option<(i64, usize)> = None; // (abs delta secs, index)
+        if let Some(ev_start) = event_start {
+            for (i, rec) in recordings.iter().enumerate() {
+                if claimed[i] {
+                    continue;
+                }
+                if rec.title.trim().to_lowercase() != want_title {
+                    continue;
+                }
+                let delta = (rec.created_at.0 - ev_start).num_seconds().abs();
+                if delta > MATCH_WINDOW.num_seconds() {
+                    continue;
+                }
+                if best.map(|(d, _)| delta < d).unwrap_or(true) {
+                    best = Some((delta, i));
+                }
+            }
+        }
+
+        let (meeting_id, status) = if let Some((_, i)) = best {
+            claimed[i] = true;
+            (
+                Some(recordings[i].id.clone()),
+                AgendaStatus::from_row(&recordings[i]),
+            )
+        } else {
+            (None, AgendaStatus::empty())
+        };
+
+        let all_attendees = fetch_attendees(&event.title, &event.starts_at);
+        let attendee_count = all_attendees.len() as u32;
+        let attendees: Vec<Attendee> = all_attendees
+            .into_iter()
+            .take(MAX_INLINE_ATTENDEES)
+            .collect();
+
+        // Legacy dismissal key: the event's own identifier (the id the agenda exposes for an
+        // unrecorded calendar row), independent of whether it later matched a recording.
+        let event_key = if event.id.trim().is_empty() {
+            synthetic_event_id(&event.title, &event.starts_at)
+        } else {
+            event.id.clone()
+        };
+        // Preferred (sync-stable) key for NEW dismissals; reads accept either, so
+        // dismissals stored under the legacy `eventIdentifier` keep working even
+        // after a provider re-sync would have orphaned them (specs/0029 WS6.2).
+        let dismiss_key = stable_dismiss_key(&event).unwrap_or_else(|| event_key.clone());
+
+        // Only an UNrecorded calendar item can be "dismissed" — if you recorded it, you want it.
+        let is_dismissed = meeting_id.is_none()
+            && (dismissed.contains(&dismiss_key) || dismissed.contains(&event_key));
+
+        let id = meeting_id.clone().unwrap_or_else(|| event_key.clone());
+
+        items.push(DayAgendaItem {
+            id,
+            title: event.title,
+            start_time: event.starts_at,
+            end_time: Some(event.ends_at),
+            source: AgendaSource::Calendar,
+            zoom_url: event.zoom_url,
+            attendees,
+            attendee_count,
+            meeting_id,
+            status,
+            dismissed: is_dismissed,
+            dismiss_key,
+            series_key: event.external_id,
+        });
+    }
+
+    // Unclaimed recordings → standalone ad-hoc "recording" items.
+    for (i, rec) in recordings.into_iter().enumerate() {
+        if claimed[i] {
+            continue;
+        }
+        let start = rec.created_at.0;
+        let end_time = rec
+            .duration_seconds
+            .filter(|d| *d > 0.0)
+            .map(|d| (start + Duration::milliseconds((d * 1000.0) as i64)).to_rfc3339());
+
+        items.push(DayAgendaItem {
+            id: rec.id.clone(),
+            title: rec.title.clone(),
+            start_time: start.to_rfc3339(),
+            end_time,
+            source: AgendaSource::Recording,
+            zoom_url: None,
+            attendees: Vec::new(),
+            attendee_count: 0,
+            meeting_id: Some(rec.id.clone()),
+            status: AgendaStatus::from_row(&rec),
+            dismissed: false,
+            // Recordings can't be dismissed; keep the field truthful anyway.
+            dismiss_key: rec.id.clone(),
+            series_key: None,
+        });
+    }
+
+    items.sort_by(|a, b| a.start_time.cmp(&b.start_time));
+    items
+}
+
+/// Today's unified Day Agenda (specs/0012): calendar events + recorded meetings,
+/// merged and matched, with attendees + processing status, sorted by start time.
+///
+/// Best-effort: calendar access denied or EventKit errors still return today's
+/// recorded meetings (the calendar layer logs and returns empty).
+#[tauri::command]
+pub async fn api_get_day_agenda<R: Runtime>(
+    app: AppHandle<R>,
+    date: Option<String>,
+) -> Result<Vec<DayAgendaItem>, String> {
+    // `None`/empty means today, so existing call sites that pass no date behave unchanged.
+    let date = date.filter(|s| !s.trim().is_empty());
+    log::info!("api_get_day_agenda called (date={date:?})");
+
+    let (start_utc, end_utc) = local_bounds_for(date.as_deref())
+        .map_err(|e| format!("Could not compute the requested date range: {e}"))?;
+
+    // Recorded meetings created within the day window (one query, status flags derived inline).
+    let state = app.state::<AppState>();
+    let pool = state.db_manager.pool();
+    let recordings = MeetingsRepository::get_between_with_status(pool, start_utc, end_utc)
+        .await
+        .map_err(|e| format!("Failed to load the day's meetings: {e}"))?;
+
+    // Events the user has hidden (specs/0026). Best-effort: a lookup failure must not break the
+    // agenda, so fall back to "nothing dismissed".
+    let dismissed = DismissedCalendarEventsRepository::all(pool)
+        .await
+        .unwrap_or_else(|e| {
+            log::error!("Failed to load dismissed calendar events (showing all): {e}");
+            std::collections::HashSet::new()
+        });
+
+    // Today's calendar events from the single active source (specs/0032):
+    // while a Google account is connected, ONLY its local cache is read
+    // (refreshed when stale; sync failures are logged and the last-good cache
+    // serves) — no EventKit call, no macOS Calendar permission dependency.
+    // When not connected, EventKit only (best-effort; empty when access
+    // denied). EventKit reads touch the Objective-C runtime, so they run off
+    // the async executor.
+    let events = if crate::calendar::google_is_active_source(&app).await {
+        crate::calendar::google::sync::sync_if_stale(&app).await;
+        crate::calendar::google::sync::cached_upcoming_between(pool, start_utc, end_utc).await
+    } else {
+        tokio::task::spawn_blocking(move || eventkit::meetings_between(start_utc, end_utc))
+            .await
+            .unwrap_or_else(|e| {
+                log::error!("Calendar read task failed: {e}; agenda will use recordings only");
+                Vec::new()
+            })
+    };
+
+    // Attendees are only fetched for calendar items, and each fetch may be an
+    // EventKit read, so do them off-thread too. We pre-fetch per unique
+    // (title, start) to keep `build_agenda` synchronous and testable. Items
+    // are routed by their id: Google-sourced items (`gcal:` ids) read their
+    // attendees from the local cache row — no EventKit round-trip, no network
+    // (specs/0032) — while EventKit items use the EventKit reader.
+    let mut attendee_cache: std::collections::HashMap<(String, String), Vec<Attendee>> =
+        std::collections::HashMap::new();
+    // Load the cached attendee-photo map ONCE for the whole build (finding #9):
+    // threading it into the per-event Google reader avoids a full photo-table
+    // scan per event. Cheap and empty when photos were never fetched.
+    let photo_map = crate::calendar::google::sync::cached_photo_map(pool).await;
+    for event in &events {
+        let key = (event.title.clone(), event.starts_at.clone());
+        if attendee_cache.contains_key(&key) {
+            continue;
+        }
+        let attendees = if event.id.starts_with("gcal:") {
+            crate::calendar::google::sync::cached_attendees_for_event_id_with_photos(
+                pool, &event.id, &photo_map,
+            )
+            .await
+        } else {
+            let (title, started_at) = key.clone();
+            tokio::task::spawn_blocking(move || eventkit::event_attendees(&title, &started_at))
+                .await
+                .unwrap_or_else(|e| {
+                    log::error!("Attendee read task failed: {e}");
+                    Vec::new()
+                })
+        };
+        attendee_cache.insert(key, attendees);
+    }
+
+    let items = build_agenda(events, recordings, &dismissed, |title, start| {
+        attendee_cache
+            .get(&(title.to_string(), start.to_string()))
+            .cloned()
+            .unwrap_or_default()
+    });
+
+    log::info!("api_get_day_agenda -> {} item(s)", items.len());
+    Ok(items)
+}
+
+/// Hide a calendar event from the agenda (specs/0026). `event_id` is the agenda item's id for
+/// an unrecorded calendar row (the EventKit event id, or the synthetic `evt-<hash>`).
+#[tauri::command]
+pub async fn api_dismiss_calendar_event<R: Runtime>(
+    app: AppHandle<R>,
+    event_id: String,
+) -> Result<(), String> {
+    let state = app.state::<AppState>();
+    DismissedCalendarEventsRepository::dismiss(state.db_manager.pool(), &event_id)
+        .await
+        .map_err(|e| format!("Failed to dismiss calendar event: {e}"))
+}
+
+/// Un-hide a previously dismissed calendar event (specs/0026).
+#[tauri::command]
+pub async fn api_undismiss_calendar_event<R: Runtime>(
+    app: AppHandle<R>,
+    event_id: String,
+) -> Result<(), String> {
+    let state = app.state::<AppState>();
+    DismissedCalendarEventsRepository::undismiss(state.db_manager.pool(), &event_id)
+        .await
+        .map_err(|e| format!("Failed to undismiss calendar event: {e}"))
+}
+
+/// List the ids of all dismissed calendar events (specs/0026).
+#[tauri::command]
+pub async fn api_list_dismissed_calendar_events<R: Runtime>(
+    app: AppHandle<R>,
+) -> Result<Vec<String>, String> {
+    let state = app.state::<AppState>();
+    DismissedCalendarEventsRepository::all(state.db_manager.pool())
+        .await
+        .map(|set| set.into_iter().collect())
+        .map_err(|e| format!("Failed to list dismissed calendar events: {e}"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::database::models::DateTimeUtc;
+
+    fn rec(id: &str, title: &str, created: DateTime<Utc>, folder: bool) -> MeetingStatusRow {
+        MeetingStatusRow {
+            id: id.to_string(),
+            title: title.to_string(),
+            created_at: DateTimeUtc(created),
+            folder_path: if folder { Some("/tmp/x".into()) } else { None },
+            duration_seconds: Some(600.0),
+            has_folder: folder as i64,
+            has_transcript: 1,
+            has_summary: 0,
+            has_speakers: 0,
+        }
+    }
+
+    fn evt(id: &str, title: &str, start: DateTime<Utc>) -> UpcomingMeeting {
+        UpcomingMeeting {
+            id: id.to_string(),
+            title: title.to_string(),
+            starts_at: start.to_rfc3339(),
+            ends_at: (start + Duration::hours(1)).to_rfc3339(),
+            calendar_name: "Work".into(),
+            location: None,
+            zoom_url: None,
+            external_id: None,
+        }
+    }
+
+    fn evt_ext(id: &str, external_id: &str, title: &str, start: DateTime<Utc>) -> UpcomingMeeting {
+        UpcomingMeeting {
+            external_id: Some(external_id.to_string()),
+            ..evt(id, title, start)
+        }
+    }
+
+    #[test]
+    fn matches_recording_to_event_by_title_and_window() {
+        let t0 = Utc.with_ymd_and_hms(2026, 6, 25, 15, 0, 0).unwrap();
+        let events = vec![evt("ev1", "Standup", t0)];
+        // Recording started 10 min late — still the same meeting.
+        let recordings = vec![rec(
+            "meeting-1",
+            "standup",
+            t0 + Duration::minutes(10),
+            true,
+        )];
+
+        let items = build_agenda(
+            events,
+            recordings,
+            &std::collections::HashSet::new(),
+            |_, _| vec![],
+        );
+        assert_eq!(items.len(), 1);
+        let item = &items[0];
+        assert_eq!(item.id, "meeting-1");
+        assert_eq!(item.meeting_id.as_deref(), Some("meeting-1"));
+        assert!(matches!(item.source, AgendaSource::Calendar));
+        assert!(item.status.recorded);
+        assert!(item.status.transcribed);
+    }
+
+    #[test]
+    fn unmatched_recording_becomes_standalone_item() {
+        let t0 = Utc.with_ymd_and_hms(2026, 6, 25, 9, 0, 0).unwrap();
+        let events = vec![evt("ev1", "Standup", t0)];
+        // Ad-hoc recording with a different title, no event.
+        let recordings = vec![rec(
+            "meeting-adhoc",
+            "Quick chat",
+            t0 + Duration::hours(2),
+            true,
+        )];
+
+        let items = build_agenda(
+            events,
+            recordings,
+            &std::collections::HashSet::new(),
+            |_, _| vec![],
+        );
+        assert_eq!(items.len(), 2);
+        // Sorted by start: event (09:00) first, then recording (11:00).
+        assert!(matches!(items[0].source, AgendaSource::Calendar));
+        assert!(items[0].meeting_id.is_none());
+        assert!(matches!(items[1].source, AgendaSource::Recording));
+        assert_eq!(items[1].meeting_id.as_deref(), Some("meeting-adhoc"));
+    }
+
+    #[test]
+    fn far_apart_same_title_does_not_match() {
+        let t0 = Utc.with_ymd_and_hms(2026, 6, 25, 9, 0, 0).unwrap();
+        let events = vec![evt("ev1", "Standup", t0)];
+        // Same title but 3 hours later -> outside MATCH_WINDOW -> standalone.
+        let recordings = vec![rec("meeting-2", "Standup", t0 + Duration::hours(3), true)];
+
+        let items = build_agenda(
+            events,
+            recordings,
+            &std::collections::HashSet::new(),
+            |_, _| vec![],
+        );
+        assert_eq!(items.len(), 2);
+        assert!(items.iter().any(|i| i.meeting_id.is_none())); // event, unmatched
+        assert!(items
+            .iter()
+            .any(|i| i.meeting_id.as_deref() == Some("meeting-2")
+                && matches!(i.source, AgendaSource::Recording)));
+    }
+
+    #[test]
+    fn attendees_capped_with_full_count() {
+        let t0 = Utc.with_ymd_and_hms(2026, 6, 25, 9, 0, 0).unwrap();
+        let events = vec![evt("ev1", "All Hands", t0)];
+        let make = |n: usize| Attendee {
+            name: format!("p{n}"),
+            email: Some(format!("p{n}@x.com")),
+            is_current_user: false,
+            is_distribution_list: false,
+            photo_data_uri: None,
+        };
+        let attendees: Vec<Attendee> = (0..8).map(make).collect();
+        let items = build_agenda(events, vec![], &std::collections::HashSet::new(), |_, _| {
+            attendees.clone()
+        });
+        assert_eq!(items[0].attendees.len(), MAX_INLINE_ATTENDEES);
+        assert_eq!(items[0].attendee_count, 8);
+    }
+
+    #[test]
+    fn dismissed_unrecorded_event_is_flagged_recorded_one_is_not() {
+        let t0 = Utc.with_ymd_and_hms(2026, 6, 25, 9, 0, 0).unwrap();
+        let events = vec![
+            evt("ev-doctor", "Doctor appt", t0),
+            evt("ev-rec", "Standup", t0),
+        ];
+        // "Standup" was recorded; "Doctor appt" was not.
+        let recordings = vec![rec("meeting-1", "standup", t0 + Duration::minutes(5), true)];
+        let mut dismissed = std::collections::HashSet::new();
+        dismissed.insert("ev-doctor".to_string());
+        dismissed.insert("ev-rec".to_string()); // dismissing a recorded event must be ignored
+
+        let items = build_agenda(events, recordings, &dismissed, |_, _| vec![]);
+        let doctor = items.iter().find(|i| i.title == "Doctor appt").unwrap();
+        let standup = items.iter().find(|i| i.title == "Standup").unwrap();
+        assert!(
+            doctor.dismissed,
+            "an unrecorded dismissed event is flagged dismissed"
+        );
+        assert!(
+            !standup.dismissed,
+            "a dismissed id that matched a recording must NOT be hidden (you recorded it)"
+        );
+    }
+
+    // -- specs/0029 WS6.2: sync-stable dismissal key ----------------------------
+
+    #[test]
+    fn dismiss_key_prefers_external_identifier_with_occurrence_start() {
+        let t0 = Utc.with_ymd_and_hms(2026, 6, 25, 9, 0, 0).unwrap();
+        let events = vec![evt_ext("ek-abc", "EXT-123", "Dentist", t0)];
+
+        let items = build_agenda(
+            events,
+            vec![],
+            &std::collections::HashSet::new(),
+            |_, _| vec![],
+        );
+        assert_eq!(
+            items[0].dismiss_key,
+            format!("ext:EXT-123@{}", t0.to_rfc3339())
+        );
+        // The row id (used for eventWithIdentifier lookups etc.) stays the EventKit id.
+        assert_eq!(items[0].id, "ek-abc");
+    }
+
+    #[test]
+    fn dismiss_key_falls_back_to_event_id_without_external_identifier() {
+        let t0 = Utc.with_ymd_and_hms(2026, 6, 25, 9, 0, 0).unwrap();
+        let items = build_agenda(
+            vec![evt("ek-abc", "Dentist", t0)],
+            vec![],
+            &std::collections::HashSet::new(),
+            |_, _| vec![],
+        );
+        assert_eq!(items[0].dismiss_key, "ek-abc");
+
+        // Empty EventKit id -> synthetic key for both id and dismiss key.
+        let items = build_agenda(
+            vec![evt("", "Dentist", t0)],
+            vec![],
+            &std::collections::HashSet::new(),
+            |_, _| vec![],
+        );
+        assert!(items[0].id.starts_with("evt-"));
+        assert_eq!(items[0].dismiss_key, items[0].id);
+    }
+
+    #[test]
+    fn dismissal_matches_either_stable_or_legacy_key() {
+        let t0 = Utc.with_ymd_and_hms(2026, 6, 25, 9, 0, 0).unwrap();
+
+        // Stored under the NEW stable key -> dismissed, even if the provider
+        // reissued the eventIdentifier between reads (id differs, external stable).
+        let mut by_stable = std::collections::HashSet::new();
+        by_stable.insert(format!("ext:EXT-123@{}", t0.to_rfc3339()));
+        let items = build_agenda(
+            vec![evt_ext("ek-REISSUED", "EXT-123", "Dentist", t0)],
+            vec![],
+            &by_stable,
+            |_, _| vec![],
+        );
+        assert!(
+            items[0].dismissed,
+            "stable-key dismissal survives an eventIdentifier reissue"
+        );
+
+        // Stored under the LEGACY eventIdentifier (pre-0029 dismissals) -> still dismissed.
+        let mut by_legacy = std::collections::HashSet::new();
+        by_legacy.insert("ek-abc".to_string());
+        let items = build_agenda(
+            vec![evt_ext("ek-abc", "EXT-123", "Dentist", t0)],
+            vec![],
+            &by_legacy,
+            |_, _| vec![],
+        );
+        assert!(
+            items[0].dismissed,
+            "legacy-key dismissals keep working (dual-key read)"
+        );
+    }
+
+    // -- specs/0041 WS5: iCalUID dedup + dismissal interplay ---------------------
+
+    #[test]
+    fn dismissal_still_applies_after_duplicate_events_collapse() {
+        let t0 = Utc.with_ymd_and_hms(2026, 7, 8, 9, 0, 0).unwrap();
+        // The same invite read from two calendars (same external id + start,
+        // different event ids) — the read-path dedup collapses them to one.
+        let duplicates = vec![
+            evt_ext("ek-work", "UID-1", "Standup", t0),
+            evt_ext("ek-team", "UID-1", "Standup", t0),
+        ];
+        let events = crate::calendar::eventkit::dedup_by_external_id(duplicates);
+        assert_eq!(events.len(), 1, "one bubble per invite");
+
+        // A dismissal stored under the stable `ext:` key (written BEFORE the
+        // dedup existed, possibly via the copy that got dropped) still hides
+        // the survivor: the key depends only on the shared UID + start.
+        let mut dismissed = std::collections::HashSet::new();
+        dismissed.insert(format!("ext:UID-1@{}", t0.to_rfc3339()));
+        let items = build_agenda(events, vec![], &dismissed, |_, _| vec![]);
+        assert_eq!(items.len(), 1);
+        assert!(
+            items[0].dismissed,
+            "dismissals keep working across the duplicate collapse"
+        );
+    }
+
+    #[test]
+    fn recurring_occurrences_share_external_id_but_get_distinct_dismiss_keys() {
+        let t0 = Utc.with_ymd_and_hms(2026, 6, 25, 9, 0, 0).unwrap();
+        let t1 = Utc.with_ymd_and_hms(2026, 6, 25, 14, 0, 0).unwrap();
+        let events = vec![
+            evt_ext("ek-1", "EXT-RECUR", "Standup", t0),
+            evt_ext("ek-2", "EXT-RECUR", "Standup", t1),
+        ];
+
+        let items = build_agenda(
+            events,
+            vec![],
+            &std::collections::HashSet::new(),
+            |_, _| vec![],
+        );
+        assert_ne!(
+            items[0].dismiss_key, items[1].dismiss_key,
+            "hiding one occurrence must not hide the whole series"
+        );
+    }
+}

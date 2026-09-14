@@ -1,0 +1,16 @@
+{
+  "name": "notes_only_grounding",
+  "description": "A notes-only meeting (empty/sparse transcript). The summary must be built from the notes alone and must not fabricate transcript content that was never said.",
+  "transcript": "",
+  "notes": "# Vendor call\n- Chose Acme for the CDN contract (12 month term)\n- Price: $4k/mo, renews annually\n- Action: Sam to send signed SOW by end of week\n- Risk: Acme's SLA only covers 99.9%, legal to review",
+  "must_include": [
+    "Acme",
+    "CDN",
+    "SOW",
+    "SLA"
+  ],
+  "must_not_include": [
+    "transcript shows",
+    "as heard in the recording"
+  ]
+}

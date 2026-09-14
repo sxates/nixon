@@ -1,0 +1,21 @@
+{
+  "extends": ["next/core-web-vitals", "next/typescript"],
+  // no-unused-vars / no-unescaped-entities / prefer-const cleaned up and restored to "error"
+  // (spec 0005). no-explicit-any remains "warn": the remaining ~86 occurrences are catch-clause
+  // bindings, dynamic JSON store records, and `as any` casts where a safe concrete type is
+  // non-obvious; fixing them risks behavior/type regressions. Tracked in specs/0005-lint-cleanup.md.
+  "rules": {
+    "@typescript-eslint/no-unused-vars": [
+      "error",
+      {
+        "argsIgnorePattern": "^_",
+        "varsIgnorePattern": "^_",
+        "caughtErrorsIgnorePattern": "^_",
+        "destructuredArrayIgnorePattern": "^_"
+      }
+    ],
+    "@typescript-eslint/no-explicit-any": "warn",
+    "react/no-unescaped-entities": "error",
+    "prefer-const": "error"
+  }
+}

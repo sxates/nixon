@@ -1,0 +1,42 @@
+{
+  "projectId": "636e117f-f939-4df1-8d78-f6f8690074fc",
+  "shape": "package",
+  "pkg": "vinyl",
+  "globalName": "VinylUI",
+  "tsconfig": "tsconfig.json",
+  "cssEntry": ".ds-sync-styles/vinyl-ui.css",
+  "readmeHeader": ".design-sync/conventions.md",
+  "componentSrcMap": {
+    "Button": "src/components/ui/button.tsx",
+    "Input": "src/components/ui/input.tsx",
+    "Select": "src/components/ui/select.tsx",
+    "Dialog": "src/components/ui/dialog.tsx",
+    "Tabs": "src/components/ui/tabs.tsx",
+    "Tooltip": "src/components/ui/tooltip.tsx",
+    "Accordion": "src/components/ui/accordion.tsx",
+    "Alert": "src/components/ui/alert.tsx",
+    "ButtonGroup": "src/components/ui/button-group.tsx",
+    "Command": "src/components/ui/command.tsx",
+    "DropdownMenu": "src/components/ui/dropdown-menu.tsx",
+    "Form": "src/components/ui/form.tsx",
+    "InputGroup": "src/components/ui/input-group.tsx",
+    "Label": "src/components/ui/label.tsx",
+    "Popover": "src/components/ui/popover.tsx",
+    "Progress": "src/components/ui/progress.tsx",
+    "ScrollArea": "src/components/ui/scroll-area.tsx",
+    "Separator": "src/components/ui/separator.tsx",
+    "Sheet": "src/components/ui/sheet.tsx",
+    "Switch": "src/components/ui/switch.tsx",
+    "Textarea": "src/components/ui/textarea.tsx",
+    "VisuallyHidden": "src/components/ui/visually-hidden.tsx"
+  },
+  "overrides": {
+    "Alert": { "cardMode": "column" },
+    "Dialog": { "cardMode": "single", "viewport": "660x420" },
+    "Tooltip": { "cardMode": "single", "viewport": "320x200" },
+    "DropdownMenu": { "cardMode": "single", "viewport": "300x360" },
+    "Popover": { "cardMode": "single", "viewport": "380x320" },
+    "Sheet": { "cardMode": "single", "viewport": "560x440" },
+    "Command": { "cardMode": "single", "viewport": "380x420" }
+  }
+}

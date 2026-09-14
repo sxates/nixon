@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 22 22">
+  <!-- idle: two open hubs joined by a tape bar -->
+  <path d="M6 16 Q11 15 16 16" fill="none" stroke="#000" stroke-width="1.6" stroke-linecap="round"/>
+  <circle cx="6" cy="11" r="5.5" fill="none" stroke="#000" stroke-width="1.6"/>
+  <circle cx="16" cy="11" r="5.5" fill="none" stroke="#000" stroke-width="1.6"/>
+</svg>
