@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- Keep debugger attach (lldb) working on the dev binary after it is
+       re-signed with a real identity; ad-hoc binaries allow attach implicitly,
+       validly signed ones require this entitlement. Dev-only — never used by
+       the production bundle (notarization would reject it). -->
+  <key>com.apple.security.get-task-allow</key>
+  <true/>
+</dict>
+</plist>

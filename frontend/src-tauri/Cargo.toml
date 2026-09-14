@@ -1,0 +1,263 @@
+[package]
+name = "nixon"
+version = "0.1.0"
+description = "Nixon — a local-first, on-device meeting assistant for macOS that records, transcribes, and summarizes your meetings privately."
+authors = ["Brian Scates <brian@sxates.com>"]
+license = "MIT"
+repository = "https://github.com/sxates/nixon"
+edition = "2021"
+rust-version = "1.88"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+name = "app_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+
+# Hardware acceleration features for whisper-rs.
+# macOS (the supported platform): Metal is auto-enabled via the target-specific
+# whisper-rs dependency below; build with ./build-gpu.sh (or ./dev-nixon.sh for dev).
+# The cuda/vulkan/hipblas/openblas features are kept as upstream platform seams.
+[features]
+default = ["platform-default"]  # Automatically enables best backend per platform
+
+# Platform-appropriate defaults - see target-specific dependencies below
+platform-default = []
+
+# Manual GPU acceleration options (for power users to override defaults)
+metal = ["whisper-rs/metal"]       # macOS: Apple Metal GPU (Auto-enabled on macOS)
+coreml = ["whisper-rs/coreml"]     # macOS: Apple CoreML acceleration
+cuda = ["whisper-rs/cuda"]         # Windows/Linux: NVIDIA CUDA GPU
+vulkan = ["whisper-rs/vulkan"]     # Windows/Linux: AMD/Intel Vulkan GPU
+hipblas = ["whisper-rs/hipblas"]   # Linux: AMD ROCm HIP
+
+# CPU optimizations (fallback for systems without GPU)
+openblas = ["whisper-rs/openblas"] # Optimized BLAS (Auto-enabled on Windows/Linux)
+openmp = ["whisper-rs/openmp"]     # OpenMP parallel processing
+
+[build-dependencies]
+tauri-build = { version = "2.3.0", features = [] }
+reqwest = { version = "0.11", features = ["blocking", "multipart", "json", "stream"] }
+which = "6.0.1"
+zip = "2.2"           # ZIP extraction (Windows, macOS)
+tar = "0.4"           # TAR extraction (Linux)
+xz2 = "0.1"           # XZ decompression (Linux)
+
+
+[dependencies]
+serde_json = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+anyhow = "1.0"
+once_cell = "1.17.1"
+uuid = { version = "1.0", features = ["v4", "serde"] }
+# NFC normalization for action-item content fingerprints (specs/0034); already in the
+# dependency tree transitively, promoted to a direct dependency.
+unicode-normalization = "0.1"
+# base64 data: URIs for cached attendee photos (specs/0038 WS3) — render-time
+# LOCAL-ONLY, no egress to Google. Already in the tree transitively; promoted here.
+base64 = "0.22"
+
+# Cross-platform audio capture
+cpal = "0.15.3"
+
+# Wav encoding - now using manual WAV creation instead of hound
+# hound = "3.5"
+
+# Dates
+chrono = { version = "0.4.31", features = ["serde"] }
+
+# Log
+log = "0.4"
+env_logger = "0.11"
+tracing = "0.1.40"
+which = "6.0.1"
+
+# Bytes
+bytemuck = "1.16.1"
+
+# EBU R128 loudness normalization (professional broadcast standard)
+ebur128 = "0.1"
+
+# Noise suppression - RNNoise-based neural network noise reduction
+nnnoiseless = "0.5"
+
+# Speech recognition and async utilities
+# NOTE: whisper-rs is declared in platform-specific sections below (macOS/Windows/Linux)
+# to ensure correct GPU features are enabled per platform
+futures-util = "0.3"
+silero_rs = { git = "https://github.com/emotechlab/silero-rs", rev = "26a6460", package = "silero" }
+
+# Parakeet (ONNX-based fast transcription) dependencies
+ort = { version = "2.0.0-rc.10" }  # ONNX Runtime for Parakeet models
+thiserror = "2.0.16"                # Error handling for Parakeet
+
+# Speaker diarization (specs/0010, ADR-0005): sherpa-onnx offline diarization
+# (pyannote segmentation + speaker embedding + clustering). Offline diarization is
+# always compiled in (no feature flag). We drop the `tts` default but MUST keep
+# `download-binaries` — that feature is how sherpa-rs-sys fetches the prebuilt
+# `libonnxruntime.1.17.1.dylib` + `libsherpa-onnx-c-api.dylib` at build time
+# (without it the sys crate tries to build sherpa-onnx from source via cmake).
+# Those dylibs are then bundled into the .app via build.rs (mirroring the
+# ffmpeg/llama-helper sidecar handling). `ort` statically links a different ORT
+# (1.22), so the two runtimes coexist without symbol clash (ADR-0005).
+sherpa-rs = { version = "0.6.8", default-features = false, features = ["download-binaries"] }
+# specs/0053 W2: sherpa-rs hardcodes num_threads: 1 on BOTH the diarizer's ONNX
+# models with no DiarizeConfig override, pinning long meetings to one core. We
+# bind the sys crate directly for diarizer construction only (see
+# src/diarization/sherpa_sys.rs). Same version cargo already resolves
+# transitively, so this unifies to one copy — no extra native download.
+sherpa-rs-sys = { version = "0.6.8", default-features = false, features = ["download-binaries"] }
+# Extracting the sherpa segmentation model tarball (.tar.bz2) at runtime.
+tar = "0.4"
+bzip2 = "0.5"
+
+# Async
+tokio = { version = "1.32.0", features = ["full", "tracing"] }
+tokio-util = "0.7"  # Utilities for tokio including CancellationToken
+async-trait = "0.1"  # Trait abstraction for async methods
+
+reqwest = { version = "0.11", features = ["blocking", "multipart", "json", "stream"] }
+
+# Google Calendar OAuth (specs/0032, ADR-0010): authorization-code + PKCE loopback
+# flow. v4.x is the line that pairs with the reqwest 0.11 pin above — if reqwest
+# ever moves to 0.12, bump to oauth2 v5 in the same change (spec 0032 risk note).
+oauth2 = "4"
+
+# crossbeam
+crossbeam = "0.8.4"
+dashmap = "6.1.0"
+
+# Directories
+dirs = "5.0.1"
+
+# Additional dependencies for notification system
+url = "2.5.0"
+
+
+# System monitoring for resource management
+sysinfo = "0.32"
+
+lazy_static = { version = "1.4.0" }
+realfft = "3.4.0"
+regex = "1.11.0"
+ndarray = "0.16"
+bytes = { version = "1.9.0", features = ["serde"] }
+
+esaxx-rs = "0.1.10"
+symphonia = { version = "0.5.4", features = ["aac", "isomp4", "mp3", "flac", "ogg", "vorbis", "pcm", "wav", "opt-simd"] }
+rand = "0.8.5"
+rayon = "1.10"
+rubato = "0.15.0"
+ringbuf = "0.4.8"
+tempfile = "3.3.0"
+whatlang = "0.16.4"
+
+ffmpeg-sidecar = { git = "https://github.com/nathanbabcock/ffmpeg-sidecar", branch = "main" }
+
+sqlx = { version = "0.8", features = [ "runtime-tokio", "sqlite", "chrono"] }
+
+# Common Tauri configuration
+tauri = { version = "2.6.2", features = [ "macos-private-api", "protocol-asset", "tray-icon", "image-png"] }
+tauri-plugin-fs = "2.4.0"
+tauri-plugin-dialog = "2.3.0"
+tauri-plugin-store = "2.4.0"
+tauri-plugin-notification = "2.3.1"
+
+# Desktop-only single instance guard
+[target.'cfg(any(target_os = "macos", windows, target_os = "linux"))'.dependencies]
+tauri-plugin-single-instance = "=2.3.7"
+# Desktop-only global shortcut (CmdOrCtrl+Shift+R record toggle, spec 0007)
+tauri-plugin-global-shortcut = "2.3.0"
+
+# macOS-specific dependencies with Metal GPU acceleration
+[target.'cfg(target_os = "macos")'.dependencies]
+tauri = { version = "2.6.2", features = ["protocol-asset", "macos-private-api", "tray-icon", "image-png"] }
+once_cell = "1.17.1"
+objc = "0.2.7"
+tauri-plugin-log = { version = "2.6.0", features = ["colored"] }
+anyhow = "1.0"
+time = { version = "0.3", features = ["formatting"] }
+reqwest = { version = "0.11", features = ["multipart", "json"] }
+core-graphics = "0.23"
+cidre = { git = "https://github.com/yury/cidre", rev = "a9587fa", features = ["av"] }
+# macOS Accessibility (AX) — read Zoom's mute state (specs/0049). `accessibility`
+# is the safe high-level wrapper; `accessibility-sys` provides AXIsProcessTrustedWithOptions
+# + attribute constants; `core-foundation` for the CFString/CFArray plumbing. AX is a C
+# API in the ApplicationServices framework (no Info.plist key; permission is the
+# Accessibility TCC grant prompted via AXIsProcessTrustedWithOptions).
+accessibility = "0.1"
+accessibility-sys = "0.1"
+core-foundation = "0.9"
+# macOS Keychain storage for LLM/transcription API keys (spec 0030 WS1, ADR-0009).
+# apple-native = Security.framework keychain; no default store features so the
+# dependency stays lean and platform-explicit.
+keyring = { version = "3", default-features = false, features = ["apple-native"] }
+
+# EventKit calendar access (specs/0008 P2 — read-only macOS Calendar).
+# Default features pull app-kit/map-kit/core-location which we don't need; trim
+# to the EventKit classes we touch + block2 for the async authorization handler.
+objc2 = "0.6"
+objc2-foundation = { version = "0.3", default-features = false, features = [
+    "std",
+    "NSArray",
+    "NSDate",
+    "NSError",
+    "NSPredicate",
+    "NSString",
+    "NSURL",
+    "NSObjCRuntime",
+] }
+objc2-event-kit = { version = "0.3", default-features = false, features = [
+    "std",
+    "block2",
+    "EKEventStore",
+    "EKEvent",
+    "EKCalendar",
+    "EKCalendarItem",
+    "EKParticipant",
+    "EKObject",
+    "EKTypes",
+] }
+block2 = "0.6"
+dasp = "0.11.0"
+futures-channel = "0.3.31"
+
+# PERFORMANCE: Enable Metal GPU + CoreML acceleration automatically on macOS
+# CoreML provides additional acceleration for Apple Silicon chips
+whisper-rs = { version = "0.13.2", features = ["raw-api", "metal", "coreml"] }
+
+# Windows-specific dependencies
+# Default: CPU-only build (no BLAS)
+# Users can enable features manually:
+#   --features cuda     (NVIDIA GPUs)
+#   --features vulkan   (AMD/Intel GPUs)
+#   --features openblas (OpenBLAS optimization, requires BLAS_INCLUDE_DIRS)
+[target.'cfg(target_os = "windows")'.dependencies]
+whisper-rs = { version = "0.13.2", features = ["raw-api"] }
+futures-channel = "0.3.31"
+
+# Linux-specific dependencies
+# Default: CPU-only build (no BLAS)
+# Users can enable features manually:
+#   --features cuda     (NVIDIA GPUs)
+#   --features vulkan   (AMD/Intel GPUs)
+#   --features hipblas  (AMD ROCm)
+#   --features openblas (OpenBLAS optimization, requires BLAS_INCLUDE_DIRS)
+[target.'cfg(target_os = "linux")'.dependencies]
+whisper-rs = { version = "0.13.2", features = ["raw-api"] }
+futures-channel = "0.3.31"
+
+[dev-dependencies]
+tempfile = "3.3.0"
+infer = "0.15"
+criterion = { version = "0.5.1", features = ["async_tokio"] }
+memory-stats = "1.0"
+strsim = "0.10.0"
+futures = "0.3.31"
+tracing-subscriber = "0.3.16"
+tauri = { version = "2.6.2", features = ["test"] }
+
+[patch.crates-io]
+cpal = { git = "https://github.com/RustAudio/cpal", rev = "51c3b43" }
+esaxx-rs = { git = "https://github.com/thewh1teagle/esaxx-rs.git", branch = "feat/dynamic-msvc-link" }

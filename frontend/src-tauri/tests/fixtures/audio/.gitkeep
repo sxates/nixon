@@ -1,0 +1,3 @@
+# Reserved for committed audio fixtures (specs/0009). Currently fixtures are
+# generated at test time via macOS `say`; add a small WAV here if/when Linux CI
+# needs a `say`-free speech fixture (see tests/common/mod.rs).

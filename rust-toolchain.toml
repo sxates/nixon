@@ -1,0 +1,15 @@
+# Pinned Rust toolchain for the Nixon workspace (specs/0028).
+#
+# Pins the channel + the components CI and the Definition-of-Done gates rely on
+# (clippy for `-D warnings`, rustfmt for `cargo fmt --check`). Applies to the
+# whole workspace — both members (frontend/src-tauri and llama-helper).
+#
+# The crate's MSRV is 1.77 (Cargo.toml `rust-version`), edition 2021, but the
+# *locked dependency tree* (Cargo.lock: cidre, plist, serde_with, time, icu…)
+# requires rustc >= 1.88. This pin is the current stable, comfortably above that
+# real floor; bump it deliberately (and re-run the full gate) rather than letting
+# CI float on whatever `stable` happens to be.
+[toolchain]
+channel = "1.96.0"
+components = ["clippy", "rustfmt"]
+profile = "minimal"

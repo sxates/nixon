@@ -1,0 +1,17 @@
+{
+  "name": "notes_grounding_standup",
+  "description": "User notes carry a decision + action item that the transcript only partially covers. A grounded summary must fold in the notes' points and must NOT invent attendees or dates.",
+  "transcript": "Alex: Morning everyone. Quick standup. I finished the auth refactor yesterday.\nPriya: Nice. I'm still blocked on the staging deploy, the pipeline keeps timing out.\nAlex: Let's pair on that after this. I think it's the migration step.\nPriya: Sounds good. Also we agreed we'd ship the beta on Friday, right?\nAlex: Yeah, Friday for the beta. I'll send the release notes draft today.",
+  "notes": "- Decision: ship beta on Friday\n- Priya blocked on staging deploy (pipeline timeout)\n- Alex to send release notes draft today\n- Follow up: pair on migration step to unblock deploy",
+  "must_include": [
+    "beta",
+    "Friday",
+    "staging",
+    "release notes"
+  ],
+  "must_not_include": [
+    "Monday",
+    "next week",
+    "Jordan"
+  ]
+}

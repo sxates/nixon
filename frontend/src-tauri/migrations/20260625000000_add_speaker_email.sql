@@ -1,0 +1,13 @@
+-- Migration: add nullable `email` to the speakers table (specs/0010, P2 Tasks 6 & 7)
+--
+-- Calendar-attendee → speaker association (specs/0008 + 0010): when the user names a
+-- diarized speaker from the linked calendar event's attendee roster, we store the
+-- attendee's EMAIL alongside the display_name. Email is a stable cross-meeting identity
+-- key (far better than a raw voice embedding for *identity*) and bridges "who was
+-- invited" with "who actually spoke" — it is the foundation for the P3 People entity.
+--
+-- Forward-only (CLAUDE.md): never edit the prior 20260624000000_add_speakers_table.sql.
+-- SQLite has no `ADD COLUMN IF NOT EXISTS`, but sqlx runs each migration at most once
+-- (tracked in _sqlx_migrations), so a plain additive ADD COLUMN is idempotent in
+-- practice. Nullable with no default so existing rows are unaffected.
+ALTER TABLE speakers ADD COLUMN email TEXT;
