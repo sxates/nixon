@@ -14,6 +14,10 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 ## [Unreleased]
 
+_(nothing yet)_
+
+## [0.2.0] - 2026-09-14
+
 ### Changed
 
 - **Canvas feedback pass (owner, 2026-09-15).** Record header: the PEAK / MIC GATE lamps
