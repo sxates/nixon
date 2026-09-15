@@ -4,7 +4,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { ArrowLeft, Pencil } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { ReelLabel } from '@/components/MeetingDetails/ReelLabel';
 import { formatReelNumber } from '@/lib/reel-number';
 
 interface MeetingIdentityHeaderProps {
@@ -206,14 +205,17 @@ export function MeetingIdentityHeader({
   );
 
   // Engraved identity line (specs/0057): the reel handle plus the recording's facts,
-  // silkscreened in small caps — "REEL 0412 · TUE JUN 24 · 10:00 · 00:42:18 · ZOOM".
-  // Unknown segments (no duration yet, no known source) are simply dropped.
+  // silkscreened in small caps — "REEL 0412 · TUE JUN 24 · 10:00 · 00:42:18 · ZOOM · 4 VOICES".
+  // Unknown segments (no duration yet, no known source, not yet diarized) are simply
+  // dropped. This line is the meeting's whole identity: the typed reel-label card that used
+  // to duplicate it on the right was removed on 0.1.0 canvas feedback (too tall, redundant).
   const identitySegments = [
     formatReelNumber(reelNumber),
     reelDate,
     reelTime,
     reelLength,
     reelSource,
+    voices == null ? null : `${voices} ${voices === 1 ? 'voice' : 'voices'}`,
   ].filter((segment): segment is string => !!segment);
 
   const identityLine = (
@@ -222,37 +224,27 @@ export function MeetingIdentityHeader({
     </p>
   );
 
-  // Single-column document layout: inline back button + editable title + the engraved
-  // identity line, with the typed reel label parked on the right. The label is a
-  // decorative duplicate of the identity line, so it drops out on narrow widths.
+  // Single-column document layout: back button + editable title + the engraved identity
+  // line. 0.1.0 canvas feedback: once the column is at its max width (`lg:` — the 840px
+  // column plus the sidebar leaves a gutter from 1024px up) the back button hangs in that
+  // gutter so the title's left edge lines up with the participants row, channel strip and
+  // tabs below it. Narrower than that there is no gutter, and it stays inline.
   return (
-    <div className="flex items-start justify-between gap-6">
-      <div className="flex min-w-0 flex-1 items-start gap-1.5">
-        {onBack && (
-          <button
-            type="button"
-            onClick={onBack}
-            aria-label="Back to meetings"
-            title="Back to meetings"
-            className="-ml-1 mt-1 inline-flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <ArrowLeft className="h-[18px] w-[18px]" />
-          </button>
-        )}
-        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-          {titleField}
-          {identityLine}
-        </div>
-      </div>
-      <div className="hidden md:block">
-        <ReelLabel
-          reelNumber={reelNumber}
-          date={reelDate ?? ''}
-          time={reelTime ?? ''}
-          length={reelLength ?? ''}
-          source={reelSource ?? ''}
-          voices={voices}
-        />
+    <div className="relative flex items-start gap-1.5">
+      {onBack && (
+        <button
+          type="button"
+          onClick={onBack}
+          aria-label="Back to meetings"
+          title="Back to meetings"
+          className="-ml-1 mt-1 inline-flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:absolute lg:-left-9 lg:top-0 lg:ml-0"
+        >
+          <ArrowLeft className="h-[18px] w-[18px]" />
+        </button>
+      )}
+      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+        {titleField}
+        {identityLine}
       </div>
     </div>
   );

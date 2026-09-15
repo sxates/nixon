@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { TemplateEditorDialog } from './TemplateEditorDialog';
 import { DeleteTemplateDialog } from './DeleteTemplateDialog';
 import { SOURCE_LABEL, TemplateListItem, TemplateSource } from './types';
+import { SettingsGroup, SettingsNote, SettingsSection } from '@/components/ui/settings';
 
 /** Badge accents per source — filled muted for built-ins, filled brand for custom,
  *  outline for edited: three distinct looks, none relying on hue alone. */
@@ -77,46 +78,35 @@ export function TemplateSettings() {
   const visibleTemplates = templates.filter((t) => !t.hidden);
   const hiddenTemplates = templates.filter((t) => t.hidden);
 
-  if (loading) {
-    return (
-      <div className="animate-pulse">
-        <div className="h-4 bg-muted rounded w-1/4 mb-4"></div>
-        <div className="h-8 bg-muted rounded mb-4"></div>
-      </div>
-    );
-  }
-
   return (
-    <div className="space-y-6">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h3 className="text-lg font-semibold mb-4">Summary Templates</h3>
-          <p className="text-sm text-muted-foreground mb-2">
-            Templates shape what the AI writes for each meeting — the sections, their order,
-            and the instructions behind them. Edit any template, or create your own. Editing a
-            built-in keeps the original and saves your changes as an edited version.
-          </p>
+    <div className="space-y-8">
+      <SettingsSection
+        title="Summary templates"
+        description="Templates shape what the AI writes for each meeting — the sections, their order, and the instructions behind them. Editing a built-in keeps the original and saves your changes as an edited version."
+      >
+        <div className="flex justify-end">
+          <Button
+            variant="brand"
+            size="sm"
+            onClick={() => setEditorTarget({ templateId: null, source: null })}
+          >
+            <Plus className="h-4 w-4" />
+            New template
+          </Button>
         </div>
-        <Button
-          variant="brand"
-          size="sm"
-          className="flex-shrink-0"
-          onClick={() => setEditorTarget({ templateId: null, source: null })}
-        >
-          <Plus className="h-4 w-4" />
-          New template
-        </Button>
-      </div>
 
-      {loadError && (
-        <div className="p-4 border rounded-lg text-sm text-destructive">
-          {loadError}
-        </div>
-      )}
+        {loadError && (
+          <SettingsNote tone="warn" className="text-destructive">
+            {loadError}
+          </SettingsNote>
+        )}
 
-      <div className="space-y-3">
-        {visibleTemplates.map((template) => (
-          <div key={template.id} className="flex items-center justify-between gap-4 p-4 border rounded-lg">
+        <SettingsGroup>
+          {loading && (
+            <div className="py-3 u-meta">Loading templates…</div>
+          )}
+          {visibleTemplates.map((template) => (
+          <div key={template.id} className="flex items-center justify-between gap-4 border-b border-border py-3 last:border-b-0">
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
                 <span className="font-medium truncate">{template.name}</span>
@@ -174,26 +164,22 @@ export function TemplateSettings() {
             </div>
           </div>
         ))}
-        {!loadError && visibleTemplates.length === 0 && (
-          <div className="p-4 border rounded-lg text-sm text-muted-foreground">
-            No templates found.
-          </div>
-        )}
-      </div>
+        {!loading && !loadError && visibleTemplates.length === 0 && (
+            <div className="py-3 u-meta">No templates found.</div>
+          )}
+        </SettingsGroup>
+      </SettingsSection>
 
       {hiddenTemplates.length > 0 && (
-        <div className="space-y-3">
-          <div>
-            <h4 className="text-sm font-semibold text-muted-foreground">Hidden templates</h4>
-            <p className="text-sm text-muted-foreground">
-              Removed from your lists — meetings that already use one keep working. Restore
-              anytime.
-            </p>
-          </div>
+        <SettingsSection
+          title="Hidden templates"
+          description="Removed from your lists — meetings that already use one keep working. Restore anytime."
+        >
+          <SettingsGroup>
           {hiddenTemplates.map((template) => (
             <div
               key={template.id}
-              className="flex items-center justify-between gap-4 rounded-lg border border-dashed p-4 opacity-70"
+              className="flex items-center justify-between gap-4 border-b border-border py-3 opacity-70 last:border-b-0"
             >
               <div className="min-w-0 flex-1">
                 <span className="font-medium truncate">{template.name}</span>
@@ -215,7 +201,8 @@ export function TemplateSettings() {
               </Button>
             </div>
           ))}
-        </div>
+          </SettingsGroup>
+        </SettingsSection>
       )}
 
       <TemplateEditorDialog

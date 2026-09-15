@@ -31,29 +31,26 @@ export interface ParakeetEngineState {
 // User-friendly model display configuration
 export interface ModelDisplayInfo {
   friendlyName: string;
-  icon: string;
   tagline: string;
   recommended?: boolean;
+  /** Rendered as an engraved tag on the model card (no emoji — 0.1.0 owner feedback). */
   tier: 'fastest' | 'balanced' | 'precise';
 }
 
 export const MODEL_DISPLAY_CONFIG: Record<string, ModelDisplayInfo> = {
   'parakeet-tdt-0.6b-v3-int8': {
     friendlyName: 'Lightning',
-    icon: '⚡',
     tagline: 'Real time • Best for speed, great accuracy',
     recommended: true,
     tier: 'fastest'
   },
   'parakeet-tdt-0.6b-v2-int8': {
     friendlyName: 'Compact',
-    icon: '📦',
     tagline: 'Real time • Smaller size',
     tier: 'balanced'
   },
   'parakeet-tdt-0.6b-v3-fp32': {
     friendlyName: 'Precise',
-    icon: '🎯',
     tagline: '20x real-time • Higher accuracy',
     tier: 'precise'
   }
@@ -102,7 +99,7 @@ export function getModelDisplayName(modelName: string): string {
   return displayInfo?.friendlyName || modelName;
 }
 
-// Get model display info (icon, tagline, etc.)
+// Get model display info (friendly name, tagline, tier)
 export function getModelDisplayInfo(modelName: string): ModelDisplayInfo | null {
   return MODEL_DISPLAY_CONFIG[modelName] || null;
 }

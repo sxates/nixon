@@ -134,7 +134,7 @@ export default function ResumeRecordingPrompt() {
       <DialogContent className="sm:max-w-[440px]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Radio className="h-5 w-5 text-record" />
+            <Radio className="h-5 w-5 text-record-ink" />
             Unfinished recording
           </DialogTitle>
           <DialogDescription>

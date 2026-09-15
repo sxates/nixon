@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { Globe } from 'lucide-react';
 import { toast } from 'sonner';
 import { useConfig } from '@/contexts/ConfigContext';
 
@@ -163,13 +162,6 @@ export function LanguageSelection() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Globe className="h-4 w-4 text-muted-foreground" />
-          <h4 className="text-sm font-medium text-foreground">Transcription Language</h4>
-        </div>
-      </div>
-
       <div className="space-y-2">
         <select
           value={selectedLanguage}
@@ -188,7 +180,7 @@ export function LanguageSelection() {
         {/* Parakeet language limitation warning */}
         {isParakeet && (
           <div className="p-2 bg-muted border border-border rounded text-foreground">
-            <p className="font-medium">ℹ️ Parakeet Language Support</p>
+            <p className="font-medium">Parakeet language support</p>
             <p className="mt-1 text-xs">Parakeet currently only supports automatic language detection. Manual language selection is not available. Use Whisper if you need to specify a particular language.</p>
           </div>
         )}
@@ -200,13 +192,13 @@ export function LanguageSelection() {
           </p>
           {selectedLanguage === 'auto' && (
             <div className="p-2 bg-brand/10 border border-brand/30 rounded text-foreground">
-              <p className="font-medium">⚠️ Auto Detect may produce incorrect results</p>
+              <p className="font-medium">Auto Detect may produce incorrect results</p>
               <p className="mt-1">For best accuracy, select your specific language (e.g., English, Spanish, etc.)</p>
             </div>
           )}
           {selectedLanguage === 'auto-translate' && (
             <div className="p-2 bg-brand/10 border border-brand/30 rounded text-foreground">
-              <p className="font-medium">🌐 Translation Mode Active</p>
+              <p className="font-medium">Translation mode active</p>
               <p className="mt-1">All audio will be automatically translated to English. Best for multilingual meetings where you need English output.</p>
             </div>
           )}

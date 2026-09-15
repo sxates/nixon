@@ -45,15 +45,23 @@ describe('MeetingIdentityHeader', () => {
     expect(segments[2]).toBe('10:00');
   });
 
-  it('renders the title at the 22px display size and shows the reel label card', async () => {
-    render(<MeetingIdentityHeader {...base} reelNumber={412} source="Zoom" />);
+  it('renders the title at the 22px display size with no reel label card', async () => {
+    render(<MeetingIdentityHeader {...base} reelNumber={412} source="Zoom" voices={4} />);
 
     const heading = await screen.findByRole('heading', { name: 'Quarterly planning' });
     expect(heading.className).toContain('font-display');
     expect(heading.className).toContain('text-[22px]');
-    // The card is aria-hidden (decorative duplicate of the identity line above),
-    // so it's found by test id rather than accessible name.
-    expect(screen.getByTestId('reel-label-header')).toBeInTheDocument();
-    expect(screen.getByTestId('reel-label-header').textContent).toContain('REEL 0412');
+    // 0.1.0 canvas feedback: the typed card is gone; the identity line carries everything,
+    // including the voice count that only the card used to show.
+    expect(screen.queryByTestId('reel-label-header')).not.toBeInTheDocument();
+    expect(screen.getByTestId('meeting-identity-line').textContent).toContain('REEL 0412');
+    expect(screen.getByTestId('meeting-identity-line').textContent).toContain('4 voices');
+  });
+
+  it('hangs the back button in the gutter at the wide breakpoint only', () => {
+    render(<MeetingIdentityHeader {...base} onBack={() => {}} />);
+    const back = screen.getByRole('button', { name: 'Back to meetings' });
+    expect(back.className).toContain('lg:absolute');
+    expect(back.className).toContain('lg:-left-9');
   });
 });

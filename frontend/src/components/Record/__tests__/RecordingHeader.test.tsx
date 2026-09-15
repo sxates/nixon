@@ -1,12 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 
-const { level, gate } = vi.hoisted(() => ({
+const { level } = vi.hoisted(() => ({
   level: { rms: 0, peak: 0, peakLatched: false, mic: { rms: 0, peak: 0 }, sys: { rms: 0, peak: 0 } },
-  gate: { muted: false },
 }));
 vi.mock('@/hooks/useRecordingLevel', () => ({ useRecordingLevel: () => level }));
-vi.mock('@/hooks/useMicGate', () => ({ useMicGate: () => gate.muted }));
 vi.mock('@/hooks/useProcessingMode', () => ({ useProcessingMode: () => ({ liveTranscription: null, onBattery: false }) }));
 vi.mock('@/components/Participants/ParticipantsPopover', () => ({ ParticipantsPopover: () => null }));
 vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn() }));
@@ -41,7 +39,6 @@ function renderHeader(recording: boolean) {
 
 beforeEach(() => {
   Object.assign(level, { rms: 0, peak: 0, peakLatched: false, mic: { rms: 0, peak: 0 }, sys: { rms: 0, peak: 0 } });
-  gate.muted = false;
 });
 
 // specs/0057 Plan 2 Task 7 — the header is a control panel, not a second transport: no
@@ -53,7 +50,7 @@ describe('RecordingHeader', () => {
     expect(screen.queryByRole('button', { name: /pause|resume|stop/i })).toBeNull();
   });
 
-  it('recording: shows the engraved identity line, one VU per channel, and the lamp captions', () => {
+  it('recording: shows the engraved identity line and one VU per channel', () => {
     level.rms = 0.5;
     level.mic = { rms: 0.5, peak: 0.5 };
     level.sys = { rms: 0.02, peak: 0.02 };
@@ -65,19 +62,15 @@ describe('RecordingHeader', () => {
       expect.stringMatching(/^CH1 Mic level -?\d+ VU$/),
       expect.stringMatching(/^CH2 Sys level -?\d+ VU$/),
     ]);
-    expect(screen.getByText('Peak')).toBeTruthy();
-    expect(screen.getByText('Mic gate')).toBeTruthy();
+    // 0.1.0 canvas feedback: no PEAK / MIC GATE lamps in the header any more.
+    expect(screen.queryByText('Peak')).toBeNull();
+    expect(screen.queryByText('Mic gate')).toBeNull();
     expect(screen.queryByRole('button', { name: /pause|resume|stop/i })).toBeNull();
   });
 
-  it('lamps follow peak latch and the Zoom mute gate', () => {
-    level.peakLatched = true;
-    gate.muted = true;
-    const { container } = renderHeader(true);
-    const tones = Array.from(container.querySelectorAll('[data-tone]')).map((n) => n.getAttribute('data-tone'));
-    expect(tones).toEqual(['red', 'amber']);
-    // The lamps are decorative: the engraved captions beside them carry the meaning, so a
-    // screen reader must not hear the state twice.
-    expect(screen.queryByRole('img', { name: /peak|mic gate/i })).toBeNull();
+  it('back control is the unboxed chevron shared with meeting details', () => {
+    renderHeader(false);
+    const back = screen.getByRole('button', { name: 'Back to home' });
+    expect(back.className).not.toMatch(/border-border|bg-card/);
   });
 });
