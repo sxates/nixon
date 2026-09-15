@@ -590,18 +590,11 @@ function ModelCard({
 
             {/* Model Specs */}
             <div className="flex items-center space-x-4 text-sm text-muted-foreground ml-9 mt-1.5">
-              <span className="flex items-center space-x-1">
-                <span>📦</span>
-                <span>{formatFileSize(model.size_mb)}</span>
-              </span>
-              <span className="flex items-center space-x-1">
-                <span>🎯</span>
-                <span>{model.accuracy} accuracy</span>
-              </span>
-              <span className="flex items-center space-x-1">
-                <span>⚡</span>
-                <span>{model.speed} processing</span>
-              </span>
+              <span>{formatFileSize(model.size_mb)}</span>
+              <span aria-hidden>·</span>
+              <span>{model.accuracy} accuracy</span>
+              <span aria-hidden>·</span>
+              <span>{model.speed} processing</span>
             </div>
           </div>
 
