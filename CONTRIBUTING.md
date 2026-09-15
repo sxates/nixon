@@ -139,3 +139,9 @@ rolls `CHANGELOG.md`, builds + notarizes the macOS DMG, merges to `main`, tags
 
 By contributing, you agree that your contributions are licensed under the project's MIT
 License.
+
+## Design records
+
+Numbered design specs (`NNNN-*.md`) and implementation plans referenced from code comments
+(for example `specs/0057 §3.2`) are working documents kept outside this repository. The
+spec number is the stable reference; the code comment near it describes the behaviour.
