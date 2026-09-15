@@ -14,6 +14,21 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 ## [Unreleased]
 
+### Changed
+
+- **Settings pages speak one visual language.** Every tab (General, Recordings,
+  Transcription, Summary, Templates, Beta) is now built from a shared set of primitives
+  in `frontend/src/components/ui/settings.tsx` — an engraved caps section header with a
+  one-line purpose, a `rounded-[3px]` group card of ruled rows, and one row shape for
+  every setting: name, description, control on the right. This replaces the three
+  vocabularies that had grown side by side (the ruled row, the old shadcn
+  `p-6 shadow-sm` card with an `h3 text-lg font-semibold`, and ad-hoc bare labels), the
+  `u-section-label` engraved style misused as a row label, and the odd-styled
+  "Loading…" placeholder boxes. Sections within each tab are ordered the way a new user
+  meets them — what is captured, how it behaves, where it is stored, destructive
+  cleanup last — and the Transcription tab's emoji (⚡/🏠/☁️ in the model picker) are
+  gone; the options now read "Parakeet (recommended)" and "Local Whisper".
+
 ## [0.1.0] - 2026-09-14
 
 First release under the Nixon name. Everything that shipped in the private Vinyl line
