@@ -1,6 +1,6 @@
 # ADR-0007 — Biometric voiceprint storage: local-only, opt-in for others, conservative confidence tiers
 
-- **Status:** Accepted (Brian, 2026-06-27) — with the per-person opt-out refinement in Decision #2
+- **Status:** Accepted (owner, 2026-06-27) — with the per-person opt-out refinement in Decision #2
 - **Date:** 2026-06-26 (accepted 2026-06-27)
 - **Related:** `specs/0013-identity-and-organization-program.md` (the "biometric ADR" gate on Wave 1c;
   voiceprint gallery, confidence tiers, "forget this person"), `specs/0011-diarization-p3-live-and-cross-meeting-identity.md`
@@ -42,7 +42,7 @@ that keeps voiceprints off the cloud. This ADR records how we get the feature *a
      owner** requires an explicit, off-by-default consent toggle. With it off, Wave 1a suggestions
      still work *within* a meeting and the People entity (1b) still maps names — but no durable
      `voiceprints` row is written for other people, and cross-meeting auto-ID simply doesn't accrue.
-   - **Per-person (Brian, 2026-06-27):** every `people` row carries a **`voiceprint_opt_out`** flag.
+   - **Per-person (owner, 2026-06-27):** every `people` row carries a **`voiceprint_opt_out`** flag.
      When set, Vinyl **never builds or stores a voiceprint for that individual** (and any existing
      samples for them are deleted), regardless of the global toggle — for consent reasons or because
      the user simply doesn't want that person's voice modeled. **Crucially, identity is decoupled from
@@ -83,7 +83,7 @@ that keeps voiceprints off the cloud. This ADR records how we get the feature *a
    silently rewritten to a *different person* by a later pass (consistent with ADR-0006
    stable-once-shown).
 
-   - **Refinement (Brian, 2026-06-27) — email corroboration required for auto-label.** A high-confidence
+   - **Refinement (owner, 2026-06-27) — email corroboration required for auto-label.** A high-confidence
      *voice* match is **not sufficient on its own** to auto-apply a label. Auto-label fires **only** when
      a high-confidence **gallery** match (cosine `≥ TAU_AUTO_LABEL`, currently `0.7`, with the runner-up
      margin) is **corroborated by a calendar-attendee email** that agrees with the matched person's email.

@@ -44,7 +44,7 @@ const PRIVACY_COPY =
 const CONNECTED_STATUS: GoogleCalendarStatus = {
   configured: true,
   connected: true,
-  email: 'brian@example.com',
+  email: 'ada@example.com',
   lastSyncedAt: new Date(Date.now() - 5 * 60_000).toISOString(),
   calendars: [
     { id: 'cal-1', summary: 'Work', selected: true },
@@ -167,7 +167,7 @@ describe('CalendarSettings — Google row render states', () => {
     render(<CalendarSettings />);
 
     expect(
-      await screen.findByText(/Connected as brian@example\.com/),
+      await screen.findByText(/Connected as ada@example\.com/),
     ).toBeInTheDocument();
     expect(screen.getByText(/Last synced 5m ago/)).toBeInTheDocument();
 
@@ -182,7 +182,7 @@ describe('CalendarSettings — Google row render states', () => {
     mockBackend(CONNECTED_STATUS);
     render(<CalendarSettings />);
 
-    await screen.findByText(/Connected as brian@example\.com/);
+    await screen.findByText(/Connected as ada@example\.com/);
 
     // Exactly one Active badge, and it's on the Google row.
     expect(within(googleRow()).getByText('Active')).toBeInTheDocument();
@@ -412,7 +412,7 @@ describe('CalendarSettings — enhanced attendee details (specs/0038 WS3)', () =
 describe('CalendarSettings — google-calendar-auth-required event', () => {
   it('shows a toast and a persistent reconnect banner, and Reconnect re-runs the connect flow', async () => {
     mockBackend(
-      { configured: true, connected: true, email: 'brian@example.com', calendars: [] },
+      { configured: true, connected: true, email: 'ada@example.com', calendars: [] },
       { api_google_calendar_connect: () => new Promise(() => {}) },
     );
     render(<CalendarSettings />);

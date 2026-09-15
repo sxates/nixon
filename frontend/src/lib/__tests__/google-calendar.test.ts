@@ -32,7 +32,7 @@ describe('getGoogleCalendarStatus', () => {
     const status = {
       configured: true,
       connected: true,
-      email: 'brian@example.com',
+      email: 'ada@example.com',
       lastSyncedAt: '2026-07-02T10:00:00Z',
       calendars: [{ id: 'cal-1', summary: 'Work', selected: true }],
     };
@@ -69,11 +69,11 @@ describe('getGoogleCalendarStatus', () => {
 
 describe('connectGoogleCalendar', () => {
   it('returns ok + email on success', async () => {
-    invoke.mockResolvedValue({ email: 'brian@example.com' });
+    invoke.mockResolvedValue({ email: 'ada@example.com' });
 
     await expect(connectGoogleCalendar()).resolves.toEqual({
       ok: true,
-      email: 'brian@example.com',
+      email: 'ada@example.com',
     });
     expect(invoke).toHaveBeenCalledWith('api_google_calendar_connect');
   });

@@ -237,7 +237,7 @@ export function canJoinAgendaItem(args: {
   return hasZoomUrl && !recorded && !isRecordingThis && !anyRecordingInProgress;
 }
 
-/** Up to two initials for an attendee/avatar (e.g. "Brian Scates" → "BS"). */
+/** Up to two initials for an attendee/avatar (e.g. "Ada Example" → "BS"). */
 export function initials(nameOrEmail: string): string {
   const trimmed = nameOrEmail.trim();
   if (!trimmed) return '?';

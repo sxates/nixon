@@ -2,7 +2,7 @@
 name = "nixon"
 version = "0.2.0"
 description = "Nixon — a local-first, on-device meeting assistant for macOS that records, transcribes, and summarizes your meetings privately."
-authors = ["Brian Scates <brian@sxates.com>"]
+authors = ["Ada Example <brian@sxates.com>"]
 license = "MIT"
 repository = "https://github.com/sxates/nixon"
 edition = "2021"

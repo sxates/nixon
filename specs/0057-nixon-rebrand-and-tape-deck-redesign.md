@@ -597,7 +597,7 @@ pills become engraved caps.
 
 ```
 ┌──────────┬──────────────────────────────────────────────────────────────────────┐
-│▐ NIXON   │  Good morning, Brian                        [⌘K] [ASK] [NOTE] [● REC]│
+│▐ NIXON   │  Good morning, Ada                        [⌘K] [ASK] [NOTE] [● REC]│
 │  ────────│  Wednesday, June 25 · 5 meetings · 2 recorded                        │
 │  ● HOME  │──────────────────────────────────────────────────────────────────────│
 │  ○ MEET… │  ‹  JUNE 25  ›   [📅]  [TODAY]              [DAY|WEEK]  ALL MEETINGS›│
@@ -684,7 +684,7 @@ appears only at the edges.
 │                                                                                  │
 │   Action items                                                                   │
 │   ▢ Sam — draft the pricing doc            due Fri                               │
-│   ▢ Brian — confirm SSO scope              due Mon                               │
+│   ▢ Ada — confirm SSO scope              due Mon                               │
 │                                                                                  │
 └──────────────────────────────────────────────────────────────────────────────────┘
 ```
