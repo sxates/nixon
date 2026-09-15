@@ -132,7 +132,7 @@ New builder in `summary/processor.rs` (e.g. `generate_enhanced_notes`) parallel 
 7. [~] **(all)** — Rust gate GREEN (`cargo check` + `clippy` clean, enhance unit tests pass);
    frontend `tsc --noEmit` clean. **`pnpm lint` cannot run** — eslint/`eslint-config-next` were
    never added to `frontend/package.json` (pre-existing upstream gap; `next lint` drops to an
-   interactive setup). Manual record→enhance smoke (spec Verification) still TODO by Brian.
+   interactive setup). Manual record→enhance smoke (spec Verification) still TODO by the owner.
 
 ## Revision 2026-06-24 (pivot to notes-aware summary)
 

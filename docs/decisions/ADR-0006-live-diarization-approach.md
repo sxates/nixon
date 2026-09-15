@@ -1,6 +1,6 @@
 # ADR-0006 — Live diarization: periodic re-diarization on the growing buffer, offline pass authoritative
 
-- **Status:** Proposed (pending Brian's decisions in `specs/0011`)
+- **Status:** Proposed (pending the owner's decisions in `specs/0011`)
 - **Date:** 2026-06-25
 - **Related:** `specs/0011-diarization-p3-live-and-cross-meeting-identity.md`,
   `docs/decisions/ADR-0005-diarization-engine.md` (sherpa-onnx; `Diarizer` trait), `specs/0010`
@@ -12,7 +12,7 @@ P1/P2 shipped **offline, post-meeting** speaker diarization: at stop, `diarizati
 (Task 10) wants speaker labels to appear **during** recording. The decision is *how labels appear live*,
 and it must satisfy two constraints that pull against each other:
 
-1. **Accuracy.** Brian observed P2 diarization is "not entirely accurate." Live diarization inherits the
+1. **Accuracy.** The owner observed P2 diarization is "not entirely accurate." Live diarization inherits the
    offline engine's accuracy, and a naive live approach makes inaccuracy worse and *visible in real
    time* (labels flickering between speakers as the model changes its mind).
 2. **Don't starve live STT.** P1 ran offline specifically so diarization wouldn't compete with

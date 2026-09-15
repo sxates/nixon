@@ -74,7 +74,7 @@ production" but unverified** — users see Google's "unverified app" interstitia
 (Advanced → Continue), capped at 100 users; crucially this avoids Testing status's 7-day
 refresh-token expiry. Google's verification process (required because Calendar scopes are
 classified *sensitive*) is undertaken **only if/when Vinyl is publicly distributed**.
-Until then this is a personal-use integration against Brian's own GCP project.
+Until then this is a personal-use integration against the owner's own GCP project.
 
 **Single active source — EventKit stays the zero-config default.** Google is opt-in;
 while connected it is the **only** calendar source (amended 2026-07-02 from an earlier

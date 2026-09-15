@@ -319,7 +319,7 @@ Wave 5 behind its ADR.
 5. Note under Phase 4 that FTS/extraction features must key off transcript writes, not meeting
    end (record-only mode + deferred transcription shipped in 1.3).
 
-## Open questions for Brian
+## Open questions for the owner
 
 1. **Action items ahead of demonstrated pull?** §2 argues yes (granola parity, foundations
    ready), but if daily use says otherwise, the aggregation engine + Ask-AI is the alternative

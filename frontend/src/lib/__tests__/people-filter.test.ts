@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { filterPeople, type FilterablePerson } from '@/lib/people-filter';
 
 const people: FilterablePerson[] = [
-  { displayName: 'Brian Scates', role: 'Founder', email: 'brian@example.com' },
+  { displayName: 'Ada Example', role: 'Founder', email: 'ada@example.com' },
   { displayName: 'Jordan Lee', role: 'Engineer', email: 'jordan.lee@acme.io' },
   { displayName: 'Priya Patel', role: null, email: null },
 ];
@@ -14,7 +14,7 @@ describe('filterPeople (WS3.3)', () => {
   });
 
   it('matches on display name, case-insensitively', () => {
-    expect(filterPeople(people, 'brian').map((p) => p.displayName)).toEqual(['Brian Scates']);
+    expect(filterPeople(people, 'ada').map((p) => p.displayName)).toEqual(['Ada Example']);
     expect(filterPeople(people, 'PRIYA').map((p) => p.displayName)).toEqual(['Priya Patel']);
   });
 

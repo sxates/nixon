@@ -11,7 +11,7 @@
 
 ## Context / Problem
 
-Brian logged a batch of backlog ideas (now scattered across `ROADMAP.md` Phases 2–5): notes-only
+The owner logged a batch of backlog ideas (now scattered across `ROADMAP.md` Phases 2–5): notes-only
 meetings, topic/category tags, action items, meeting analytics, pluggable Google Calendar,
 per-meeting Zoom recording links, pre-call prep, Zoom-as-speaker-source, and the big one —
 cross-meeting voiceprints / persistent People & roles.
@@ -20,7 +20,7 @@ Specced piecemeal these read as nine disconnected features. They are not. **Almo
 on the same small set of shared primitives**, and building them as one sequenced program (foundation
 first, consumers last) avoids re-litigating identity, aggregation, and standalone-content storage
 three separate times. This spec is that synthesis: a vision, a shared data-model sketch, and a
-**prioritized, dependency-ordered enhancement list** that respects Brian's stated priorities
+**prioritized, dependency-ordered enhancement list** that respects the owner's stated priorities
 (Google Calendar = high "big upgrade"; cross-meeting voiceprints = high keystone;
 Zoom-as-speaker-source = low/complex).
 
@@ -183,7 +183,7 @@ prompt + a multi-meeting gather, behind one internal API used by several feature
 - **Speaker-labeling:** a `SpeakerLabelSource` seam where **diarization is the universal default** and
   **Zoom transcript** is an optional, higher-fidelity source when a Zoom cloud recording is accessible.
   Diarization stays the fallback for Meet/Teams/in-person/no-access. **ADR-gated** (cloud content +
-  reconciliation). Lowest priority per Brian.
+  reconciliation). Lowest priority per the owner.
 
 ## Prioritized, dependency-ordered enhancement list (the program)
 
@@ -202,7 +202,7 @@ Nearly everything below depends on a stable `people` entity. Lead here.
 | # | Item | Impact | Effort | Depends on | ADR? |
 |---|---|---|---|---|---|
 | 2a | **Notes-only meetings** (ROADMAP P2) | Capture in-person/phone/catch-up meetings; notepad+summary without audio | S | `meetings.origin`; `specs/0003` notes-grounding | — |
-| 2b | **Pluggable Google Calendar (opt-in)** — Brian "big upgrade" | Richer participant data (organizer/RSVP/Directory names+titles) → feeds People + pre-call prep; no Calendar.app dependency | L | `CalendarSource` seam (0008); Keychain | **YES — first non-LLM cloud outbound** |
+| 2b | **Pluggable Google Calendar (opt-in)** — the owner "big upgrade" | Richer participant data (organizer/RSVP/Directory names+titles) → feeds People + pre-call prep; no Calendar.app dependency | L | `CalendarSource` seam (0008); Keychain | **YES — first non-LLM cloud outbound** |
 | 2c | **Per-meeting Zoom recording links + passcode** | Keep the original Zoom video/passcode on a meeting for reference | S | `meetings` columns; Keychain (passcode); 0008 link extraction | maybe (small; fold into Zoom ADR) |
 
 ### Wave 3 — Organization: topics, action items, the aggregation engine
@@ -218,7 +218,7 @@ Nearly everything below depends on a stable `people` entity. Lead here.
 | 4a | **Meeting analytics** (ROADMAP P4) | Meetings/day, time-in-meetings, my talk-time share, heat-map, most-frequent collaborators, consolidation suggestions | M | 1b (collaborators), diarization talk-time (0010/0011), calendar (0008) | — |
 | 4b | **Pre-call prep** (ROADMAP P5) | Before a (recurring) meeting: last time's decisions, attendees' open action items, what *I* owe | M | 3a (roll-up), 3c (action items), 1b, `calendar_event_id` recurring-series | — |
 
-### Wave 5 — Optional / complex (explicitly lowest priority — Brian)
+### Wave 5 — Optional / complex (explicitly lowest priority — the owner)
 | # | Item | Impact | Effort | Depends on | ADR? |
 |---|---|---|---|---|---|
 | 5a | **Zoom as a speaker-label source** (ROADMAP P3) | Real names from Zoom's attributed transcript over diarization clusters when a cloud recording is accessible | L | `SpeakerLabelSource` seam; Zoom OAuth; transcript reconciliation; 2c (same Zoom app) | **YES — Zoom cloud content + reconciliation** |
@@ -281,7 +281,7 @@ unchanged). For 0013 itself:
 - 0011/0012 are reconciled explicitly (supersede/extend/sequence) with no re-specification.
 - The three ADR gates (biometric, Google-Calendar outbound, Zoom cloud) are named with what each must
   decide and which item it blocks.
-- Brian's priorities are respected: Google Calendar = high (Wave 2), voiceprints = high keystone
+- the owner's priorities are respected: Google Calendar = high (Wave 2), voiceprints = high keystone
   (Wave 1), Zoom-as-speaker-source = lowest (Wave 5).
 
 ## Risks / open questions
