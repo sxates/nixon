@@ -23,7 +23,6 @@ import { SearchMeetingsButton } from '@/components/CommandPalette/SearchMeetings
 import { avatarColorClass } from '@/lib/avatar-colors';
 import { PageHeader } from '@/components/ui/page-header';
 import { SegmentedControl } from '@/components/ui/segmented-control';
-import { TapeCounter } from '@/components/Transport/TapeCounter';
 import { Reels } from '@/components/Transport/Reels';
 import { formatReelTag } from '@/lib/reel-number';
 
@@ -102,11 +101,9 @@ function formatStartTime(d: Date): string {
 }
 
 /**
- * Plain human duration ("42 min", "1h 05m") — the row's ACCESSIBLE text for its
- * duration. The visible `TapeCounter` in the tape log is `decorative` (fix round 1):
- * a `role="timer"` on every row would make each row's accessible name read "Elapsed
- * time 00:42:18", so this sr-only string carries the duration instead. Restored from
- * the pre-task-6 row (git show 4b1a60d).
+ * Plain human duration ("42 min", "1h 05m") shown on the row. 0.1.0 owner feedback: this
+ * replaced a decorative `TapeCounter` per row — a counter is the live recording's
+ * instrument; in a list, plain text reads faster.
  */
 function formatDuration(seconds?: number | null): string | null {
   if (seconds == null || !Number.isFinite(seconds) || seconds <= 0) return null;
@@ -191,10 +188,9 @@ function MeetingRow({
         </span>
         <span className="flex justify-end">
           {hasDuration && (
-            <>
-              <TapeCounter seconds={seconds} size="xs" tone="dim" decorative />
-              {duration && <span className="sr-only">{duration}</span>}
-            </>
+            // 0.1.0 owner feedback: plain text, not the rail's counter — easier to read in
+            // a list, and the counter is the live recording's instrument, not a duration.
+            <span className="text-xs tabular-nums text-muted-foreground">{duration}</span>
           )}
         </span>
         <span className="text-right text-xs text-muted-foreground">
