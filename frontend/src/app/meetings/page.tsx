@@ -123,7 +123,7 @@ function RecordingBadge() {
   return (
     <span className="inline-flex flex-shrink-0 items-center gap-1.5">
       <Reels state="recording" size={14} />
-      <span className="u-section-label text-record">Recording</span>
+      <span className="u-section-label text-record-ink">Recording</span>
     </span>
   );
 }
