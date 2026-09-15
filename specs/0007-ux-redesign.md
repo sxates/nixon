@@ -16,7 +16,7 @@
 ## Context / Problem
 
 Vinyl's flagship flow (live notepad + notes-aware summary, `specs/0003`) shipped, but in
-Brian's words *"the usability and craft of the interface is nowhere near Granola quality."*
+The owner's words *"the usability and craft of the interface is nowhere near Granola quality."*
 The product inherited meetily's UI wholesale and bolted the notepad onto it. The result is a
 recording-centric tool, not a meeting **operating surface**.
 
@@ -209,7 +209,7 @@ Rationale over alternatives:
   flow. Risk/effort dwarfs the craft payoff. We change surfaces, not foundations.
 - *Pure CSS polish pass* — rejected as insufficient; the IA itself (home = recorder, no list
   view, no shortcuts) is the problem, not just spacing.
-- The chosen path lets Brian ship the **quick wins** (shortcut, human titles, list metadata,
+- The chosen path lets the owner ship the **quick wins** (shortcut, human titles, list metadata,
   header) in days while the **larger redesign** (home dashboard, command palette, recording HUD)
   lands behind them.
 
@@ -361,14 +361,14 @@ Key IA moves:
   (`title` column already exists).
 - **Global shortcut + tray accelerators:** add the Tauri `global-shortcut` plugin and register
   ⌘⇧R (toggle record) in `src-tauri/src/lib.rs`/`tray.rs`; reuse the existing
-  `request-recording-toggle` event already wired in `layout.tsx`. **Needs Brian's pick of the
+  `request-recording-toggle` event already wired in `layout.tsx`. **Needs the owner's pick of the
   default chord** (see open questions).
 - **Status via events, not polling:** the summary path already emits status; the frontend should
   `listen` instead of `startSummaryPolling`'s 5 s loop (`SidebarProvider`). Backend events exist.
 - **Persist meeting at start, not stop:** remove the `intro-call` placeholder window by creating
   the meeting row when recording starts, so notes/transcript autosave to a real id throughout
   (eliminates the `NotesDraftContext` flush dance and the crash-loses-notes risk). This is the
-  one change with backend lifecycle impact — flag for Brian.
+  one change with backend lifecycle impact — flag for the owner.
 
 ### UI component impact (frontend/src/)
 
@@ -396,7 +396,7 @@ Effort: **S** ≈ <1 day, **M** ≈ 1–3 days, **L** ≈ multi-day. Impact for 
 
 | # | Change | Effort | Impact | Notes |
 |---|---|---|---|---|
-| Q1 | **Global record shortcut (⌘⇧R)** + tray accelerators | S–M | ★★★★★ | Tauri `global-shortcut`; reuse `request-recording-toggle`. Brian picks chord. |
+| Q1 | **Global record shortcut (⌘⇧R)** + tray accelerators | S–M | ★★★★★ | Tauri `global-shortcut`; reuse `request-recording-toggle`. The owner picks chord. |
 | Q2 | **Meeting list metadata + date grouping** (date/time/duration/gist on rows) | M | ★★★★★ | Extend `api_get_meetings` shape; render scannable rows. Unblocks "find it later." |
 | Q3 | **Human display titles** (derive from first note/summary line; hide machine name) | S | ★★★★ | No schema change; fallback to timestamp internally. |
 | Q4 | **Identity header on meeting-details** (uncomment title; add date/duration/source) | S | ★★★★ | `SummaryPanel.tsx:259` already stubbed. |
@@ -420,7 +420,7 @@ Effort: **S** ≈ <1 day, **M** ≈ 1–3 days, **L** ≈ multi-day. Impact for 
 **Suggested path:** ship Q1→Q9 as a "craft sprint" (instantly better daily ergonomics with low
 risk), then L1+L2+L3 as the "Granola-grade" redesign, then L4–L6.
 
-### Needs Brian's decision
+### Needs the owner's decision
 - **Record shortcut chord** (⌘⇧R? ⌥Space? something that won't clash with Zoom's own hotkeys).
 - **Persist-at-start** (Q5/L3): OK to create a real meeting row when recording starts? It's the
   cleanest fix but touches the recording lifecycle and the recovery flow.
@@ -431,7 +431,7 @@ risk), then L1+L2+L3 as the "Granola-grade" redesign, then L4–L6.
 
 ## Acceptance criteria (for the eventual implementation, not this doc)
 
-This spec is "done" when Brian has reviewed it and chosen a path. The *implementation* specs it
+This spec is "done" when the owner has reviewed it and chosen a path. The *implementation* specs it
 spawns must each, per `/CLAUDE.md` Definition of Done:
 - `cargo check` + `clippy` clean; `pnpm lint`/`tsc` clean for touched files; app launches via
   `./clean_run.sh`; record → live transcript → notes → summary smoke still works.
@@ -453,26 +453,26 @@ spawns must each, per `/CLAUDE.md` Definition of Done:
   too-short stop).
 - **Shortcut conflicts:** global chords can clash with Zoom/Meet/OS; make it user-configurable.
 - **Scope creep into Phase 3/4:** reserve space for diarization + FTS but don't build them here.
-- **Open questions** for Brian: the four "Needs Brian's decision" items above, plus — do we want
+- **Open questions** for the owner: the four "Needs the owner's decision" items above, plus — do we want
   a true light/dark theme as part of the craft pass, or hold it? And should "Today" show
   *calendar* events before `specs/0008` lands, or stay recordings-only until then?
 
-## Decisions locked (2026-06-24, Brian)
+## Decisions locked (2026-06-24, the owner)
 - **Scope:** go straight to the larger redesign (craft polish folded in), not a separate sprint.
 - **Home / landing screen:** a **meeting-list/dashboard** (date-grouped, metadata + 1-line gist,
   with a Record action), replacing the recorder-as-home.
 - Defaults adopted from the recommendations: global record shortcut **⌘⇧R**; **persist meeting at
   recording start** (removes the `intro-call` placeholder + `NotesDraftContext` flush + crash-loss
   risk); ⌘K command palette.
-- Build incrementally in reviewable slices (UI look/feel needs Brian's eyes per slice). Order:
+- Build incrementally in reviewable slices (UI look/feel needs the owner's eyes per slice). Order:
   **(1) dashboard home + landing route → (2) persist-at-start lifecycle → (3) post-meeting review
   view + identity header → (4) ⌘⇧R + tray accelerators → (5) ⌘K palette → (6) IA/nav cleanup +
   typography/density + dead-UI removal.** Each slice: build → verify (lint/tsc, launch Dev Vinyl)
-  → commit → show Brian.
+  → commit → show the owner.
 
 ## Verification (of the design, before code)
 
-- Walk the three wireframed screens against the four UX targets above with Brian.
+- Walk the three wireframed screens against the four UX targets above with the owner.
 - Confirm each quick win maps to a named file/command (done in Design/Prioritization).
 - Spin out the agreed subset into implementation specs (`0009+`), each with its own DoD.
 

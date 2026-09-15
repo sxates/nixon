@@ -62,7 +62,7 @@ the machine, so the diarization models must run locally too.
 - **Editable labels:** the user can rename a speaker ("Speaker 2" → "Priya") and have it stick for
   that meeting.
 - **Off by default initially / opt-in**, with a clear settings toggle, so we can validate accuracy
-  before making it the default (Brian decides — see Open decisions).
+  before making it the default (the owner decides — see Open decisions).
 - **Feed speakers into the summary** so the notes-aware summary (`specs/0003`) can attribute points.
 
 ## Non-goals
@@ -332,7 +332,7 @@ Testable; tie back to the Definition of Done in `/CLAUDE.md`.
   stability across re-runs is non-trivial. *Open:* re-run preserves names by best-effort embedding
   match, or warns that renames reset?
 
-## Decisions (resolved by Brian, 2026-06-24)
+## Decisions (resolved by the owner, 2026-06-24)
 All recommendations accepted:
 1. **Offline (post-meeting) diarization in P1**; live deferred to P3.
 2. **Default off / opt-in** until accuracy is validated on real calls, then flip.
@@ -345,7 +345,7 @@ All recommendations accepted:
 7. **Merge/split speakers: yes, in P2.**
 8. **sherpa-onnx for P1**, `Diarizer` trait retained so speakrs can be adopted in P3.
 
-### Added scope (Brian, 2026-06-24) — calendar-attendee → speaker association
+### Added scope (owner, 2026-06-24) — calendar-attendee → speaker association
 Tie diarization to the calendar integration (`specs/0008`): when a meeting is linked to a calendar
 event, we already have its **attendees (display name + email)** via EventKit. Use that roster to make
 naming a *pick-list*, not free text:

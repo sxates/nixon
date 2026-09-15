@@ -70,7 +70,7 @@ schedule to a cloud service. This pushes us hard toward **on-device** signals.
 ## Approach (decisions up front)
 
 ### Calendar source: **macOS EventKit, not Google Calendar API.** ✅ recommendation
-Answering Brian's explicit question — **No, we do not need the Google Calendar API.** EventKit
+Answering the owner's explicit question — **No, we do not need the Google Calendar API.** EventKit
 (Apple's calendar framework) reads **all accounts the user has already added to macOS Calendar** —
 iCloud, **Google**, Exchange, CalDAV, subscribed — through one local API, with one OS permission
 prompt, and **zero network calls from Vinyl**. That is the privacy-correct, lower-effort choice and

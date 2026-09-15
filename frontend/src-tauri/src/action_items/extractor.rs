@@ -561,15 +561,15 @@ mod tests {
     #[test]
     fn resolves_owner_name_you_and_email_to_self() {
         let roster = vec![participant("p-alice", "Alice", Some("alice@example.com"))];
-        let owner = owner(Some("Brian"), &["brian@x.com", "b@personal.io"]);
+        let owner = owner(Some("Ada"), &["ada@x.com", "b@personal.io"]);
 
         for form in [
             "You",
             "you",
             "YOU",
-            "Brian",
-            "brian",
-            "brian@x.com",
+            "Ada",
+            "ada",
+            "ada@x.com",
             "B@PERSONAL.IO",
         ] {
             assert_eq!(
@@ -593,7 +593,7 @@ mod tests {
 
     /// Finding: a model that copies a whole ASSIGNEES line verbatim must still resolve —
     /// the composed `Name (email)` form directly, and one trailing parenthetical is
-    /// stripped as a fallback (`"me" (the meeting owner)`, `Brian (brian@x.com)`).
+    /// stripped as a fallback (`"me" (the meeting owner)`, `Ada (ada@x.com)`).
     #[test]
     fn resolves_verbatim_copies_of_assignees_lines() {
         let roster = vec![participant(
@@ -601,7 +601,7 @@ mod tests {
             "Alice Example",
             Some("alice@example.com"),
         )];
-        let owner = owner(Some("Brian"), &["brian@x.com"]);
+        let owner = owner(Some("Ada"), &["ada@x.com"]);
 
         // Composed roster line, any case.
         assert_eq!(
@@ -623,7 +623,7 @@ mod tests {
         );
         // Owner name with a trailing parenthetical.
         assert_eq!(
-            resolve_assignee(Some("Brian (brian@x.com)"), &roster, &owner),
+            resolve_assignee(Some("Ada (ada@x.com)"), &roster, &owner),
             (None, true, None)
         );
         // An unknown name with a parenthetical stays raw VERBATIM (display fallback keeps
@@ -770,10 +770,10 @@ mod tests {
     /// ASSIGNEES list must present the "me" option WITH the owner's identity when known.
     #[test]
     fn system_prompt_owner_line_carries_owner_identity() {
-        let prompt = build_system_prompt(&[], &owner(Some("Brian"), &["brian@x.com"]));
+        let prompt = build_system_prompt(&[], &owner(Some("Ada"), &["ada@x.com"]));
         assert!(
             prompt.contains(
-                "- \"me\" — the meeting owner (Brian, brian@x.com); the text may call them \"You\""
+                "- \"me\" — the meeting owner (Ada, ada@x.com); the text may call them \"You\""
             ),
             "owner identity missing from the me-line:\n{prompt}"
         );

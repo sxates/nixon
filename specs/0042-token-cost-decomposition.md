@@ -194,12 +194,12 @@ direct release merges (CI is PR-only); the gate is real again.
 
 ## Risks / open questions
 
-- **TODO (Brian): WS2 depth.** Full tauri-specta rollout (recommended — biggest
+- **TODO (the owner): WS2 depth.** Full tauri-specta rollout (recommended — biggest
   structural win) vs. ts-rs types-only (half the value, quarter the risk). The WS2a spike
   answers feasibility; the depth choice is yours.
-- **TODO (Brian): guardrail threshold + severity.** 800 lines proposed; hard-fail in CI
+- **TODO (the owner): guardrail threshold + severity.** 800 lines proposed; hard-fail in CI
   vs. warn-only for the first release?
-- **TODO (Brian): release cadence.** Land WS1/WS3/WS4/WS5 in one release (v1.10.0) and
+- **TODO (the owner): release cadence.** Land WS1/WS3/WS4/WS5 in one release (v1.10.0) and
   WS2 in the next, or batch everything?
 - Move-refactors can silently change behavior via `pub` visibility, module-scoped
   `thread_local!`/statics (the language-preference statics in `lib.rs` are one), or

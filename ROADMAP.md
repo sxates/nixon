@@ -20,7 +20,7 @@ The current ordering adopts the recommendations of the
 feedback say *finish the half-built advertised features first* (search, templates —
 each asked for twice), *fix calendar fidelity* (the most persistent pain), and *don't
 start the zero-pull items* (topics, analytics, pre-call prep) yet. Its open questions
-are tracked at the bottom (owner: Brian).
+are tracked at the bottom (owner).
 
 ---
 
@@ -75,7 +75,7 @@ are tracked at the bottom (owner: Brian).
    Join & Record/adoption/participant seeding, Settings Calendar card (connect,
    per-calendar toggles, reconnect banner, privacy copy). Declined events hidden by
    default. Manual smoke + packet-capture egress check (spec tasks 7–8) tracked under
-   Awaiting verification; needs Brian's GCP client id in the build env.
+   Awaiting verification; needs the owner's GCP client id in the build env.
 4. ~~**Action items v1: extraction + task hub**~~ — **✅ implemented 2026-07-04** (`specs/0034`). The
    biggest remaining gap vs. granola.ai; every prerequisite shipped in 1.0 (owners via
    `people`, participants, `calendar_event_id`, summary templates already elicit
@@ -177,7 +177,7 @@ the user-visible part.)*
   not currently configured (audit §6; `SETUP.md` documents how).
 - **Self-hosted macOS CI runner** (2026-07-04, follow-on to the CI cost trims) — the
   `rust` job in `ci-checks.yml` is ~all of the Actions bill: macOS runners bill at 10×
-  and a cold-cache run is 20–40 real minutes per PR. Registering Brian's Mac as a
+  and a cold-cache run is 20–40 real minutes per PR. Registering the owner's Mac as a
   self-hosted runner and pointing that job at it (`runs-on: [self-hosted, macOS]`) makes
   those minutes free, reuses a warm local target dir (faster than the cache dance), and
   is the only path that could ever CI-gate the Metal/model-dependent tests the hosted
@@ -186,12 +186,12 @@ the user-visible part.)*
   keeping `~/Library/Caches` model downloads shared). Security is a non-issue while the
   repo is private and all PRs are ours; revisit before ever accepting external PRs.
 
-## Awaiting verification (needs Brian's machine)
+## Awaiting verification (needs the owner's machine)
 
 - **0020 templates smoke** — edit a template in Settings → Templates, regenerate a summary
   with it; one-click summarize from the Day Agenda uses the meeting's picked template;
   recurring-title meeting auto-selects the prior template.
-- **0032 Google Calendar verification** — needs Brian's GCP OAuth client
+- **0032 Google Calendar verification** — needs the owner's GCP OAuth client
   (`NIXON_GOOGLE_CLIENT_ID`/`_SECRET` in the build env): connect flow end-to-end; spec
   task 7 (EventKit `calendarItemExternalIdentifier` ≡ API `iCalUID` on a real
   Google-synced calendar — dedupe + dismissal transfer depend on it); spec task 8
@@ -211,7 +211,7 @@ the user-visible part.)*
   a forced falling-behind condition). *This round is also the trigger for the conditional
   state-machine item under Next.*
 
-## Open questions (owner: Brian — from the 2026-07-01 roadmap review)
+## Open questions (owner — from the 2026-07-01 roadmap review)
 
 1. ~~**Action items ahead of demonstrated pull?**~~ Resolved 2026-07-03: yes — `specs/0034`
    approved and building; the aggregation engine is specced too (`specs/0035`) but builds after.

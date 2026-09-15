@@ -24,7 +24,7 @@ Two gaps remain against the granola.ai bar, and one quality concern overhangs bo
    in last week's call, even when it's the same person. We already persist a stable `email` identity
    key (P2) and reserve a per-speaker `embedding BLOB`, but **nothing is written to `embedding` yet**
    and nothing matches a new meeting's voices against prior ones (Task 11).
-3. **Accuracy is "not entirely accurate" (Brian, observed on real P2 calls) and under-tested.** Live
+3. **Accuracy is "not entirely accurate" (the owner, observed on real P2 calls) and under-tested.** Live
    diarization *inherits* whatever accuracy the offline engine has, and cross-meeting matching is only
    as good as the embeddings we store. Shipping live labels on top of a shaky base would surface the
    shakiness in the worst possible place — in real time, visibly churning. **P3 must therefore treat
@@ -133,7 +133,7 @@ Three options were considered for "how do labels appear during recording":
 
 **Why C over B:** the whole reason P1 is accurate is that it clusters the *complete* conversation.
 Option B throws that away for latency; option C keeps it and pays a recompute cost instead. Given the
-accuracy concern Brian raised, **we should not trade accuracy for latency in the diarization step** —
+accuracy concern the owner raised, **we should not trade accuracy for latency in the diarization step** —
 labels can lag a few seconds; they must not be wrong-and-flickering.
 
 **Concretely (C):**
@@ -245,7 +245,7 @@ contention; we bound it:
 
 ### Accuracy gate (gates the Task 10 build; precedes it) ✅
 
-Brian flagged P2 accuracy as "not entirely accurate." Live diarization would amplify that. **Before
+The owner flagged P2 accuracy as "not entirely accurate." Live diarization would amplify that. **Before
 building live, we run an accuracy spike** (audio-engineer, ~1–2 days) that:
 1. Builds a small **labeled benchmark**: 3–5 real-ish multi-speaker system-channel clips with a
    ground-truth turn timeline (extend the `specs/0009` macOS `say` harness for synthetic + capture a

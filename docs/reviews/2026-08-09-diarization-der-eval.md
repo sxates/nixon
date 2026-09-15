@@ -69,7 +69,7 @@ floor stops merging the big fragments). There is **no floor that collapses the s
 fusing real people.** Only `AtMost(n)` — which *knows* when to stop — reaches the true count.
 
 **Worst confusion at the shipped config** is small and sensible (e.g. long-many: Franco↔Arno 12 s,
-short-4: Scott↔Brian ~10 s) — i.e. genuinely similar/overlapping voices, not a systematic bug.
+short-4: Scott↔the owner ~10 s) — i.e. genuinely similar/overlapping voices, not a systematic bug.
 
 ## 5. Decision: do NOT change clustering now
 
