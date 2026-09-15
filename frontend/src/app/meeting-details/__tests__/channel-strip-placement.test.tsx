@@ -106,7 +106,7 @@ const meeting = {
 /**
  * THREE speaker rows, but `spk_0` and `spk_1` are both assigned to the same Person —
  * `consolidateSpeakers` folds them into one channel, so the strip draws CH1-CH2 and the
- * reel label must agree (a raw `speakers.length` would claim VOICES 3).
+ * identity line must agree (a raw `speakers.length` would claim 3 voices).
  */
 const speakers = [
   { speakerKey: 'local', displayName: 'You', isLocal: true, segmentCount: 4 },
@@ -176,9 +176,11 @@ describe('meeting-details channel strip placement (specs/0057 Plan 3, Task 5)', 
     await waitFor(() => {
       expect(within(strip).getAllByRole('row')).toHaveLength(3);
     });
-    const voices = screen.getByText('VOICES').parentElement;
-    expect(voices?.textContent).toContain('2');
-    expect(voices?.textContent).not.toContain('3');
+    // The reel-label card is gone (0.1.0 canvas feedback); the identity line carries the
+    // voice count now, still consolidated.
+    const line = screen.getByTestId('meeting-identity-line').textContent ?? '';
+    expect(line).toContain('2 voices');
+    expect(line).not.toContain('3 voices');
   });
 
   it('hides the strip while THIS meeting is the live recording', async () => {

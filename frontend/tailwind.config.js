@@ -38,7 +38,8 @@ module.exports = {
   			},
   			record: {
   				DEFAULT: 'hsl(var(--record))',
-  				foreground: 'hsl(var(--record-foreground))'
+  				foreground: 'hsl(var(--record-foreground))',
+  				ink: 'hsl(var(--record-ink))'
   			},
   			card: {
   				DEFAULT: 'hsl(var(--card))',
@@ -122,8 +123,11 @@ module.exports = {
   		animation: {
   			'accordion-down': 'accordion-down 0.2s ease-out',
   			'accordion-up': 'accordion-up 0.2s ease-out',
-  			reel: 'reel 1.176s linear infinite',
-  			'reel-spindown': 'reel 0.6s ease-out 1'
+  			// Owner feedback (0.1.0): slower, and the two hubs turn at different rates like a
+  			// real deck — the supply reel (left, fuller) lags the take-up reel (right).
+  			reel: 'reel 2.6s linear infinite',
+  			'reel-slow': 'reel 3.6s linear infinite',
+  			'reel-spindown': 'reel 0.9s ease-out 1'
   		}
   	}
   },

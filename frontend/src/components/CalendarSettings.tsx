@@ -33,6 +33,7 @@ import {
   setGoogleCalendarsSelected,
   syncGoogleCalendarNow,
 } from '@/lib/googleCalendar';
+import { SettingsNote, SettingsSection } from '@/components/ui/settings';
 
 /** Human-readable label for each EventKit access status. */
 const CALENDAR_STATUS_LABEL: Record<CalendarAccessStatus, string> = {
@@ -341,20 +342,14 @@ export function CalendarSettings() {
   const configured = googleStatus?.configured === true;
 
   return (
-    <div className="border-t pt-6">
-      <h4 className="text-base font-medium text-foreground mb-1">Calendar</h4>
-      <p className="text-sm text-muted-foreground mb-4">
-        Nixon uses one calendar source — your Mac&apos;s calendar, or Google Calendar
-        connected directly.
-      </p>
-
+    <SettingsSection
+      title="Calendar"
+      description="Nixon uses one calendar source — your Mac's calendar, or Google Calendar connected directly."
+    >
       {/* Reconnect banner — persistent until reconnect/disconnect (specs/0032). */}
       {authRequired && configured && (
-        <div
-          role="status"
-          className="mb-4 flex items-center justify-between gap-4 rounded-[3px] border border-brand/30 bg-brand/10 p-4"
-        >
-          <div className="flex-1 text-sm text-foreground">
+        <SettingsNote role="status" tone="info" className="flex items-center justify-between gap-4">
+          <div className="flex-1">
             <span className="font-medium">Google Calendar disconnected — reconnect</span>
             <div className="mt-0.5">
               Your Google session expired or was revoked. Your meetings still show from
@@ -370,7 +365,7 @@ export function CalendarSettings() {
           >
             {googleConnecting ? 'Reconnecting…' : 'Reconnect'}
           </Button>
-        </div>
+        </SettingsNote>
       )}
 
       {/* macOS Calendar (EventKit) — permission behavior unchanged, relocated
@@ -380,7 +375,7 @@ export function CalendarSettings() {
       <div
         role="group"
         aria-label="macOS Calendar source"
-        className={`flex items-center justify-between p-4 rounded-[3px] border border-border bg-card ${
+        className={`flex items-center justify-between gap-4 rounded-[3px] border border-border bg-card p-4 ${
           connected ? 'opacity-60' : ''
         }`}
       >
@@ -418,7 +413,7 @@ export function CalendarSettings() {
 
       {/* Google Calendar (specs/0032, ADR-0010) — connecting makes it the
           active (and only) calendar source. */}
-      <div role="group" aria-label="Google Calendar source" className="mt-4 rounded-[3px] border border-border bg-card p-4">
+      <div role="group" aria-label="Google Calendar source" className="rounded-[3px] border border-border bg-card p-4">
         <div className="flex items-center justify-between gap-4">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 font-medium">
@@ -630,6 +625,6 @@ export function CalendarSettings() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </SettingsSection>
   );
 }

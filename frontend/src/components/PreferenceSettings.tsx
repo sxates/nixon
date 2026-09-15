@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 import { Switch } from "./ui/switch"
 import { useConfig, NotificationSettings } from "@/contexts/ConfigContext"
+import { SettingsGroup, SettingsRow, SettingsSection } from "@/components/ui/settings"
 
 export function PreferenceSettings() {
   const {
@@ -74,30 +75,33 @@ export function PreferenceSettings() {
     handleUpdateNotificationSettings();
   }, [notificationsEnabled, notificationSettings, isInitialLoad, previousNotificationsEnabled, updateNotificationSettings])
 
-  // Show loading only if we're actually loading and don't have cached data
-  if (isLoadingPreferences && !notificationSettings) {
-    return <div className="max-w-2xl mx-auto p-6">Loading Preferences...</div>
-  }
-
-  // Show loading if notificationsEnabled hasn't been determined yet
-  if (notificationsEnabled === null && !isLoadingPreferences) {
-    return <div className="max-w-2xl mx-auto p-6">Loading Preferences...</div>
-  }
-
-  // Ensure we have a boolean value for the Switch component
-  const notificationsEnabledValue = notificationsEnabled ?? false;
+  // While preferences load, render the section shell with the row disabled rather
+  // than a differently-styled "Loading…" box — the page keeps its shape.
+  const loading =
+    (isLoadingPreferences && !notificationSettings) ||
+    (notificationsEnabled === null && !isLoadingPreferences);
 
   // Notifications only. The recordings storage location moved to the Recordings
   // tab (it duplicated the save-location row there).
   return (
-    <div className="bg-card rounded-lg border border-border p-6 shadow-sm">
-      <div className="flex items-center justify-between">
-        <div>
-          <h3 className="text-lg font-semibold text-foreground mb-2">Notifications</h3>
-          <p className="text-sm text-muted-foreground">Enable or disable notifications of start and end of meeting</p>
-        </div>
-        <Switch checked={notificationsEnabledValue} onCheckedChange={setNotificationsEnabled} />
-      </div>
-    </div>
+    <SettingsSection
+      title="Notifications"
+      description="What Nixon tells you while a meeting is being recorded."
+    >
+      <SettingsGroup>
+        <SettingsRow
+          label="Meeting start and end notifications"
+          description="Notify me when a recording starts and when it stops."
+          control={
+            <Switch
+              checked={notificationsEnabled ?? false}
+              onCheckedChange={setNotificationsEnabled}
+              disabled={loading}
+              aria-label="Meeting start and end notifications"
+            />
+          }
+        />
+      </SettingsGroup>
+    </SettingsSection>
   )
 }

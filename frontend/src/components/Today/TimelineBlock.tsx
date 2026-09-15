@@ -74,7 +74,7 @@ export function StateChip({ state }: { state: TimelineVisualState }): JSX.Elemen
   switch (state) {
     case 'recording':
       return (
-        <span className="u-section-label inline-flex flex-shrink-0 items-center gap-1.5 text-record">
+        <span className="u-section-label inline-flex flex-shrink-0 items-center gap-1.5 text-record-ink">
           <span className="h-1.5 w-1.5 flex-shrink-0 bg-record" aria-hidden="true" />
           Recording…
         </span>
