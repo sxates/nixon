@@ -92,3 +92,7 @@ ds-bundle/
 .design-sync/learnings/
 .design-sync/node_modules
 frontend/.ds-sync-styles/
+
+# Design records (Vinyl-era specs + implementation plans) — kept locally for reference,
+# out of the public repository.
+private/
