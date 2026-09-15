@@ -103,22 +103,22 @@ export default function SettingsPage() {
                 email when Google Calendar connects (specs/0032). */}
             <OwnerEmailSettings />
           </TabsContent>
-          <TabsContent value="recording">
+          <TabsContent value="recording" className="space-y-8">
             <RecordingSettings />
           </TabsContent>
-          <TabsContent value="Transcriptionmodels">
+          <TabsContent value="Transcriptionmodels" className="space-y-8">
             <TranscriptSettings
               transcriptModelConfig={transcriptModelConfig}
               setTranscriptModelConfig={setTranscriptModelConfig}
             />
           </TabsContent>
-          <TabsContent value="summaryModels">
+          <TabsContent value="summaryModels" className="space-y-8">
             <SummaryModelSettings />
           </TabsContent>
-          <TabsContent value="templates" className="mt-6">
+          <TabsContent value="templates" className="space-y-8">
             <TemplateSettings />
           </TabsContent>
-          <TabsContent value="beta" className="mt-6">
+          <TabsContent value="beta" className="space-y-8">
             <BetaSettings />
           </TabsContent>
           {/* About (spec 0038 WS7.c) — version, credits, and links. Reuses the

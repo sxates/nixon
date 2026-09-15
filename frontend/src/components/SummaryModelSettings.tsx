@@ -8,6 +8,7 @@ import { ModelConfig, ModelSettingsModal } from '@/components/ModelSettingsModal
 import { SummaryLanguageSettings } from '@/components/SummaryLanguageSettings';
 import { Switch } from './ui/switch';
 import { useConfig } from '@/contexts/ConfigContext';
+import { SettingsGroup, SettingsRow, SettingsSection } from '@/components/ui/settings';
 
 interface SummaryModelSettingsProps {
   refetchTrigger?: number; // Change this to trigger refetch
@@ -107,36 +108,43 @@ export function SummaryModelSettings({ refetchTrigger }: SummaryModelSettingsPro
   };
 
   return (
-    <div className='flex flex-col gap-4'>
-      <div className="bg-card rounded-lg border border-border p-6 shadow-sm">
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="text-lg font-semibold text-foreground mb-2">Auto summary</h3>
-            <p className="text-sm text-muted-foreground">
-              Summarize automatically when a meeting ends. Also available in Recording settings.
-            </p>
-          </div>
+    <div className="space-y-8">
+      <SettingsSection
+        title="Summary model"
+        description="The AI model that writes your meeting summaries. A local model keeps everything on this Mac."
+      >
+        <SettingsGroup className="py-4">
+          <ModelSettingsModal
+            modelConfig={modelConfig}
+            setModelConfig={setModelConfig}
+            onSave={handleSaveModelConfig}
+            skipInitialFetch={true}
+          />
+        </SettingsGroup>
+      </SettingsSection>
+
+      <SettingsSection
+        title="When to summarize"
+        description="Summaries can also be generated on demand from any meeting page."
+      >
+        <SettingsGroup>
           {/* Same ConfigContext state as the toggle in Recording settings (specs/0029
               WS7.3) — one source of truth, two surfaces. */}
-          <Switch checked={isAutoSummary} onCheckedChange={toggleIsAutoSummary} />
-        </div>
-      </div>
+          <SettingsRow
+            label="Summarize automatically when a meeting ends"
+            description="Also available in Settings → Recordings."
+            control={
+              <Switch
+                checked={isAutoSummary}
+                onCheckedChange={toggleIsAutoSummary}
+                aria-label="Summarize automatically when a meeting ends"
+              />
+            }
+          />
+        </SettingsGroup>
+      </SettingsSection>
 
       <SummaryLanguageSettings />
-
-      <div className="bg-card rounded-lg border border-border p-6 shadow-sm">
-        <h3 className="text-lg font-semibold mb-4">Summary Model Configuration</h3>
-        <p className="text-sm text-muted-foreground mb-6">
-          Configure the AI model used for generating meeting summaries.
-        </p>
-
-        <ModelSettingsModal
-          modelConfig={modelConfig}
-          setModelConfig={setModelConfig}
-          onSave={handleSaveModelConfig}
-          skipInitialFetch={true}
-        />
-      </div>
     </div>
   );
 }
