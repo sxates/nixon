@@ -58,7 +58,7 @@ const height = parseInt(arg('height', '900'), 10);
 // listed falls through to a sensible default (null) so a missing mock can't crash a
 // provider. Add commands here as you drive deeper pages.
 const PEOPLE = [
-  { id: 'p1', displayName: 'Ada Example', role: 'Founder', email: 'brian@example.com', notes: null, voiceprintOptOut: false, createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z' },
+  { id: 'p1', displayName: 'Ada Example', role: 'Founder', email: 'ada@example.com', notes: null, voiceprintOptOut: false, createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z' },
   { id: 'p2', displayName: 'Jordan Lee', role: 'Engineer', email: 'jordan.lee@acme.io', notes: null, voiceprintOptOut: true, createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z' },
   { id: 'p3', displayName: 'Priya Patel', role: 'Design', email: 'priya@acme.io', notes: null, voiceprintOptOut: false, createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z' },
 ];
@@ -310,7 +310,7 @@ const MOCKS = {
     },
   },
   // Settings → General/Recordings tabs.
-  api_get_owner_emails: ['brian@example.com'],
+  api_get_owner_emails: ['ada@example.com'],
   api_google_calendar_status: {
     configured: true,
     connected: false,

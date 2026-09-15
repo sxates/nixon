@@ -108,7 +108,7 @@ describe('canJoinAgendaItem (WS6.4)', () => {
 
 describe('initials', () => {
   it('takes first+last initials of a full name', () => {
-    expect(initials('Brian Scates')).toBe('BS');
+    expect(initials('Ada Example')).toBe('BS');
   });
 
   it('uses the email local part', () => {

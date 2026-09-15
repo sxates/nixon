@@ -10,7 +10,7 @@ Owner report (2026-08-26, v1.18.0): *"attribution is off by 1 or 2 speaking bloc
 Speaker A is talking, then I start talking. The first block or two that I say gets
 attributed to Speaker A. Then I also get attribution for the first block or two of
 whatever the next speaker says."* Seen **both** live and in the final transcript;
-the owner's audio-out setup **varies** (speakers some meetings, headphones others).
+The owner's audio-out setup **varies** (speakers some meetings, headphones others).
 
 This is the fourth report of the same symptom (0044 W1.2, 0046, 0047). Each previous
 fix adjusted which *turns* may claim a *row*; none changed the fact that the row is
