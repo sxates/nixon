@@ -5,6 +5,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { X } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import { SettingsGroup, SettingsRow, SettingsSection } from '@/components/ui/settings';
 
 /**
  * "Your email" card (specs/0018) — the durable "which invite addresses are me"
@@ -94,74 +95,68 @@ export function OwnerEmailSettings() {
   };
 
   return (
-    <div className="border-t pt-6">
-      <h4 className="text-base font-medium text-foreground mb-1">Your email</h4>
-      <p className="text-sm text-muted-foreground mb-4">
-        Tell Nixon which invite addresses are you, so you&apos;re never added as a
-        participant and your own voice maps to &quot;You&quot;. Add any work, personal,
-        or alias addresses you&apos;re invited under. Stored only on this Mac.
-      </p>
-
-      <div className="rounded-lg border p-4">
-        {/* Existing addresses. */}
-        {ownerEmails.length > 0 ? (
-          <ul className="mb-3 space-y-2">
-            {ownerEmails.map((email) => (
-              <li
-                key={email}
-                className="flex items-center justify-between gap-2 rounded-md bg-muted px-3 py-1.5"
-              >
-                <span className="truncate text-sm text-foreground">{email}</span>
-                <button
-                  type="button"
-                  onClick={() => void handleRemoveOwnerEmail(email)}
-                  aria-label={`Remove ${email}`}
-                  className="flex-shrink-0 rounded-[3px] p-1 text-muted-foreground hover:bg-background hover:text-foreground"
-                >
-                  <X size={14} />
-                </button>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="mb-3 text-sm text-muted-foreground">
-            No addresses added yet.
-          </p>
-        )}
-
-        {/* Add an address. */}
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            void handleAddOwnerEmail();
-          }}
-          className="flex items-center gap-2"
+    <SettingsSection
+      title="Your email"
+      description="Which invite addresses are you, so you're never added as a participant and your own voice maps to &ldquo;You&rdquo;. Stored only on this Mac."
+    >
+      <SettingsGroup>
+        <SettingsRow
+          label="Your addresses"
+          description="Add any work, personal, or alias addresses you're invited under. When Google Calendar is connected, your Google account email is added automatically."
+          align="start"
         >
-          <input
-            type="email"
-            value={ownerEmailInput}
-            onChange={(e) => setOwnerEmailInput(e.target.value)}
-            placeholder="you@example.com"
-            aria-label="Add your email address"
-            className="flex-1 rounded-md border border-input px-2 py-1 text-sm"
-          />
-          <Button
-            type="submit"
-            size="sm"
-            disabled={addingOwnerEmail || !ownerEmailInput.trim()}
+          {ownerEmails.length > 0 ? (
+            <ul className="mb-3 space-y-2">
+              {ownerEmails.map((email) => (
+                <li
+                  key={email}
+                  className="flex items-center justify-between gap-2 rounded-[3px] bg-muted px-3 py-1.5"
+                >
+                  <span className="truncate text-sm text-foreground">{email}</span>
+                  <button
+                    type="button"
+                    onClick={() => void handleRemoveOwnerEmail(email)}
+                    aria-label={`Remove ${email}`}
+                    className="flex-shrink-0 rounded-[3px] p-1 text-muted-foreground hover:bg-background hover:text-foreground"
+                  >
+                    <X size={14} />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mb-3 text-sm text-muted-foreground">No addresses added yet.</p>
+          )}
+
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              void handleAddOwnerEmail();
+            }}
+            className="flex items-center gap-2"
           >
-            Add
-          </Button>
-        </form>
-        <p className="mt-2 text-xs text-muted-foreground">
-          When Google Calendar is connected, your Google account email is added
-          automatically.
-        </p>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Removing an address stops future auto-matching; it won&apos;t undo people
-          already merged into you.
-        </p>
-      </div>
-    </div>
+            <input
+              type="email"
+              value={ownerEmailInput}
+              onChange={(e) => setOwnerEmailInput(e.target.value)}
+              placeholder="you@example.com"
+              aria-label="Add your email address"
+              className="flex-1 rounded-md border border-input bg-background px-2 py-1 text-sm"
+            />
+            <Button
+              type="submit"
+              size="sm"
+              disabled={addingOwnerEmail || !ownerEmailInput.trim()}
+            >
+              Add
+            </Button>
+          </form>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Removing an address stops future auto-matching; it won&apos;t undo people
+            already merged into you.
+          </p>
+        </SettingsRow>
+      </SettingsGroup>
+    </SettingsSection>
   );
 }
