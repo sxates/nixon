@@ -20,6 +20,12 @@ import {
   noticeForSetting,
   type StartTimeOnlySetting,
 } from '@/lib/recording-settings-notices';
+import {
+  SettingsGroup,
+  SettingsNote,
+  SettingsRow,
+  SettingsSection,
+} from '@/components/ui/settings';
 
 export interface RecordingPreferences {
   save_folder: string;
@@ -441,354 +447,347 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="animate-pulse">
-        <div className="h-4 bg-muted rounded w-1/4 mb-4"></div>
-        <div className="h-8 bg-muted rounded mb-4"></div>
-      </div>
-    );
-  }
-
   // What the single "Delete audio recordings" select shows for the stored
   // { auto_save, retention_days } pair. auto_save=false always reads as
   // "Immediately", regardless of any leftover retention value.
   const retentionChoice = retentionChoiceFromPreferences(preferences);
 
+  // Sections run in the order a new user needs them: what is captured → how a
+  // recording behaves → what language → who is labelled → where the audio lives
+  // (and the destructive cleanup last).
   return (
-    <div className="space-y-6">
-      <div>
-        <h3 className="text-lg font-semibold mb-4">Recording Settings</h3>
-        <p className="text-sm text-muted-foreground mb-6">
-          Configure how your audio recordings are saved during meetings.
-        </p>
-      </div>
+    <div className="space-y-8">
+      <SettingsSection
+        title="Audio devices"
+        description="Which microphone and system-audio source new recordings start with."
+      >
+        <SettingsGroup>
+          <SettingsRow
+            label="Default devices"
+            description="Used automatically when you start a new recording. System audio is what captures the other participants."
+            align="start"
+          >
+            <DeviceSelection
+              selectedDevices={{
+                micDevice: preferences.preferred_mic_device,
+                systemDevice: preferences.preferred_system_device,
+              }}
+              onDeviceChange={handleDeviceChange}
+              disabled={saving || loading}
+            />
+          </SettingsRow>
+        </SettingsGroup>
+      </SettingsSection>
 
-      {/* Delete audio recordings — ONE control combining the old "Save Audio
-          Recordings" toggle and the retention window. The backend contract is
-          unchanged: this maps onto { auto_save, retention_days } via
-          lib/audio-retention.ts ("Immediately" = auto_save off; a day count or
-          Never = auto_save on + that sweep window). Media files only: transcripts,
-          notes, summaries, and metadata are kept, and meetings that haven't been
-          transcribed yet are never swept. */}
-      <div className="flex items-center justify-between gap-4 rounded-[3px] border border-border bg-card px-4 py-3">
-        <div className="flex-1 pr-4">
-          <div className="u-section-label">Delete audio recordings</div>
-          <div className="text-sm text-muted-foreground">
-            Choose how long the audio files of your meetings are kept.
-            &quot;Immediately&quot; discards audio as soon as a recording stops. Only
-            the audio is affected — transcripts, notes, and summaries are always
-            kept, and meetings that haven&apos;t been transcribed yet are never
-            deleted.
-          </div>
-        </div>
-        <select
-          value={retentionChoiceToSelectValue(retentionChoice)}
-          onChange={(e) => void handleRetentionChange(e.target.value)}
-          disabled={saving}
-          aria-label="Delete audio recordings"
-          className="rounded-md border border-input bg-background px-2 py-1 text-sm"
-        >
-          <option value="immediately">Immediately</option>
-          <option value="7">After 7 days</option>
-          <option value="30">After 30 days</option>
-          <option value="90">After 90 days</option>
-          {/* A custom value stored outside the presets still renders truthfully. */}
-          {typeof retentionChoice === 'number' &&
-            ![7, 30, 90].includes(retentionChoice) && (
-              <option value={String(retentionChoice)}>After {retentionChoice} days</option>
-            )}
-          <option value="never">Never</option>
-        </select>
-      </div>
-
-      {/* Folder Location - Only shown when audio is kept (auto_save on) */}
-      {preferences.auto_save && (
-        <div className="space-y-4">
-          <div className="rounded-[3px] border border-border bg-muted p-4">
-            <div className="font-medium mb-2">Save Location</div>
-            <div className="text-sm text-muted-foreground mb-3 break-all">
-              {preferences.save_folder || 'Default folder'}
-            </div>
-            <button
-              onClick={handleOpenFolder}
-              className="flex items-center gap-2 px-3 py-2 text-sm border border-input rounded-md hover:bg-muted transition-colors"
-            >
-              <FolderOpen className="w-4 h-4" />
-              Open Folder
-            </button>
-          </div>
-
-          <div className="rounded-[3px] border border-border bg-muted p-4">
-            <div className="text-sm text-foreground">
-              <strong>File Format:</strong> {preferences.file_format.toUpperCase()} files
-            </div>
-            <div className="text-xs text-muted-foreground mt-1">
-              Recordings are saved with timestamp: recording_YYYYMMDD_HHMMSS.{preferences.file_format}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Info when audio is discarded immediately (auto_save off) */}
-      {!preferences.auto_save && (
-        <div className="rounded-[3px] border border-border bg-brand/10 p-4">
-          <div className="text-sm text-foreground">
-            Audio is deleted as soon as a recording stops — transcripts, notes, and
-            summaries are still saved. Pick a time window (or &quot;Never&quot;) above
-            to keep the audio files.
-          </div>
-        </div>
-      )}
-
-      {/* Live transcription toggle (specs/0029 WS7.2). Off = record-only mode:
-          audio is still recorded (and the visualizers still work), but the STT
-          stage is skipped to save CPU/battery; the meeting is transcribed later. */}
-      <div className="rounded-[3px] border border-border bg-card px-4">
-        <div className="flex items-center justify-between gap-4 border-b border-border py-3 last:border-b-0">
-          <div className="flex-1 pr-4">
-            <div className="text-sm font-medium text-foreground">Transcribe in real time during recording</div>
-            <div className="text-sm text-muted-foreground">
-              Show a live transcript while you record. Turning this off saves CPU and
-              battery — audio is still recorded, and the meeting is transcribed later
-              (automatically before a summary, or with &quot;Transcribe now&quot; on the
-              meeting page).
-            </div>
-          </div>
-          <Switch
-            checked={preferences.live_transcription_enabled}
-            onCheckedChange={handleLiveTranscriptionToggle}
-            disabled={saving}
-          />
-        </div>
-
-        {/* Low Power Mode on battery (low-power-mode spec). On by default (backend
-            serde default true). Independent of the live-transcription toggle above —
-            this one only kicks in on battery, and can be overridden per meeting while
-            recording via the mode chip in the recording header. */}
-        <div className="flex items-center justify-between gap-4 border-b border-border py-3 last:border-b-0">
-          <div className="flex-1 pr-4">
-            <div className="text-sm font-medium text-foreground">Low Power Mode on battery</div>
-            <div className="text-sm text-muted-foreground">
-              When on battery, record audio but defer transcription and summaries until
-              you&apos;re back on power. You can override per meeting while recording.
-            </div>
-          </div>
-          <Switch
-            checked={preferences.low_power_on_battery}
-            onCheckedChange={handleLowPowerToggle}
-            disabled={saving}
-          />
-        </div>
-      </div>
-
-      {/* Transcription language (spec 0038 WS7.d) — the single global control for
-          the transcription language preference (`set_language_preference`). This
-          replaces the former in-recording "Language Settings" modal; there is no
-          per-transcript/per-summary language. */}
-      <div className="rounded-[3px] border border-border bg-card p-4">
-        <LanguageSelection />
-      </div>
-
-      {/* Auto-summarize on meeting end (specs/0029 WS7.3) — same ConfigContext state as
-          the Auto Summary toggle in Summary settings; one source of truth, two surfaces. */}
-      <div className="rounded-[3px] border border-border bg-card px-4">
-        <div className="flex items-center justify-between gap-4 border-b border-border py-3 last:border-b-0">
-          <div className="flex-1 pr-4">
-            <div className="text-sm font-medium text-foreground">Summarize automatically when a meeting ends</div>
-            <div className="text-sm text-muted-foreground">
-              Generate an AI summary as soon as a recording stops, using your configured
-              summary model.
-            </div>
-          </div>
-          <Switch
-            checked={isAutoSummary}
-            onCheckedChange={handleAutoSummaryToggle}
-          />
-        </div>
-
-        {/* Recording Notification Toggle */}
-        <div className="flex items-center justify-between gap-4 border-b border-border py-3 last:border-b-0">
-          <div className="flex-1">
-            <div className="u-section-label">Recording Start Notification</div>
-            <div className="text-sm text-muted-foreground">
-              Show reminder to inform participants when recording starts
-            </div>
-          </div>
-          <Switch
-            checked={showRecordingNotification}
-            onCheckedChange={handleNotificationToggle}
-          />
-        </div>
-
-        {/* Zoom Auto-Detect Toggle */}
-        <div className="flex items-center justify-between gap-4 border-b border-border py-3 last:border-b-0">
-          <div className="flex-1">
-            <div className="u-section-label">Auto-detect Zoom meetings</div>
-            <div className="text-sm text-muted-foreground">
-              When a Zoom meeting starts, offer to record it
-            </div>
-          </div>
-          <Switch
-            checked={zoomAutoDetect}
-            onCheckedChange={handleZoomAutoDetectToggle}
-          />
-        </div>
-      </div>
-
-      {/* Zoom mute gate (specs/0049) — opt-in, needs Accessibility permission. */}
-      <ZoomMuteGateToggle />
-
-      {/* Speaker diarization (specs/0010) — opt-in, default off. */}
-      <div className="flex items-center justify-between gap-4 rounded-[3px] border border-border bg-card px-4 py-3">
-        <div className="flex-1 pr-4">
-          <div className="u-section-label">Speaker diarization</div>
-          <div className="text-sm text-muted-foreground">
-            Label who spoke in the transcript. Runs on-device after the meeting and
-            downloads a small model (~35 MB) the first time.
-          </div>
-        </div>
-        <Switch checked={diarizationEnabled} onCheckedChange={handleDiarizationToggle} />
-      </div>
-
-      {/* Live speaker labels (specs/0011, P3-B) — a sub-toggle of the diarization
-          enable above. Only shown when diarization is on; renders indented and
-          muted so it reads as subordinate. Default off; uses extra CPU. */}
-      {diarizationEnabled && (
-        <div className="ml-6 flex items-center justify-between gap-4 border-l-2 border-border bg-muted/50 rounded-r-[3px] p-4">
-          <div className="flex-1 pr-4">
-            <div className="font-medium">Label speakers live while recording</div>
-            <div className="text-sm text-muted-foreground">
-              Show provisional speaker labels on the live transcript as you record,
-              instead of only after the meeting. Uses extra CPU.
-            </div>
-          </div>
-          <Switch
-            checked={liveDiarizationEnabled}
-            onCheckedChange={handleLiveDiarizationToggle}
-          />
-        </div>
-      )}
-
-      {/* Expected speaker count override (specs/0011 accuracy gate). Only shown
-          when diarization is on; the most reliable lever when automatic speaker
-          detection over- or under-splits. Empty = automatic. */}
-      {diarizationEnabled && (
-        <div className="ml-6 flex items-center justify-between gap-4 border-l-2 border-border bg-muted/50 rounded-r-[3px] p-4">
-          <div className="flex-1 pr-4">
-            <div className="font-medium">Expected number of speakers</div>
-            <div className="text-sm text-muted-foreground">
-              Leave blank to detect automatically. If labels split one person into
-              several (or merge several into one), set the exact number of people
-              who spoke to force that many speakers.
-            </div>
-          </div>
-          <input
-            type="number"
-            min={1}
-            max={50}
-            inputMode="numeric"
-            placeholder="Auto"
-            value={expectedSpeakerCount}
-            onChange={(e) => setExpectedSpeakerCount(e.target.value)}
-            onBlur={handleExpectedSpeakerCountCommit}
-            className="w-20 rounded-md border border-input px-2 py-1 text-sm"
-            aria-label="Expected number of speakers"
-          />
-        </div>
-      )}
-
-      {/* Voice identification / voiceprints (specs/0016 1c, ADR-0007). Only shown when
-          diarization is on, since cross-meeting voice memory is built from diarized
-          speakers. The global "store others" gate is OFF by default. */}
-      {diarizationEnabled && (
-        <div className="border-t pt-6">
-          <h4 className="text-base font-medium text-foreground mb-1">Voice identification</h4>
-          <p className="text-sm text-muted-foreground mb-4">
-            Nixon can learn voices to recognize the same person across meetings. Voiceprints are
-            stored only on this Mac and never leave your machine — they&apos;re never sent to any
-            summary or AI provider.
-          </p>
-
-          <div className="rounded-[3px] border border-border bg-card px-4">
-            {/* Global opt-in to store OTHER people's voiceprints — off by default. */}
-            <div className="flex items-center justify-between gap-4 border-b border-border py-3 last:border-b-0">
-              <div className="flex-1 pr-4">
-                <div className="text-sm font-medium text-foreground">Store voiceprints for other people</div>
-                <div className="text-sm text-muted-foreground">
-                  Off by default. When on, Nixon remembers other people&apos;s voices to suggest names
-                  automatically in future meetings. When off, names still suggest within a single
-                  meeting, but no cross-meeting voice memory is kept for others. Voiceprints stay on
-                  this Mac either way.
-                </div>
-              </div>
+      <SettingsSection
+        title="Recording"
+        description="What Nixon does while a meeting is being recorded, and right after it ends."
+      >
+        <SettingsGroup>
+          {/* Live transcription toggle (specs/0029 WS7.2). Off = record-only mode:
+              audio is still recorded (and the visualizers still work), but the STT
+              stage is skipped to save CPU/battery; the meeting is transcribed later. */}
+          <SettingsRow
+            label="Transcribe in real time during recording"
+            description={
+              <>
+                Show a live transcript while you record. Turning this off saves CPU and
+                battery — audio is still recorded, and the meeting is transcribed later
+                (automatically before a summary, or with &quot;Transcribe now&quot; on the
+                meeting page).
+              </>
+            }
+            control={
               <Switch
-                checked={storeOthersVoiceprints}
-                onCheckedChange={handleStoreOthersToggle}
+                checked={preferences.live_transcription_enabled}
+                onCheckedChange={handleLiveTranscriptionToggle}
+                disabled={saving || loading}
+                aria-label="Transcribe in real time during recording"
               />
-            </div>
+            }
+          />
 
-            {/* Device-owner self-enroll — on by default. */}
-            <div className="flex items-center justify-between gap-4 border-b border-border py-3 last:border-b-0">
-              <div className="flex-1 pr-4">
-                <div className="text-sm font-medium text-foreground">Recognize my own voice across meetings</div>
-                <div className="text-sm text-muted-foreground">
-                  Learns your voice (the microphone channel) so &quot;You&quot; is labeled reliably in
-                  every meeting. Stored only on this Mac.
-                </div>
-              </div>
+          {/* Low Power Mode on battery (low-power-mode spec). On by default (backend
+              serde default true). Independent of the live-transcription toggle above —
+              this one only kicks in on battery, and can be overridden per meeting while
+              recording via the mode chip in the recording header. */}
+          <SettingsRow
+            label="Low Power Mode on battery"
+            description={
+              <>
+                When on battery, record audio but defer transcription and summaries until
+                you&apos;re back on power. You can override per meeting while recording.
+              </>
+            }
+            control={
               <Switch
-                checked={selfEnrollVoiceprint}
-                onCheckedChange={handleSelfEnrollToggle}
+                checked={preferences.low_power_on_battery}
+                onCheckedChange={handleLowPowerToggle}
+                disabled={saving || loading}
+                aria-label="Low Power Mode on battery"
               />
-            </div>
+            }
+          />
 
-            {/* Destructive: wipe the entire gallery. */}
-            <div className="flex items-center justify-between gap-4 border-b border-border py-3 last:border-b-0">
-              <div className="flex-1 pr-4">
-                <div className="u-section-label">Clear all voiceprints</div>
-                <div className="text-sm text-muted-foreground">
-                  Delete every stored voice sample. People and their names are kept; Nixon just
-                  re-learns voices from scratch.
-                </div>
-              </div>
-              <Button
-                variant="destructive"
-                size="sm"
-                onClick={() => setClearVoiceprintsOpen(true)}
+          {/* Auto-summarize on meeting end (specs/0029 WS7.3) — same ConfigContext state as
+              the Auto Summary toggle in Summary settings; one source of truth, two surfaces. */}
+          <SettingsRow
+            label="Summarize automatically when a meeting ends"
+            description="Generate an AI summary as soon as a recording stops, using your configured summary model."
+            control={
+              <Switch
+                checked={isAutoSummary}
+                onCheckedChange={handleAutoSummaryToggle}
+                aria-label="Summarize automatically when a meeting ends"
+              />
+            }
+          />
+
+          <SettingsRow
+            label="Recording start notification"
+            description="Show a reminder to tell participants when recording starts."
+            control={
+              <Switch
+                checked={showRecordingNotification}
+                onCheckedChange={handleNotificationToggle}
+                aria-label="Recording start notification"
+              />
+            }
+          />
+
+          <SettingsRow
+            label="Auto-detect Zoom meetings"
+            description="When a Zoom meeting starts, offer to record it."
+            control={
+              <Switch
+                checked={zoomAutoDetect}
+                onCheckedChange={handleZoomAutoDetectToggle}
+                aria-label="Auto-detect Zoom meetings"
+              />
+            }
+          />
+        </SettingsGroup>
+
+        {/* Zoom mute gate (specs/0049) — opt-in, needs Accessibility permission.
+            Renders its own ruled-row card in the same vocabulary. */}
+        <ZoomMuteGateToggle />
+      </SettingsSection>
+
+      <SettingsSection
+        title="Transcription language"
+        description="The single global language preference used for every transcript."
+      >
+        <SettingsGroup className="py-4">
+          <LanguageSelection />
+        </SettingsGroup>
+      </SettingsSection>
+
+      <SettingsSection
+        title="Speaker labels"
+        description="Who said what. Diarization runs on-device after the meeting; voiceprints never leave this Mac."
+      >
+        <SettingsGroup>
+          {/* Speaker diarization (specs/0010) — opt-in, default off. */}
+          <SettingsRow
+            label="Speaker diarization"
+            description="Label who spoke in the transcript. Runs on-device after the meeting and downloads a small model (~35 MB) the first time."
+            control={
+              <Switch
+                checked={diarizationEnabled}
+                onCheckedChange={handleDiarizationToggle}
+                aria-label="Speaker diarization"
+              />
+            }
+          />
+
+          {/* Live speaker labels (specs/0011, P3-B) and the expected-count override are
+              sub-settings of the enable above: they only exist once it is on. */}
+          {diarizationEnabled && (
+            <SettingsRow
+              label="Label speakers live while recording"
+              description="Show provisional speaker labels on the live transcript as you record, instead of only after the meeting. Uses extra CPU."
+              control={
+                <Switch
+                  checked={liveDiarizationEnabled}
+                  onCheckedChange={handleLiveDiarizationToggle}
+                  aria-label="Label speakers live while recording"
+                />
+              }
+            />
+          )}
+
+          {diarizationEnabled && (
+            <SettingsRow
+              label="Expected number of speakers"
+              htmlFor="expected-speaker-count"
+              description="Leave blank to detect automatically. If labels split one person into several (or merge several into one), set the exact number of people who spoke to force that many speakers."
+              control={
+                <input
+                  id="expected-speaker-count"
+                  type="number"
+                  min={1}
+                  max={50}
+                  inputMode="numeric"
+                  placeholder="Auto"
+                  value={expectedSpeakerCount}
+                  onChange={(e) => setExpectedSpeakerCount(e.target.value)}
+                  onBlur={handleExpectedSpeakerCountCommit}
+                  className="w-20 rounded-md border border-input bg-background px-2 py-1 text-sm"
+                />
+              }
+            />
+          )}
+
+          {/* Voice identification / voiceprints (specs/0016 1c, ADR-0007). Only meaningful
+              when diarization is on, since cross-meeting voice memory is built from
+              diarized speakers. The global "store others" gate is OFF by default. */}
+          {diarizationEnabled && (
+            <SettingsRow
+              label="Store voiceprints for other people"
+              description={
+                <>
+                  Off by default. When on, Nixon remembers other people&apos;s voices to suggest
+                  names automatically in future meetings. When off, names still suggest within a
+                  single meeting, but no cross-meeting voice memory is kept for others.
+                  Voiceprints stay on this Mac either way.
+                </>
+              }
+              control={
+                <Switch
+                  checked={storeOthersVoiceprints}
+                  onCheckedChange={handleStoreOthersToggle}
+                  aria-label="Store voiceprints for other people"
+                />
+              }
+            />
+          )}
+
+          {diarizationEnabled && (
+            <SettingsRow
+              label="Recognize my own voice across meetings"
+              description={
+                <>
+                  Learns your voice (the microphone channel) so &quot;You&quot; is labeled
+                  reliably in every meeting. Stored only on this Mac.
+                </>
+              }
+              control={
+                <Switch
+                  checked={selfEnrollVoiceprint}
+                  onCheckedChange={handleSelfEnrollToggle}
+                  aria-label="Recognize my own voice across meetings"
+                />
+              }
+            />
+          )}
+
+          {/* Destructive: wipe the entire gallery. Last row of the section. */}
+          {diarizationEnabled && (
+            <SettingsRow
+              label="Clear all voiceprints"
+              description="Delete every stored voice sample. People and their names are kept; Nixon just re-learns voices from scratch."
+              control={
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => setClearVoiceprintsOpen(true)}
+                >
+                  Clear all
+                </Button>
+              }
+            />
+          )}
+        </SettingsGroup>
+      </SettingsSection>
+
+      <SettingsSection
+        title="Audio storage"
+        description="Where the audio files live and how long they are kept. Transcripts, notes, and summaries are always kept."
+      >
+        <SettingsGroup>
+          {/* Delete audio recordings — ONE control combining the old "Save Audio
+              Recordings" toggle and the retention window. The backend contract is
+              unchanged: this maps onto { auto_save, retention_days } via
+              lib/audio-retention.ts ("Immediately" = auto_save off; a day count or
+              Never = auto_save on + that sweep window). */}
+          <SettingsRow
+            label="Delete audio recordings"
+            htmlFor="audio-retention"
+            description={
+              <>
+                &quot;Immediately&quot; discards audio as soon as a recording stops. Only the
+                audio is affected — meetings that haven&apos;t been transcribed yet are never
+                deleted.
+              </>
+            }
+            control={
+              <select
+                id="audio-retention"
+                value={retentionChoiceToSelectValue(retentionChoice)}
+                onChange={(e) => void handleRetentionChange(e.target.value)}
+                disabled={saving || loading}
+                className="rounded-md border border-input bg-background px-2 py-1 text-sm"
               >
-                Clear all
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+                <option value="immediately">Immediately</option>
+                <option value="7">After 7 days</option>
+                <option value="30">After 30 days</option>
+                <option value="90">After 90 days</option>
+                {/* A custom value stored outside the presets still renders truthfully. */}
+                {typeof retentionChoice === 'number' &&
+                  ![7, 30, 90].includes(retentionChoice) && (
+                    <option value={String(retentionChoice)}>
+                      After {retentionChoice} days
+                    </option>
+                  )}
+                <option value="never">Never</option>
+              </select>
+            }
+          />
+
+          {preferences.auto_save && (
+            <SettingsRow
+              label="Save location"
+              description={
+                <span className="break-all">
+                  {preferences.save_folder || 'Default folder'}
+                </span>
+              }
+              control={
+                <Button variant="outline" size="sm" onClick={handleOpenFolder}>
+                  <FolderOpen className="h-4 w-4" />
+                  Open folder
+                </Button>
+              }
+            />
+          )}
+
+          {preferences.auto_save && (
+            <SettingsRow
+              label="File format"
+              description={`Saved with a timestamp: recording_YYYYMMDD_HHMMSS.${preferences.file_format}`}
+              control={
+                <span className="text-sm text-muted-foreground">
+                  {preferences.file_format.toUpperCase()}
+                </span>
+              }
+            />
+          )}
+        </SettingsGroup>
+
+        {/* Info when audio is discarded immediately (auto_save off) */}
+        {!preferences.auto_save && (
+          <SettingsNote tone="info">
+            Audio is deleted as soon as a recording stops — transcripts, notes, and
+            summaries are still saved. Pick a time window (or &quot;Never&quot;) above to
+            keep the audio files.
+          </SettingsNote>
+        )}
+      </SettingsSection>
 
       <ClearVoiceprintsDialog
         open={clearVoiceprintsOpen}
         onOpenChange={setClearVoiceprintsOpen}
       />
-
-      {/* Device Preferences */}
-      <div className="space-y-4">
-        <div className="border-t pt-6">
-          <h4 className="text-base font-medium text-foreground mb-4">Default Audio Devices</h4>
-          <p className="text-sm text-muted-foreground mb-4">
-            Set your preferred microphone and system audio devices for recording. These will be automatically selected when starting new recordings.
-          </p>
-
-          <div className="rounded-[3px] border border-border bg-muted p-4">
-            <DeviceSelection
-              selectedDevices={{
-                micDevice: preferences.preferred_mic_device,
-                systemDevice: preferences.preferred_system_device
-              }}
-              onDeviceChange={handleDeviceChange}
-              disabled={saving}
-            />
-          </div>
-        </div>
-      </div>
     </div>
   );
 }
