@@ -72,7 +72,7 @@
     --bevel-hi: 0 0% 100% / 0.85;
     --bevel-lo: 0 0% 0% / 0.14;
 
-    --rail-h: 2.75rem; /* transport rail height (specs/0057 Plan 2) */
+    --rail-h: 3.25rem; /* transport rail height (specs/0057 Plan 2; 52px after 0.1.0 feedback — 44px clipped the keys) */
   }
 
   /* ---- DECK (dark) — anodized charcoal, cream silkscreen. Applied by ThemeProvider. ---- */
