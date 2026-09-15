@@ -3,8 +3,10 @@
 import React from 'react';
 import { cn } from '@/lib/utils';
 
-// specs/0057 §3.1 — an illuminated transport key: 44×34, 2px radius, 1px bevel, engraved
-// 9px caps legend, and a 3px lamp bar across the top that lights in the key's own color.
+// specs/0057 §3.1 — an illuminated transport key: 48×40 (spec said 44×34; at that height the
+// glyph collided with the lamp bar and the keys read as clipped — 0.1.0 owner feedback),
+// 2px radius, 1px bevel, engraved 9px caps legend, and a 4px lamp bar across the top that
+// lights in the key's own color with a real glow.
 // REC lamp = record, HOLD lamp = brand, STOP is never lit.
 //
 // `[transition-duration:120ms]` rather than the usual duration utility with an arbitrary
@@ -24,8 +26,10 @@ const GLYPH: Record<TransportFn, React.ReactNode> = {
 };
 
 const LIT_BAR: Record<TransportFn, string> = {
-  rec: 'bg-record shadow-[0_0_0_1px_hsl(var(--record)/0.25),0_0_8px_-1px_hsl(var(--record)/0.7)]',
-  hold: 'bg-brand shadow-[0_0_0_1px_hsl(var(--brand)/0.25),0_0_8px_-1px_hsl(var(--brand)/0.7)]',
+  // Lit bars: a bright core (white highlight over the token) plus a two-ring halo. The
+  // original single 8px halo read as a dull dot in the panel — owner feedback for 0.1.0.
+  rec: 'bg-record [background-image:linear-gradient(rgba(255,255,255,0.45),rgba(255,255,255,0)_70%)] shadow-[0_0_0_1px_hsl(var(--record)/0.35),0_0_10px_1px_hsl(var(--record)/0.85),0_0_22px_4px_hsl(var(--record)/0.4)]',
+  hold: 'bg-brand [background-image:linear-gradient(rgba(255,255,255,0.45),rgba(255,255,255,0)_70%)] shadow-[0_0_0_1px_hsl(var(--brand)/0.35),0_0_10px_1px_hsl(var(--brand)/0.85),0_0_22px_4px_hsl(var(--brand)/0.4)]',
   stop: '',
 };
 const LIT_GLYPH: Record<TransportFn, string> = { rec: 'fill-record', hold: 'fill-brand', stop: 'fill-engrave' };
@@ -46,7 +50,7 @@ export function TransportKey({ fn, legend, lit = false, dim = false, disabled, c
       aria-pressed={fn === 'stop' ? undefined : lit}
       disabled={disabled}
       className={cn(
-        'relative flex h-[34px] w-11 flex-none flex-col items-center justify-end gap-0.5 rounded-[2px] pb-1',
+        'relative flex h-10 w-12 flex-none flex-col items-center justify-end gap-1 rounded-[2px] pb-1.5',
         'bg-key shadow-[inset_0_1px_0_hsl(var(--bevel-hi)),inset_0_-1px_0_hsl(var(--bevel-lo)),0_1px_0_rgba(0,0,0,0.4)]',
         'transition-transform [transition-duration:60ms] [transition-timing-function:cubic-bezier(.2,0,0,1)] active:translate-y-px',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-panel',
@@ -59,7 +63,7 @@ export function TransportKey({ fn, legend, lit = false, dim = false, disabled, c
       <span
         aria-hidden
         className={cn(
-          'absolute left-2 right-2 top-[3px] h-[3px] rounded-[1px] transition-[background-color,box-shadow] ease-out',
+          'absolute left-2 right-2 top-[3px] h-1 rounded-[1px] transition-[background-color,box-shadow] ease-out',
           lit ? cn(LIT_BAR[fn], '[transition-duration:120ms]') : 'bg-border [transition-duration:400ms]',
           lit && dim && 'opacity-[0.55]',
         )}

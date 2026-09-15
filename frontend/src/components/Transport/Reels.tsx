@@ -4,24 +4,28 @@ import { cn } from '@/lib/utils';
 export type ReelState = 'idle' | 'recording' | 'paused' | 'finalizing';
 
 /**
- * specs/0057 §3.4 — the recording indicator: two hubs joined by a tape path. Turning at
- * 0.85 rev/s while recording; stops dead on HOLD (no ease-out); 600 ms spin-down when
+ * specs/0057 §3.4 — the recording indicator: two hubs joined by a tape path. While
+ * recording the take-up hub (right) turns at ~0.38 rev/s and the supply hub (left) at
+ * ~0.28 rev/s, like a real deck; stops dead on HOLD (no ease-out); 900 ms spin-down when
  * finalizing. Never blinks. Under prefers-reduced-motion the hubs stay still (the REC lamp
  * and the counter carry liveness) — done with Tailwind's motion-reduce variant.
  */
 export function Reels({ state, size = 22, className }: { state: ReelState; size?: number; className?: string }) {
   const spin = state === 'recording';
-  const hub = cn(
-    'origin-center',
-    spin && 'animate-reel motion-reduce:animate-none',
-    state === 'finalizing' && 'animate-reel-spindown motion-reduce:animate-none',
-  );
+  const hubClass = (speed: 'animate-reel' | 'animate-reel-slow') =>
+    cn(
+      'origin-center',
+      spin && `${speed} motion-reduce:animate-none`,
+      state === 'finalizing' && 'animate-reel-spindown motion-reduce:animate-none',
+    );
+  const supply = hubClass('animate-reel-slow');
+  const takeUp = hubClass('animate-reel');
   const h = size;
   const w = Math.round(size * (50 / 22));
   return (
     <svg data-state={state} width={w} height={h} viewBox="0 0 50 22" className={cn('block', className)} aria-hidden>
       <path d="M11 20 L39 20" className="stroke-engrave" strokeWidth="1" fill="none" />
-      <g data-hub className={hub} style={{ transformOrigin: '11px 11px' }}>
+      <g data-hub className={supply} style={{ transformOrigin: '11px 11px' }}>
         <circle cx="11" cy="11" r="8.5" className="stroke-foreground" strokeWidth="1.5" fill="none" />
         <circle cx="11" cy="11" r="5" className="stroke-foreground" strokeWidth="1" fill="none" />
         <g className="stroke-foreground" strokeWidth="1.6" strokeLinecap="square">
@@ -30,7 +34,7 @@ export function Reels({ state, size = 22, className }: { state: ReelState; size?
           <path d="M15.3 13.5 L17.5 14.7" />
         </g>
       </g>
-      <g className={hub} style={{ transformOrigin: '39px 11px' }}>
+      <g data-hub className={takeUp} style={{ transformOrigin: '39px 11px' }}>
         <circle cx="39" cy="11" r="8.5" className="stroke-foreground" strokeWidth="1.5" fill="none" />
         <circle cx="39" cy="11" r="3.2" className="stroke-foreground" strokeWidth="1" fill="none" />
         <g className="stroke-foreground" strokeWidth="1.6" strokeLinecap="square">
