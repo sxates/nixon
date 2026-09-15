@@ -363,7 +363,9 @@ function SpeakerChip({
 
   return (
     <div className="inline-flex flex-col items-start gap-1">
-    <div className="inline-flex items-center gap-0.5 rounded-[3px] border border-border bg-card pl-1.5 pr-0.5 py-0.5 text-xs shadow-sm">
+    {/* 0.1.0 canvas feedback: no box around the name — plain text with the pencil shown on
+        hover/focus only (`group/chip`), so the strip reads as a list, not a row of buttons. */}
+    <div className="group/chip inline-flex items-center gap-0.5 text-xs">
       {/* Color dot (matches the in-transcript name color). */}
       <span
         className={cn(
@@ -385,7 +387,10 @@ function SpeakerChip({
             title="Rename speaker"
           >
             {speaker.displayName}
-            <Pencil size={10} className="text-muted-foreground" />
+            <Pencil
+              size={10}
+              className="text-muted-foreground opacity-0 transition-opacity group-hover/chip:opacity-100 group-focus-within/chip:opacity-100"
+            />
           </button>
         </PopoverTrigger>
         <PopoverContent align="start" className="w-64 p-2">

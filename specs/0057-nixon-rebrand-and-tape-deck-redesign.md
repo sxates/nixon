@@ -1000,11 +1000,9 @@ meetings test's framer-motion mock + `localStorage.clear()`); the rest carries f
   Accepted for Plan 3; a stored `reel_number` column assigned at creation (migration +
   backfill, so a deletion can't silently relabel someone else's tape) is a follow-up plan's
   first task if the renumbering-on-delete behavior proves confusing in the field.
-- `ReelLabel` has no `--paper-rule` token for its segment hairline (still the ad-hoc
-  `bg-record/55`), and its `deck` / `tags` props are still unwired from
-  `MeetingIdentityHeader` — only `reelNumber`/date/time/length/source/voices are passed.
-
-**Correctness / hygiene (from the task ledger):**
+- ~~`ReelLabel` `--paper-rule` token / `deck` / `tags` wiring~~ — MOOT (2026-09-15): the card was
+  removed on owner canvas feedback (too tall, redundant with the identity line); the
+  identity line now carries the voice count too.
 - `handleRecordingStart` (`frontend/src/hooks/useRecordingStart.ts`, 812 lines) still has no
   production caller — a near-duplicate of the sidebar listener. Ruling stands: leave in place
   (resume tests exercise the shared start core); collapsing it into the sidebar listener is

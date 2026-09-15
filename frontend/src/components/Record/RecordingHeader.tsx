@@ -20,10 +20,8 @@ import {
 } from '@/components/ui/tooltip';
 import { ParticipantsPopover } from '@/components/Participants/ParticipantsPopover';
 import { VuMeter } from '@/components/Transport/VuMeter';
-import { LampDot } from '@/components/Transport/LampDot';
 import { useProcessingMode } from '@/hooks/useProcessingMode';
 import { useRecordingLevel } from '@/hooks/useRecordingLevel';
-import { useMicGate } from '@/hooks/useMicGate';
 import { modeChipDisplay } from '@/lib/processing-mode';
 import { rmsToVu } from '@/lib/transport/vu-ballistics';
 import type { UseRecordingTitleEditReturn } from '@/hooks/useRecordingTitleEdit';
@@ -129,17 +127,19 @@ export function RecordingHeader({
   const selectedTemplateName =
     availableTemplates.find((t) => t.id === selectedTemplate)?.name ?? 'Template';
   const level = useRecordingLevel(isRecordingActive);
-  const gated = useMicGate();
 
   return (
-    <header className="flex flex-wrap items-center gap-x-4 gap-y-3 border-b border-border bg-panel px-6 py-4 shadow-[inset_0_1px_0_hsl(var(--bevel-hi)),inset_0_-1px_0_hsl(var(--bevel-lo))]">
+    <header className="flex flex-wrap items-start gap-x-2 gap-y-3 border-b border-border bg-panel px-6 py-4 shadow-[inset_0_1px_0_hsl(var(--bevel-hi)),inset_0_-1px_0_hsl(var(--bevel-lo))]">
+      {/* 0.1.0 canvas feedback: the back control is the same unboxed chevron as on meeting
+          details, sitting on the title line (the header top-aligns for that; the meter
+          bridge re-centres itself on the right). */}
       <button
         onClick={() => router.push('/')}
         aria-label="Back to home"
         title="Back to home"
-        className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-[9px] border border-border bg-card text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="-ml-1 mt-0.5 inline-flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
-        <ChevronLeft size={16} />
+        <ChevronLeft size={18} />
       </button>
 
       <div className="min-w-0 flex-1 basis-60">
@@ -186,9 +186,11 @@ export function RecordingHeader({
         ) : (
           <p className="mt-0.5 text-xs text-muted-foreground">Recording locally on your Mac</p>
         )}
-      </div>
-
-      <div className="flex flex-shrink-0 items-center gap-3.5">
+        {/* 0.1.0 canvas feedback: the per-meeting controls sit under the title, not in the
+            meter bridge. Rendered only when at least one is live so an idle header carries
+            no empty row. */}
+        {(isRecordingActive && availableTemplates.length > 0) || activeRecordingMeetingId ? (
+          <div className="mt-2.5 flex flex-wrap items-center gap-2">
         {/* Participants for the in-progress meeting (specs/0017). Use the authoritative
             SQLite meeting id (`activeRecordingMeetingId`, set at recording start), NOT the
             fabricated `currentMeetingId` from TranscriptContext (a `meeting-<timestamp>` IndexedDB
@@ -233,25 +235,17 @@ export function RecordingHeader({
           <ModeChip meetingId={activeRecordingMeetingId} />
         )}
         {activeRecordingMeetingId && <ParticipantsPopover meetingId={activeRecordingMeetingId} />}
-        {/* The control panel's meter bridge (specs/0057 §3.2): one needle per channel —
-            CH1 is the owner's mic, CH2 is system audio (the other side of the call) — read
-            from the clean pre-mix windows, plus the two lamps that matter while recording.
-            The lamps are decorative — the engraved captions beside them carry the meaning,
-            so a screen reader reads "Peak"/"Mic gate" once, not twice. */}
+          </div>
+        ) : null}
+      </div>
+
+      {/* The control panel's meter bridge (specs/0057 §3.2): one needle per channel — CH1
+          is the owner's mic, CH2 is system audio (the other side of the call) — read from
+          the clean pre-mix windows. The PEAK / MIC GATE lamps were dropped on 0.1.0 canvas
+          feedback: the rail's ladder and the transport status line carry both states. */}
+      <div className="flex flex-shrink-0 items-center gap-3.5 self-center">
         <VuMeter db={rmsToVu(level.mic.rms)} active={isRecordingActive} label="CH1 Mic" />
         <VuMeter db={rmsToVu(level.sys.rms)} active={isRecordingActive} label="CH2 Sys" />
-        <div className="flex flex-col gap-1.5">
-          <span className="flex items-center gap-1.5">
-            <LampDot tone={level.peakLatched ? 'red' : 'off'} label="Peak" decorative />
-            <span className="u-section-label">Peak</span>
-          </span>
-          <span className="flex items-center gap-1.5">
-            {/* `zoom-mute-changed` is edge-triggered and the monitor emits nothing on stop, so a
-                stale `true` could outlive the session — the lamp only lights while recording. */}
-            <LampDot tone={gated && isRecordingActive ? 'amber' : 'off'} label="Mic gate" decorative />
-            <span className="u-section-label">Mic gate</span>
-          </span>
-        </div>
       </div>
     </header>
   );

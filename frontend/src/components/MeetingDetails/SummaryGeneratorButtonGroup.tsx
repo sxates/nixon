@@ -289,7 +289,7 @@ export function SummaryGeneratorButtonGroup({
         <Button
           variant="outline"
           size="xs"
-          className="bg-record/10 hover:bg-record/20 border-record/30 text-record xl:px-4"
+          className="bg-record/10 hover:bg-record/20 border-record/30 text-record-ink xl:px-4"
           onClick={() => {
             onStopGeneration();
           }}

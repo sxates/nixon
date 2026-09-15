@@ -38,7 +38,8 @@ module.exports = {
   			},
   			record: {
   				DEFAULT: 'hsl(var(--record))',
-  				foreground: 'hsl(var(--record-foreground))'
+  				foreground: 'hsl(var(--record-foreground))',
+  				ink: 'hsl(var(--record-ink))'
   			},
   			card: {
   				DEFAULT: 'hsl(var(--card))',

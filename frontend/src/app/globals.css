@@ -45,7 +45,8 @@
     /* lamps — the only saturated colors on the panel */
     --brand: 31 84% 30%;               /* ~#8C4E0C amber, armed/active/queue */
     --brand-foreground: 40 39% 97%;
-    --record: 3 63% 44%;               /* #B8302A REC */
+    --record: 4 82% 50%;               /* #E8281A REC lamp — hot; 0.1.0 feedback: the old brick read as unlit */
+    --record-ink: 3 75% 42%;           /* #BB2A1F red as TEXT (4.7:1 on background); lamps use --record */
     --record-foreground: 40 39% 97%;
     --success: 131 39% 30%;            /* #2F6B3A READY */
     --success-foreground: 40 39% 97%;
@@ -68,7 +69,7 @@
     --key: 39 27% 90%;                 /* #ECE7DE transport key face */
     --well: 40 39% 95%;                /* #F8F5EF recessed counter/meter well */
     --walnut: 22 38% 25%;              /* #5A3A28 */
-    --meter-over: 3 63% 44%;
+    --meter-over: 4 82% 50%;
     --bevel-hi: 0 0% 100% / 0.85;
     --bevel-lo: 0 0% 0% / 0.14;
 
@@ -100,7 +101,8 @@
 
     --brand: 38 87% 55%;               /* #F0A72A */
     --brand-foreground: 30 10% 8%;
-    --record: 5 74% 56%;               /* #E24A3D */
+    --record: 5 88% 58%;               /* #F24638 */
+    --record-ink: 5 88% 58%;           /* 4.9:1 on background — one shade serves both */
     --record-foreground: 40 30% 96%;
     --success: 127 29% 50%;            /* #5AA362 */
     --success-foreground: 30 10% 8%;
@@ -121,7 +123,7 @@
     --key: 22 11% 15%;                 /* #292421 */
     --well: 0 6% 7%;                   /* #121010 */
     --walnut: 22 38% 21%;              /* #4A3021 */
-    --meter-over: 5 74% 56%;
+    --meter-over: 5 88% 58%;
     --bevel-hi: 0 0% 100% / 0.06;
     --bevel-lo: 0 0% 0% / 0.45;
   }
