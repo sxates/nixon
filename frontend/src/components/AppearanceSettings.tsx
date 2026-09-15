@@ -3,6 +3,7 @@
 import React from 'react';
 import { useTheme, type ThemePreference } from '@/contexts/ThemeContext';
 import { cn } from '@/lib/utils';
+import { SettingsGroup, SettingsRow, SettingsSection } from '@/components/ui/settings';
 
 // specs/0057 decision 1 — Faceplate (light) / Deck (dark) / System. Rendered as a
 // three-position selector, not a switch: a deck has a labelled position for each state.
@@ -41,49 +42,53 @@ export function AppearanceSettings() {
   };
 
   return (
-    <section className="space-y-3">
-      <div>
-        <h2 id="appearance-label" className="u-section-label">Appearance</h2>
-        <p className="u-meta mt-1">Which face the machine wears. System follows macOS.</p>
-      </div>
-      <div
-        role="radiogroup"
-        aria-labelledby="appearance-label"
-        onKeyDown={handleKeyDown}
-        className="grid grid-cols-3 gap-2"
-      >
-        {OPTIONS.map((opt, index) => {
-          const selected = preference === opt.value;
-          return (
-            <button
-              key={opt.value}
-              type="button"
-              role="radio"
-              aria-checked={selected}
-              tabIndex={index === selectedIndex ? 0 : -1}
-              ref={(el) => {
-                buttonRefs.current[index] = el;
-              }}
-              onClick={() => setPreference(opt.value)}
-              className={cn(
-                'flex flex-col items-start gap-1 rounded-md border px-3 py-2 text-left transition-colors',
-                selected
-                  ? 'border-brand bg-card text-foreground'
-                  : 'border-border bg-panel text-muted-foreground hover:bg-accent',
-              )}
-            >
-              <span className="flex items-center gap-2 text-sm font-semibold">
-                <span
-                  aria-hidden
-                  className={cn('inline-block h-2 w-2 rounded-full', selected ? 'bg-brand' : 'bg-border')}
-                />
-                {opt.label}
-              </span>
-              <span className="text-xs">{opt.hint}</span>
-            </button>
-          );
-        })}
-      </div>
-    </section>
+    <SettingsSection
+      id="appearance-label"
+      title="Appearance"
+      description="Which face the machine wears. System follows macOS."
+    >
+      <SettingsGroup>
+        <SettingsRow label="Theme" align="start">
+          <div
+            role="radiogroup"
+            aria-labelledby="appearance-label"
+            onKeyDown={handleKeyDown}
+            className="grid grid-cols-3 gap-2"
+          >
+            {OPTIONS.map((opt, index) => {
+              const selected = preference === opt.value;
+              return (
+                <button
+                  key={opt.value}
+                  type="button"
+                  role="radio"
+                  aria-checked={selected}
+                  tabIndex={index === selectedIndex ? 0 : -1}
+                  ref={(el) => {
+                    buttonRefs.current[index] = el;
+                  }}
+                  onClick={() => setPreference(opt.value)}
+                  className={cn(
+                    'flex flex-col items-start gap-1 rounded-md border px-3 py-2 text-left transition-colors',
+                    selected
+                      ? 'border-brand bg-card text-foreground'
+                      : 'border-border bg-panel text-muted-foreground hover:bg-accent',
+                  )}
+                >
+                  <span className="flex items-center gap-2 text-sm font-semibold">
+                    <span
+                      aria-hidden
+                      className={cn('inline-block h-2 w-2 rounded-full', selected ? 'bg-brand' : 'bg-border')}
+                    />
+                    {opt.label}
+                  </span>
+                  <span className="text-xs">{opt.hint}</span>
+                </button>
+              );
+            })}
+          </div>
+        </SettingsRow>
+      </SettingsGroup>
+    </SettingsSection>
   );
 }
