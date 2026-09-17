@@ -28,7 +28,7 @@ describe('About updates (specs/0058)', () => {
   });
 
   it('shows notes and a Restart to update button when ready', () => {
-    status = { state: 'ready', version: '0.3.1', notes: '- Fixed a thing' };
+    status = { state: 'ready', version: '0.3.1', notes: '- Fixed a thing', last_checked: null };
     render(<About />);
     expect(screen.getByText('0.3.1 ready — restart to update')).toBeInTheDocument();
     expect(screen.getByText('Fixed a thing')).toBeInTheDocument();

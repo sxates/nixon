@@ -5,10 +5,11 @@ import type { UpdateStatus } from '@/contexts/UpdateStatusContext';
 
 let status: UpdateStatus = { state: 'idle', last_checked: null };
 let isRecording = false;
+let error: string | null = null;
 const install = vi.fn(async () => {});
 vi.mock('@/contexts/UpdateStatusContext', async (orig) => ({
   ...(await orig<typeof import('@/contexts/UpdateStatusContext')>()),
-  useOptionalUpdateStatus: () => ({ status, busy: false, error: null, checkNow: vi.fn(), install }),
+  useOptionalUpdateStatus: () => ({ status, busy: false, error, checkNow: vi.fn(), install }),
 }));
 vi.mock('@/contexts/RecordingStateContext', () => ({ useRecordingState: () => ({ isRecording }) }));
 
@@ -42,7 +43,7 @@ describe('UpdateRow (specs/0058)', () => {
   });
 
   it('offers Restart when ready and idle', () => {
-    status = { state: 'ready', version: '0.3.0', notes: '' };
+    status = { state: 'ready', version: '0.3.0', notes: '', last_checked: null };
     isRecording = false;
     render(<UpdateRow />);
     expect(screen.getByText('Nixon 0.3.0 ready')).toBeInTheDocument();
@@ -52,7 +53,7 @@ describe('UpdateRow (specs/0058)', () => {
   });
 
   it('disables Restart while recording', () => {
-    status = { state: 'ready', version: '0.3.0', notes: '' };
+    status = { state: 'ready', version: '0.3.0', notes: '', last_checked: null };
     isRecording = true;
     render(<UpdateRow />);
     const btn = screen.getByRole('button', { name: 'Restart' });
@@ -60,8 +61,19 @@ describe('UpdateRow (specs/0058)', () => {
     expect(btn).toHaveAttribute('title', 'Finish the recording first');
   });
 
+  it('shows a refused install under the row, with the full text in the title', () => {
+    status = { state: 'ready', version: '0.3.0', notes: '', last_checked: null };
+    isRecording = false;
+    error = 'Staged update failed verification; it will be downloaded again';
+    render(<UpdateRow />);
+    const line = screen.getByText(error);
+    expect(line).toHaveAttribute('title', error);
+    expect(line).toHaveClass('truncate');
+    error = null;
+  });
+
   it('collapsed variant is a lamp-only button with an accessible name', () => {
-    status = { state: 'ready', version: '0.3.0', notes: '' };
+    status = { state: 'ready', version: '0.3.0', notes: '', last_checked: null };
     isRecording = false;
     render(<UpdateRow collapsed />);
     expect(screen.getByRole('button', { name: 'Restart to update to 0.3.0' })).toBeInTheDocument();
