@@ -159,6 +159,15 @@ export default function RootLayout({
     });
   }, [showOnboarding]);
 
+  // specs/0059 — the debug-only `dev_reset_onboarding` command emits this event after
+  // clearing the onboarding status; reload so the app re-checks it and shows the Welcome step.
+  useEffect(() => {
+    return safeListen('onboarding-reset', () => {
+      console.log('[Layout] Received onboarding-reset, reloading');
+      window.location.reload();
+    });
+  }, []);
+
   // Handle file drop for audio import
   const handleFileDrop = useCallback((paths: string[]) => {
     // Check if beta features are enabled (read from localStorage directly since we're outside ConfigProvider)
