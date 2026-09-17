@@ -3,3 +3,4 @@
 #![cfg(debug_assertions)]
 
 pub mod dataset;
+pub mod guard;
