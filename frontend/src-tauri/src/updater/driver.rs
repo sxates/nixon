@@ -24,6 +24,20 @@ fn staged_path(version: &str) -> PathBuf {
     staging_dir().join(format!("Nixon-{version}.app.tar.gz"))
 }
 
+/// Forget the staged payload and tell everyone. Used when the file it names is gone from
+/// disk or the manifest has moved on: without this the core keeps believing the version
+/// is staged, `should_download` keeps returning false for it, and it is never
+/// re-downloaded.
+fn forget_staged<R: Runtime>(app: &AppHandle<R>, why: &str) {
+    log::warn!("updater: forgetting the staged payload ({why})");
+    {
+        let state = app.state::<UpdaterState>();
+        state.core.lock().unwrap().clear_staged(chrono::Utc::now());
+    }
+    emit_status(app);
+    crate::tray::update_tray_menu(app);
+}
+
 /// Run one check (+ download when something newer is offered). Errors are folded into
 /// the status; this never panics and never restarts the app.
 pub async fn check_and_download<R: Runtime>(app: &AppHandle<R>) {
@@ -36,6 +50,26 @@ pub async fn check_and_download<R: Runtime>(app: &AppHandle<R>) {
         log::debug!("updater: a check is already running; skipping this one");
         return;
     };
+    // Self-heal before anything else: the staging record is only meaningful while its
+    // file exists. If someone cleaned it out between ticks, forget it here so
+    // `should_download` offers the same version again instead of skipping it forever.
+    let staged_file_gone = {
+        let staged = state
+            .core
+            .lock()
+            .unwrap()
+            .staged_version()
+            .map(str::to_string);
+        match staged {
+            // On an IO error assume it is still there — never drop good state on a blip.
+            Some(v) => !tokio::fs::try_exists(staged_path(&v)).await.unwrap_or(true),
+            None => false,
+        }
+    };
+    if staged_file_gone {
+        forget_staged(app, "its file is no longer on disk");
+    }
+
     {
         state.core.lock().unwrap().begin_check();
     }
@@ -155,9 +189,15 @@ pub async fn install_and_restart<R: Runtime>(app: AppHandle<R>) -> Result<(), St
         .unwrap()
         .can_install(stopped)
         .map_err(|e| e.to_string())?;
-    let bytes = tokio::fs::read(staged_path(&version))
-        .await
-        .map_err(|e| format!("Staged update is missing ({e}); it will be downloaded again"))?;
+    let bytes = match tokio::fs::read(staged_path(&version)).await {
+        Ok(bytes) => bytes,
+        Err(e) => {
+            forget_staged(&app, "its file is missing at install time");
+            return Err(format!(
+                "Staged update is missing ({e}); it will be downloaded again"
+            ));
+        }
+    };
     let updater = app
         .updater_builder()
         .timeout(HTTP_TIMEOUT)
@@ -172,6 +212,9 @@ pub async fn install_and_restart<R: Runtime>(app: AppHandle<R>) -> Result<(), St
         })?
         .ok_or_else(|| "The update is no longer offered".to_string())?;
     if update.version != version {
+        // The staged tarball is superseded: its bytes no longer match anything the
+        // manifest signs for, so drop it rather than keep offering a dead restart.
+        forget_staged(&app, "the manifest moved to a different version");
         return Err(format!(
             "A different version ({}) is now offered; checking again",
             update.version

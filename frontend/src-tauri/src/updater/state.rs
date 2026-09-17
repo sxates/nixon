@@ -156,6 +156,17 @@ impl UpdaterCore {
         Ok(staged.version.clone())
     }
 
+    /// Forget the staged payload: its file is gone from disk, or the manifest has moved
+    /// on. The visible status drops back to Idle so the UI stops offering a restart, and
+    /// because `should_download` no longer sees a staged version the next check
+    /// re-downloads the same version instead of skipping it forever.
+    pub fn clear_staged(&mut self, now: DateTime<Utc>) {
+        self.staged = None;
+        self.set(UpdateStatus::Idle {
+            last_checked: Some(now),
+        });
+    }
+
     /// Version of the staged payload, if any (tray menu reads this).
     pub fn staged_version(&self) -> Option<&str> {
         self.staged.as_ref().map(|s| s.version.as_str())
@@ -296,6 +307,27 @@ mod tests {
             Err(InstallRefusal::RecordingInProgress)
         );
         assert_eq!(core.can_install(true), Ok("0.3.0".to_string()));
+    }
+
+    #[test]
+    fn clearing_a_staged_payload_makes_it_downloadable_again() {
+        let mut core = UpdaterCore::default();
+        core.begin_download("0.3.0");
+        core.ready("0.3.0", "notes");
+        assert!(!core.should_download("0.3.0"));
+
+        core.clear_staged(t0());
+
+        // The same version must now be offered again — the file it referred to is gone.
+        assert!(core.should_download("0.3.0"));
+        assert_eq!(core.staged_version(), None);
+        assert_eq!(core.can_install(true), Err(InstallRefusal::NothingStaged));
+        assert_eq!(
+            core.status(),
+            &UpdateStatus::Idle {
+                last_checked: Some(t0())
+            }
+        );
     }
 
     #[test]
