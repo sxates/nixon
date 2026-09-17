@@ -29,4 +29,11 @@ describe('useMeetingTabs requestedTab (specs/0060)', () => {
     const { result } = renderHook(() => useMeetingTabs({ ...base, wantsPrepTab: true } as any));
     expect(result.current.activeTab).toBe('prep');
   });
+
+  it('a segment deep link wins over ?tab=: ends on Transcript even when requestedTab is summary', () => {
+    const { result } = renderHook(() =>
+      useMeetingTabs({ ...base, requestedTab: 'summary', deepLinkSegmentId: 'seg-1' } as any),
+    );
+    expect(result.current.activeTab).toBe('transcript');
+  });
 });

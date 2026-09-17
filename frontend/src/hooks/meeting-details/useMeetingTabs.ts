@@ -40,10 +40,13 @@ export function useMeetingTabs({
   requestedTab,
 }: UseMeetingTabsParams) {
   // Active document tab in the single-column layout (Summary / Transcript / My notes / Prep).
-  // A search deep-link to a transcript segment (specs/0033) lands on the Transcript tab;
-  // `?tab=prep` or a scheduled meeting lands on Prep (specs/0036). specs/0060 — an explicit
-  // `requestedTab` (the screenshot pipeline's `?tab=` deep link) wins over all of that; an
-  // unrecognized value is ignored and falls through to the existing rules.
+  // Precedence: a `?segment=` deep-link (specs/0033, the effect below) wins over
+  // everything — the segment only means something once the Transcript tab is actually
+  // visible, so it force-switches there even if something else requested a different
+  // tab. Below that, an explicit `requestedTab` (specs/0060's `?tab=` screenshot
+  // deep-link) seeds the initial tab; an unrecognized value is ignored and falls
+  // through to the legacy defaults: `?tab=prep` / a scheduled meeting → Prep
+  // (specs/0036), notes-only → My notes, else Summary.
   const seededTab =
     requestedTab && VALID_MEETING_TAB_KEYS.includes(requestedTab) ? requestedTab : null;
   const [activeTab, setActiveTab] = useState<MeetingTabKey>(
@@ -73,7 +76,9 @@ export function useMeetingTabs({
   // display:none, and the child's scroll effect flushes before this parent effect flips
   // the tab — scrolling a zero-height hidden subtree would silently do nothing.
   // Notes-only meetings have no Transcript tab at all, so the intent is consumed
-  // immediately (URL cleaned).
+  // immediately (URL cleaned). This runs on mount too (deepLinkSegmentId is already
+  // set in the initial props), so it overrides whatever `requestedTab` (specs/0060)
+  // seeded activeTab to above — `?tab=summary&segment=X` still ends on Transcript.
   useEffect(() => {
     if (!deepLinkSegmentId) return;
     if (isNotesOnly) {
