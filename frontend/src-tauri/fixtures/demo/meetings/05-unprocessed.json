@@ -7,6 +7,704 @@
   "participants": [],
   "speakers": [],
   "segments": [
-    { "id": "seg_1", "speaker": null, "channel": "mixed", "start": 0.0, "end": 3.0, "text": "Alright, let's get going." }
-  ]
+    {
+      "id": "seg_1",
+      "speaker": null,
+      "channel": "mixed",
+      "start": 0.0,
+      "end": 8.4,
+      "text": "Hey, thanks for hopping on, can you hear me okay, I think there's a bit of an echo on my end."
+    },
+    {
+      "id": "seg_2",
+      "speaker": null,
+      "channel": "mixed",
+      "start": 8.8,
+      "end": 14.0,
+      "text": "Yeah, I can hear you fine, might just be your side, go ahead."
+    },
+    {
+      "id": "seg_3",
+      "speaker": null,
+      "channel": "mixed",
+      "start": 14.7,
+      "end": 25.9,
+      "text": "Okay, great, so I wanted to get an update on the rib pattern prototype, iteration three, I think you said it was coming off the machine this week."
+    },
+    {
+      "id": "seg_4",
+      "speaker": null,
+      "channel": "mixed",
+      "start": 26.9,
+      "end": 40.5,
+      "text": "That's right, it actually came off yesterday afternoon, we're doing the thermal soak on it this morning, so I don't have full results yet, but visually it looks a lot cleaner than iteration two."
+    },
+    {
+      "id": "seg_5",
+      "speaker": null,
+      "channel": "mixed",
+      "start": 41.0,
+      "end": 51.4,
+      "text": "Good, that's what we were hoping for, the hot spot near the radio module was the main thing we were worried about on the last one."
+    },
+    {
+      "id": "seg_6",
+      "speaker": null,
+      "channel": "mixed",
+      "start": 52.2,
+      "end": 63.4,
+      "text": "Right, the new rib layout adds two more fins right around that zone specifically, so if the thermal model held up we should see a meaningful drop there."
+    },
+    {
+      "id": "seg_7",
+      "speaker": null,
+      "channel": "mixed",
+      "start": 64.7,
+      "end": 68.3,
+      "text": "When do you expect to have the soak data?"
+    },
+    {
+      "id": "seg_8",
+      "speaker": null,
+      "channel": "mixed",
+      "start": 68.6,
+      "end": 77.4,
+      "text": "End of day tomorrow, I'll send it straight over once it's compiled, probably as a PDF with the thermal camera stills included."
+    },
+    {
+      "id": "seg_9",
+      "speaker": null,
+      "channel": "mixed",
+      "start": 78.3,
+      "end": 79.5,
+      "text": "Perfect, appreciate that."
+    },
+    {
+      "id": "seg_10",
+      "speaker": null,
+      "channel": "mixed",
+      "start": 79.8,
+      "end": 87.0,
+      "text": "Can we talk about the anodizing lead time again, that's the piece my team keeps asking me about."
+    },
+    {
+      "id": "seg_11",
+      "speaker": null,
+      "channel": "mixed",
+      "start": 87.6,
+      "end": 99.6,
+      "text": "Sure, so once the geometry's actually locked, the anodised *and closure* lead time is looking like ten to twelve weeks, that includes the anodizing line booking, not just the machining."
+    },
+    {
+      "id": "seg_12",
+      "speaker": null,
+      "channel": "mixed",
+      "start": 100.7,
+      "end": 105.9,
+      "text": "Ten to twelve, okay, that's longer than the six weeks we originally scoped."
+    },
+    {
+      "id": "seg_13",
+      "speaker": null,
+      "channel": "mixed",
+      "start": 106.2,
+      "end": 116.6,
+      "text": "Before we get into that, actually, can we quickly cover the finish issue from the last batch, the one with the mottled look near the seam."
+    },
+    {
+      "id": "seg_14",
+      "speaker": null,
+      "channel": "mixed",
+      "start": 117.0,
+      "end": 132.6,
+      "text": "Yes, we did some digging on that internally after your team flagged it, it looks like it was a bath temperature variance during anodizing, the tank was running a couple degrees warmer than spec for part of that run."
+    },
+    {
+      "id": "seg_15",
+      "speaker": null,
+      "channel": "mixed",
+      "start": 134.1,
+      "end": 142.9,
+      "text": "Is that something you've corrected on your end, or is it something we need to worry about happening again on this batch?"
+    },
+    {
+      "id": "seg_16",
+      "speaker": null,
+      "channel": "mixed",
+      "start": 143.5,
+      "end": 161.1,
+      "text": "It's corrected, we recalibrated the tank sensor and added a mid-run temperature check that wasn't part of our process before, so it shouldn't recur, but I'll flag your job specifically to the floor team just so there's extra attention on it given the history."
+    },
+    {
+      "id": "seg_17",
+      "speaker": null,
+      "channel": "mixed",
+      "start": 161.9,
+      "end": 167.9,
+      "text": "Appreciate that, that was the main worry on our side going into this next round."
+    },
+    {
+      "id": "seg_18",
+      "speaker": null,
+      "channel": "mixed",
+      "start": 168.3,
+      "end": 179.9,
+      "text": "Totally understandable, that kind of defect is exactly the sort of thing that erodes trust even when it's a small percentage of a batch, so I take it seriously."
+    },
+    {
+      "id": "seg_19",
+      "speaker": null,
+      "channel": "mixed",
+      "start": 180.6,
+      "end": 182.6,
+      "text": "Good, glad it's been root-caused."
+    },
+    {
+      "id": "seg_20",
+      "speaker": null,
+      "channel": "mixed",
+      "start": 182.8,
+      "end": 185.6,
+      "text": "Okay, back to the lead time then."
+    },
+    {
+      "id": "seg_21",
+      "speaker": null,
+      "channel": "mixed",
+      "start": 186.6,
+      "end": 202.6,
+      "text": "Yeah, I know, the anodizing line got busier this quarter than usual, we've got a couple other clients running larger batches ahead of us in the queue, that's really what's driving the extra time, not anything about your part specifically."
+    },
+    {
+      "id": "seg_22",
+      "speaker": null,
+      "channel": "mixed",
+      "start": 203.1,
+      "end": 207.5,
+      "text": "Is there any way to expedite that, even at a premium?"
+    },
+    {
+      "id": "seg_23",
+      "speaker": null,
+      "channel": "mixed",
+      "start": 208.3,
+      "end": 222.3,
+      "text": "There might be, let me check with our line scheduler, sometimes we can slot a small job in between larger runs if the geometry's simple enough, yours might qualify since it's a relatively small part."
+    },
+    {
+      "id": "seg_24",
+      "speaker": null,
+      "channel": "mixed",
+      "start": 223.6,
+      "end": 230.4,
+      "text": "That would help a lot, even shaving two or three weeks off would matter on our side."
+    },
+    {
+      "id": "seg_25",
+      "speaker": null,
+      "channel": "mixed",
+      "start": 230.7,
+      "end": 237.1,
+      "text": "Understood, I'll ask today and get back to you by tomorrow along with the soak data."
+    },
+    {
+      "id": "seg_26",
+      "speaker": null,
+      "channel": "mixed",
+      "start": 238.0,
+      "end": 238.6,
+      "text": "Great."
+    },
+    {
+      "id": "seg_27",
+      "speaker": null,
+      "channel": "mixed",
+      "start": 238.8,
+      "end": 248.0,
+      "text": "Separate question, what if we did a non-anodized finish for an initial batch, just bead blasted, does that change the timeline at all?"
+    },
+    {
+      "id": "seg_28",
+      "speaker": null,
+      "channel": "mixed",
+      "start": 248.6,
+      "end": 263.8,
+      "text": "Oh, yeah, that's much faster actually, bead blasting doesn't need the anodizing line at all, that's basically just the machining and a finishing pass, we could probably turn that around in two to three weeks once geometry's locked."
+    },
+    {
+      "id": "seg_29",
+      "speaker": null,
+      "channel": "mixed",
+      "start": 264.9,
+      "end": 273.3,
+      "text": "That's really helpful actually, we might do exactly that for an initial batch and keep anodized for the main production run."
+    },
+    {
+      "id": "seg_30",
+      "speaker": null,
+      "channel": "mixed",
+      "start": 273.7,
+      "end": 284.1,
+      "text": "Makes sense, plenty of clients do a mixed approach like that, especially when there's a deadline on one end and a cosmetic requirement on the other."
+    },
+    {
+      "id": "seg_31",
+      "speaker": null,
+      "channel": "mixed",
+      "start": 285.6,
+      "end": 288.0,
+      "text": "Right, that's pretty much our situation."
+    },
+    {
+      "id": "seg_32",
+      "speaker": null,
+      "channel": "mixed",
+      "start": 288.2,
+      "end": 299.4,
+      "text": "Can you send me a quote for both paths, the bead blasted small batch and the full anodized production run, so I can take real numbers back internally?"
+    },
+    {
+      "id": "seg_33",
+      "speaker": null,
+      "channel": "mixed",
+      "start": 300.0,
+      "end": 312.8,
+      "text": "Yeah, I'll put that together, should have it to you by Thursday, I need to check current material pricing on the aluminum stock first, it's moved a bit since our last quote."
+    },
+    {
+      "id": "seg_34",
+      "speaker": null,
+      "channel": "mixed",
+      "start": 313.6,
+      "end": 319.6,
+      "text": "That's fine, just flag if it's moved a lot, we'd want to know either way."
+    },
+    {
+      "id": "seg_35",
+      "speaker": null,
+      "channel": "mixed",
+      "start": 320.0,
+      "end": 320.8,
+      "text": "Will do."
+    },
+    {
+      "id": "seg_36",
+      "speaker": null,
+      "channel": "mixed",
+      "start": 321.1,
+      "end": 337.9,
+      "text": "Let's talk about the mold, sorry, not mold, this is machined not molded, I keep saying mold out of habit from other projects, the tooling for the machining fixture, that part's stable, no changes needed there regardless of which rib pattern wins."
+    },
+    {
+      "id": "seg_37",
+      "speaker": null,
+      "channel": "mixed",
+      "start": 338.6,
+      "end": 340.2,
+      "text": "Good, one less variable."
+    },
+    {
+      "id": "seg_38",
+      "speaker": null,
+      "channel": "mixed",
+      "start": 340.4,
+      "end": 349.2,
+      "text": "What about the sealing, is the gasket design still compatible with iteration three, or did the rib changes affect the mating surface?"
+    },
+    {
+      "id": "seg_39",
+      "speaker": null,
+      "channel": "mixed",
+      "start": 350.2,
+      "end": 361.8,
+      "text": "Should be compatible, the mating surface geometry didn't change, just the internal rib structure, but I'll double check that specifically during the soak test inspection just to be safe."
+    },
+    {
+      "id": "seg_40",
+      "speaker": null,
+      "channel": "mixed",
+      "start": 362.3,
+      "end": 367.9,
+      "text": "Appreciate the caution there, that's exactly the kind of thing that's easy to miss."
+    },
+    {
+      "id": "seg_41",
+      "speaker": null,
+      "channel": "mixed",
+      "start": 368.7,
+      "end": 373.1,
+      "text": "Yeah, better to catch it now than during final assembly testing."
+    },
+    {
+      "id": "seg_42",
+      "speaker": null,
+      "channel": "mixed",
+      "start": 373.4,
+      "end": 390.6,
+      "text": "One more thing on my end, we did notice some minor surface marking on a couple of the iteration two prototypes, probably from the fixture clamping, nothing structural, but I wanted to flag it in case you saw it on your end too."
+    },
+    {
+      "id": "seg_43",
+      "speaker": null,
+      "channel": "mixed",
+      "start": 391.9,
+      "end": 398.3,
+      "text": "We did notice something like that actually, wasn't sure if it was intentional or a defect."
+    },
+    {
+      "id": "seg_44",
+      "speaker": null,
+      "channel": "mixed",
+      "start": 398.6,
+      "end": 409.8,
+      "text": "Not intentional, we're adjusting the clamp padding for iteration three, should be resolved, but let me know if you still see it once you get the new prototype."
+    },
+    {
+      "id": "seg_45",
+      "speaker": null,
+      "channel": "mixed",
+      "start": 410.7,
+      "end": 417.1,
+      "text": "Will do, when should we expect to receive the physical prototype, not just the soak data?"
+    },
+    {
+      "id": "seg_46",
+      "speaker": null,
+      "channel": "mixed",
+      "start": 417.7,
+      "end": 428.9,
+      "text": "I can ship it overnight once the soak test's done, so you'd have it in hand by Friday at the latest, could be Thursday if the courier cooperates."
+    },
+    {
+      "id": "seg_47",
+      "speaker": null,
+      "channel": "mixed",
+      "start": 430.0,
+      "end": 433.6,
+      "text": "Great, that works well with our internal review timeline."
+    },
+    {
+      "id": "seg_48",
+      "speaker": null,
+      "channel": "mixed",
+      "start": 433.9,
+      "end": 438.7,
+      "text": "Can we also touch on the quantity break points for production pricing?"
+    },
+    {
+      "id": "seg_49",
+      "speaker": null,
+      "channel": "mixed",
+      "start": 439.1,
+      "end": 452.3,
+      "text": "Sure, we typically see meaningful step-downs at five hundred units, two thousand units, and then again at ten thousand, each step is roughly an eight to twelve percent reduction depending on the finish."
+    },
+    {
+      "id": "seg_50",
+      "speaker": null,
+      "channel": "mixed",
+      "start": 453.8,
+      "end": 459.8,
+      "text": "And that's per-unit pricing at each tier, not a blended average across the whole order?"
+    },
+    {
+      "id": "seg_51",
+      "speaker": null,
+      "channel": "mixed",
+      "start": 460.4,
+      "end": 474.8,
+      "text": "Correct, per-unit at whatever the highest tier you hit is, so if you order twenty two hundred units you get the two thousand unit pricing on the whole batch, not just the units above the threshold."
+    },
+    {
+      "id": "seg_52",
+      "speaker": null,
+      "channel": "mixed",
+      "start": 475.6,
+      "end": 480.4,
+      "text": "Got it, that's helpful, I'll factor that into our production volume planning."
+    },
+    {
+      "id": "seg_53",
+      "speaker": null,
+      "channel": "mixed",
+      "start": 480.6,
+      "end": 488.6,
+      "text": "Is there a minimum order quantity below the five hundred tier, in case we want a small pilot batch first?"
+    },
+    {
+      "id": "seg_54",
+      "speaker": null,
+      "channel": "mixed",
+      "start": 489.0,
+      "end": 505.0,
+      "text": "Yeah, we can do runs as small as fifty units for a pilot, pricing's just at the base rate below five hundred, no special pilot discount, but plenty of clients do a small pilot before committing to a bigger order."
+    },
+    {
+      "id": "seg_55",
+      "speaker": null,
+      "channel": "mixed",
+      "start": 505.7,
+      "end": 515.7,
+      "text": "That's useful, we might actually do a fifty or hundred unit pilot with the bead blasted finish before committing to the full anodized production run."
+    },
+    {
+      "id": "seg_56",
+      "speaker": null,
+      "channel": "mixed",
+      "start": 516.7,
+      "end": 524.7,
+      "text": "Makes sense given everything we've talked about today, that seems like a reasonable way to de-risk it on your end."
+    },
+    {
+      "id": "seg_57",
+      "speaker": null,
+      "channel": "mixed",
+      "start": 525.2,
+      "end": 525.8,
+      "text": "Agreed."
+    },
+    {
+      "id": "seg_58",
+      "speaker": null,
+      "channel": "mixed",
+      "start": 526.0,
+      "end": 536.8,
+      "text": "What's typical turnaround on a pilot batch that size, similar to the two to three weeks you quoted for bead blasted, or faster given the smaller quantity?"
+    },
+    {
+      "id": "seg_59",
+      "speaker": null,
+      "channel": "mixed",
+      "start": 537.6,
+      "end": 551.6,
+      "text": "Similar, honestly, the machining time doesn't scale down much below a certain batch size, it's mostly setup time either way, so two to three weeks is a fair estimate for fifty units or five hundred."
+    },
+    {
+      "id": "seg_60",
+      "speaker": null,
+      "channel": "mixed",
+      "start": 552.9,
+      "end": 557.3,
+      "text": "Understood, good to know it's not meaningfully faster at that scale."
+    },
+    {
+      "id": "seg_61",
+      "speaker": "unknown",
+      "channel": "mixed",
+      "start": 557.6,
+      "end": 566.4,
+      "text": "Sorry, sorry, can you say that last part again, about the tier pricing, I stepped away for a second and missed it."
+    },
+    {
+      "id": "seg_62",
+      "speaker": null,
+      "channel": "mixed",
+      "start": 567.3,
+      "end": 577.7,
+      "text": "No problem, I'll send a written quote with the tiers spelled out anyway, easier than trying to repeat it verbally and have someone mishear a number."
+    },
+    {
+      "id": "seg_63",
+      "speaker": null,
+      "channel": "mixed",
+      "start": 578.3,
+      "end": 583.5,
+      "text": "That's probably safer, yeah, numbers over the phone are always a little risky."
+    },
+    {
+      "id": "seg_64",
+      "speaker": null,
+      "channel": "mixed",
+      "start": 584.6,
+      "end": 585.2,
+      "text": "Agreed."
+    },
+    {
+      "id": "seg_65",
+      "speaker": null,
+      "channel": "mixed",
+      "start": 585.5,
+      "end": 597.5,
+      "text": "Okay, I think that covers the main items, thermal soak results and pricing quote by end of week, prototype shipped by Friday, and you'll check on expediting the anodizing line."
+    },
+    {
+      "id": "seg_66",
+      "speaker": null,
+      "channel": "mixed",
+      "start": 597.9,
+      "end": 607.9,
+      "text": "That's right, I'll follow up on all three by tomorrow where I can, and Thursday at the latest for the parts that need more digging."
+    },
+    {
+      "id": "seg_67",
+      "speaker": null,
+      "channel": "mixed",
+      "start": 609.4,
+      "end": 612.6,
+      "text": "Sounds good, appreciate you jumping on short notice."
+    },
+    {
+      "id": "seg_68",
+      "speaker": null,
+      "channel": "mixed",
+      "start": 613.2,
+      "end": 620.0,
+      "text": "No problem at all, talk soon, I'll email you as soon as I have the soak numbers."
+    },
+    {
+      "id": "seg_69",
+      "speaker": null,
+      "channel": "mixed",
+      "start": 620.8,
+      "end": 632.4,
+      "text": "Actually, one more thing before we hang up, what's the current drawing revision we should both be working from, I want to make sure we're not out of sync."
+    },
+    {
+      "id": "seg_70",
+      "speaker": null,
+      "channel": "mixed",
+      "start": 632.8,
+      "end": 642.0,
+      "text": "On our end it's revision C-014, dated the twelfth, that's the one with the updated rib pattern and the corrected gasket groove depth."
+    },
+    {
+      "id": "seg_71",
+      "speaker": null,
+      "channel": "mixed",
+      "start": 642.7,
+      "end": 645.9,
+      "text": "Same on our end, C-014, good, that matches."
+    },
+    {
+      "id": "seg_72",
+      "speaker": null,
+      "channel": "mixed",
+      "start": 646.1,
+      "end": 652.9,
+      "text": "And the NDA covering the new sensor housing details, that's already fully executed, right, nothing outstanding there?"
+    },
+    {
+      "id": "seg_73",
+      "speaker": null,
+      "channel": "mixed",
+      "start": 653.9,
+      "end": 661.5,
+      "text": "Yes, that was signed and countersigned a few weeks back, I have it on file, no action needed there."
+    },
+    {
+      "id": "seg_74",
+      "speaker": null,
+      "channel": "mixed",
+      "start": 662.0,
+      "end": 669.6,
+      "text": "Perfect, just wanted to double check before we start shipping prototypes back and forth with more detail on them."
+    },
+    {
+      "id": "seg_75",
+      "speaker": null,
+      "channel": "mixed",
+      "start": 669.9,
+      "end": 678.7,
+      "text": "One more logistics question, do you ship internationally if we need samples sent to a lab that isn't at our main office?"
+    },
+    {
+      "id": "seg_76",
+      "speaker": null,
+      "channel": "mixed",
+      "start": 679.5,
+      "end": 690.7,
+      "text": "Yes, we can ship anywhere, just need the address and any customs paperwork requirements in advance, some countries want extra documentation for machined aluminum parts depending on classification."
+    },
+    {
+      "id": "seg_77",
+      "speaker": null,
+      "channel": "mixed",
+      "start": 692.0,
+      "end": 700.0,
+      "text": "Understood, I'll get you that address if it comes up, for now everything can go to our usual receiving dock."
+    },
+    {
+      "id": "seg_78",
+      "speaker": null,
+      "channel": "mixed",
+      "start": 700.3,
+      "end": 704.7,
+      "text": "Sounds good, I'll default to that unless you tell me otherwise."
+    },
+    {
+      "id": "seg_79",
+      "speaker": null,
+      "channel": "mixed",
+      "start": 705.6,
+      "end": 706.2,
+      "text": "Great."
+    },
+    {
+      "id": "seg_80",
+      "speaker": null,
+      "channel": "mixed",
+      "start": 706.5,
+      "end": 711.3,
+      "text": "I think that's everything on my list, did you have anything else?"
+    },
+    {
+      "id": "seg_81",
+      "speaker": null,
+      "channel": "mixed",
+      "start": 711.9,
+      "end": 725.5,
+      "text": "Just a scheduling note, I'll be out Monday, so if anything urgent comes up around the soak data, my colleague can cover, I'll make sure they're looped in before I leave for the day."
+    },
+    {
+      "id": "seg_82",
+      "speaker": null,
+      "channel": "mixed",
+      "start": 726.6,
+      "end": 733.8,
+      "text": "Good to know, thanks for the heads up, I'll loop in whoever from my side if needed too."
+    },
+    {
+      "id": "seg_83",
+      "speaker": null,
+      "channel": "mixed",
+      "start": 734.2,
+      "end": 734.8,
+      "text": "Appreciated."
+    },
+    {
+      "id": "seg_84",
+      "speaker": null,
+      "channel": "mixed",
+      "start": 735.0,
+      "end": 741.8,
+      "text": "Alright, I'll get you the soak results and the quote by end of week like we said."
+    },
+    {
+      "id": "seg_85",
+      "speaker": null,
+      "channel": "mixed",
+      "start": 743.3,
+      "end": 745.7,
+      "text": "Sounds good, talk to you then."
+    },
+    {
+      "id": "seg_86",
+      "speaker": null,
+      "channel": "mixed",
+      "start": 746.3,
+      "end": 748.3,
+      "text": "Great, thanks, bye for now."
+    },
+    {
+      "id": "seg_87",
+      "speaker": null,
+      "channel": "mixed",
+      "start": 749.1,
+      "end": 749.7,
+      "text": "Bye."
+    }
+  ],
+  "summary_markdown": null,
+  "notes_markdown": null,
+  "action_items": []
 }
