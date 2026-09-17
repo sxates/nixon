@@ -4,3 +4,4 @@
 
 pub mod dataset;
 pub mod guard;
+pub mod seed;
