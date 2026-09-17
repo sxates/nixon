@@ -113,6 +113,14 @@ export default function RootLayout({
   const [importFilePath, setImportFilePath] = useState<string | null>(null)
 
   useEffect(() => {
+    // specs/0060: screenshot drivers wait for this attribute. 400 ms clears the
+    // 0.25–0.3 s framer intro animations on every page. Set on both outcomes below —
+    // a failed status check still renders onboarding.
+    let shotReadyTimer: ReturnType<typeof window.setTimeout> | undefined
+    const markShotReady = () => {
+      shotReadyTimer = window.setTimeout(() => { document.documentElement.dataset.shotReady = '1' }, 400)
+    }
+
     // Check onboarding status first
     invoke<{ completed: boolean } | null>('get_onboarding_status')
       .then((status) => {
@@ -126,9 +134,7 @@ export default function RootLayout({
           console.log('[Layout] Onboarding completed, showing main app')
         }
 
-        // specs/0060: screenshot drivers wait for this attribute. 400 ms clears the
-        // 0.25–0.3 s framer intro animations on every page.
-        window.setTimeout(() => { document.documentElement.dataset.shotReady = '1' }, 400)
+        markShotReady()
       })
       .catch((error) => {
         console.error('[Layout] Failed to check onboarding status:', error)
@@ -136,10 +142,10 @@ export default function RootLayout({
         setShowOnboarding(true)
         setOnboardingCompleted(false)
 
-        // specs/0060: screenshot drivers wait for this attribute. 400 ms clears the
-        // 0.25–0.3 s framer intro animations on every page.
-        window.setTimeout(() => { document.documentElement.dataset.shotReady = '1' }, 400)
+        markShotReady()
       })
+
+    return () => { if (shotReadyTimer !== undefined) window.clearTimeout(shotReadyTimer) }
   }, [])
 
   // Disable context menu in production
