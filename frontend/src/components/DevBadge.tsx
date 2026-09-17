@@ -1,4 +1,6 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import { DevFlags, formatFlags } from "./DeveloperSettings";
 
 interface DevBadgeProps {
   /** When true, render a compact dot suitable for the collapsed sidebar. */
@@ -12,9 +14,19 @@ interface DevBadgeProps {
  * production export this component compiles down to `null`.
  */
 const DevBadge: React.FC<DevBadgeProps> = ({ isCollapsed = false }) => {
+  // specs/0059 — hooks run unconditionally, before the production early return below.
+  const [flags, setFlags] = useState<DevFlags | null>(null);
+
+  useEffect(() => {
+    if (process.env.NODE_ENV === "production") return;
+    invoke<DevFlags>("dev_get_flags").then(setFlags).catch(() => setFlags(null));
+  }, []);
+
   if (process.env.NODE_ENV === "production") return null;
 
-  const label = "Development build — separate data from the production app";
+  const label = flags
+    ? `Development build — separate data from the production app\nDev flags: ${formatFlags(flags)}`
+    : "Development build — separate data from the production app";
 
   if (isCollapsed) {
     return (

@@ -13,6 +13,7 @@ import {
   SettingsRow,
   SettingsSection,
 } from "./ui/settings"
+import { DeveloperSettings } from "./DeveloperSettings"
 
 export function BetaSettings() {
   const { betaFeatures, toggleBetaFeature } = useConfig();
@@ -21,37 +22,43 @@ export function BetaSettings() {
   const featureOrder: BetaFeatureKey[] = ['importAndRetranscribe'];
 
   return (
-    <SettingsSection
-      title="Beta features"
-      description="Still being tested. You may hit rough edges — feedback welcome."
-    >
-      <SettingsGroup>
-        {featureOrder.map((featureKey) => (
-          <SettingsRow
-            key={featureKey}
-            label={
-              <span className="flex items-center gap-2">
-                {BETA_FEATURE_NAMES[featureKey]}
-                <span className="rounded-[3px] bg-brand/10 px-2 py-0.5 text-[11px] font-semibold text-brand">
-                  BETA
+    <>
+      <SettingsSection
+        title="Beta features"
+        description="Still being tested. You may hit rough edges — feedback welcome."
+      >
+        <SettingsGroup>
+          {featureOrder.map((featureKey) => (
+            <SettingsRow
+              key={featureKey}
+              label={
+                <span className="flex items-center gap-2">
+                  {BETA_FEATURE_NAMES[featureKey]}
+                  <span className="rounded-[3px] bg-brand/10 px-2 py-0.5 text-[11px] font-semibold text-brand">
+                    BETA
+                  </span>
                 </span>
-              </span>
-            }
-            description={BETA_FEATURE_DESCRIPTIONS[featureKey]}
-            control={
-              <Switch
-                checked={betaFeatures[featureKey]}
-                onCheckedChange={(checked) => toggleBetaFeature(featureKey, checked)}
-                aria-label={BETA_FEATURE_NAMES[featureKey]}
-              />
-            }
-          />
-        ))}
-      </SettingsGroup>
+              }
+              description={BETA_FEATURE_DESCRIPTIONS[featureKey]}
+              control={
+                <Switch
+                  checked={betaFeatures[featureKey]}
+                  onCheckedChange={(checked) => toggleBetaFeature(featureKey, checked)}
+                  aria-label={BETA_FEATURE_NAMES[featureKey]}
+                />
+              }
+            />
+          ))}
+        </SettingsGroup>
 
-      <SettingsNote tone="muted">
-        When disabled, beta features are hidden. Your existing meetings remain unaffected.
-      </SettingsNote>
-    </SettingsSection>
+        <SettingsNote tone="muted">
+          When disabled, beta features are hidden. Your existing meetings remain unaffected.
+        </SettingsNote>
+      </SettingsSection>
+
+      {/* specs/0059 — debug-only Developer section. Renders nothing in release builds,
+          where the `dev_get_flags` command doesn't exist. */}
+      <DeveloperSettings />
+    </>
   );
 }
