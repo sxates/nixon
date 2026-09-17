@@ -44,13 +44,22 @@ pub async fn run_seed(app: &AppHandle, no_audio: bool) -> Result<seed::SeedRepor
     );
 
     let now = chrono::Utc::now();
-    let mut folders = seed::FolderMap::new();
-    for m in &ds.meetings {
-        let start = seed::started_at(m, now);
-        if let Some(f) = prepare_folder(m, &root, start, no_audio) {
-            folders.insert(m.id.clone(), f);
-        }
-    }
+    let folders = {
+        let ds = ds.clone();
+        let root = root.clone();
+        tauri::async_runtime::spawn_blocking(move || {
+            let mut folders = seed::FolderMap::new();
+            for m in &ds.meetings {
+                let start = seed::started_at(m, now);
+                if let Some(f) = prepare_folder(m, &root, start, no_audio) {
+                    folders.insert(m.id.clone(), f);
+                }
+            }
+            folders
+        })
+        .await
+        .map_err(|e| anyhow::anyhow!("folder/audio preparation task panicked: {e}"))?
+    };
     let report = seed::seed_all(pool, &ds, &folders, now).await?;
 
     // A seeded profile is post-onboarding unless --onboarding also asked for a reset.

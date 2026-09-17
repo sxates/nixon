@@ -4,7 +4,9 @@ use super::wav::{place, read_pcm16_mono, say_to_wav, write_pcm16_mono, SAMPLE_RA
 use crate::audio::channel_writer::{MIC_CHANNEL_FILENAME, SYSTEM_CHANNEL_FILENAME};
 use anyhow::{Context, Result};
 use sha2::{Digest, Sha256};
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Mutex;
 
 const HASH_FILE: &str = ".fixture-hash";
 const VOICES: [&str; 6] = ["Daniel", "Moira", "Rishi", "Karen", "Tessa", "Fred"];
@@ -30,6 +32,46 @@ fn fingerprint(m: &FixtureMeeting) -> String {
     format!("{:x}", h.finalize())
 }
 
+/// Synthesizes every segment's clip in parallel onto `<tmp>/<i>.wav` using a bounded
+/// worker pool (segment indices are handed out from a shared atomic counter so workers
+/// never contend over the same segment). Returns `None` (after logging which segment(s)
+/// failed) when any `say` call fails, so the caller can preserve the existing
+/// `Ok(false)` "say unavailable" contract; otherwise returns each clip's path indexed
+/// by segment position, ready for the same sequential timeline placement as before.
+fn synth_segments_parallel(m: &FixtureMeeting, tmp: &Path) -> Option<Vec<PathBuf>> {
+    let n = m.segments.len();
+    let workers = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(4)
+        .clamp(2, 8);
+    let next = AtomicUsize::new(0);
+    let ok = std::sync::atomic::AtomicBool::new(true);
+    let results: Mutex<Vec<Option<PathBuf>>> = Mutex::new(vec![None; n]);
+    std::thread::scope(|scope| {
+        for _ in 0..workers {
+            scope.spawn(|| loop {
+                let i = next.fetch_add(1, Ordering::SeqCst);
+                if i >= n {
+                    break;
+                }
+                let seg = &m.segments[i];
+                let clip_path = tmp.join(format!("{i}.wav"));
+                let key = seg.speaker.as_deref().unwrap_or("spk_0");
+                if say_to_wav(&seg.text, Some(voice_for(key)), &clip_path) {
+                    results.lock().unwrap()[i] = Some(clip_path);
+                } else {
+                    log::warn!("[dev] say failed for segment {i} ({}) of {}", seg.id, m.id);
+                    ok.store(false, Ordering::SeqCst);
+                }
+            });
+        }
+    });
+    if !ok.load(Ordering::SeqCst) {
+        return None;
+    }
+    results.into_inner().unwrap().into_iter().collect()
+}
+
 /// Ok(true) = rendered or cache hit; Ok(false) = `say` unavailable (folder left without audio).
 pub fn render_meeting_audio(m: &FixtureMeeting, folder: &Path) -> Result<bool> {
     let fp = fingerprint(m);
@@ -44,13 +86,12 @@ pub fn render_meeting_audio(m: &FixtureMeeting, folder: &Path) -> Result<bool> {
     let mut mic = vec![0i16; total];
     let mut sys = vec![0i16; total];
     let tmp = tempfile::tempdir()?;
+    let clip_paths = match synth_segments_parallel(m, tmp.path()) {
+        Some(paths) => paths,
+        None => return Ok(false),
+    };
     for (i, seg) in m.segments.iter().enumerate() {
-        let clip_path = tmp.path().join(format!("{i}.wav"));
-        let key = seg.speaker.as_deref().unwrap_or("spk_0");
-        if !say_to_wav(&seg.text, Some(voice_for(key)), &clip_path) {
-            return Ok(false);
-        }
-        let mut clip = read_pcm16_mono(&clip_path)?;
+        let mut clip = read_pcm16_mono(&clip_paths[i])?;
         let max = ((seg.end - seg.start) * SAMPLE_RATE as f64) as usize;
         clip.truncate(max);
         if seg.channel == "microphone" {
@@ -123,6 +164,41 @@ mod tests {
                     .unwrap()
                     == mtime,
             "second run must be a cache hit"
+        );
+    }
+
+    #[test]
+    fn parallel_synthesis_produces_correct_length_and_places_owner_audio() {
+        if crate::audio::ffmpeg::find_ffmpeg_path().is_none() {
+            eprintln!("ffmpeg missing; skipped");
+            return;
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let ds = load_embedded().unwrap();
+        let mut m = ds.meetings[3].clone(); // standup, shortest
+        m.segments.truncate(6);
+        m.duration_seconds = 40;
+        if !render_meeting_audio(&m, dir.path()).unwrap() {
+            eprintln!("say unavailable; skipped");
+            return;
+        }
+        let mic = read_pcm16_mono(&dir.path().join("mic.wav")).unwrap();
+        assert_eq!(
+            mic.len(),
+            (m.duration_seconds as usize + 1) * SAMPLE_RATE as usize
+        );
+        // seg_1 ("Morning, everyone.") is the owner's first, microphone-channel segment,
+        // starting at t=0 — the parallel path must place it at the same offset the
+        // sequential path always did.
+        let owner_seg = m
+            .segments
+            .iter()
+            .find(|s| s.channel == "microphone")
+            .expect("standup meeting has an owner/microphone segment");
+        let off = (owner_seg.start * SAMPLE_RATE as f64) as usize;
+        assert!(
+            mic[off..off + 100].iter().any(|&s| s != 0),
+            "expected non-silent audio at the owner segment's offset"
         );
     }
 }
