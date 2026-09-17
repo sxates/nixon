@@ -4,11 +4,2135 @@
   "days_ago": 0,
   "time_of_day": "14:00",
   "duration_seconds": 2280,
-  "participants": ["person-maya"],
+  "template_id": "standard_meeting",
+  "participants": [
+    "person-maya",
+    "person-tomas",
+    "person-ines"
+  ],
   "speakers": [
-    { "key": "local", "display_name": "You", "is_local": true }
+    {
+      "key": "local",
+      "display_name": "You",
+      "is_local": true
+    },
+    {
+      "key": "spk_0",
+      "display_name": "Maya Okafor",
+      "person_id": "person-maya"
+    },
+    {
+      "key": "spk_1",
+      "display_name": "Tomas Lindqvist",
+      "person_id": "person-tomas"
+    },
+    {
+      "key": "spk_2",
+      "display_name": "Inès Marchetti",
+      "person_id": "person-ines"
+    }
   ],
   "segments": [
-    { "id": "seg_1", "speaker": "local", "channel": "microphone", "start": 0.0, "end": 3.0, "text": "Alright, let's get going." }
+    {
+      "id": "seg_1",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 0.0,
+      "end": 1.6,
+      "text": "Alright, let's get going."
+    },
+    {
+      "id": "seg_2",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 1.9,
+      "end": 7.5,
+      "text": "Thanks all for making time this afternoon, I know it's been a heavy week."
+    },
+    {
+      "id": "seg_3",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 7.8,
+      "end": 15.8,
+      "text": "Agenda's the usual, release scope, bug backlog, field feedback, then rev C hardware status, and we'll close with action items."
+    },
+    {
+      "id": "seg_4",
+      "speaker": "spk_0",
+      "channel": "system",
+      "start": 16.2,
+      "end": 17.0,
+      "text": "Sounds good."
+    },
+    {
+      "id": "seg_5",
+      "speaker": "spk_0",
+      "channel": "system",
+      "start": 17.2,
+      "end": 21.6,
+      "text": "Should I start with scope since that's probably the longest conversation?"
+    },
+    {
+      "id": "seg_6",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 22.3,
+      "end": 23.5,
+      "text": "Yeah, go ahead."
+    },
+    {
+      "id": "seg_7",
+      "speaker": "spk_0",
+      "channel": "system",
+      "start": 24.5,
+      "end": 25.1,
+      "text": "Okay."
+    },
+    {
+      "id": "seg_8",
+      "speaker": "spk_0",
+      "channel": "system",
+      "start": 25.4,
+      "end": 42.6,
+      "text": "For the Q4 firmware release on the Vantage line, we've got four things in scope right now, the low-power sleep mode work, the calibration table patch for the humidity drift issue, the Bluetooth low energy diagnostic mode, and the cloud connectivity retry logic."
+    },
+    {
+      "id": "seg_9",
+      "speaker": "spk_0",
+      "channel": "system",
+      "start": 42.9,
+      "end": 52.5,
+      "text": "Tomas is owning sleep mode, I'm owning the calibration patch, and Inès has been helping with the BLE diagnostic mode from the hardware side."
+    },
+    {
+      "id": "seg_10",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 53.0,
+      "end": 56.2,
+      "text": "And the cloud connectivity piece, who's on that?"
+    },
+    {
+      "id": "seg_11",
+      "speaker": "spk_0",
+      "channel": "system",
+      "start": 57.0,
+      "end": 60.6,
+      "text": "Nobody yet, honestly, it's been sitting in the backlog."
+    },
+    {
+      "id": "seg_12",
+      "speaker": "spk_0",
+      "channel": "system",
+      "start": 60.9,
+      "end": 69.3,
+      "text": "It's a smaller change, retrying failed uploads with exponential backoff instead of the current fixed one-minute retry, but it's not assigned."
+    },
+    {
+      "id": "seg_13",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 70.6,
+      "end": 79.8,
+      "text": "Let's talk about whether it needs to be in this release at all, or if it can slip to the point release after."
+    },
+    {
+      "id": "seg_14",
+      "speaker": "spk_1",
+      "channel": "system",
+      "start": 80.1,
+      "end": 81.7,
+      "text": "I'd vote slip it."
+    },
+    {
+      "id": "seg_15",
+      "speaker": "spk_1",
+      "channel": "system",
+      "start": 82.0,
+      "end": 89.6,
+      "text": "It's not customer facing in the sense that units still upload eventually, they just retry more slowly than ideal."
+    },
+    {
+      "id": "seg_16",
+      "speaker": "spk_1",
+      "channel": "system",
+      "start": 89.8,
+      "end": 93.8,
+      "text": "Sleep mode and the calibration fix are both more urgent."
+    },
+    {
+      "id": "seg_17",
+      "speaker": "spk_2",
+      "channel": "system",
+      "start": 94.7,
+      "end": 107.1,
+      "text": "I agree, and honestly the connectivity code touches the same buffer management as the BLE diagnostic mode, I'd rather not have two people modifying that path in the same release cycle."
+    },
+    {
+      "id": "seg_18",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 107.7,
+      "end": 115.3,
+      "text": "Before we defer it entirely, what's the actual customer impact of the current fixed retry, does anyone have numbers?"
+    },
+    {
+      "id": "seg_19",
+      "speaker": "spk_1",
+      "channel": "system",
+      "start": 116.4,
+      "end": 122.4,
+      "text": "Roughly, if a unit loses connectivity for under a minute it's invisible, no data loss."
+    },
+    {
+      "id": "seg_20",
+      "speaker": "spk_1",
+      "channel": "system",
+      "start": 122.7,
+      "end": 129.1,
+      "text": "Between one and six minutes it retries on the fixed schedule and usually catches up fine."
+    },
+    {
+      "id": "seg_21",
+      "speaker": "spk_1",
+      "channel": "system",
+      "start": 129.3,
+      "end": 140.1,
+      "text": "Past about six minutes of outage it starts dropping the oldest buffered readings, same buffer limit issue Northfield ran into, so the two problems are actually related."
+    },
+    {
+      "id": "seg_22",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 140.5,
+      "end": 147.3,
+      "text": "Interesting, so exponential backoff alone doesn't fix the data loss, it just changes how aggressively we retry."
+    },
+    {
+      "id": "seg_23",
+      "speaker": "spk_1",
+      "channel": "system",
+      "start": 148.8,
+      "end": 160.4,
+      "text": "Right, the backoff change is really about not hammering the server with retries when connectivity's flaky, it's a server load and battery consideration more than a data integrity one."
+    },
+    {
+      "id": "seg_24",
+      "speaker": "spk_1",
+      "channel": "system",
+      "start": 160.7,
+      "end": 164.7,
+      "text": "The buffer size is the actual fix for data loss."
+    },
+    {
+      "id": "seg_25",
+      "speaker": "spk_2",
+      "channel": "system",
+      "start": 165.3,
+      "end": 174.9,
+      "text": "Which argues for doing them together in the Q1 session rather than splitting the backoff logic out now and revisiting the buffer separately later."
+    },
+    {
+      "id": "seg_26",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 175.7,
+      "end": 181.7,
+      "text": "Agreed, that's a better argument for deferring both together than I had a minute ago."
+    },
+    {
+      "id": "seg_27",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 181.9,
+      "end": 193.1,
+      "text": "Okay, let's defer cloud connectivity to the point release after freeze, I'll note that as a decision, and we'll scope it jointly with the buffer work in Q1."
+    },
+    {
+      "id": "seg_28",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 193.3,
+      "end": 197.3,
+      "text": "Maya, keep going with sleep mode and the calibration patch."
+    },
+    {
+      "id": "seg_29",
+      "speaker": "spk_0",
+      "channel": "system",
+      "start": 197.7,
+      "end": 198.9,
+      "text": "Right, sleep mode."
+    },
+    {
+      "id": "seg_30",
+      "speaker": "spk_0",
+      "channel": "system",
+      "start": 199.2,
+      "end": 206.0,
+      "text": "Tomas, you want to give the status since you're closer to it than me at this point?"
+    },
+    {
+      "id": "seg_31",
+      "speaker": "spk_1",
+      "channel": "system",
+      "start": 206.7,
+      "end": 207.3,
+      "text": "Sure."
+    },
+    {
+      "id": "seg_32",
+      "speaker": "spk_1",
+      "channel": "system",
+      "start": 207.6,
+      "end": 221.6,
+      "text": "It's mostly done, the state machine rewrite is in, the tricky part was handling wake sources correctly during an in-progress firmware update, we don't want a unit to go to sleep mid-flash and brick itself."
+    },
+    {
+      "id": "seg_33",
+      "speaker": "spk_1",
+      "channel": "system",
+      "start": 221.8,
+      "end": 225.0,
+      "text": "That's tested now against six different wake scenarios."
+    },
+    {
+      "id": "seg_34",
+      "speaker": "spk_1",
+      "channel": "system",
+      "start": 225.2,
+      "end": 232.4,
+      "text": "What's left is characterizing the actual current draw across temperature, and that's blocked on the rev C boards."
+    },
+    {
+      "id": "seg_35",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 233.4,
+      "end": 237.0,
+      "text": "Right, we'll get to rev C in a minute."
+    },
+    {
+      "id": "seg_36",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 237.2,
+      "end": 244.0,
+      "text": "How confident are you in the current draw numbers you do have, from the rev B units?"
+    },
+    {
+      "id": "seg_37",
+      "speaker": "spk_1",
+      "channel": "system",
+      "start": 244.5,
+      "end": 252.5,
+      "text": "Reasonably confident, we're seeing about forty microamps in deep sleep, down from around three hundred on the current shipping firmware."
+    },
+    {
+      "id": "seg_38",
+      "speaker": "spk_1",
+      "channel": "system",
+      "start": 252.8,
+      "end": 259.6,
+      "text": "That's roughly a seven times improvement, which was the target Maya and I set back in July."
+    },
+    {
+      "id": "seg_39",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 260.4,
+      "end": 266.0,
+      "text": "That's a great number, that alone is worth a customer email once it ships."
+    },
+    {
+      "id": "seg_40",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 266.2,
+      "end": 267.8,
+      "text": "Maya, calibration patch status?"
+    },
+    {
+      "id": "seg_41",
+      "speaker": "spk_0",
+      "channel": "system",
+      "start": 269.1,
+      "end": 269.9,
+      "text": "Good progress."
+    },
+    {
+      "id": "seg_42",
+      "speaker": "spk_0",
+      "channel": "system",
+      "start": 270.1,
+      "end": 288.5,
+      "text": "I mentioned this in our 1:1 earlier this week, we found the root cause of a slow drift on the humidity channel, it was the reference temperature compensation table being built off the old thermistor curve instead of the one used on the rev B parts."
+    },
+    {
+      "id": "seg_43",
+      "speaker": "spk_0",
+      "channel": "system",
+      "start": 288.8,
+      "end": 300.4,
+      "text": "I've got a corrected table from bench data on twelve units, and we're running a seventy-two hour soak test now at three humidity setpoints to validate it before shipping."
+    },
+    {
+      "id": "seg_44",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 300.7,
+      "end": 303.5,
+      "text": "And that's the one affecting Solenne Biolabs?"
+    },
+    {
+      "id": "seg_45",
+      "speaker": "spk_0",
+      "channel": "system",
+      "start": 304.4,
+      "end": 310.4,
+      "text": "Right, they flagged drift over a forty-eight hour unattended run in one of their incubators."
+    },
+    {
+      "id": "seg_46",
+      "speaker": "spk_0",
+      "channel": "system",
+      "start": 310.6,
+      "end": 318.6,
+      "text": "I've already let their support contact know we're targeting a patch within two weeks, ahead of the main Q4 release."
+    },
+    {
+      "id": "seg_47",
+      "speaker": "spk_2",
+      "channel": "system",
+      "start": 319.2,
+      "end": 326.4,
+      "text": "Is there a hardware angle to that at all, or is it purely a firmware lookup table issue?"
+    },
+    {
+      "id": "seg_48",
+      "speaker": "spk_0",
+      "channel": "system",
+      "start": 327.5,
+      "end": 336.3,
+      "text": "Purely firmware as far as I can tell, the sensor itself reads correctly, it's our interpretation of the reading that was off."
+    },
+    {
+      "id": "seg_49",
+      "speaker": "spk_0",
+      "channel": "system",
+      "start": 336.6,
+      "end": 342.6,
+      "text": "If the soak test comes back clean I don't think we need any hardware changes."
+    },
+    {
+      "id": "seg_50",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 343.0,
+      "end": 349.8,
+      "text": "Walk me through the math a bit, just so I can explain it if a customer asks."
+    },
+    {
+      "id": "seg_51",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 350.1,
+      "end": 358.1,
+      "text": "Why does a small thermistor curve error turn into a visible drift over time instead of just a constant offset?"
+    },
+    {
+      "id": "seg_52",
+      "speaker": "spk_0",
+      "channel": "system",
+      "start": 359.6,
+      "end": 375.2,
+      "text": "Good question, it's because the compensation is nonlinear and temperature dependent, so the error isn't constant, it grows as the unit's internal temperature drifts over a long run, mostly from the sensor's own self-heating as it takes more readings."
+    },
+    {
+      "id": "seg_53",
+      "speaker": "spk_0",
+      "channel": "system",
+      "start": 375.4,
+      "end": 385.8,
+      "text": "Early in a run the error's negligible, under a tenth of a percent, but after forty-plus hours of continuous logging it can compound to something noticeable."
+    },
+    {
+      "id": "seg_54",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 386.4,
+      "end": 394.0,
+      "text": "And the corrected table just uses the right reference curve for the actual thermistor part on rev B boards."
+    },
+    {
+      "id": "seg_55",
+      "speaker": "spk_0",
+      "channel": "system",
+      "start": 394.8,
+      "end": 411.2,
+      "text": "Exactly, once we swap in the curve that matches the part that's actually populated, the compensation stays accurate regardless of how long the unit's been running, because we're compensating against real physical behavior instead of an approximation for a different part."
+    },
+    {
+      "id": "seg_56",
+      "speaker": "spk_2",
+      "channel": "system",
+      "start": 411.6,
+      "end": 421.2,
+      "text": "Is there a way to detect this kind of mismatch automatically in the future, so it doesn't take a customer complaint to surface it?"
+    },
+    {
+      "id": "seg_57",
+      "speaker": "spk_0",
+      "channel": "system",
+      "start": 421.9,
+      "end": 435.1,
+      "text": "That's actually a good idea for the Q1 documentation sprint, a sanity check at first boot that cross-references the reported part ID against the loaded compensation table and warns if they don't match."
+    },
+    {
+      "id": "seg_58",
+      "speaker": "spk_0",
+      "channel": "system",
+      "start": 435.4,
+      "end": 437.8,
+      "text": "I'll add it to my list."
+    },
+    {
+      "id": "seg_59",
+      "speaker": "spk_2",
+      "channel": "system",
+      "start": 438.8,
+      "end": 442.4,
+      "text": "Good, one less thing on my plate this month."
+    },
+    {
+      "id": "seg_60",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 442.9,
+      "end": 447.7,
+      "text": "Speaking of your plate, Inès, how's the BLE diagnostic mode coming along?"
+    },
+    {
+      "id": "seg_61",
+      "speaker": "spk_2",
+      "channel": "system",
+      "start": 448.5,
+      "end": 460.9,
+      "text": "It's functional, we can pull live signal strength and packet loss stats over BLE now without needing a USB connection, which the field techs have been asking for since the spring."
+    },
+    {
+      "id": "seg_62",
+      "speaker": "spk_2",
+      "channel": "system",
+      "start": 461.1,
+      "end": 469.9,
+      "text": "The remaining work is mostly UI polish on the companion app side, which isn't really my lane, that's on the mobile team."
+    },
+    {
+      "id": "seg_63",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 471.2,
+      "end": 478.0,
+      "text": "Right, I need to sync with them separately on timeline, I'll take that as an action item."
+    },
+    {
+      "id": "seg_64",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 478.2,
+      "end": 489.0,
+      "text": "Is there anything on the security side worth flagging for the BLE mode, since it's a new attack surface once units are broadcasting diagnostics over the air?"
+    },
+    {
+      "id": "seg_65",
+      "speaker": "spk_2",
+      "channel": "system",
+      "start": 489.3,
+      "end": 490.9,
+      "text": "We thought about that."
+    },
+    {
+      "id": "seg_66",
+      "speaker": "spk_2",
+      "channel": "system",
+      "start": 491.1,
+      "end": 508.3,
+      "text": "The diagnostic broadcast requires a pairing code printed on the unit's underside, so it's not open to anyone walking by with a phone, and it only transmits signal strength and packet loss counters, nothing about the actual sensor readings or any customer data."
+    },
+    {
+      "id": "seg_67",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 509.2,
+      "end": 515.2,
+      "text": "Good, that was going to be my next question, whether any measurement data could leak."
+    },
+    {
+      "id": "seg_68",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 515.5,
+      "end": 517.5,
+      "text": "Sounds like we're fine there."
+    },
+    {
+      "id": "seg_69",
+      "speaker": "spk_2",
+      "channel": "system",
+      "start": 518.1,
+      "end": 527.3,
+      "text": "Right, and the pairing code rotates on power cycle too, so it's not even a fixed secret sitting on a public-facing label indefinitely."
+    },
+    {
+      "id": "seg_70",
+      "speaker": "spk_2",
+      "channel": "system",
+      "start": 528.4,
+      "end": 542.4,
+      "text": "One thing worth flagging though, we found a connector debounce issue on three units out of the last batch of fifty, the USB-C port intermittently disconnects if you wiggle the cable at a certain angle."
+    },
+    {
+      "id": "seg_71",
+      "speaker": "spk_2",
+      "channel": "system",
+      "start": 542.6,
+      "end": 553.0,
+      "text": "It's not new firmware related, but I wanted it on the radar before the release goes out, since support will get calls about it either way."
+    },
+    {
+      "id": "seg_72",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 553.4,
+      "end": 557.8,
+      "text": "How serious is it, mechanical or is there a firmware-side mitigation?"
+    },
+    {
+      "id": "seg_73",
+      "speaker": "spk_2",
+      "channel": "system",
+      "start": 559.3,
+      "end": 576.1,
+      "text": "Mostly mechanical, the connector's tolerance stack is a little loose on that batch, but we can improve the debounce timing in firmware to mask most of the symptom, treat brief disconnects under fifty milliseconds as noise instead of a real unplug event."
+    },
+    {
+      "id": "seg_74",
+      "speaker": "spk_1",
+      "channel": "system",
+      "start": 576.7,
+      "end": 582.3,
+      "text": "I can add that debounce change, it's a small diff, maybe half a day."
+    },
+    {
+      "id": "seg_75",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 583.1,
+      "end": 588.3,
+      "text": "Let's do that, add it to the release scope, small but worth it."
+    },
+    {
+      "id": "seg_76",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 588.5,
+      "end": 594.1,
+      "text": "Okay, let's move to the general bug backlog, what else came out of grooming?"
+    },
+    {
+      "id": "seg_77",
+      "speaker": "spk_1",
+      "channel": "system",
+      "start": 594.5,
+      "end": 606.1,
+      "text": "The Bluetooth reconnect loop bug is still open, the one where a unit walked more than thirty meters from the base station won't reconnect cleanly without a power cycle."
+    },
+    {
+      "id": "seg_78",
+      "speaker": "spk_1",
+      "channel": "system",
+      "start": 606.4,
+      "end": 616.8,
+      "text": "We triaged it as low priority at standup this morning since it's an edge case, but wanted to mention it here too in case anyone disagrees."
+    },
+    {
+      "id": "seg_79",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 617.5,
+      "end": 625.9,
+      "text": "No, I agree it's low priority, let's leave it in the backlog for now, it's not worth delaying the release over."
+    },
+    {
+      "id": "seg_80",
+      "speaker": "spk_0",
+      "channel": "system",
+      "start": 626.9,
+      "end": 638.9,
+      "text": "There were also a couple of smaller UI string issues on the local display, wrong unit label on the pressure reading when the device is set to metric versus imperial."
+    },
+    {
+      "id": "seg_81",
+      "speaker": "spk_0",
+      "channel": "system",
+      "start": 639.1,
+      "end": 641.1,
+      "text": "Small fix, already in progress."
+    },
+    {
+      "id": "seg_82",
+      "speaker": "spk_2",
+      "channel": "system",
+      "start": 641.6,
+      "end": 654.0,
+      "text": "And one more, we noticed the fault-code table Inès added last sprint pushed flash usage up to about ninety-one percent on the C-series board, which is getting close to the ceiling."
+    },
+    {
+      "id": "seg_83",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 654.8,
+      "end": 658.8,
+      "text": "Tomas mentioned that at standup too, what's the plan there?"
+    },
+    {
+      "id": "seg_84",
+      "speaker": "spk_1",
+      "channel": "system",
+      "start": 660.1,
+      "end": 671.7,
+      "text": "For now, I'm dropping the diagnostic logging changes I had planned for this release, that buys us some headroom, and Greta's stripping verbose calibration strings from the release build."
+    },
+    {
+      "id": "seg_85",
+      "speaker": "spk_1",
+      "channel": "system",
+      "start": 672.0,
+      "end": 676.0,
+      "text": "Between the two we should be back under eighty-five percent."
+    },
+    {
+      "id": "seg_86",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 676.3,
+      "end": 689.1,
+      "text": "Okay, that should hold us for this cycle, but let's put a longer-term flash budget review on the radar for Q1, before Aegis firmware starts sharing space on any common code paths."
+    },
+    {
+      "id": "seg_87",
+      "speaker": "spk_0",
+      "channel": "system",
+      "start": 690.0,
+      "end": 694.8,
+      "text": "Agreed, that's worth its own session, not something to rush through here."
+    },
+    {
+      "id": "seg_88",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 695.4,
+      "end": 697.8,
+      "text": "Noted, I'll set that up separately."
+    },
+    {
+      "id": "seg_89",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 698.0,
+      "end": 704.4,
+      "text": "Let's talk field feedback more broadly, beyond the Solenne drift issue, what else are we hearing?"
+    },
+    {
+      "id": "seg_90",
+      "speaker": "spk_0",
+      "channel": "system",
+      "start": 705.5,
+      "end": 709.9,
+      "text": "Northfield Analytical sent over some notes from their pilot, mostly positive."
+    },
+    {
+      "id": "seg_91",
+      "speaker": "spk_0",
+      "channel": "system",
+      "start": 710.1,
+      "end": 726.5,
+      "text": "Their main ask is a longer local data buffer, right now if a unit loses connectivity for more than six hours it starts dropping the oldest readings, and they'd like at least twenty-four hours of buffer for their remote field sites."
+    },
+    {
+      "id": "seg_92",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 726.9,
+      "end": 731.7,
+      "text": "Is that feasible for this release, or is that its own project?"
+    },
+    {
+      "id": "seg_93",
+      "speaker": "spk_1",
+      "channel": "system",
+      "start": 733.2,
+      "end": 746.8,
+      "text": "It's mostly a memory allocation question, we have the flash headroom concern we just talked about, so probably not this release, but I can scope it properly for Q1 alongside the flash budget review."
+    },
+    {
+      "id": "seg_94",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 747.4,
+      "end": 751.8,
+      "text": "Let's fold it into that same Q1 session then, they're related."
+    },
+    {
+      "id": "seg_95",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 752.0,
+      "end": 758.4,
+      "text": "What's Northfield's timeline expectation on this, are they patient or is this becoming a churn risk?"
+    },
+    {
+      "id": "seg_96",
+      "speaker": "spk_0",
+      "channel": "system",
+      "start": 759.2,
+      "end": 780.8,
+      "text": "They've been patient so far, they mentioned it more as a wishlist item than a complaint, but their pilot converts to a paid contract at the end of Q1, so I'd like to have at least a committed timeline to share with them before that renewal conversation, even if the actual fix lands after."
+    },
+    {
+      "id": "seg_97",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 781.2,
+      "end": 789.2,
+      "text": "Good context, I'll make sure the Q1 session produces something concrete enough to share externally, not just an internal plan."
+    },
+    {
+      "id": "seg_98",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 789.5,
+      "end": 791.5,
+      "text": "Anything else from the field?"
+    },
+    {
+      "id": "seg_99",
+      "speaker": "spk_2",
+      "channel": "system",
+      "start": 792.2,
+      "end": 802.6,
+      "text": "A few customers mentioned the enclosure gets warm to the touch after several hours of continuous logging, nothing out of spec thermally, but it surprises people."
+    },
+    {
+      "id": "seg_100",
+      "speaker": "spk_2",
+      "channel": "system",
+      "start": 802.9,
+      "end": 808.5,
+      "text": "Might be worth a line in the user guide rather than a firmware change."
+    },
+    {
+      "id": "seg_101",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 809.5,
+      "end": 817.5,
+      "text": "Good idea, I'll ask documentation to add a note, maybe a line about it being normal thermal behavior within spec."
+    },
+    {
+      "id": "seg_102",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 817.8,
+      "end": 825.0,
+      "text": "Did the warmth complaint come with any actual temperature readings, or is it purely a subjective touch complaint?"
+    },
+    {
+      "id": "seg_103",
+      "speaker": "spk_2",
+      "channel": "system",
+      "start": 825.5,
+      "end": 836.3,
+      "text": "Purely subjective as far as I've seen, nobody's reported the unit failing a thermal spec check, it's just warmer than people expect a small sensor to get."
+    },
+    {
+      "id": "seg_104",
+      "speaker": "spk_2",
+      "channel": "system",
+      "start": 836.5,
+      "end": 845.3,
+      "text": "We could add a passive vent slot in a future enclosure revision, but that's not worth doing just for a perception issue."
+    },
+    {
+      "id": "seg_105",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 846.1,
+      "end": 850.1,
+      "text": "Agreed, a documentation note is the right scope for now."
+    },
+    {
+      "id": "seg_106",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 850.4,
+      "end": 856.4,
+      "text": "Anything from the general support ticket trends worth calling out, beyond the specific customer feedback?"
+    },
+    {
+      "id": "seg_107",
+      "speaker": "spk_0",
+      "channel": "system",
+      "start": 857.7,
+      "end": 877.7,
+      "text": "Ticket volume's been flat month over month, but the mix has shifted a bit, we're seeing more setup and calibration questions relative to hardware failures, which honestly is a good sign, it suggests the hardware's more reliable than it used to be and the friction is now more in onboarding."
+    },
+    {
+      "id": "seg_108",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 878.0,
+      "end": 883.6,
+      "text": "That tracks with the sleep mode and calibration work being the right priorities, then."
+    },
+    {
+      "id": "seg_109",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 883.9,
+      "end": 890.3,
+      "text": "Is there a specific onboarding pain point we should fix in this release versus just documentation?"
+    },
+    {
+      "id": "seg_110",
+      "speaker": "spk_0",
+      "channel": "system",
+      "start": 891.2,
+      "end": 904.0,
+      "text": "I don't think it's firmware-fixable this cycle, most of it is people not understanding the calibration workflow, like when to trigger a manual recalibration versus letting the automatic drift compensation handle it."
+    },
+    {
+      "id": "seg_111",
+      "speaker": "spk_0",
+      "channel": "system",
+      "start": 904.2,
+      "end": 909.0,
+      "text": "That's more of a user guide and maybe an in-app hint problem."
+    },
+    {
+      "id": "seg_112",
+      "speaker": "spk_2",
+      "channel": "system",
+      "start": 909.6,
+      "end": 920.8,
+      "text": "We could surface a simple status LED pattern for \"recalibration recommended\" pretty cheaply, that's a small firmware change and it nudges people without them having to read anything."
+    },
+    {
+      "id": "seg_113",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 921.9,
+      "end": 928.3,
+      "text": "I like that, is that feasible for this release or does it need its own scoping?"
+    },
+    {
+      "id": "seg_114",
+      "speaker": "spk_2",
+      "channel": "system",
+      "start": 928.7,
+      "end": 934.7,
+      "text": "Feasible, it's just a threshold check we already compute internally, we just haven't exposed it."
+    },
+    {
+      "id": "seg_115",
+      "speaker": "spk_2",
+      "channel": "system",
+      "start": 935.0,
+      "end": 943.0,
+      "text": "I could have a rough version by Wednesday for Tomas to fold into the same build as the debounce fix."
+    },
+    {
+      "id": "seg_116",
+      "speaker": "spk_1",
+      "channel": "system",
+      "start": 944.5,
+      "end": 949.7,
+      "text": "That should be easy to piggyback on, I'll leave a slot for it."
+    },
+    {
+      "id": "seg_117",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 950.3,
+      "end": 958.3,
+      "text": "What does the LED pattern actually look like, just so I can picture it, slow blink, color change, something else?"
+    },
+    {
+      "id": "seg_118",
+      "speaker": "spk_2",
+      "channel": "system",
+      "start": 959.1,
+      "end": 965.9,
+      "text": "Slow amber blink, maybe once every two seconds, versus the steady green we use for normal operation."
+    },
+    {
+      "id": "seg_119",
+      "speaker": "spk_2",
+      "channel": "system",
+      "start": 966.1,
+      "end": 972.1,
+      "text": "It's subtle enough not to alarm anyone but noticeable if you glance at the unit."
+    },
+    {
+      "id": "seg_120",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 972.5,
+      "end": 978.5,
+      "text": "And it clears automatically once a recalibration happens, or does someone have to acknowledge it?"
+    },
+    {
+      "id": "seg_121",
+      "speaker": "spk_2",
+      "channel": "system",
+      "start": 979.2,
+      "end": 990.0,
+      "text": "Clears automatically, the moment the drift compensation recalculates within tolerance, no acknowledgment needed, we don't want to add a button-press requirement to something meant to reduce friction."
+    },
+    {
+      "id": "seg_122",
+      "speaker": "spk_0",
+      "channel": "system",
+      "start": 991.0,
+      "end": 995.8,
+      "text": "That's a good design choice, adding a step would defeat the purpose."
+    },
+    {
+      "id": "seg_123",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 996.3,
+      "end": 997.9,
+      "text": "Agreed, keep it passive."
+    },
+    {
+      "id": "seg_124",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 998.7,
+      "end": 1004.3,
+      "text": "Let's add it then, small but meaningful for the onboarding problem Maya just described."
+    },
+    {
+      "id": "seg_125",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 1004.5,
+      "end": 1010.1,
+      "text": "Let's talk QA and rollout plan for a minute before we get to hardware."
+    },
+    {
+      "id": "seg_126",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 1010.4,
+      "end": 1016.4,
+      "text": "What does the test matrix look like for this release given everything we just covered?"
+    },
+    {
+      "id": "seg_127",
+      "speaker": "spk_1",
+      "channel": "system",
+      "start": 1017.7,
+      "end": 1026.1,
+      "text": "I've got the regression suite running against the sleep mode changes now, that covers the standard wake, sleep, and update scenarios."
+    },
+    {
+      "id": "seg_128",
+      "speaker": "spk_1",
+      "channel": "system",
+      "start": 1026.3,
+      "end": 1035.5,
+      "text": "I still need to add the three new wake-during-update cases we talked about earlier, those aren't automated yet, I've only run them manually."
+    },
+    {
+      "id": "seg_129",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 1035.8,
+      "end": 1041.8,
+      "text": "Can those be automated before freeze, or do we ship with manual coverage for now?"
+    },
+    {
+      "id": "seg_130",
+      "speaker": "spk_1",
+      "channel": "system",
+      "start": 1042.7,
+      "end": 1055.9,
+      "text": "I think manual is fine for this release, automating them properly means building a fixture that can interrupt a firmware update mid-flash on demand, that's a bigger project than we have time for."
+    },
+    {
+      "id": "seg_131",
+      "speaker": "spk_1",
+      "channel": "system",
+      "start": 1056.2,
+      "end": 1060.6,
+      "text": "I'll write it up as a Q1 test infrastructure item instead."
+    },
+    {
+      "id": "seg_132",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 1061.2,
+      "end": 1066.8,
+      "text": "Fair, add it to the Q1 list alongside the flash budget and buffer work."
+    },
+    {
+      "id": "seg_133",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 1067.0,
+      "end": 1071.4,
+      "text": "Maya, what's QA coverage look like for the calibration patch specifically?"
+    },
+    {
+      "id": "seg_134",
+      "speaker": "spk_0",
+      "channel": "system",
+      "start": 1072.5,
+      "end": 1089.7,
+      "text": "The soak test itself is the main validation, but I'm also going to run the existing calibration regression suite against the corrected table just to make sure I haven't broken anything else in the pipeline, that's a couple hours, not a big lift."
+    },
+    {
+      "id": "seg_135",
+      "speaker": "spk_2",
+      "channel": "system",
+      "start": 1090.1,
+      "end": 1102.1,
+      "text": "And the connector debounce fix, I'll have Tomas's diff go through the standard hardware-in-the-loop suite plus a manual wiggle test on the three units where we originally saw the disconnect."
+    },
+    {
+      "id": "seg_136",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 1103.6,
+      "end": 1104.2,
+      "text": "Good."
+    },
+    {
+      "id": "seg_137",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 1104.5,
+      "end": 1112.9,
+      "text": "What about a broader beta rollout before general availability, or are we going straight from freeze to full release like usual?"
+    },
+    {
+      "id": "seg_138",
+      "speaker": "spk_0",
+      "channel": "system",
+      "start": 1113.5,
+      "end": 1128.7,
+      "text": "I'd suggest a short beta window this time, maybe three days, specifically with Solenne given they're the ones who found the drift issue, so they get early confirmation it's actually fixed before we tell everyone else it's resolved."
+    },
+    {
+      "id": "seg_139",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 1129.5,
+      "end": 1133.5,
+      "text": "I like that, it closes the loop with them directly."
+    },
+    {
+      "id": "seg_140",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 1133.8,
+      "end": 1137.8,
+      "text": "Can we get them opted in without much extra process?"
+    },
+    {
+      "id": "seg_141",
+      "speaker": "spk_0",
+      "channel": "system",
+      "start": 1138.2,
+      "end": 1148.2,
+      "text": "Yeah, they're already on a beta channel from a previous engagement, I can just flip the flag on their account once the soak test passes."
+    },
+    {
+      "id": "seg_142",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 1148.9,
+      "end": 1149.7,
+      "text": "Do that."
+    },
+    {
+      "id": "seg_143",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 1150.0,
+      "end": 1158.8,
+      "text": "Let's also make sure support is briefed before this goes out, has anyone talked to the support team about the incoming changes?"
+    },
+    {
+      "id": "seg_144",
+      "speaker": "spk_2",
+      "channel": "system",
+      "start": 1159.8,
+      "end": 1172.6,
+      "text": "Not yet, I can put together a short internal note covering the sleep mode current improvement, the calibration patch, and the connector debounce mitigation, so they're not caught flat-footed on customer calls."
+    },
+    {
+      "id": "seg_145",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 1173.1,
+      "end": 1181.1,
+      "text": "Perfect, that should go out at least a couple days before general release so they have time to read it."
+    },
+    {
+      "id": "seg_146",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 1181.3,
+      "end": 1185.7,
+      "text": "Anything else on QA or rollout before we move to hardware?"
+    },
+    {
+      "id": "seg_147",
+      "speaker": "spk_1",
+      "channel": "system",
+      "start": 1186.5,
+      "end": 1201.3,
+      "text": "Just a note that if the connector debounce fix and the calibration patch both land close together, we should stagger the release notes so customers don't think we're admitting to two unrelated defects in the same email."
+    },
+    {
+      "id": "seg_148",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 1202.6,
+      "end": 1210.2,
+      "text": "Good instinct, I'll ask documentation to frame it as one consolidated Q4 update rather than a list of bugs."
+    },
+    {
+      "id": "seg_149",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 1210.5,
+      "end": 1216.9,
+      "text": "Alright, now let's get to rev C hardware, since that's blocking the sleep mode current characterization."
+    },
+    {
+      "id": "seg_150",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 1217.2,
+      "end": 1219.2,
+      "text": "Inès, where do things stand?"
+    },
+    {
+      "id": "seg_151",
+      "speaker": "spk_2",
+      "channel": "system",
+      "start": 1219.5,
+      "end": 1224.7,
+      "text": "Boards are through fab and assembly, we're doing incoming inspection today and tomorrow."
+    },
+    {
+      "id": "seg_152",
+      "speaker": "spk_2",
+      "channel": "system",
+      "start": 1225.0,
+      "end": 1229.8,
+      "text": "Barring any surprises, Tomas should have five units in hand by Friday."
+    },
+    {
+      "id": "seg_153",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 1230.7,
+      "end": 1236.7,
+      "text": "That's the same Friday you mentioned at standup this morning, right, so no slippage yet?"
+    },
+    {
+      "id": "seg_154",
+      "speaker": "spk_2",
+      "channel": "system",
+      "start": 1237.3,
+      "end": 1248.1,
+      "text": "No slippage yet, I know I said the same thing last week, but the fab run actually shipped on time this time, I have the tracking number."
+    },
+    {
+      "id": "seg_155",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 1249.2,
+      "end": 1257.2,
+      "text": "What's actually changed on rev C versus rev B, remind me, since it's been a while since we scoped it?"
+    },
+    {
+      "id": "seg_156",
+      "speaker": "spk_2",
+      "channel": "system",
+      "start": 1257.6,
+      "end": 1258.4,
+      "text": "Three things."
+    },
+    {
+      "id": "seg_157",
+      "speaker": "spk_2",
+      "channel": "system",
+      "start": 1258.7,
+      "end": 1267.5,
+      "text": "New thermistor part, which is what fixes the calibration issue at the hardware level going forward even after this firmware patch ships."
+    },
+    {
+      "id": "seg_158",
+      "speaker": "spk_2",
+      "channel": "system",
+      "start": 1267.8,
+      "end": 1271.4,
+      "text": "A revised antenna trace for slightly better BLE range."
+    },
+    {
+      "id": "seg_159",
+      "speaker": "spk_2",
+      "channel": "system",
+      "start": 1271.7,
+      "end": 1282.5,
+      "text": "And a connector footprint change to address that debounce tolerance stack issue, though the debounce firmware mitigation should cover us until rev C actually ships in volume."
+    },
+    {
+      "id": "seg_160",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 1284.0,
+      "end": 1294.0,
+      "text": "So rev C is really a superset fix, firmware handles the near-term symptom and rev C handles the root cause on new units going forward."
+    },
+    {
+      "id": "seg_161",
+      "speaker": "spk_2",
+      "channel": "system",
+      "start": 1294.6,
+      "end": 1309.0,
+      "text": "Exactly, and it means once rev C ships we could probably retire the debounce workaround and the corrected calibration table becomes a permanent non-issue rather than an ongoing thing we have to remember to carry forward."
+    },
+    {
+      "id": "seg_162",
+      "speaker": "spk_0",
+      "channel": "system",
+      "start": 1309.8,
+      "end": 1318.6,
+      "text": "That's worth documenting somewhere so nobody removes the debounce fix prematurely, before all the rev B units are out of the field."
+    },
+    {
+      "id": "seg_163",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 1319.0,
+      "end": 1324.2,
+      "text": "Good point, I'll ask Inès to note that dependency in the hardware changelog."
+    },
+    {
+      "id": "seg_164",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 1324.5,
+      "end": 1332.9,
+      "text": "What's the volume ramp look like for rev C, when do we expect it to fully replace rev B in production?"
+    },
+    {
+      "id": "seg_165",
+      "speaker": "spk_2",
+      "channel": "system",
+      "start": 1333.6,
+      "end": 1347.6,
+      "text": "If incoming inspection goes clean this week, we could start mixing rev C into production runs by the end of next month, full replacement is probably a quarter out given how existing component inventory works."
+    },
+    {
+      "id": "seg_166",
+      "speaker": "spk_1",
+      "channel": "system",
+      "start": 1348.6,
+      "end": 1362.2,
+      "text": "Good, I'll plan to start the current draw characterization first thing Friday afternoon then, and I should have final numbers by Monday, which gives me a couple of days of buffer before the freeze."
+    },
+    {
+      "id": "seg_167",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 1362.7,
+      "end": 1363.3,
+      "text": "Perfect."
+    },
+    {
+      "id": "seg_168",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 1363.5,
+      "end": 1367.5,
+      "text": "Let's talk freeze and release date to close out scope."
+    },
+    {
+      "id": "seg_169",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 1367.8,
+      "end": 1373.4,
+      "text": "Freeze is still the twenty-fifth, is everyone comfortable with that given what we've covered?"
+    },
+    {
+      "id": "seg_170",
+      "speaker": "spk_0",
+      "channel": "system",
+      "start": 1374.2,
+      "end": 1380.2,
+      "text": "I'm comfortable, my soak test finishes Thursday, review Friday, patch ready well ahead of freeze."
+    },
+    {
+      "id": "seg_171",
+      "speaker": "spk_0",
+      "channel": "system",
+      "start": 1380.5,
+      "end": 1390.5,
+      "text": "The only thing that would change that is if the soak test surfaces something unexpected, but twelve units in and the early data looks clean."
+    },
+    {
+      "id": "seg_172",
+      "speaker": "spk_1",
+      "channel": "system",
+      "start": 1391.8,
+      "end": 1396.2,
+      "text": "Comfortable, especially now that logging's deferred and rev C didn't slip."
+    },
+    {
+      "id": "seg_173",
+      "speaker": "spk_1",
+      "channel": "system",
+      "start": 1396.5,
+      "end": 1405.7,
+      "text": "The recalibration LED is new scope but it's genuinely small, I'd be more worried if it were the debounce fix that grew instead."
+    },
+    {
+      "id": "seg_174",
+      "speaker": "spk_2",
+      "channel": "system",
+      "start": 1406.0,
+      "end": 1413.2,
+      "text": "Comfortable from the hardware side, connector debounce fix is small and BLE diagnostic mode is already functionally done."
+    },
+    {
+      "id": "seg_175",
+      "speaker": "spk_2",
+      "channel": "system",
+      "start": 1413.5,
+      "end": 1423.9,
+      "text": "Incoming inspection is the only thing that could still surprise us, but I'd have heard by now if there were a real problem with the batch."
+    },
+    {
+      "id": "seg_176",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 1424.8,
+      "end": 1433.6,
+      "text": "Good, sounds like a genuinely low-risk freeze compared to some of the ones we've had, which is a nice change of pace."
+    },
+    {
+      "id": "seg_177",
+      "speaker": "spk_0",
+      "channel": "system",
+      "start": 1434.2,
+      "end": 1440.2,
+      "text": "Agreed, the sleep mode work last quarter was a much rockier freeze week by comparison."
+    },
+    {
+      "id": "seg_178",
+      "speaker": "spk_1",
+      "channel": "system",
+      "start": 1441.3,
+      "end": 1445.3,
+      "text": "Fair, I remember that one, I don't want a repeat."
+    },
+    {
+      "id": "seg_179",
+      "speaker": "spk_0",
+      "channel": "system",
+      "start": 1445.7,
+      "end": 1456.5,
+      "text": "Actually, sorry, one thing before we lock the date, has anyone confirmed Solenne's beta channel doesn't have any other pending changes that could confuse the drift test?"
+    },
+    {
+      "id": "seg_180",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 1458.0,
+      "end": 1459.6,
+      "text": "Wait, sorry, go on."
+    },
+    {
+      "id": "seg_181",
+      "speaker": "spk_0",
+      "channel": "system",
+      "start": 1460.2,
+      "end": 1476.2,
+      "text": "I just want to make sure the beta build only carries the calibration fix and not, say, an early cut of the recalibration LED work too, or we won't know which change actually fixed the drift if something looks different."
+    },
+    {
+      "id": "seg_182",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 1477.0,
+      "end": 1477.8,
+      "text": "Good catch."
+    },
+    {
+      "id": "seg_183",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 1478.0,
+      "end": 1484.0,
+      "text": "Inès, can you confirm the beta channel branch is scoped to just the calibration patch?"
+    },
+    {
+      "id": "seg_184",
+      "speaker": "spk_2",
+      "channel": "system",
+      "start": 1484.4,
+      "end": 1495.6,
+      "text": "Yes, I checked the branch config yesterday, it only pulls the calibration table change, the LED work and debounce fix are on the main release branch, not beta."
+    },
+    {
+      "id": "seg_185",
+      "speaker": "spk_0",
+      "channel": "system",
+      "start": 1496.3,
+      "end": 1499.9,
+      "text": "Great, that's what I wanted to hear, thank you."
+    },
+    {
+      "id": "seg_186",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 1500.9,
+      "end": 1510.5,
+      "text": "Great, freeze on the twenty-fifth stands, and we're targeting general release the following Wednesday assuming QA doesn't find anything major during the freeze week."
+    },
+    {
+      "id": "seg_187",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 1510.8,
+      "end": 1520.8,
+      "text": "Should we do a dry run of the release notes and internal support briefing before then, or just have them ready by the freeze date?"
+    },
+    {
+      "id": "seg_188",
+      "speaker": "spk_0",
+      "channel": "system",
+      "start": 1521.3,
+      "end": 1533.7,
+      "text": "I'd say have a draft ready by the twenty-fifth so support has real time with it, even if it's not fully polished, better than a rushed version the day before release."
+    },
+    {
+      "id": "seg_189",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 1534.5,
+      "end": 1535.1,
+      "text": "Agreed."
+    },
+    {
+      "id": "seg_190",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 1535.3,
+      "end": 1543.3,
+      "text": "Who's drafting it, is that you since you're closest to the customer-facing parts, or should it be a joint effort?"
+    },
+    {
+      "id": "seg_191",
+      "speaker": "spk_0",
+      "channel": "system",
+      "start": 1544.6,
+      "end": 1560.6,
+      "text": "I can draft the calibration and sleep mode sections, but I'd want Inès to write the connector debounce and recalibration LED parts since those are her calls to make on wording around what's a hardware issue versus a firmware mitigation."
+    },
+    {
+      "id": "seg_192",
+      "speaker": "spk_2",
+      "channel": "system",
+      "start": 1560.9,
+      "end": 1568.1,
+      "text": "That works, I'll have a draft to Maya by Monday so she can merge it with her sections."
+    },
+    {
+      "id": "seg_193",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 1569.0,
+      "end": 1578.6,
+      "text": "Good, and Tomas, anything customer-facing from your side that needs its own paragraph, or does it fold into Maya's calibration and sleep mode language?"
+    },
+    {
+      "id": "seg_194",
+      "speaker": "spk_1",
+      "channel": "system",
+      "start": 1579.2,
+      "end": 1589.2,
+      "text": "Sleep mode's covered under Maya's section I think, the battery life improvement is really the headline there regardless of who wrote which line of code."
+    },
+    {
+      "id": "seg_195",
+      "speaker": "spk_1",
+      "channel": "system",
+      "start": 1589.5,
+      "end": 1592.7,
+      "text": "I don't think I need a separate paragraph."
+    },
+    {
+      "id": "seg_196",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 1593.8,
+      "end": 1599.0,
+      "text": "Agreed, keep it as one coherent narrative rather than four separate engineer bios."
+    },
+    {
+      "id": "seg_197",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 1599.2,
+      "end": 1606.4,
+      "text": "Let's talk resourcing for a minute, is anyone stretched thin enough that something should move to someone else?"
+    },
+    {
+      "id": "seg_198",
+      "speaker": "spk_0",
+      "channel": "system",
+      "start": 1606.8,
+      "end": 1623.2,
+      "text": "I mentioned to you separately that I'm feeling a bit stretched between the calibration patch and catching up on everything from steerco earlier this week, but I've got help lined up, Greta and Tomas are both giving me some validation time."
+    },
+    {
+      "id": "seg_199",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 1624.7,
+      "end": 1629.1,
+      "text": "Good, I saw that, thank you both for picking that up."
+    },
+    {
+      "id": "seg_200",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 1629.3,
+      "end": 1630.1,
+      "text": "Anyone else?"
+    },
+    {
+      "id": "seg_201",
+      "speaker": "spk_1",
+      "channel": "system",
+      "start": 1630.7,
+      "end": 1636.3,
+      "text": "I'm fine, sleep mode's basically done, the debounce fix is small, I've got room."
+    },
+    {
+      "id": "seg_202",
+      "speaker": "spk_2",
+      "channel": "system",
+      "start": 1637.1,
+      "end": 1643.1,
+      "text": "Same, I'm mostly waiting on inspection results at this point, not actively blocked on anything."
+    },
+    {
+      "id": "seg_203",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 1643.5,
+      "end": 1654.3,
+      "text": "Good, let's use the extra bandwidth wisely then rather than pulling forward Q1 work early, I'd rather people have slack going into freeze week than be scrambling."
+    },
+    {
+      "id": "seg_204",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 1654.5,
+      "end": 1667.7,
+      "text": "While we're on staffing, I want to flag that we may be hiring again once Aegis firmware work ramps up in Q1, does anyone have thoughts on where the team's thinnest right now?"
+    },
+    {
+      "id": "seg_205",
+      "speaker": "spk_2",
+      "channel": "system",
+      "start": 1668.4,
+      "end": 1669.6,
+      "text": "Hardware validation, honestly."
+    },
+    {
+      "id": "seg_206",
+      "speaker": "spk_2",
+      "channel": "system",
+      "start": 1669.8,
+      "end": 1679.8,
+      "text": "It's just me and a contractor doing incoming inspection, and that's fine at current volume, but Aegis will roughly double the board variants we're testing."
+    },
+    {
+      "id": "seg_207",
+      "speaker": "spk_0",
+      "channel": "system",
+      "start": 1680.8,
+      "end": 1694.8,
+      "text": "I'd agree, and I'd add that once the calibration pipeline has more people touching it, we'll want someone who can own test methodology full time rather than it being something I do alongside everything else."
+    },
+    {
+      "id": "seg_208",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 1695.3,
+      "end": 1700.1,
+      "text": "Both good points, I'll factor that into the headcount conversation with Sun."
+    },
+    {
+      "id": "seg_209",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 1700.3,
+      "end": 1713.1,
+      "text": "One more thing while we're talking Aegis crossover, does the BLE diagnostic mode need any new regulatory certification given it's a new radio behavior, or does it fall under our existing approval?"
+    },
+    {
+      "id": "seg_210",
+      "speaker": "spk_2",
+      "channel": "system",
+      "start": 1713.9,
+      "end": 1726.7,
+      "text": "I checked with our compliance contact last month, it falls under the existing certification since we're not changing transmit power or frequency, just adding a new data payload over the existing protocol."
+    },
+    {
+      "id": "seg_211",
+      "speaker": "spk_2",
+      "channel": "system",
+      "start": 1727.0,
+      "end": 1728.6,
+      "text": "No new filing needed."
+    },
+    {
+      "id": "seg_212",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 1729.9,
+      "end": 1733.5,
+      "text": "Good, one less thing to worry about for freeze."
+    },
+    {
+      "id": "seg_213",
+      "speaker": "spk_2",
+      "channel": "system",
+      "start": 1733.8,
+      "end": 1745.4,
+      "text": "Right, though Aegis will likely need its own certification pass regardless, given it's a different form factor and radio module entirely, that's a Q1 conversation, not a Q4 one."
+    },
+    {
+      "id": "seg_214",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 1746.3,
+      "end": 1751.1,
+      "text": "Noted, I'll make sure that's on Sun's radar too, not just ours."
+    },
+    {
+      "id": "seg_215",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 1751.3,
+      "end": 1753.7,
+      "text": "Tomas, anything from the firmware side?"
+    },
+    {
+      "id": "seg_216",
+      "speaker": "spk_1",
+      "channel": "system",
+      "start": 1754.3,
+      "end": 1769.9,
+      "text": "We're okay for now, sleep mode and the debounce fix are both manageable, but if Aegis needs its own firmware variant rather than sharing the Vantage codebase, that's a real second workstream, not something we absorb into current capacity."
+    },
+    {
+      "id": "seg_217",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 1771.0,
+      "end": 1780.6,
+      "text": "That's a good flag for the Q1 planning session too, whether Aegis shares the codebase or forks it, that decision affects headcount either way."
+    },
+    {
+      "id": "seg_218",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 1780.8,
+      "end": 1787.6,
+      "text": "Has anyone actually looked at how much of the Vantage firmware would realistically be reusable for Aegis?"
+    },
+    {
+      "id": "seg_219",
+      "speaker": "spk_1",
+      "channel": "system",
+      "start": 1788.0,
+      "end": 1802.8,
+      "text": "Roughly, at a glance, the communication stack and the calibration pipeline architecture would mostly carry over, it's really the sensor driver layer and the power management specifics that would need to be rewritten for the new hardware."
+    },
+    {
+      "id": "seg_220",
+      "speaker": "spk_0",
+      "channel": "system",
+      "start": 1804.3,
+      "end": 1814.3,
+      "text": "That matches what I'd guess too, calibration math is calibration math regardless of which sensor it's compensating for, it's the low-level hardware interface that changes."
+    },
+    {
+      "id": "seg_221",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 1814.9,
+      "end": 1826.9,
+      "text": "That's actually more reusable than I expected, good to know before the Q1 conversation, it might mean a fork is less necessary than Tomas was worried about a minute ago."
+    },
+    {
+      "id": "seg_222",
+      "speaker": "spk_1",
+      "channel": "system",
+      "start": 1827.7,
+      "end": 1836.9,
+      "text": "Fair, I was assuming more of a rewrite than there'd probably need to be, this is useful context, thanks for pushing on it."
+    },
+    {
+      "id": "seg_223",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 1837.3,
+      "end": 1844.1,
+      "text": "Let's talk about the field data buffer and flash budget review Tomas mentioned, when should that happen?"
+    },
+    {
+      "id": "seg_224",
+      "speaker": "spk_1",
+      "channel": "system",
+      "start": 1844.8,
+      "end": 1853.2,
+      "text": "Early next week works for me, once rev C characterization is done Monday I'll have a clearer picture of headroom anyway."
+    },
+    {
+      "id": "seg_225",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 1854.2,
+      "end": 1858.2,
+      "text": "Let's tentatively pencil that for Tuesday, I'll send an invite."
+    },
+    {
+      "id": "seg_226",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 1858.5,
+      "end": 1861.7,
+      "text": "Anything else before we get to action items?"
+    },
+    {
+      "id": "seg_227",
+      "speaker": "spk_0",
+      "channel": "system",
+      "start": 1862.2,
+      "end": 1879.8,
+      "text": "One more thing, since steerco already covered the Aegis side, I want to make sure this scope makes it into my written recap to Sun, so if anything here changes between now and freeze, ping me directly rather than waiting for the next sync."
+    },
+    {
+      "id": "seg_228",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 1880.6,
+      "end": 1881.4,
+      "text": "Good call."
+    },
+    {
+      "id": "seg_229",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 1881.7,
+      "end": 1892.9,
+      "text": "Inès, the connector debounce issue and rev C status should probably get a line in that recap too, since Rafael was already asking about board yield at steerco."
+    },
+    {
+      "id": "seg_230",
+      "speaker": "spk_2",
+      "channel": "system",
+      "start": 1894.2,
+      "end": 1898.2,
+      "text": "I'll send Maya a couple of bullet points after this."
+    },
+    {
+      "id": "seg_231",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 1898.5,
+      "end": 1904.9,
+      "text": "Maya, how did the rest of steerco land overall, anything surprising come up in the room?"
+    },
+    {
+      "id": "seg_232",
+      "speaker": "spk_0",
+      "channel": "system",
+      "start": 1905.8,
+      "end": 1917.8,
+      "text": "Mostly as expected, the one surprise was how much interest there was in the onboarding friction I mentioned earlier, Sun asked a few follow-up questions I wasn't fully prepared for."
+    },
+    {
+      "id": "seg_233",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 1918.4,
+      "end": 1928.0,
+      "text": "Good thing we just scoped the LED indicator then, make sure that gets into your written recap too, sounds like it's timely for her."
+    },
+    {
+      "id": "seg_234",
+      "speaker": "spk_0",
+      "channel": "system",
+      "start": 1929.1,
+      "end": 1935.5,
+      "text": "Good point, I'll add it rather than wait for it to come up again next time."
+    },
+    {
+      "id": "seg_235",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 1935.9,
+      "end": 1936.7,
+      "text": "Good call."
+    },
+    {
+      "id": "seg_236",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 1937.0,
+      "end": 1945.0,
+      "text": "One last logistics question, who's the point of contact for Solenne if something goes wrong during their three-day beta window?"
+    },
+    {
+      "id": "seg_237",
+      "speaker": "spk_0",
+      "channel": "system",
+      "start": 1946.5,
+      "end": 1958.1,
+      "text": "Me, I already have a direct line to their support contact from the original drift report, it makes sense to keep continuity there rather than routing through general support."
+    },
+    {
+      "id": "seg_238",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 1958.7,
+      "end": 1963.1,
+      "text": "Agreed, and if it does go wrong, what's the rollback plan?"
+    },
+    {
+      "id": "seg_239",
+      "speaker": "spk_0",
+      "channel": "system",
+      "start": 1963.9,
+      "end": 1970.7,
+      "text": "They'd revert to the previous firmware version, which is a standard supported downgrade path, nothing special needed."
+    },
+    {
+      "id": "seg_240",
+      "speaker": "spk_0",
+      "channel": "system",
+      "start": 1971.0,
+      "end": 1975.0,
+      "text": "Worst case we're back where we started, not worse off."
+    },
+    {
+      "id": "seg_241",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 1975.4,
+      "end": 1979.0,
+      "text": "Good, that's the safety net I wanted to hear."
+    },
+    {
+      "id": "seg_242",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 1979.2,
+      "end": 1979.8,
+      "text": "Perfect."
+    },
+    {
+      "id": "seg_243",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 1980.0,
+      "end": 1982.4,
+      "text": "Okay, let's lock in action items."
+    },
+    {
+      "id": "seg_244",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 1982.7,
+      "end": 1992.3,
+      "text": "First, I'll follow up with the mobile team on the BLE diagnostic app UI timeline, that's on me, I'll have an answer by Wednesday."
+    },
+    {
+      "id": "seg_245",
+      "speaker": "spk_1",
+      "channel": "system",
+      "start": 1993.0,
+      "end": 2002.6,
+      "text": "Second, I'll finish the rev C current draw characterization, the connector debounce fix, and the recalibration LED indicator ahead of freeze on the twenty-fifth."
+    },
+    {
+      "id": "seg_246",
+      "speaker": "spk_1",
+      "channel": "system",
+      "start": 2002.8,
+      "end": 2011.2,
+      "text": "That's a fuller plate than I had an hour ago, but none of the three pieces are large on their own."
+    },
+    {
+      "id": "seg_247",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 2012.2,
+      "end": 2024.6,
+      "text": "Agreed, flag it to me directly if that combination turns out to be too much, we can always push the LED indicator to the point release if it comes to that."
+    },
+    {
+      "id": "seg_248",
+      "speaker": "spk_1",
+      "channel": "system",
+      "start": 2025.1,
+      "end": 2029.1,
+      "text": "Will do, I don't expect to need to, but noted."
+    },
+    {
+      "id": "seg_249",
+      "speaker": "spk_0",
+      "channel": "system",
+      "start": 2029.9,
+      "end": 2048.3,
+      "text": "Third, I'll finish the calibration soak test, review the results, ship the patch to Solenne Biolabs on the beta channel, and draft the calibration and sleep mode sections of the release notes, targeting early next week for the patch and Monday for the release notes draft."
+    },
+    {
+      "id": "seg_250",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 2049.6,
+      "end": 2058.4,
+      "text": "That's a lot on your plate too given the steerco recap you're also sending Sun today, are you comfortable with that stack?"
+    },
+    {
+      "id": "seg_251",
+      "speaker": "spk_0",
+      "channel": "system",
+      "start": 2058.7,
+      "end": 2070.7,
+      "text": "I am, most of it's finishing work rather than starting from scratch, the soak test is already running and the release notes are mostly restating things we've already decided today."
+    },
+    {
+      "id": "seg_252",
+      "speaker": "spk_2",
+      "channel": "system",
+      "start": 2071.6,
+      "end": 2090.0,
+      "text": "Fourth, I'll complete incoming inspection on the rev C boards, get five units to Tomas by Friday, draft the connector debounce and recalibration LED sections of the release notes for Maya by Monday, and note the rev B to rev C dependency in the hardware changelog."
+    },
+    {
+      "id": "seg_253",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 2090.6,
+      "end": 2106.2,
+      "text": "And fifth, I'll set up the Q1 planning session covering the flash budget review, the Northfield data buffer request, the cloud connectivity backoff logic, and the codebase-sharing question for Aegis firmware, aiming for that Tuesday slot we just discussed."
+    },
+    {
+      "id": "seg_254",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 2106.4,
+      "end": 2115.2,
+      "text": "That's five action items, two of them mine, which feels about right given how much you three are already carrying this cycle."
+    },
+    {
+      "id": "seg_255",
+      "speaker": "spk_0",
+      "channel": "system",
+      "start": 2116.3,
+      "end": 2117.9,
+      "text": "Sounds like a plan."
+    },
+    {
+      "id": "seg_256",
+      "speaker": "spk_1",
+      "channel": "system",
+      "start": 2118.3,
+      "end": 2128.3,
+      "text": "Agreed, this was a good one, feels like we actually have a real handle on the release now instead of a loose pile of tickets."
+    },
+    {
+      "id": "seg_257",
+      "speaker": "spk_2",
+      "channel": "system",
+      "start": 2129.8,
+      "end": 2131.0,
+      "text": "Same, thanks everyone."
+    },
+    {
+      "id": "seg_258",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 2131.6,
+      "end": 2133.2,
+      "text": "Thanks all, talk soon."
+    },
+    {
+      "id": "seg_259",
+      "speaker": "spk_0",
+      "channel": "system",
+      "start": 2134.0,
+      "end": 2138.4,
+      "text": "Thanks, I'll get that recap to Sun by end of day."
+    }
+  ],
+  "summary_markdown": "## Key decisions\n\n- Cloud connectivity backoff logic and the twenty-four hour local data buffer increase (requested by Northfield Analytical) are deferred to a joint Q1 planning session rather than rushed into Q4, since they touch related buffer-management code.\n- Firmware freeze holds at September 25th; general availability is targeted for the following Wednesday, pending a clean freeze week.\n- Two small items were added to Q4 scope: a firmware-side connector debounce mitigation (masking sub-50ms USB-C disconnects) and a passive amber-LED \"recalibration recommended\" indicator to reduce onboarding friction.\n- The corrected calibration lookup table will ship to Solenne Biolabs first, via a three-day beta window, before the wider Q4 release goes out.\n\n## Discussion\n\nTomas reported the sleep-mode rewrite is functionally complete, cutting deep-sleep current from roughly 300µA to about 40µA (~7x), pending final characterization once rev C boards arrive. Maya traced the humidity-channel drift Solenne reported to a stale thermistor reference curve rather than a sensor defect; a corrected table is now in a 72-hour, three-setpoint soak test. Inès confirmed rev C hardware is through fab, with five units due to Tomas by Friday; rev C carries a new thermistor, an antenna revision, and the connector fix, meaning it addresses these issues at the hardware level going forward. The team reviewed BLE diagnostic-mode security (pairing-code gated, no sensor data exposed, no new certification required) and confirmed QA plans, including manual coverage for wake-during-update scenarios and a staged, consolidated release-notes draft due before freeze. Flash usage on the C-series is at 91%; dropping this cycle's logging work and trimming debug strings should hold it under 85% for now, with a fuller review planned for Q1.\n\n## Action items\n\nFive items were assigned: the owner will chase the BLE companion-app timeline with mobile and stand up the Q1 planning session; Tomas covers rev C characterization, the debounce fix, and the LED indicator; Maya finishes the soak test, ships the Solenne beta, and drafts release notes; Inès completes incoming inspection and documents the rev B/rev C dependency.\n\n## Open questions\n\n- Whether Aegis firmware shares the Vantage codebase or needs its own fork, and what that implies for Q1 headcount.\n- Final production ramp timeline for rev C fully replacing rev B.\n- Whether the flash budget will force compression work once Aegis-related code paths are shared.",
+  "notes_markdown": "- Sleep mode: ~40µA deep-sleep (was ~300µA), ~7x improvement — good release-notes headline once rev C confirms it\n- Calibration drift root cause = stale thermistor curve on rev B boards, not a sensor defect; corrected table in 72h soak now\n- Added to scope: connector debounce mitigation + passive recalibration LED (both small, Tomas/Inès coordinating)\n- Rev C: 5 units to Tomas by Friday; addresses drift, antenna range, and connector issues at the hardware level long-term\n- Freeze Sept 25 holds; Solenne gets a 3-day beta of the calibration patch before general release\n- Q1 session (Tue): flash budget, Northfield 24h buffer ask, cloud backoff logic, Aegis codebase-sharing decision",
+  "action_items": [
+    {
+      "description": "Follow up with the mobile team on the BLE diagnostic companion app UI timeline.",
+      "assignee": "self",
+      "due_hint": "this Wednesday"
+    },
+    {
+      "description": "Finish the rev C current-draw characterization, the connector debounce fix, and the recalibration LED indicator.",
+      "assignee": "person-tomas",
+      "due_hint": "ahead of the September 25 freeze"
+    },
+    {
+      "description": "Complete the calibration soak test, ship the corrected lookup table to Solenne Biolabs via the beta channel, and draft the calibration/sleep-mode release notes.",
+      "assignee": "person-maya",
+      "due_hint": "patch early next week; release notes draft by Monday"
+    },
+    {
+      "description": "Finish incoming inspection on the rev C boards, deliver five units to Tomas, and note the rev B/rev C calibration dependency in the hardware changelog.",
+      "assignee": "person-ines",
+      "due_hint": "by Friday"
+    },
+    {
+      "description": "Set up the Q1 planning session covering the flash budget review, the Northfield data-buffer request, cloud-connectivity backoff logic, and the Aegis codebase-sharing question.",
+      "assignee": "self",
+      "due_hint": "next Tuesday"
+    }
   ]
 }

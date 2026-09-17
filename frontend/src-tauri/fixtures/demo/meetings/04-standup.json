@@ -4,11 +4,591 @@
   "days_ago": 0,
   "time_of_day": "09:15",
   "duration_seconds": 540,
-  "participants": ["person-maya"],
+  "template_id": "daily_standup",
+  "participants": [
+    "person-tomas",
+    "person-greta"
+  ],
   "speakers": [
-    { "key": "local", "display_name": "You", "is_local": true }
+    {
+      "key": "local",
+      "display_name": "You",
+      "is_local": true
+    },
+    {
+      "key": "spk_0",
+      "display_name": "Tomas Lindqvist",
+      "person_id": "person-tomas"
+    },
+    {
+      "key": "spk_1",
+      "display_name": "Greta Voss",
+      "person_id": "person-greta"
+    }
   ],
   "segments": [
-    { "id": "seg_1", "speaker": "local", "channel": "microphone", "start": 0.0, "end": 3.0, "text": "Alright, let's get going." }
-  ]
+    {
+      "id": "seg_1",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 0.0,
+      "end": 0.8,
+      "text": "Morning, everyone."
+    },
+    {
+      "id": "seg_2",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 1.1,
+      "end": 4.7,
+      "text": "Let's keep this quick, usual format, yesterday, today, blockers."
+    },
+    {
+      "id": "seg_3",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 5.0,
+      "end": 7.4,
+      "text": "Tomas, want to kick us off?"
+    },
+    {
+      "id": "seg_4",
+      "speaker": "spk_0",
+      "channel": "system",
+      "start": 7.8,
+      "end": 8.4,
+      "text": "Sure."
+    },
+    {
+      "id": "seg_5",
+      "speaker": "spk_0",
+      "channel": "system",
+      "start": 8.7,
+      "end": 18.3,
+      "text": "Yesterday I finished the watchdog reset fix for the C-series board, the one where it would brown out during a cold boot below freezing."
+    },
+    {
+      "id": "seg_6",
+      "speaker": "spk_0",
+      "channel": "system",
+      "start": 18.6,
+      "end": 24.2,
+      "text": "Today I'm picking up the low-power sleep mode work for the three-dot-two firmware branch."
+    },
+    {
+      "id": "seg_7",
+      "speaker": "spk_0",
+      "channel": "system",
+      "start": 24.4,
+      "end": 34.4,
+      "text": "No blockers from me, other than I'm still waiting on the rev C hardware to land so I can test the sleep current draw properly."
+    },
+    {
+      "id": "seg_8",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 35.1,
+      "end": 38.3,
+      "text": "Do we have an ETA on rev C?"
+    },
+    {
+      "id": "seg_9",
+      "speaker": "spk_0",
+      "channel": "system",
+      "start": 39.3,
+      "end": 45.7,
+      "text": "Inès said Friday, but she also said that last week, so I'm not holding my breath."
+    },
+    {
+      "id": "seg_10",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 46.2,
+      "end": 47.0,
+      "text": "Fair enough."
+    },
+    {
+      "id": "seg_11",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 47.2,
+      "end": 53.6,
+      "text": "Flag it if it slips again and we'll borrow a board from the Q4 firmware bench."
+    },
+    {
+      "id": "seg_12",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 53.9,
+      "end": 55.5,
+      "text": "Greta, how about you?"
+    },
+    {
+      "id": "seg_13",
+      "speaker": "spk_1",
+      "channel": "system",
+      "start": 56.3,
+      "end": 67.5,
+      "text": "Yesterday I got the calibration test harness talking to the bench multimeter over serial, so we can log reference readings automatically instead of typing them in by hand."
+    },
+    {
+      "id": "seg_14",
+      "speaker": "spk_1",
+      "channel": "system",
+      "start": 67.8,
+      "end": 73.4,
+      "text": "That alone should save us an hour a day once we're running full sweeps."
+    },
+    {
+      "id": "seg_15",
+      "speaker": "spk_1",
+      "channel": "system",
+      "start": 73.7,
+      "end": 82.5,
+      "text": "Today I want to run the full calibration pass against ten units and see how much scatter we get across the batch."
+    },
+    {
+      "id": "seg_16",
+      "speaker": "spk_1",
+      "channel": "system",
+      "start": 82.8,
+      "end": 89.2,
+      "text": "Blocker-wise, the CI runner keeps timing out on the hardware-in-the-loop job, it's failed three times overnight."
+    },
+    {
+      "id": "seg_17",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 90.5,
+      "end": 93.7,
+      "text": "Same runner Tomas was complaining about last week?"
+    },
+    {
+      "id": "seg_18",
+      "speaker": "spk_0",
+      "channel": "system",
+      "start": 94.0,
+      "end": 101.2,
+      "text": "Yeah, I think it's the same one, the one plugged into the flaky USB hub in the lab."
+    },
+    {
+      "id": "seg_19",
+      "speaker": "spk_1",
+      "channel": "system",
+      "start": 102.1,
+      "end": 103.7,
+      "text": "That would explain it."
+    },
+    {
+      "id": "seg_20",
+      "speaker": "spk_1",
+      "channel": "system",
+      "start": 104.0,
+      "end": 112.8,
+      "text": "Half my failures look like a dropped serial connection, not an actual test failure, and they clear up if I just rerun."
+    },
+    {
+      "id": "seg_21",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 113.4,
+      "end": 117.8,
+      "text": "Okay, I'll ping DevOps and get that hub swapped out today."
+    },
+    {
+      "id": "seg_22",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 118.0,
+      "end": 124.0,
+      "text": "In the meantime just rerun locally if CI flakes, don't block your day on it."
+    },
+    {
+      "id": "seg_23",
+      "speaker": "spk_1",
+      "channel": "system",
+      "start": 125.1,
+      "end": 126.3,
+      "text": "Will do, thanks."
+    },
+    {
+      "id": "seg_24",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 126.7,
+      "end": 131.5,
+      "text": "Anything else blocking either of you before we get into the details?"
+    },
+    {
+      "id": "seg_25",
+      "speaker": "spk_0",
+      "channel": "system",
+      "start": 133.0,
+      "end": 137.8,
+      "text": "One thing — are we still targeting the freeze for the twenty-fifth?"
+    },
+    {
+      "id": "seg_26",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 138.4,
+      "end": 140.0,
+      "text": "Yes, that hasn't moved."
+    },
+    {
+      "id": "seg_27",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 140.2,
+      "end": 141.8,
+      "text": "Why, are you tight?"
+    },
+    {
+      "id": "seg_28",
+      "speaker": "spk_0",
+      "channel": "system",
+      "start": 142.6,
+      "end": 143.4,
+      "text": "A little."
+    },
+    {
+      "id": "seg_29",
+      "speaker": "spk_0",
+      "channel": "system",
+      "start": 143.7,
+      "end": 147.7,
+      "text": "The sleep mode work is bigger than I scoped it."
+    },
+    {
+      "id": "seg_30",
+      "speaker": "spk_0",
+      "channel": "system",
+      "start": 147.9,
+      "end": 157.5,
+      "text": "There's more state machine cleanup in the power management module than I expected, mostly around how we handle wake sources during a firmware update."
+    },
+    {
+      "id": "seg_31",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 157.9,
+      "end": 160.3,
+      "text": "How much bigger are we talking?"
+    },
+    {
+      "id": "seg_32",
+      "speaker": "spk_0",
+      "channel": "system",
+      "start": 161.0,
+      "end": 162.6,
+      "text": "Maybe two extra days."
+    },
+    {
+      "id": "seg_33",
+      "speaker": "spk_0",
+      "channel": "system",
+      "start": 162.8,
+      "end": 171.2,
+      "text": "I can still make the freeze if I drop the diagnostic logging changes for now and pick those up right after."
+    },
+    {
+      "id": "seg_34",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 172.2,
+      "end": 173.4,
+      "text": "Let's do that."
+    },
+    {
+      "id": "seg_35",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 173.7,
+      "end": 177.3,
+      "text": "Logging isn't customer facing this cycle, sleep mode is."
+    },
+    {
+      "id": "seg_36",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 177.6,
+      "end": 182.0,
+      "text": "Greta, does the calibration sweep depend on any of his changes?"
+    },
+    {
+      "id": "seg_37",
+      "speaker": "spk_1",
+      "channel": "system",
+      "start": 182.5,
+      "end": 188.5,
+      "text": "No, it's independent, I'm only consuming the existing calibration API, not the power management code."
+    },
+    {
+      "id": "seg_38",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 189.3,
+      "end": 190.9,
+      "text": "Good, no cross-blocking there."
+    },
+    {
+      "id": "seg_39",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 191.2,
+      "end": 202.4,
+      "text": "One more thing while I've got you both — firmware image size crept up again on last night's build, we're at ninety-one percent of flash on the C-series."
+    },
+    {
+      "id": "seg_40",
+      "speaker": "spk_0",
+      "channel": "system",
+      "start": 203.7,
+      "end": 214.1,
+      "text": "That's mostly the new fault-code table Inès added last week, it's a few kilobytes bigger than the old one because it carries the extended diagnostic strings."
+    },
+    {
+      "id": "seg_41",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 214.4,
+      "end": 218.8,
+      "text": "Is it worth compressing now, or do we just watch it?"
+    },
+    {
+      "id": "seg_42",
+      "speaker": "spk_0",
+      "channel": "system",
+      "start": 219.7,
+      "end": 222.1,
+      "text": "I'd say watch it for now."
+    },
+    {
+      "id": "seg_43",
+      "speaker": "spk_0",
+      "channel": "system",
+      "start": 222.3,
+      "end": 229.9,
+      "text": "If the sleep mode work adds much more we might need to trim something, but we're not there yet."
+    },
+    {
+      "id": "seg_44",
+      "speaker": "spk_1",
+      "channel": "system",
+      "start": 230.5,
+      "end": 238.9,
+      "text": "I can strip the verbose calibration strings out of the release build too, those are only useful in debug builds anyway."
+    },
+    {
+      "id": "seg_45",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 240.0,
+      "end": 243.6,
+      "text": "Do that, every byte helps this close to freeze."
+    },
+    {
+      "id": "seg_46",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 243.8,
+      "end": 246.6,
+      "text": "Okay, I think that covers the updates."
+    },
+    {
+      "id": "seg_47",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 246.8,
+      "end": 256.0,
+      "text": "Quick reminder, freeze is still the twenty-fifth, so if you're carrying anything into next week, flag it now rather than the day before."
+    },
+    {
+      "id": "seg_48",
+      "speaker": "spk_0",
+      "channel": "system",
+      "start": 256.4,
+      "end": 262.0,
+      "text": "Nothing new from me, sleep mode's the only thing riding close to the line."
+    },
+    {
+      "id": "seg_49",
+      "speaker": "spk_1",
+      "channel": "system",
+      "start": 263.5,
+      "end": 267.1,
+      "text": "Same, the calibration sweep should wrap well before then."
+    },
+    {
+      "id": "seg_50",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 267.7,
+      "end": 268.3,
+      "text": "Good."
+    },
+    {
+      "id": "seg_51",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 268.6,
+      "end": 272.6,
+      "text": "Anything from the backlog grooming yesterday I should know about?"
+    },
+    {
+      "id": "seg_52",
+      "speaker": "spk_0",
+      "channel": "system",
+      "start": 273.4,
+      "end": 286.2,
+      "text": "Just that ticket about the Bluetooth reconnect loop, we triaged it as low priority since it only shows up if you walk the unit more than thirty meters from the base station."
+    },
+    {
+      "id": "seg_53",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 286.6,
+      "end": 288.2,
+      "text": "Agreed, that can wait."
+    },
+    {
+      "id": "seg_54",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 288.4,
+      "end": 301.6,
+      "text": "One more thing, Maya mentioned she's got a corrected calibration lookup table for the humidity drift issue, does either of you have bandwidth to help her validate it against a batch this week?"
+    },
+    {
+      "id": "seg_55",
+      "speaker": "spk_0",
+      "channel": "system",
+      "start": 302.3,
+      "end": 309.5,
+      "text": "I can give her a couple hours tomorrow morning, before I get back into the sleep mode cleanup."
+    },
+    {
+      "id": "seg_56",
+      "speaker": "spk_1",
+      "channel": "system",
+      "start": 310.5,
+      "end": 320.9,
+      "text": "I could help too, actually, since my ten-unit sweep will already have fresh reference readings logged, we could reuse those instead of collecting a new batch."
+    },
+    {
+      "id": "seg_57",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 321.4,
+      "end": 325.0,
+      "text": "Perfect, coordinate with her directly, that'll save everyone time."
+    },
+    {
+      "id": "seg_58",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 325.2,
+      "end": 335.6,
+      "text": "Also, heads up, Rafael's enclosure supplier call yesterday came back with a longer anodizing lead time than hoped, ten to twelve weeks once the tool's locked."
+    },
+    {
+      "id": "seg_59",
+      "speaker": "spk_0",
+      "channel": "system",
+      "start": 336.4,
+      "end": 343.2,
+      "text": "Does that put the launch date at risk, or is there slack in the schedule for it?"
+    },
+    {
+      "id": "seg_60",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 344.5,
+      "end": 356.5,
+      "text": "Sun didn't think so as of yesterday, but it's close enough that I want you both aware in case it starts squeezing the antenna cutout timeline for the BLE work."
+    },
+    {
+      "id": "seg_61",
+      "speaker": "spk_1",
+      "channel": "system",
+      "start": 356.8,
+      "end": 364.4,
+      "text": "Noted, I'll mention it to Maya too since her diagnostic mode range testing depends on the final enclosure geometry."
+    },
+    {
+      "id": "seg_62",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 365.3,
+      "end": 365.9,
+      "text": "Good."
+    },
+    {
+      "id": "seg_63",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 366.1,
+      "end": 369.7,
+      "text": "Last thing, does anyone need code review time today?"
+    },
+    {
+      "id": "seg_64",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 369.9,
+      "end": 372.3,
+      "text": "I have a gap after lunch."
+    },
+    {
+      "id": "seg_65",
+      "speaker": "spk_0",
+      "channel": "system",
+      "start": 372.9,
+      "end": 378.5,
+      "text": "I'll have the watchdog fix ready for review by then, it's a small diff."
+    },
+    {
+      "id": "seg_66",
+      "speaker": "spk_1",
+      "channel": "system",
+      "start": 379.6,
+      "end": 384.0,
+      "text": "I might have the CI runner workaround ready too, we'll see."
+    },
+    {
+      "id": "seg_67",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 384.4,
+      "end": 386.8,
+      "text": "Sounds good, ping me either way."
+    },
+    {
+      "id": "seg_68",
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 387.1,
+      "end": 389.1,
+      "text": "Alright, that's standup, thanks both."
+    },
+    {
+      "id": "seg_69",
+      "speaker": "spk_0",
+      "channel": "system",
+      "start": 390.6,
+      "end": 391.2,
+      "text": "Thanks."
+    },
+    {
+      "id": "seg_70",
+      "speaker": "spk_1",
+      "channel": "system",
+      "start": 391.8,
+      "end": 393.4,
+      "text": "Back to it, thanks."
+    }
+  ],
+  "summary_markdown": "## Yesterday\n\nTomas finished the watchdog reset fix for the C-series board (a cold-boot brown-out issue). Greta got the calibration test harness talking to the bench multimeter over serial, automating reference-reading capture ahead of a full ten-unit calibration sweep.\n\n## Today\n\nTomas is picking up the low-power sleep mode work on the 3.2 firmware branch, but flagged the scope grew (extra state-machine cleanup for wake-during-update handling) by about two days; he'll drop this cycle's diagnostic logging changes to stay on track for the September 25 freeze. Greta is running the full ten-unit calibration sweep and will strip verbose calibration strings from the release build to help with flash headroom. Both are giving Maya a couple of hours this week to help validate her corrected calibration lookup table.\n\n## Blockers\n\nTomas is still waiting on rev C hardware (Inès targeting Friday) to characterize sleep-mode current draw. Greta's hardware-in-the-loop CI job has been failing overnight, likely due to a flaky USB hub in the lab; the owner will get DevOps to swap it, and both engineers will rerun locally in the meantime rather than block on CI. Flash usage on the C-series is at 91%; the logging deferral and string-stripping should bring it back under 85% for this cycle. Rafael's enclosure supplier call surfaced a longer anodizing lead time (10–12 weeks once the tool is locked), which the owner is watching in case it starts squeezing the BLE antenna cutout timeline.",
+  "notes_markdown": null,
+  "action_items": []
 }
