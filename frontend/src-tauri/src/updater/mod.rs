@@ -9,6 +9,7 @@ pub mod driver;
 pub mod settings;
 pub mod state;
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use std::time::Duration;
 
@@ -22,15 +23,47 @@ const CHECK_INTERVAL: Duration = Duration::from_secs(6 * 60 * 60);
 
 /// App-managed updater state. `core` is the pure machine; the staged payload lives on
 /// disk (see `driver`), so nothing here holds the tarball.
+///
+/// `in_flight` is the single-flight latch: the unattended loop, a manual check and the
+/// check kicked by turning the preference on can all fire at once, and two concurrent
+/// runs would interleave progress counters and let one wipe the other's staged tarball
+/// out from under a `Ready` status. Only one check runs at a time; the losers are no-ops.
 pub struct UpdaterState {
     pub core: Mutex<UpdaterCore>,
+    in_flight: AtomicBool,
 }
 
 impl Default for UpdaterState {
     fn default() -> Self {
         Self {
             core: Mutex::new(UpdaterCore::default()),
+            in_flight: AtomicBool::new(false),
         }
+    }
+}
+
+impl UpdaterState {
+    /// Claim the single check slot. `None` means a check is already running — the caller
+    /// must do nothing at all (not even touch `core`). The slot is released when the
+    /// returned guard drops, including on an early return or a panic.
+    pub fn try_begin_check(&self) -> Option<CheckGuard<'_>> {
+        self.in_flight
+            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .ok()
+            .map(|_| CheckGuard {
+                flag: &self.in_flight,
+            })
+    }
+}
+
+/// RAII release of the single-flight latch (see [`UpdaterState::try_begin_check`]).
+pub struct CheckGuard<'a> {
+    flag: &'a AtomicBool,
+}
+
+impl Drop for CheckGuard<'_> {
+    fn drop(&mut self) {
+        self.flag.store(false, Ordering::Release);
     }
 }
 
@@ -72,4 +105,44 @@ pub fn spawn_update_loop<R: Runtime>(app: AppHandle<R>) {
             tokio::time::sleep(CHECK_INTERVAL).await;
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn single_flight_latch_admits_one_and_releases_on_drop() {
+        let state = UpdaterState::default();
+        let first = state
+            .try_begin_check()
+            .expect("first check claims the slot");
+        assert!(
+            state.try_begin_check().is_none(),
+            "a concurrent check must be refused while one is in flight"
+        );
+        drop(first);
+        assert!(
+            state.try_begin_check().is_some(),
+            "the slot is free again once the guard drops"
+        );
+    }
+
+    #[test]
+    fn latch_is_released_even_when_the_check_panics() {
+        let state = UpdaterState::default();
+        // Silence the deliberate panic so the test output stays pristine.
+        let prev = std::panic::take_hook();
+        std::panic::set_hook(Box::new(|_| {}));
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _guard = state.try_begin_check().expect("claims the slot");
+            panic!("driver blew up");
+        }));
+        std::panic::set_hook(prev);
+        assert!(result.is_err());
+        assert!(
+            state.try_begin_check().is_some(),
+            "a panicking check must not wedge the latch shut"
+        );
+    }
 }

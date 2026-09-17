@@ -10,9 +10,11 @@ use std::time::Duration;
 use tauri::{AppHandle, Manager, Runtime};
 use tauri_plugin_updater::UpdaterExt;
 
-use super::{emit_status, UpdaterState};
+use super::{emit_status, InstallRefusal, UpdateStatus, UpdaterState};
 
 const HTTP_TIMEOUT: Duration = Duration::from_secs(30);
+/// Fallback emit cadence while the server sends no Content-Length (no percent to track).
+const PROGRESS_EMIT_BYTES: u64 = 256 * 1024;
 
 fn staging_dir() -> PathBuf {
     crate::app_paths::app_data_dir().join("updates")
@@ -26,6 +28,14 @@ fn staged_path(version: &str) -> PathBuf {
 /// the status; this never panics and never restarts the app.
 pub async fn check_and_download<R: Runtime>(app: &AppHandle<R>) {
     let state = app.state::<UpdaterState>();
+    // Single-flight: the loop, a manual check and the preference-toggle check can all
+    // fire at once. A second concurrent run would interleave progress counters and its
+    // staging-dir wipe would delete the first run's tarball while `core` still says
+    // Ready, so the loser does nothing at all — the caller reads the live status.
+    let Some(_in_flight) = state.try_begin_check() else {
+        log::debug!("updater: a check is already running; skipping this one");
+        return;
+    };
     {
         state.core.lock().unwrap().begin_check();
     }
@@ -48,6 +58,12 @@ pub async fn check_and_download<R: Runtime>(app: &AppHandle<R>) {
         emit_status(app);
 
         let app_for_progress = app.clone();
+        // The byte counter advances on every chunk, but the IPC event does not: a
+        // ~100 MB payload arrives in thousands of chunks and one event each would flood
+        // the webview. Emit only when the integer percent changes (or every
+        // PROGRESS_EMIT_BYTES when the server sent no Content-Length).
+        let mut last_pct = u64::MAX;
+        let mut last_emit_bytes = 0u64;
         // tauri-plugin-updater 2.11: `download` verifies the minisign signature against
         // the configured pubkey BEFORE returning the bytes, so what we stage on disk is
         // already verified and `install` never sees unverified bytes.
@@ -55,8 +71,35 @@ pub async fn check_and_download<R: Runtime>(app: &AppHandle<R>) {
             .download(
                 move |chunk, total| {
                     let st = app_for_progress.state::<UpdaterState>();
-                    st.core.lock().unwrap().progress(chunk as u64, total);
-                    emit_status(&app_for_progress);
+                    let (received, content_length) = {
+                        let mut core = st.core.lock().unwrap();
+                        core.progress(chunk as u64, total);
+                        match core.status() {
+                            UpdateStatus::Downloading {
+                                received, total, ..
+                            } => (*received, *total),
+                            _ => return,
+                        }
+                    };
+                    let emit = match content_length {
+                        Some(len) if len > 0 => {
+                            let pct = received.saturating_mul(100) / len;
+                            let changed = pct != last_pct;
+                            last_pct = pct;
+                            changed
+                        }
+                        _ => {
+                            let due =
+                                received.saturating_sub(last_emit_bytes) >= PROGRESS_EMIT_BYTES;
+                            if due {
+                                last_emit_bytes = received;
+                            }
+                            due
+                        }
+                    };
+                    if emit {
+                        emit_status(&app_for_progress);
+                    }
                 },
                 || {},
             )
@@ -123,7 +166,10 @@ pub async fn install_and_restart<R: Runtime>(app: AppHandle<R>) -> Result<(), St
     let update = updater
         .check()
         .await
-        .map_err(|e| e.to_string())?
+        .map_err(|e| {
+            log::warn!("updater: install-time check failed: {e}");
+            "Couldn't reach GitHub to confirm the update; try again".to_string()
+        })?
         .ok_or_else(|| "The update is no longer offered".to_string())?;
     if update.version != version {
         return Err(format!(
@@ -131,7 +177,17 @@ pub async fn install_and_restart<R: Runtime>(app: AppHandle<R>) -> Result<(), St
             update.version
         ));
     }
-    update.install(bytes).map_err(|e| e.to_string())?;
+    // The gate above was evaluated before a network round trip that can take as long as
+    // HTTP_TIMEOUT. Zoom auto-detect or the global record shortcut can have started a
+    // recording in that window, so re-check immediately before the point of no return.
+    if crate::audio::recording_commands::is_recording().await {
+        return Err(InstallRefusal::RecordingInProgress.to_string());
+    }
+    // Extraction is synchronous filesystem work; keep it off the async runtime.
+    tauri::async_runtime::spawn_blocking(move || update.install(bytes))
+        .await
+        .map_err(|e| format!("Update install task failed: {e}"))?
+        .map_err(|e| e.to_string())?;
     log::info!("updater: installed {version}; restarting");
     app.restart();
 }
