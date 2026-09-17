@@ -96,3 +96,6 @@ frontend/.ds-sync-styles/
 # Design records (Vinyl-era specs + implementation plans) — kept locally for reference,
 # out of the public repository.
 private/
+
+# SDD scratch (ledgers, briefs, review packages)
+.superpowers/
