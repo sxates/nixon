@@ -7,6 +7,8 @@ use tauri_plugin_store::StoreExt;
 use crate::database::repositories::setting::SettingsRepository;
 use crate::state::AppState;
 
+pub const STORE_FILE: &str = "onboarding-status.json";
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct OnboardingStatus {
     pub version: String,
@@ -43,7 +45,7 @@ impl Default for OnboardingStatus {
 /// Load onboarding status from store
 pub async fn load_onboarding_status<R: Runtime>(app: &AppHandle<R>) -> Result<OnboardingStatus> {
     // Try to load from Tauri store
-    let store = match app.store("onboarding-status.json") {
+    let store = match app.store(STORE_FILE) {
         Ok(store) => store,
         Err(e) => {
             warn!("Failed to access onboarding store: {}, using defaults", e);
@@ -89,7 +91,7 @@ pub async fn save_onboarding_status<R: Runtime>(
 
     // Get or create store
     let store = app
-        .store("onboarding-status.json")
+        .store(STORE_FILE)
         .map_err(|e| anyhow::anyhow!("Failed to access onboarding store: {}", e))?;
 
     // Update last_updated timestamp
@@ -117,7 +119,7 @@ pub async fn reset_onboarding_status<R: Runtime>(app: &AppHandle<R>) -> Result<(
     info!("Resetting onboarding status");
 
     let store = app
-        .store("onboarding-status.json")
+        .store(STORE_FILE)
         .map_err(|e| anyhow::anyhow!("Failed to access onboarding store: {}", e))?;
 
     // Clear the status key
@@ -144,7 +146,7 @@ pub async fn get_onboarding_status<R: Runtime>(
     // Return None if it's the default (never saved before)
     // Check if we have any saved data by seeing if the store has the key
     let store = app
-        .store("onboarding-status.json")
+        .store(STORE_FILE)
         .map_err(|e| format!("Failed to access store: {}", e))?;
 
     if store.get("status").is_none() {
@@ -224,6 +226,26 @@ pub async fn complete_onboarding<R: Runtime>(
 
     info!("Onboarding completed successfully with model: {}", model);
     Ok(())
+}
+
+/// specs/0059: `NIXON_RESET_ONBOARDING=1` on a `.debug` build clears the persisted status
+/// before the frontend asks for it. Release builds compile this to a no-op.
+pub async fn reset_if_requested<R: Runtime>(app: &AppHandle<R>) {
+    #[cfg(debug_assertions)]
+    {
+        if crate::dev_fixtures::guard::env_flag(crate::dev_fixtures::guard::ENV_RESET_ONBOARDING)
+            && crate::dev_fixtures::guard::allowed("NIXON_RESET_ONBOARDING")
+        {
+            match reset_onboarding_status(app).await {
+                Ok(()) => log::info!("[dev] onboarding status reset"),
+                Err(e) => log::warn!("[dev] onboarding reset failed: {e}"),
+            }
+        }
+    }
+    #[cfg(not(debug_assertions))]
+    {
+        let _ = app;
+    }
 }
 
 #[cfg(test)]

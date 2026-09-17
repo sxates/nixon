@@ -352,6 +352,11 @@ pub fn run() {
                 }
             }
 
+            // specs/0059 — debug-only: reset onboarding / seed fixtures before the window shows.
+            tauri::async_runtime::block_on(crate::onboarding::reset_if_requested(_app.handle()));
+            #[cfg(debug_assertions)]
+            crate::dev_fixtures::seed_at_startup(_app.handle());
+
             // Audio retention sweep (specs/0029 WS7.1): background deletion of media
             // files for meetings older than the user's retention window. Spawned AFTER
             // database init (it queries `meetings`); first pass ~2 min after startup so
