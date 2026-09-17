@@ -19,8 +19,11 @@ static PRESENT: [AtomicBool; 3] = [
 const TOTAL_SECONDS: u64 = 10;
 const STEPS: usize = 40;
 
+/// specs/0059 fix round 2 (Minor): `guard::allowed` (not a bare `is_debug_identifier`
+/// check) so a non-`.debug` build logs the refusal, same as every other dev hook.
+/// Short-circuiting on `env_flag` first means we only log when the flag is actually set.
 pub fn active() -> bool {
-    guard::env_flag(guard::ENV_FAKE_DOWNLOADS) && guard::is_debug_identifier()
+    guard::env_flag(guard::ENV_FAKE_DOWNLOADS) && guard::allowed("NIXON_FAKE_DOWNLOADS")
 }
 
 pub fn is_faked_present(m: Model) -> bool {

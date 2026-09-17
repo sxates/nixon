@@ -1,11 +1,13 @@
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { invoke } from '@tauri-apps/api/core';
+import { toast } from 'sonner';
 import { DeveloperSettings } from '../DeveloperSettings';
 
 vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn() }));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 const invokeMock = vi.mocked(invoke);
+const toastSuccessMock = vi.mocked(toast.success);
 
 describe('DeveloperSettings', () => {
   // NOTE: a block-body arrow, not `() => invokeMock.mockReset()`. The implicit-return form
@@ -15,7 +17,17 @@ describe('DeveloperSettings', () => {
   // bisecting with a minimal reproduction — swapping only this line's return value fixes it,
   // independent of the component's catch style (`.then().catch()`, two-arg `.then()`, and
   // async/await try/catch were all tried and all failed with the implicit-return form).
-  beforeEach(() => { invokeMock.mockReset(); });
+  const reloadMock = vi.fn();
+
+  beforeEach(() => {
+    invokeMock.mockReset();
+    toastSuccessMock.mockReset();
+    reloadMock.mockReset();
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: { ...window.location, reload: reloadMock },
+    });
+  });
 
   it('renders nothing when dev_get_flags is unavailable (release build)', async () => {
     invokeMock.mockRejectedValue(new Error('command dev_get_flags not found'));
@@ -24,17 +36,23 @@ describe('DeveloperSettings', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it('shows flags and loads demo data', async () => {
+  it('shows flags, loads demo data, and reloads the page', async () => {
     invokeMock.mockImplementation(async (cmd) => {
       if (cmd === 'dev_get_flags') return { fixtures: true, no_audio: false, fake_downloads: false, reset_onboarding: false };
-      if (cmd === 'dev_load_fixtures') return { meetings: 5, people: 7, segments: 1100 };
+      if (cmd === 'dev_load_fixtures') return { meetings: 5, people: 7, segments: 1100, failed: 0 };
       return undefined;
     });
     render(<DeveloperSettings />);
     expect(await screen.findByText(/fixtures=demo/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /load demo data/i }));
     await waitFor(() => expect(invokeMock).toHaveBeenCalledWith('dev_load_fixtures', { noAudio: false }));
-    expect(await screen.findByText(/5 meetings/)).toBeInTheDocument();
+    // The section unmounts on reload, so the report is asserted from the toast call
+    // (its description), not from anything rendered in the DOM.
+    await waitFor(() => expect(toastSuccessMock).toHaveBeenCalledWith(
+      'Demo data loaded',
+      expect.objectContaining({ description: expect.stringContaining('5 meetings') }),
+    ));
+    await waitFor(() => expect(reloadMock).toHaveBeenCalledTimes(1));
   });
 
   it('resets onboarding', async () => {

@@ -25,7 +25,6 @@ export function DeveloperSettings() {
   const [flags, setFlags] = useState<DevFlags | null>(null)
   const [skipAudio, setSkipAudio] = useState(false)
   const [busy, setBusy] = useState(false)
-  const [report, setReport] = useState<SeedReport | null>(null)
 
   useEffect(() => {
     invoke<DevFlags>("dev_get_flags").then(setFlags).catch(() => setFlags(null))
@@ -33,12 +32,16 @@ export function DeveloperSettings() {
 
   if (!flags) return null
 
+  // specs/0059 fix round 2: reload after a successful load so the sidebar and Today view
+  // (already-mounted providers holding stale meeting/people lists) refetch against the
+  // newly-seeded data. The report goes in the toast description, not component state,
+  // because this section unmounts on reload before a state update could ever render.
   const load = async () => {
     setBusy(true)
     try {
       const r = await invoke<SeedReport>("dev_load_fixtures", { noAudio: skipAudio })
-      setReport(r)
-      toast.success("Demo data loaded")
+      toast.success("Demo data loaded", { description: formatReport(r) })
+      window.location.reload()
     } catch (e) {
       toast.error(`Could not load demo data: ${String(e)}`)
     } finally { setBusy(false) }
@@ -54,7 +57,7 @@ export function DeveloperSettings() {
         <SettingsRow label="Active dev flags" description={formatFlags(flags)} />
         <SettingsRow
           label="Load demo data"
-          description={report ? formatReport(report) : "Replaces every meeting in the debug profile with the fictional dataset."}
+          description="Replaces every meeting in the debug profile with the fictional dataset, then reloads."
           control={
             <div className="flex items-center gap-3">
               <label className="flex items-center gap-2 text-xs text-muted-foreground">

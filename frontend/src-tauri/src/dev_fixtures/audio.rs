@@ -4,12 +4,36 @@ use super::wav::{place, read_pcm16_mono, say_to_wav, write_pcm16_mono, SAMPLE_RA
 use crate::audio::channel_writer::{MIC_CHANNEL_FILENAME, SYSTEM_CHANNEL_FILENAME};
 use anyhow::{Context, Result};
 use sha2::{Digest, Sha256};
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Mutex;
+use std::sync::{Mutex, OnceLock};
 
 const HASH_FILE: &str = ".fixture-hash";
 const VOICES: [&str; 6] = ["Daniel", "Moira", "Rishi", "Karen", "Tessa", "Fred"];
+
+/// Voices we've already logged as unavailable, so a meeting with many segments for the
+/// same missing voice only warns once (specs/0059 fix round 2, Important 3).
+fn logged_missing_voices() -> &'static Mutex<HashSet<String>> {
+    static LOGGED: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
+    LOGGED.get_or_init(|| Mutex::new(HashSet::new()))
+}
+
+/// Synthesizes `text` with `voice`, falling back to `say`'s default voice if `voice`
+/// itself is unavailable (specs/0059 Risk: "guard with a clear error if a voice is
+/// missing and fall back to the default voice"). Returns false only when both the
+/// requested voice and the default fail.
+fn say_with_voice_fallback(text: &str, voice: &str, out: &Path) -> bool {
+    if say_to_wav(text, Some(voice), out) {
+        return true;
+    }
+    let mut logged = logged_missing_voices().lock().unwrap();
+    if logged.insert(voice.to_string()) {
+        log::warn!("[dev] voice {voice} unavailable; using the default voice");
+    }
+    drop(logged);
+    say_to_wav(text, None, out)
+}
 
 /// Owner is always Samantha; remote keys cycle through VOICES by their numeric suffix.
 pub fn voice_for(key: &str) -> &'static str {
@@ -57,7 +81,7 @@ fn synth_segments_parallel(m: &FixtureMeeting, tmp: &Path) -> Option<Vec<PathBuf
                 let seg = &m.segments[i];
                 let clip_path = tmp.join(format!("{i}.wav"));
                 let key = seg.speaker.as_deref().unwrap_or("spk_0");
-                if say_to_wav(&seg.text, Some(voice_for(key)), &clip_path) {
+                if say_with_voice_fallback(&seg.text, voice_for(key), &clip_path) {
                     results.lock().unwrap()[i] = Some(clip_path);
                 } else {
                     log::warn!("[dev] say failed for segment {i} ({}) of {}", seg.id, m.id);
@@ -156,15 +180,31 @@ mod tests {
             .unwrap()
             .modified()
             .unwrap();
+        // Real assertion, not `unwrap_or(true)`: the second call must report a cache hit
+        // (Ok(true)) AND must not have touched audio.mp4 (specs/0059 fix round 2).
+        let second = render_meeting_audio(&m, dir.path()).unwrap();
+        assert!(second, "second run must report a cache hit");
+        let mtime2 = std::fs::metadata(dir.path().join("audio.mp4"))
+            .unwrap()
+            .modified()
+            .unwrap();
+        assert_eq!(mtime, mtime2, "cache hit must not rewrite audio.mp4");
+    }
+
+    #[test]
+    fn missing_voice_falls_back_to_the_default_voice() {
+        let dir = tempfile::tempdir().unwrap();
+        let out = dir.path().join("fallback.wav");
+        if !say_with_voice_fallback("testing a missing voice", "NoSuchVoiceXYZ", &out) {
+            eprintln!("say unavailable; skipped");
+            return;
+        }
         assert!(
-            !render_meeting_audio(&m, dir.path()).unwrap_or(true)
-                || std::fs::metadata(dir.path().join("audio.mp4"))
-                    .unwrap()
-                    .modified()
-                    .unwrap()
-                    == mtime,
-            "second run must be a cache hit"
+            out.exists(),
+            "a wav must still be produced via the fallback"
         );
+        let samples = read_pcm16_mono(&out).unwrap();
+        assert!(!samples.is_empty());
     }
 
     #[test]

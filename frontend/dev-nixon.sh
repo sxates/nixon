@@ -59,7 +59,7 @@ for arg in "$@"; do
     --no-audio)       export NIXON_FIXTURES_NO_AUDIO=1 ;;
     --onboarding)     WANT_ONBOARDING=1 ;;
     --real-downloads) REAL_DOWNLOADS=1 ;;
-    -h|--help)        sed -n '/^# specs\/0059 dev flags/,/^REAL_DOWNLOADS/p' "$0" | sed 's/^#\{0,1\} \{0,1\}//' ; exit 0 ;;
+    -h|--help)        sed -n '/^# specs\/0059 dev flags/,/^#   --real-downloads/p' "$0" | sed 's/^#\{0,1\} \{0,1\}//' ; exit 0 ;;
     *) echo "dev-nixon.sh: unknown flag $arg" >&2; exit 2 ;;
   esac
 done

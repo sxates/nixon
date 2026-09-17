@@ -66,6 +66,10 @@ pub fn place(timeline: &mut [i16], clip: &[i16], sample_rate: u32, at_seconds: f
 }
 
 /// `say` → 16 kHz mono PCM16. Returns false when `say` is unavailable or fails.
+///
+/// `--` is passed immediately before `text` (verified against macOS `say`: `say -- "-x"`
+/// synthesizes the literal text `-x` rather than erroring on an unknown option) so a
+/// fixture segment that happens to start with `-` can never be parsed as a `say` flag.
 pub fn say_to_wav(text: &str, voice: Option<&str>, out: &Path) -> bool {
     let mut cmd = Command::new("say");
     cmd.arg("-o")
@@ -75,7 +79,7 @@ pub fn say_to_wav(text: &str, voice: Option<&str>, out: &Path) -> bool {
     if let Some(v) = voice {
         cmd.arg("-v").arg(v);
     }
-    cmd.arg(text);
+    cmd.arg("--").arg(text);
     match cmd.status() {
         Ok(s) if s.success() && out.exists() => true,
         Ok(s) => {
@@ -118,5 +122,18 @@ mod tests {
         }
         let s = read_pcm16_mono(&p).unwrap();
         assert!(s.len() > 8_000, "got {} samples", s.len());
+    }
+    #[test]
+    fn say_handles_text_starting_with_a_dash() {
+        // Without `--`, `say -v Samantha -x this looks like a flag` fails with
+        // "invalid option -- x" instead of speaking the text (specs/0059 fix round 2).
+        let dir = tempfile::tempdir().unwrap();
+        let p = dir.path().join("dash.wav");
+        if !say_to_wav("-x this looks like a flag", None, &p) {
+            eprintln!("say unavailable; skipped");
+            return;
+        }
+        let s = read_pcm16_mono(&p).unwrap();
+        assert!(!s.is_empty(), "got {} samples", s.len());
     }
 }
