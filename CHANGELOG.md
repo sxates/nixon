@@ -14,7 +14,10 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 ## [Unreleased]
 
-_(nothing yet)_
+### Changed
+
+- **Updater verification release.** No functional changes; this release exists to exercise
+  the in-app update path introduced in 0.3.0 (background download, restart to update).
 
 ## [0.3.0] - 2026-09-16
 
