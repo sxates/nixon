@@ -76,6 +76,9 @@
     --rail-h: 3.25rem; /* transport rail height (specs/0057 Plan 2; 52px after 0.1.0 feedback — 44px clipped the keys) */
   }
 
+  /* specs/0060: a screenshot driver sets data-shot="1" to hide dev-only chrome. */
+  html[data-shot="1"] [data-dev-badge] { display: none; }
+
   /* ---- DECK (dark) — anodized charcoal, cream silkscreen. Applied by ThemeProvider. ---- */
   .dark {
     --background: 30 8% 9%;            /* #1A1816 */

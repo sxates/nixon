@@ -19,7 +19,7 @@ import { useSummaryGeneration } from '@/hooks/meeting-details/useSummaryGenerati
 import { useTemplates } from '@/hooks/meeting-details/useTemplates';
 import { useCopyOperations } from '@/hooks/meeting-details/useCopyOperations';
 import { useMeetingOperations } from '@/hooks/meeting-details/useMeetingOperations';
-import { useMeetingTabs } from '@/hooks/meeting-details/useMeetingTabs';
+import { useMeetingTabs, MeetingTabKey } from '@/hooks/meeting-details/useMeetingTabs';
 import { useAutoGenerateSummary } from '@/hooks/meeting-details/useAutoGenerateSummary';
 import { useModelSettings } from '@/hooks/meeting-details/useModelSettings';
 import { useSpeakers } from '@/hooks/useSpeakers';
@@ -91,11 +91,14 @@ export default function PageContent({
   const isScheduled = meeting.origin === 'scheduled';
   // The Today view deep-links to `?tab=prep` to open the Prep tab directly.
   const wantsPrepTab = searchParams.get('tab') === 'prep';
+  // specs/0060 — the screenshot pipeline deep-links `?tab=summary|transcript|notes|prep`
+  // straight to a tab; an unrecognized value is ignored by the hook.
+  const requestedTab = searchParams.get('tab') as MeetingTabKey | null;
 
   // Tab state: which tabs exist, the active tab (deep-link/scheduled/notes-only rules),
   // lazy Prep mounting, and roving-focus keyboard handling (specs/0033, 0036, 0028).
   const { activeTab, setActiveTab, hasOpenedPrep, tabs, tabRefs, handleTabKeyDown } =
-    useMeetingTabs({ isScheduled, isNotesOnly, wantsPrepTab, deepLinkSegmentId, onDeepLinkConsumed });
+    useMeetingTabs({ isScheduled, isNotesOnly, wantsPrepTab, deepLinkSegmentId, onDeepLinkConsumed, requestedTab });
 
   // Model-settings modal registration + save-config IPC.
   const { handleRegisterModalOpen, handleOpenModelSettings, handleSaveModelConfig } =

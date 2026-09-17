@@ -125,12 +125,20 @@ export default function RootLayout({
         } else {
           console.log('[Layout] Onboarding completed, showing main app')
         }
+
+        // specs/0060: screenshot drivers wait for this attribute. 400 ms clears the
+        // 0.25–0.3 s framer intro animations on every page.
+        window.setTimeout(() => { document.documentElement.dataset.shotReady = '1' }, 400)
       })
       .catch((error) => {
         console.error('[Layout] Failed to check onboarding status:', error)
         // Default to showing onboarding if we can't check
         setShowOnboarding(true)
         setOnboardingCompleted(false)
+
+        // specs/0060: screenshot drivers wait for this attribute. 400 ms clears the
+        // 0.25–0.3 s framer intro animations on every page.
+        window.setTimeout(() => { document.documentElement.dataset.shotReady = '1' }, 400)
       })
   }, [])
 

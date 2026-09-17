@@ -18,7 +18,12 @@ interface UseMeetingTabsParams {
   deepLinkSegmentId?: string | null;
   /** specs/0033 — consume the deep-link intent (scroll done or impossible). */
   onDeepLinkConsumed?: () => void;
+  /** specs/0060 — screenshot pipeline deep-link: `/meeting-details?tab=<key>` seeds the
+   *  active tab directly. An unrecognized value falls back to the normal default rules. */
+  requestedTab?: MeetingTabKey | null;
 }
+
+const VALID_MEETING_TAB_KEYS: MeetingTabKey[] = ['summary', 'transcript', 'notes', 'prep'];
 
 /**
  * Tab state for the meeting-details single-column layout (Summary / Transcript /
@@ -32,18 +37,24 @@ export function useMeetingTabs({
   wantsPrepTab,
   deepLinkSegmentId,
   onDeepLinkConsumed,
+  requestedTab,
 }: UseMeetingTabsParams) {
   // Active document tab in the single-column layout (Summary / Transcript / My notes / Prep).
   // A search deep-link to a transcript segment (specs/0033) lands on the Transcript tab;
-  // `?tab=prep` or a scheduled meeting lands on Prep (specs/0036).
+  // `?tab=prep` or a scheduled meeting lands on Prep (specs/0036). specs/0060 — an explicit
+  // `requestedTab` (the screenshot pipeline's `?tab=` deep link) wins over all of that; an
+  // unrecognized value is ignored and falls through to the existing rules.
+  const seededTab =
+    requestedTab && VALID_MEETING_TAB_KEYS.includes(requestedTab) ? requestedTab : null;
   const [activeTab, setActiveTab] = useState<MeetingTabKey>(
-    wantsPrepTab || isScheduled
-      ? 'prep'
-      : isNotesOnly
-        ? 'notes'
-        : deepLinkSegmentId
-          ? 'transcript'
-          : 'summary',
+    seededTab ??
+      (wantsPrepTab || isScheduled
+        ? 'prep'
+        : isNotesOnly
+          ? 'notes'
+          : deepLinkSegmentId
+            ? 'transcript'
+            : 'summary'),
   );
 
   // Lazy-mount the Prep tab: only build it once the user actually opens it (or it's the

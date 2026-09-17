@@ -1,6 +1,8 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { LoaderIcon } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import { TranscriptSettings } from '@/components/TranscriptSettings';
 import { RecordingSettings } from '@/components/RecordingSettings';
@@ -28,10 +30,16 @@ const TABS = [
   { value: 'about', label: 'About' }
 ] as const;
 
-export default function SettingsPage() {
+function SettingsPageContent() {
   const { transcriptModelConfig, setTranscriptModelConfig } = useConfig();
 
-  const [activeTab, setActiveTab] = useState('general');
+  // specs/0060 — the screenshot pipeline reaches a specific tab via `/settings?tab=<value>`;
+  // an unrecognized (or absent) value falls back to the existing 'general' default.
+  const searchParams = useSearchParams();
+  const requestedTab = searchParams.get('tab');
+  const initialTab = TABS.some((t) => t.value === requestedTab) ? (requestedTab as string) : 'general';
+
+  const [activeTab, setActiveTab] = useState(initialTab);
 
   // Load saved transcript configuration on mount
   useEffect(() => {
@@ -130,4 +138,16 @@ export default function SettingsPage() {
       </div>
     </Tabs>
   );
-};
+}
+
+export default function SettingsPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex items-center justify-center h-page">
+        <LoaderIcon className="animate-spin size-6" />
+      </div>
+    }>
+      <SettingsPageContent />
+    </Suspense>
+  );
+}

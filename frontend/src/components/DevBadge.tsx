@@ -31,6 +31,7 @@ const DevBadge: React.FC<DevBadgeProps> = ({ isCollapsed = false }) => {
   if (isCollapsed) {
     return (
       <span
+        data-dev-badge=""
         title={label}
         aria-label={label}
         className="inline-flex items-center justify-center px-1.5 py-0.5 rounded-[2px] text-[9px] font-bold uppercase tracking-[0.12em] bg-brand/15 text-brand border border-brand/40"
@@ -42,6 +43,7 @@ const DevBadge: React.FC<DevBadgeProps> = ({ isCollapsed = false }) => {
 
   return (
     <span
+      data-dev-badge=""
       title={label}
       aria-label={label}
       className="inline-flex items-center justify-center px-1.5 py-0.5 rounded-[2px] text-[9px] font-bold uppercase tracking-[0.12em] bg-brand/15 text-brand border border-brand/40"
