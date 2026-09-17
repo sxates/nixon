@@ -192,6 +192,50 @@
       current_pause_duration: 0,
     }),
 
+    // settings/commands.rs `get_notification_settings` -> NotificationSettings
+    // (src/contexts/ConfigContext.tsx). The generic {}-for-"settings"-shaped fallback
+    // below is render-safe for callers that only read top-level fields, but
+    // PreferenceSettings.tsx (specs/0060 settings-general shot) destructures
+    // notificationSettings.notification_preferences.show_recording_started
+    // unguarded — {} crashes the whole app (ConfigContext wraps every route).
+    get_notification_settings: () => ({
+      recording_notifications: true,
+      time_based_reminders: false,
+      meeting_reminders: true,
+      respect_do_not_disturb: true,
+      notification_sound: true,
+      system_permission_granted: true,
+      consent_given: true,
+      manual_dnd_mode: false,
+      notification_preferences: {
+        show_recording_started: true,
+        show_recording_stopped: true,
+        show_recording_paused: false,
+        show_recording_resumed: false,
+        show_transcription_complete: true,
+        show_meeting_reminders: true,
+        show_system_errors: true,
+        meeting_reminder_minutes: [5],
+      },
+    }),
+
+    // settings/commands.rs `set_notification_settings` -> (). Args: { settings }
+    // (ConfigContext.tsx echoes its own optimistic update back through this, so a
+    // no-op is fine — the demo never reloads the page to observe persistence).
+    set_notification_settings: () => undefined,
+
+    // audio/recording_preferences.rs `get_audio_backend_info` -> Vec<BackendInfo>
+    // (AudioBackendSelector.tsx, under Settings → Recordings). The "_info" suffix
+    // trips the {}-shaped-word heuristic below even though this is a Vec — {}.map
+    // crashes the whole app (settings-recordings shot). Real macOS id/name/description.
+    get_audio_backend_info: () => ([
+      { id: 'screencapturekit', name: 'ScreenCaptureKit', description: "Apple's ScreenCaptureKit framework - Higher level API with good compatibility" },
+      { id: 'coreaudio', name: 'Core Audio', description: 'Direct Core Audio API - Lower latency, more control over audio pipeline' },
+    ]),
+
+    // audio/recording_preferences.rs `get_current_audio_backend` -> String.
+    get_current_audio_backend: () => 'coreaudio',
+
     // meetings/commands.rs `api_get_meetings` -> Vec<Meeting>.
     api_get_meetings: () => MEETINGS.map(meetingRow),
 
