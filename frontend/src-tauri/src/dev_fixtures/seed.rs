@@ -25,6 +25,7 @@ pub struct SeedReport {
     pub meetings: u32,
     pub people: u32,
     pub segments: u32,
+    pub failed: u32,
 }
 
 /// Tables the seeder owns. Settings, calendar, voiceprints, Keychain are untouched.
@@ -43,6 +44,25 @@ const WIPE_TABLES: &[&str] = &[
     "people",
 ];
 
+/// Meeting-scoped tables a single failed meeting's rows are removed from by
+/// [`remove_meeting_rows`], in delete order. Same set as [`WIPE_TABLES`] minus
+/// `ask_ai_history` (not meeting-scoped in the seeder's writes) and `people` (never
+/// touched per-meeting). `transcript_speaker_overrides` carries its own `meeting_id`
+/// column (migrations/20260701000000_add_transcript_speaker_overrides.sql), so it is
+/// deleted the same way as the rest rather than via a `transcripts` subquery.
+/// `meetings` itself is deleted LAST, after every table that references it.
+const MEETING_SCOPED_TABLES: &[&str] = &[
+    "action_item_extractions",
+    "action_items",
+    "meeting_summary_outlines",
+    "summary_processes",
+    "meeting_notes",
+    "meeting_participants",
+    "transcript_speaker_overrides",
+    "speakers",
+    "transcripts",
+];
+
 pub async fn wipe(pool: &SqlitePool) -> Result<()> {
     let mut tx = pool.begin().await?;
     for t in WIPE_TABLES {
@@ -51,6 +71,28 @@ pub async fn wipe(pool: &SqlitePool) -> Result<()> {
             .await
             .with_context(|| format!("wipe {t}"))?;
     }
+    tx.commit().await?;
+    Ok(())
+}
+
+/// Compensating delete for one meeting's rows across every meeting-scoped table, run in a
+/// single transaction (repositories take `&SqlitePool`, not a shared transaction handle, so
+/// this is the closest available substitute for "the meeting's writes are one transaction").
+/// Never touches `people` — people are dataset-wide, not meeting-scoped.
+pub async fn remove_meeting_rows(pool: &SqlitePool, meeting_id: &str) -> Result<()> {
+    let mut tx = pool.begin().await?;
+    for t in MEETING_SCOPED_TABLES {
+        sqlx::query(&format!("DELETE FROM {t} WHERE meeting_id = ?"))
+            .bind(meeting_id)
+            .execute(&mut *tx)
+            .await
+            .with_context(|| format!("remove {t} rows for {meeting_id}"))?;
+    }
+    sqlx::query("DELETE FROM meetings WHERE id = ?")
+        .bind(meeting_id)
+        .execute(&mut *tx)
+        .await
+        .with_context(|| format!("remove meetings row for {meeting_id}"))?;
     tx.commit().await?;
     Ok(())
 }
@@ -67,6 +109,17 @@ pub fn started_at(m: &FixtureMeeting, now: DateTime<Utc>) -> DateTime<Utc> {
         .with_timezone(&Utc)
 }
 
+/// specs/0059 controller ruling (Task 4 review, fix round 1): the parent spec requires
+/// "each meeting is one transaction; a failed meeting is rolled back and reported, the
+/// others still land". The repositories this seeder calls take `&SqlitePool` (not a
+/// shared transaction handle), so a real cross-repository transaction per meeting isn't
+/// available without changing their signatures. Instead: the meetings-row INSERT is a
+/// separate first step ([`insert_meeting_row`]) whose failure returns early with NO
+/// compensating delete — a PRIMARY KEY collision there means the id already belongs to an
+/// earlier, successfully seeded meeting, and deleting would destroy that meeting's rows
+/// instead of anything this attempt created. Once the row insert succeeds, any later
+/// failure ([`seed_meeting_rest`]) is known to be scoped to THIS meeting's fresh rows, so
+/// [`remove_meeting_rows`] safely deletes them and seeding continues with the next meeting.
 pub async fn seed_all(
     pool: &SqlitePool,
     ds: &Dataset,
@@ -75,6 +128,7 @@ pub async fn seed_all(
 ) -> Result<SeedReport> {
     wipe(pool).await?;
     let mut report = SeedReport::default();
+    let mut failures: Vec<String> = Vec::new();
     let ts = now.to_rfc3339();
     for p in &ds.people {
         sqlx::query("INSERT INTO people (id, email, display_name, role, notes, voiceprint_opt_out, created_at, updated_at) VALUES (?, ?, ?, ?, NULL, 0, ?, ?)")
@@ -83,27 +137,61 @@ pub async fn seed_all(
         report.people += 1;
     }
     for m in &ds.meetings {
-        let n = seed_meeting(pool, m, folders.get(&m.id), now)
-            .await
-            .with_context(|| format!("seed {}", m.id))?;
-        report.meetings += 1;
-        report.segments += n;
+        let start = started_at(m, now);
+        let folder_path = folders.get(&m.id).map(|p| p.to_string_lossy().to_string());
+
+        if let Err(e) = insert_meeting_row(pool, m, folder_path.as_deref(), start).await {
+            // See the doc comment above: no cleanup here, the row insert itself failed.
+            log::error!(
+                "[dev] seed {} failed inserting its meetings row: {e:#}; not rolling back \
+                 (the id likely belongs to an earlier, successfully seeded meeting)",
+                m.id
+            );
+            report.failed += 1;
+            failures.push(format!("{}: {e:#}", m.id));
+            continue;
+        }
+
+        match seed_meeting_rest(pool, m, folder_path, start).await {
+            Ok(n) => {
+                report.meetings += 1;
+                report.segments += n;
+            }
+            Err(e) => {
+                log::error!("[dev] seed {} failed: {e:#}; rolling back its rows", m.id);
+                if let Err(e2) = remove_meeting_rows(pool, &m.id).await {
+                    log::error!("[dev] rollback of {} failed too: {e2:#}", m.id);
+                }
+                report.failed += 1;
+                failures.push(format!("{}: {e:#}", m.id));
+            }
+        }
+    }
+    if report.meetings == 0 {
+        anyhow::bail!("every meeting failed to seed: {}", failures.join("; "));
     }
     Ok(report)
 }
 
-async fn seed_meeting(
+async fn insert_meeting_row(
     pool: &SqlitePool,
     m: &FixtureMeeting,
-    folder: Option<&PathBuf>,
-    now: DateTime<Utc>,
-) -> Result<u32> {
-    let start = started_at(m, now);
-    let folder_path = folder.map(|p| p.to_string_lossy().to_string());
+    folder_path: Option<&str>,
+    start: DateTime<Utc>,
+) -> Result<()> {
     sqlx::query("INSERT INTO meetings (id, title, created_at, updated_at, folder_path, origin, template_id, title_manually_set) VALUES (?, ?, ?, ?, ?, 'recorded', ?, 1)")
-        .bind(&m.id).bind(&m.title).bind(start.to_rfc3339()).bind(start.to_rfc3339()).bind(&folder_path).bind(&m.template_id)
-        .execute(pool).await?;
+        .bind(&m.id).bind(&m.title).bind(start.to_rfc3339()).bind(start.to_rfc3339()).bind(folder_path).bind(&m.template_id)
+        .execute(pool).await
+        .with_context(|| format!("insert meetings row for {}", m.id))?;
+    Ok(())
+}
 
+async fn seed_meeting_rest(
+    pool: &SqlitePool,
+    m: &FixtureMeeting,
+    folder_path: Option<String>,
+    start: DateTime<Utc>,
+) -> Result<u32> {
     for s in &m.speakers {
         SpeakersRepository::upsert(
             pool,
@@ -149,7 +237,7 @@ async fn seed_meeting(
         &m.id,
         &m.title,
         &segments,
-        folder_path.clone(),
+        folder_path,
     )
     .await?;
     anyhow::ensure!(ok, "save_transcripts_for_meeting refused {}", m.id);
