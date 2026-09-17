@@ -1,0 +1,14 @@
+{
+  "id": "demo-02",
+  "title": "1:1 with Maya",
+  "days_ago": 2,
+  "time_of_day": "10:30",
+  "duration_seconds": 1320,
+  "participants": ["person-maya"],
+  "speakers": [
+    { "key": "local", "display_name": "You", "is_local": true }
+  ],
+  "segments": [
+    { "id": "seg_1", "speaker": "local", "channel": "microphone", "start": 0.0, "end": 3.0, "text": "Alright, let's get going." }
+  ]
+}
