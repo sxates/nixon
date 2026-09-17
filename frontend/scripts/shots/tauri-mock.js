@@ -405,7 +405,7 @@
   }
 
   window.__TAURI_INTERNALS__ = {
-    invoke: (cmd, args) => Promise.resolve(cmd in FIXTURES ? FIXTURES[cmd](args || {}) : fallback(cmd)),
+    invoke: (cmd, args) => Promise.resolve(Object.hasOwn(FIXTURES, cmd) ? FIXTURES[cmd](args || {}) : fallback(cmd)),
     transformCallback: () => Math.floor(Math.random() * 1e9),
     convertFileSrc: (p) => p,
     metadata: { currentWindow: { label: 'main' }, currentWebview: { label: 'main' } },

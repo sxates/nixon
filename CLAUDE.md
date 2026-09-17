@@ -68,6 +68,9 @@ pnpm install
 ./dev-nixon.sh           # ← DEV launcher (wraps dev-gpu.sh; cargo on PATH). Runs as "Dev Nixon",
                          #   identifier ai.vinyl.app.debug — ISOLATED data from production.
 ./dev-nixon.sh --demo        # seed 5 fictional meetings + audio into the DEBUG profile (specs/0059)
+                              # first run: ~4 min (say/ffmpeg synthesis); re-running --demo reuses
+                              # the cached audio (folders are stable, so it's seconds) — use
+                              # --no-audio for fast iteration when audio doesn't matter
 ./dev-nixon.sh --onboarding  # re-run onboarding with simulated downloads (--real-downloads to keep them)
 ./build-gpu.sh           # production build (also builds the sidecar) — needs cargo on PATH
 ./upgrade-nixon.sh       # rebuild + reinstall /Applications/Nixon.app, preserving data
@@ -95,8 +98,10 @@ fresh installs use `~/Movies/nixon-recordings/`. An install that has
 (`audio/recording_preferences.rs` prefers the legacy folder whenever it is present, even if a
 `nixon-recordings` folder appears beside it), so nothing is moved or re-pointed. On such a
 machine the debug build's recordings root is that same legacy folder, and `--demo`'s
-`demo-*` folders land there too — the seeder only ever deletes folders matching that
-`demo-` prefix, never anything else in the recordings root. Also note: `--onboarding`
+`nixon-demo-*` folders land there too — cleanup only ever deletes a folder that both starts
+with the `nixon-demo-` prefix AND has a `metadata.json` whose `meeting_id` starts with
+`demo-` and whose microphone device is `"Demo Microphone"`, so it can never touch a real
+recording folder even if one happened to share the prefix. Also note: `--onboarding`
 simulates the model downloads only (no bytes hit disk), so recording after a simulated
 onboarding still needs the real models downloaded and present on disk.
 **Don't call `dev-gpu.sh` / `build-gpu.sh` directly unless cargo is already on PATH.** They're
