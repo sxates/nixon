@@ -170,6 +170,8 @@ tauri-plugin-notification = "2.3.1"
 tauri-plugin-single-instance = "=2.3.7"
 # Desktop-only global shortcut (CmdOrCtrl+Shift+R record toggle, spec 0007)
 tauri-plugin-global-shortcut = "2.3.0"
+# specs/0058 in-app updates — Rust drives check/download/install; no JS package needed.
+tauri-plugin-updater = "2"
 
 # macOS-specific dependencies with Metal GPU acceleration
 [target.'cfg(target_os = "macos")'.dependencies]

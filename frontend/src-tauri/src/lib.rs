@@ -146,6 +146,9 @@ pub fn run() {
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        // specs/0058 — updater state (status machine; the payload is staged on disk).
+        .manage(updater::UpdaterState::default())
         .manage(Arc::new(RwLock::new(
             None::<notifications::manager::NotificationManager<tauri::Wry>>,
         )) as NotificationManagerState<tauri::Wry>)
@@ -263,6 +266,10 @@ pub fn run() {
             // Zoom mute gate (specs/0049): while recording with the opt-in setting on,
             // poll Zoom's mute state via Accessibility and drop the owner mic while muted.
             zoom::spawn_zoom_mute_monitor(_app.handle().clone());
+
+            // specs/0058 — unattended update check + background download. Never
+            // restarts by itself; dev builds set NIXON_DISABLE_UPDATER=1.
+            updater::spawn_update_loop(_app.handle().clone());
 
             // Set models directory to use app_data_dir (unified storage location)
             whisper_engine::commands::set_models_directory(_app.handle());
