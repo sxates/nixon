@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // diff.mjs — compare the headless set against a git ref and write a contact sheet (specs/0060).
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -14,14 +14,18 @@ const repo = resolve(here, '..', '..', '..');
 export function diffPng(aBuf, bBuf, { threshold = 0.1, ignore = [] } = {}) {
   const a = PNG.sync.read(aBuf), b = PNG.sync.read(bBuf);
   if (a.width !== b.width || a.height !== b.height) throw new Error(`size mismatch ${a.width}x${a.height} vs ${b.width}x${b.height}`);
-  for (const [x, y, w, h] of ignore) for (let yy = y; yy < y + h; yy++) for (let xx = x; xx < x + w; xx++) { const i = (yy * a.width + xx) * 4; b.data.set(a.data.subarray(i, i + 4), i); }
+  for (const [x, y, w, h] of ignore) {
+    const x0 = Math.max(0, x), y0 = Math.max(0, y);
+    const x1 = Math.min(a.width, x + w), y1 = Math.min(a.height, y + h);
+    for (let yy = y0; yy < y1; yy++) for (let xx = x0; xx < x1; xx++) { const i = (yy * a.width + xx) * 4; b.data.set(a.data.subarray(i, i + 4), i); }
+  }
   const out = new PNG({ width: a.width, height: a.height });
   const changed = pixelmatch(a.data, b.data, out.data, a.width, a.height, { threshold, includeAA: false });
   return { changed, total: a.width * a.height, ratio: changed / (a.width * a.height), diffPng: PNG.sync.write(out) };
 }
 
 function fromGit(ref, relPath) {
-  try { return execSync(`git show ${ref}:${relPath}`, { cwd: repo, stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 64 * 1024 * 1024 }); } catch { return null; }
+  try { return execFileSync('git', ['show', `${ref}:${relPath}`], { cwd: repo, stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 64 * 1024 * 1024 }); } catch { return null; }
 }
 
 // routes.json ignore rects are {x,y,w,h,why} objects (see manifest.mjs); diffPng wants [x,y,w,h] tuples.
