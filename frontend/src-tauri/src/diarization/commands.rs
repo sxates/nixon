@@ -3,8 +3,11 @@
 //! Frontend → Rust surface consumed by P1-C:
 //! - [`api_diarize_meeting`]   — kick off an offline diarization pass (background).
 //! - [`api_get_meeting_speakers`] — the per-meeting speaker keys + display names.
-//! - [`api_download_diarization_models`] — explicit first-run model fetch.
-//! - [`api_diarization_models_present`] — whether both models are cached.
+//! - [`crate::diarization::model_commands::api_download_diarization_models`] —
+//!   explicit first-run model fetch (moved to [`crate::diarization::model_commands`]
+//!   to keep this file under the repo's file-size ratchet).
+//! - [`crate::diarization::model_commands::api_diarization_models_present`] —
+//!   whether both models are cached.
 //! - [`api_get_diarization_enabled`] / [`api_set_diarization_enabled`] — the
 //!   opt-in on/off setting (default OFF).
 //!
@@ -19,7 +22,7 @@
 //! complete,error}` events (see [`crate::diarization::pipeline`]).
 
 use serde::Serialize;
-use tauri::{AppHandle, Emitter, Manager, Runtime};
+use tauri::{AppHandle, Manager, Runtime};
 
 use crate::calendar::eventkit::{self, Attendee};
 use crate::database::repositories::meeting::MeetingsRepository;
@@ -28,8 +31,7 @@ use crate::database::repositories::meeting_participant::{
 };
 use crate::database::repositories::people::PeopleRepository;
 use crate::database::repositories::speaker::SpeakersRepository;
-use crate::diarization::models;
-use crate::diarization::pipeline::{self, EVENT_PROGRESS};
+use crate::diarization::pipeline;
 use crate::diarization::settings;
 use crate::state::AppState;
 
@@ -112,48 +114,6 @@ pub async fn api_get_meeting_speakers<R: Runtime>(
                 .collect()
         })
         .map_err(|e| format!("Failed to load speakers: {e}"))
-}
-
-/// Download the two diarization ONNX models on demand, emitting
-/// `diarization-progress` per stage. No-op if already cached.
-#[tauri::command]
-pub async fn api_download_diarization_models<R: Runtime>(app: AppHandle<R>) -> Result<(), String> {
-    #[cfg(debug_assertions)]
-    if crate::dev_fixtures::fake_downloads::active() {
-        crate::dev_fixtures::fake_downloads::run(
-            &app,
-            crate::dev_fixtures::fake_downloads::Model::Diarization,
-            "diarization",
-        )
-        .await;
-        return Ok(());
-    }
-    tauri::async_runtime::spawn_blocking(move || {
-        let progress = move |stage: models::DownloadStage| {
-            let label = match stage {
-                models::DownloadStage::Segmentation => "downloading segmentation model",
-                models::DownloadStage::Embedding => "downloading embedding model",
-                models::DownloadStage::Extracting => "extracting model",
-            };
-            let _ = app.emit(EVENT_PROGRESS, serde_json::json!({ "stage": label }));
-        };
-        models::ensure_models(Some(&progress)).map(|_| ())
-    })
-    .await
-    .map_err(|e| format!("model download task panicked: {e}"))?
-    .map_err(|e| format!("Failed to download diarization models: {e:#}"))
-}
-
-/// Whether both diarization models are present (and a plausible size) on disk.
-#[tauri::command]
-pub async fn api_diarization_models_present() -> Result<bool, String> {
-    #[cfg(debug_assertions)]
-    if crate::dev_fixtures::fake_downloads::is_faked_present(
-        crate::dev_fixtures::fake_downloads::Model::Diarization,
-    ) {
-        return Ok(true);
-    }
-    Ok(models::models_present())
 }
 
 /// Whether diarization is enabled (opt-in; default OFF).

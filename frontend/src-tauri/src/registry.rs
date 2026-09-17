@@ -304,8 +304,8 @@ pub fn invoke_handler() -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Sen
         // Per-meeting run status for UI rehydration (specs/0029 WS3.1)
         diarization::commands::api_diarization_status,
         diarization::commands::api_get_meeting_speakers,
-        diarization::commands::api_download_diarization_models,
-        diarization::commands::api_diarization_models_present,
+        diarization::model_commands::api_download_diarization_models,
+        diarization::model_commands::api_diarization_models_present,
         diarization::commands::api_get_diarization_enabled,
         diarization::commands::api_set_diarization_enabled,
         // Live diarization sub-toggle (specs/0011 P3-B)
