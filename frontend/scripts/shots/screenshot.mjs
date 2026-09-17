@@ -32,8 +32,8 @@ try {
   chrome = await launchChrome();
   const browser = openSession(chrome.browserWs);
   await browser.ready;
-  log('navigated');
   const png = await capture(browser, { url, mock: MOCK, width: +W, height: +H, waitMs: +WAIT });
+  log('captured');
   writeFileSync(out, png);
   log('OK ' + png.length);
   browser.close();

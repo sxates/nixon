@@ -56,7 +56,7 @@ async function main() {
   for (const shot of shots) {
     const t0 = Date.now();
     try {
-      const png = await capture(browser, { url: shot.url(`http://127.0.0.1:${server.port}`), mock, width: shot.entry.viewport[0], height: shot.entry.viewport[1], waitMs: shot.entry.wait });
+      const png = await capture(browser, { url: shot.url(`http://127.0.0.1:${server.port}`), mock, width: shot.entry.viewport[0], height: shot.entry.viewport[1], waitMs: shot.entry.wait, deadlineMs: shot.entry.wait + 30000 });
       writeFileSync(join(opt.out, shot.file), png);
       results.push({ file: shot.file, status: 'ok', ms: Date.now() - t0 });
       console.log('ok  ', shot.file);
