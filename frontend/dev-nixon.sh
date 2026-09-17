@@ -47,4 +47,7 @@ if [ -f "src-tauri/.env.google" ] && { [ -z "${NIXON_GOOGLE_CLIENT_ID:-}" ] || [
   } >&2
 fi
 
+# specs/0058: dev builds never check for or install updates.
+export NIXON_DISABLE_UPDATER=1
+
 exec ./dev-gpu.sh "$@"
