@@ -20,6 +20,7 @@ import { useImportDialog } from '@/contexts/ImportDialogContext';
 import { useConfig } from '@/contexts/ConfigContext';
 import { DeckIcon } from '@/components/ui/deck-icon';
 import { cn } from '@/lib/utils';
+import { UpdateRow } from './UpdateRow';
 
 import DevBadge from '../DevBadge';
 
@@ -140,6 +141,8 @@ const Sidebar: React.FC = () => {
             })}
           </nav>
 
+          <UpdateRow collapsed />
+
           <button
             onClick={() => router.push('/settings')}
             aria-label="Settings"
@@ -257,6 +260,8 @@ const Sidebar: React.FC = () => {
 
         {/* Footer — settings entry (the avatar puck is gone, specs/0057 Plan 3) */}
         <div className="flex-shrink-0 border-t border-border p-2">
+          <UpdateRow />
+
           <button
             onClick={() => router.push('/settings')}
             className="relative flex h-8 w-full items-center gap-2.5 pl-3 pr-3.5 text-left text-engrave transition-colors hover:bg-key hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"

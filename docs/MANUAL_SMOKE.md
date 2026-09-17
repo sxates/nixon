@@ -185,6 +185,20 @@ the system-audio tap silently returns silence (see `CLAUDE.md` / ADR-0004).
 
 ---
 
+## 21. In-app update (specs/0058) — run against a throwaway patch release
+- [ ] Install the DMG of the version under test; launch; Settings > About shows
+      "Not checked yet" then within ~30 s "Up to date · checked just now".
+- [ ] Publish a throwaway patch release (`./release.sh patch`, notes "updater smoke").
+- [ ] Within ~20 s of relaunching the older build, the sidebar footer shows
+      "Downloading X.Y.Z" with a percentage, then "Nixon X.Y.Z ready · Restart"; the tray
+      menu gains "Restart to update to X.Y.Z".
+- [ ] Start a recording: the Restart key is disabled ("Finish the recording first") and
+      the tray item disappears. Stop: both return.
+- [ ] Click Restart: the app relaunches, About shows X.Y.Z, meetings and settings are
+      intact, `<app-data-dir>/updates/` no longer needs the old tarball (may be deleted).
+- [ ] Settings > General > "Download updates automatically" off → no row appears for a
+      further release, but About's "Check for updates" still finds and downloads it.
+
 ## Release builds (WS8)
 - [ ] A production build (`./build-gpu.sh` / `./upgrade-nixon.sh`) launches as **Nixon** —
       window title, menu bar, tray and notifications all say Nixon, and the sidebar shows no

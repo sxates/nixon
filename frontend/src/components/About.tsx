@@ -1,5 +1,70 @@
 import React, { useState, useEffect } from "react";
 import { getVersion } from '@tauri-apps/api/app';
+import { useOptionalUpdateStatus, describeStatus } from '@/contexts/UpdateStatusContext';
+import { useRecordingState } from '@/contexts/RecordingStateContext';
+import { SettingsNote } from '@/components/ui/settings';
+
+// specs/0058 Task 5 — the update status line + Check for updates / Restart to
+// update controls. Provider-tolerant: renders nothing when the app-wide
+// UpdateStatusProvider isn't mounted (e.g. this component's own unit test).
+// useRecordingState() is only called from the child below, which is only
+// rendered once the update context is known to exist, so About stays safe to
+// render outside a RecordingStateProvider too.
+function UpdatesBlock() {
+    const updates = useOptionalUpdateStatus();
+    if (!updates) return null;
+    return <UpdatesBlockContent {...updates} />;
+}
+
+function UpdatesBlockContent({
+    status,
+    busy,
+    error,
+    checkNow,
+    install,
+}: NonNullable<ReturnType<typeof useOptionalUpdateStatus>>) {
+    const { isRecording } = useRecordingState();
+    const ready = status.state === 'ready';
+    const notes = ready ? status.notes.split('\n').map((l) => l.replace(/^\s*[-*]\s*/, '').trim()).filter(Boolean) : [];
+    return (
+        <div className="space-y-2 text-left">
+            <div className="flex items-center justify-between gap-3">
+                <span className="text-sm text-muted-foreground">{describeStatus(status)}</span>
+                <div className="flex gap-2">
+                    {ready && (
+                        <button
+                            type="button"
+                            onClick={() => install()}
+                            disabled={busy || isRecording}
+                            title={isRecording ? 'Finish the recording first' : undefined}
+                            className="rounded-[3px] border border-border bg-key px-2.5 py-1 text-xs text-foreground hover:bg-key/80 disabled:opacity-50"
+                        >
+                            Restart to update
+                        </button>
+                    )}
+                    <button
+                        type="button"
+                        onClick={() => checkNow()}
+                        disabled={busy || status.state === 'checking' || status.state === 'downloading'}
+                        className="rounded-[3px] border border-border px-2.5 py-1 text-xs text-muted-foreground hover:bg-key disabled:opacity-50"
+                    >
+                        Check for updates
+                    </button>
+                </div>
+            </div>
+            {status.state === 'error' && <p className="text-xs text-muted-foreground">{status.message}</p>}
+            {error && <p className="text-xs text-record-ink">{error}</p>}
+            {ready && notes.length > 0 && (
+                <SettingsNote tone="muted">
+                    <p className="u-section-label mb-1 text-[9px]">What&apos;s new in {status.version}</p>
+                    <ul className="list-disc space-y-0.5 pl-4 text-xs text-muted-foreground">
+                        {notes.map((n, i) => <li key={i}>{n}</li>)}
+                    </ul>
+                </SettingsNote>
+            )}
+        </div>
+    );
+}
 
 export function About() {
     const [currentVersion, setCurrentVersion] = useState<string>('');
@@ -23,6 +88,8 @@ export function About() {
                     never leave your machine.
                 </p>
             </div>
+
+            <UpdatesBlock />
 
             {/* Features Grid */}
             <div className="space-y-3">

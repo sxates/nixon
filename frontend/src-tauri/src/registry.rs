@@ -12,7 +12,7 @@
 use crate::{
     action_items, aggregation, anthropic, audio, calendar, database, diarization, fs_guard, groq,
     llm_activity, meetings, notifications, ollama, onboarding, openai, openrouter, parakeet_engine,
-    people, power, search, settings, summary, transcripts, utils, whisper_engine, zoom,
+    people, power, search, settings, summary, transcripts, updater, utils, whisper_engine, zoom,
 };
 
 // Concrete over `tauri::Wry` (not generic over `R: Runtime`): several registered
@@ -275,6 +275,12 @@ pub fn invoke_handler() -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Sen
         zoom::commands::api_set_zoom_mute_gate,
         zoom::commands::api_zoom_mute_ax_trusted,
         zoom::commands::api_open_accessibility_settings,
+        // In-app updates (specs/0058)
+        updater::commands::api_get_update_status,
+        updater::commands::api_check_for_updates,
+        updater::commands::api_install_update,
+        updater::commands::api_get_updater_settings,
+        updater::commands::api_set_updater_settings,
         // macOS calendar (EventKit) commands (specs/0008 P2)
         calendar::commands::api_get_calendar_access_status,
         calendar::commands::api_request_calendar_access,

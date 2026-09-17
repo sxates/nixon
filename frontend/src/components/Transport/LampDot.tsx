@@ -24,6 +24,7 @@ export function LampDot({
   tone,
   label,
   decorative = false,
+  pulse = false,
   className,
 }: {
   tone: LampTone;
@@ -31,6 +32,8 @@ export function LampDot({
   /** Inside an already-labelled control, where the lamp's own name would pollute the
    *  accessible name ("Queue off Queue 0 Idle"). Renders purely decoratively. */
   decorative?: boolean;
+  /** specs/0058 — an in-progress activity (e.g. a download) pulses the lamp. */
+  pulse?: boolean;
   className?: string;
 }) {
   return (
@@ -44,6 +47,7 @@ export function LampDot({
       className={cn(
         'inline-block h-2 w-2 flex-none rounded-full transition-[background-color,box-shadow] ease-out',
         TONE[tone],
+        pulse && 'animate-pulse',
         className,
       )}
     />

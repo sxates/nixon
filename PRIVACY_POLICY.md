@@ -65,6 +65,13 @@ If you choose to use external LLM providers for summarization:
 - **Data**: Only anonymized usage patterns, no meeting content
 - **Control**: Completely optional, off by default, and user-controlled
 
+### Update checks (on by default, optional)
+- **GitHub**: Nixon asks github.com for its latest release about every six hours and
+  downloads new versions in the background. The request carries no account, device, or
+  meeting information — only what any download sends (your IP address and a generic
+  user agent). Turn it off under Settings > General > "Download updates automatically";
+  "Check for updates" in About then works on demand. Installing is always your click.
+
 ## Your Privacy Rights
 
 ### Data Control

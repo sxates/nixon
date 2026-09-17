@@ -223,6 +223,22 @@ With `.env.signing` present, `release.sh` loads it, fails fast if the identity i
 the keychain, and after the build runs `spctl` + `xcrun stapler validate` to confirm.
 Verify by hand with `spctl -a -vvv -t install Nixon.app` (want `source=Notarized Developer ID`).
 
-**Public hosting:** notarization clears Gatekeeper, but `sxates/nixon` is **private**,
-so its release assets still require auth to download. For open internet distribution, also
-make the releases public **or** host the notarized DMG on a public URL/CDN.
+**Public hosting:** the repository and its releases are public, so a notarized DMG
+downloads and opens from the release page directly.
+
+### In-app updates (specs/0058)
+
+Installed apps poll the latest GitHub release for `latest.json` and install the signed
+`Nixon.app.tar.gz` it points to. `release.sh` produces and uploads both; it refuses to
+publish without the update signing key.
+
+**One-time:** `cd frontend && pnpm tauri signer generate -w ~/.tauri/nixon-updater.key`,
+commit the printed **public** key into `frontend/src-tauri/tauri.conf.json`
+(`plugins.updater.pubkey`), and add to `.env.signing`:
+
+    TAURI_SIGNING_PRIVATE_KEY="$(cat ~/.tauri/nixon-updater.key)"
+    TAURI_SIGNING_PRIVATE_KEY_PASSWORD="…"
+
+**Back the private key up outside the repo.** If it is lost, every installed copy will
+reject updates signed with a replacement key and users must reinstall by hand.
+Dev builds (`dev-nixon.sh`) never check for updates (`NIXON_DISABLE_UPDATER=1`).

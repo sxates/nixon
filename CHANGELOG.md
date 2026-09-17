@@ -16,6 +16,17 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 _(nothing yet)_
 
+## [0.3.0] - 2026-09-16
+
+### Added
+
+- **In-app updates.** Nixon checks GitHub for new versions about every six hours,
+  downloads them in the background, and shows a "ready · Restart" row in the sidebar
+  (and a tray item) once the update is verified. Restarting is always your choice and
+  is never offered mid-recording. "Check for updates" lives in Settings > About; the
+  background check can be turned off under Settings > General. Copies older than this
+  release need one last manual install from the release page.
+
 ## [0.2.0] - 2026-09-14
 
 ### Changed
