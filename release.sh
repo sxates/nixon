@@ -277,7 +277,15 @@ if [ "$SKIP_BUILD" -eq 0 ]; then
   [ -f "$HOME/.cargo/env" ] && source "$HOME/.cargo/env"
   if [ "$DRY_RUN" -eq 0 ]; then
     ( cd frontend && ./build-gpu.sh ) || die "Build failed. The release commit is local only (not pushed) — fix and re-run, or 'git reset --hard HEAD~1' to undo the bump."
-    [ -f "$DMG" ] || c_yellow "⚠️  Build finished but expected DMG not found at $DMG"
+    # specs/0058: a *published* release missing the DMG is a release nobody can install,
+    # and the warning was easy to scroll past. Only --no-release (local build) warns.
+    if [ ! -f "$DMG" ]; then
+      if [ "$NO_RELEASE" -eq 1 ]; then
+        c_yellow "⚠️  Build finished but expected DMG not found at $DMG"
+      else
+        die "Build finished but the DMG is missing at $DMG. Refusing to publish a release without it — check the bundle step and re-run."
+      fi
+    fi
   else
     echo "  [dry-run] would run frontend/build-gpu.sh → target/release/bundle/dmg/Nixon_${NEW}_aarch64.dmg"
   fi
@@ -360,6 +368,7 @@ PY
     case "$keyid_status" in
       0) c_green "   ✅ Updater artefacts present; signature key id matches the app's pubkey." ;;
       2) die "Could not parse plugins.updater.pubkey or ${UPD_SIG} as minisign blobs. Check TAURI_CONF and TAURI_SIGNING_PRIVATE_KEY." ;;
+      127) die "python3 not found — the updater signature key-id check can't run. Install python3 (it is also used to build latest.json) and re-run." ;;
       *) die "Updater signature was made with a different key than plugins.updater.pubkey. Check TAURI_SIGNING_PRIVATE_KEY." ;;
     esac
   fi
@@ -412,7 +421,7 @@ else
 
   rel_args=( "$TAG" --title "Nixon v${NEW}" --notes-file "$NOTES_FILE" )
   MANIFEST="$(mktemp -d)/latest.json"
-  if [ "$SKIP_BUILD" -eq 0 ] && { [ -f "$DMG" ] || [ "$DRY_RUN" -eq 1 ]; }; then
+  if [ "$SKIP_BUILD" -eq 0 ]; then
     # specs/0058: the manifest the installed app polls. Versioned asset URL so an
     # older manifest can never point at a newer tarball.
     python3 - "$NEW" "$NOTES_FILE" "$UPD_SIG" "$TAG" "$MANIFEST" "$DRY_RUN" <<'PY'
@@ -432,7 +441,10 @@ json.dump(manifest, open(out, "w"), indent=2)
 PY
     rel_args+=( "$DMG" "$UPD_TGZ" "$UPD_SIG" "$MANIFEST" )
   else
-    c_yellow "   (no build artefacts to attach — --skip-build, or DMG missing on a real run; release will have no assets and installed apps will NOT see it)"
+    # Only --skip-build reaches this now: on a real publish a missing DMG, updater
+    # tarball or signature already died above, so an asset-less release can no longer
+    # happen by accident.
+    c_yellow "   (--skip-build: no build artefacts to attach — this release will have no assets and installed apps will NOT see it)"
   fi
 
   if [ "$DRY_RUN" -eq 1 ]; then
@@ -444,7 +456,7 @@ PY
     fi
   else
     gh release create "${rel_args[@]}" \
-      || { rm -f "$NOTES_FILE"; die "gh release create failed. Tag ${TAG} is already pushed — retry with: gh release create '$TAG' '$DMG' '$UPD_TGZ' '$UPD_SIG' '$MANIFEST' --title 'Nixon v${NEW}' --notes-file <notes>"; }
+      || { rm -f "$NOTES_FILE"; die "gh release create failed. Tag ${TAG} is already pushed — retry with: gh release create '$TAG' '$DMG' '$UPD_TGZ' '$UPD_SIG' '$MANIFEST' --title 'Nixon v${NEW}' --generate-notes"; }
   fi
   rm -f "$NOTES_FILE"
 fi
