@@ -1,0 +1,14 @@
+{
+  "id": "demo-03",
+  "title": "Sensor line steerco",
+  "days_ago": 3,
+  "time_of_day": "16:00",
+  "duration_seconds": 3300,
+  "participants": ["person-maya"],
+  "speakers": [
+    { "key": "local", "display_name": "You", "is_local": true }
+  ],
+  "segments": [
+    { "id": "seg_1", "speaker": "local", "channel": "microphone", "start": 0.0, "end": 3.0, "text": "Alright, let's get going." }
+  ]
+}

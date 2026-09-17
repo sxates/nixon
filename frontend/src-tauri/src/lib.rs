@@ -36,6 +36,7 @@ pub mod calendar;
 pub mod config;
 pub mod data_migration;
 pub mod database;
+pub mod dev_fixtures;
 pub mod diarization;
 pub mod fs_guard;
 pub mod groq;

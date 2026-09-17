@@ -1,0 +1,14 @@
+{
+  "id": "demo-01",
+  "title": "Product sync — Q4 firmware",
+  "days_ago": 0,
+  "time_of_day": "14:00",
+  "duration_seconds": 2280,
+  "participants": ["person-maya"],
+  "speakers": [
+    { "key": "local", "display_name": "You", "is_local": true }
+  ],
+  "segments": [
+    { "id": "seg_1", "speaker": "local", "channel": "microphone", "start": 0.0, "end": 3.0, "text": "Alright, let's get going." }
+  ]
+}

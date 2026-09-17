@@ -1,0 +1,14 @@
+{
+  "id": "demo-04",
+  "title": "Firmware standup",
+  "days_ago": 0,
+  "time_of_day": "09:15",
+  "duration_seconds": 540,
+  "participants": ["person-maya"],
+  "speakers": [
+    { "key": "local", "display_name": "You", "is_local": true }
+  ],
+  "segments": [
+    { "id": "seg_1", "speaker": "local", "channel": "microphone", "start": 0.0, "end": 3.0, "text": "Alright, let's get going." }
+  ]
+}
