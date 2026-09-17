@@ -26,6 +26,7 @@ pub mod embedding;
 pub mod folder_match;
 pub mod identity;
 pub mod live;
+pub mod model_commands;
 pub mod models;
 pub mod owner_turns;
 pub mod pipeline;
