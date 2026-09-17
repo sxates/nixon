@@ -27,7 +27,8 @@
         "test": "vitest run",
         "test:watch": "vitest",
         "shots:mock": "node scripts/shots/build-mock.mjs",
-        "shots": "node scripts/shots/run.mjs"
+        "shots": "node scripts/shots/run.mjs",
+        "shots:diff": "node scripts/shots/diff.mjs"
     },
     "dependencies": {
         "@blocknote/core": "0.36.0",
@@ -86,6 +87,8 @@
         "eslint": "^8.57.1",
         "eslint-config-next": "14.2.25",
         "jsdom": "^25.0.1",
+        "pixelmatch": "7.2.0",
+        "pngjs": "7.0.0",
         "postcss": "^8",
         "puppeteer-core": "^25.2.1",
         "tailwindcss": "^3.4.1",

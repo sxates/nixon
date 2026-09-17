@@ -99,3 +99,6 @@ private/
 
 # SDD scratch (ledgers, briefs, review packages)
 .superpowers/
+
+# screenshot pipeline diff sheet (local artefact, specs/0060)
+docs/screenshots/diff/
