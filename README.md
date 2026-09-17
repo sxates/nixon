@@ -7,7 +7,8 @@ summarizes them, and organizes them for later reference.
 Privacy is the whole point: meeting audio, transcripts, and notes never leave your
 machine. The only outbound traffic is to a **you-chosen** LLM provider for
 summarization — and the default is a local model via Ollama, so everything can stay
-on-device.
+on-device. Nixon also checks GitHub for new versions in the background (no personal
+data is sent); this can be turned off in Settings.
 
 > Nixon is a hard fork of [meetily](https://github.com/Zackriya-Solutions/meeting-minutes)
 > v0.4.0 (MIT) and diverges substantially. See [`CHANGELOG.md`](CHANGELOG.md) for the
@@ -49,7 +50,9 @@ See [`CLAUDE.md`](CLAUDE.md) for the full architecture map and build notes.
 
 Meeting audio, transcripts, and notes are stored locally and never transmitted.
 The only outbound traffic is to your chosen LLM provider for summarization; use the
-default local Ollama to keep everything on-device. See [`PRIVACY_POLICY.md`](PRIVACY_POLICY.md).
+default local Ollama to keep everything on-device. Nixon also checks GitHub for new
+versions in the background (no personal data is sent); this can be turned off in
+Settings. See [`PRIVACY_POLICY.md`](PRIVACY_POLICY.md).
 
 ## Contributing
 
