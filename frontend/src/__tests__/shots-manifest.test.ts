@@ -1,5 +1,4 @@
 import { describe, it, expect } from 'vitest';
-// @ts-expect-error — scripts/shots/lib/manifest.mjs is a plain Node ESM module (no types); Vite resolves it fine.
 import { loadManifest, expand } from '../../scripts/shots/lib/manifest.mjs';
 
 describe('shots manifest', () => {
