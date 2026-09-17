@@ -161,7 +161,6 @@ impl UpdaterCore {
         self.staged.as_ref().map(|s| s.version.as_str())
     }
 
-    #[allow(dead_code)]
     pub fn last_checked_at(&self) -> Option<DateTime<Utc>> {
         self.last_checked()
     }
@@ -282,7 +281,7 @@ mod tests {
 
     #[test]
     fn unparseable_versions_never_download() {
-        let mut core = UpdaterCore::default();
+        let core = UpdaterCore::default();
         assert!(!core.should_download("not-a-version"));
     }
 
