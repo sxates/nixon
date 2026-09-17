@@ -14,6 +14,10 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 ## [Unreleased]
 
+_(nothing yet)_
+
+## [0.3.1] - 2026-09-16
+
 ### Changed
 
 - **Updater verification release.** No functional changes; this release exists to exercise
