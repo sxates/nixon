@@ -11,7 +11,7 @@ export type UpdateStatus =
   | { state: 'idle'; last_checked: string | null }
   | { state: 'checking' }
   | { state: 'downloading'; version: string; received: number; total: number | null }
-  | { state: 'ready'; version: string; notes: string }
+  | { state: 'ready'; version: string; notes: string; last_checked: string | null }
   | { state: 'error'; message: string; last_checked: string };
 
 const STATES = new Set(['idle', 'checking', 'downloading', 'ready', 'error']);
@@ -42,8 +42,10 @@ export function describeStatus(status: UpdateStatus, now: Date = new Date()): st
       return 'Checking…';
     case 'downloading':
       return `Downloading ${status.version}…`;
-    case 'ready':
-      return `${status.version} ready — restart to update`;
+    case 'ready': {
+      const line = `${status.version} ready — restart to update`;
+      return status.last_checked ? `${line} · checked ${relative(status.last_checked, now)}` : line;
+    }
     case 'error':
       return "Couldn't check for updates";
   }
@@ -71,9 +73,18 @@ export function UpdateStatusProvider({ children }: { children: React.ReactNode }
       .catch(() => { /* not in Tauri (tests, plain browser) — stay idle */ });
     const unlisten = safeListen<unknown>('update-status', (e) => {
       const p = parseUpdateStatus(e.payload);
-      if (p) setStatus(p);
+      // A fresh status supersedes whatever the last failure said — otherwise a refusal
+      // from days ago sits under the row forever.
+      if (p) { setStatus(p); setError(null); }
     });
-    return () => { disposed = true; unlisten(); };
+    // specs/0058 — an install can be refused from the tray, where there is no caller to
+    // return the message to. The backend broadcasts every refusal so the UI shows it
+    // wherever the user happens to be looking.
+    const unlistenRefused = safeListen<unknown>('update-install-refused', (e) => {
+      const message = (e.payload as { message?: unknown } | null)?.message;
+      if (typeof message === 'string' && message) setError(message);
+    });
+    return () => { disposed = true; unlisten(); unlistenRefused(); };
   }, []);
 
   const checkNow = useCallback(async () => {
