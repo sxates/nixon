@@ -179,6 +179,7 @@ fi
 if [ "$NO_RELEASE" -eq 0 ] && [ "$SKIP_BUILD" -eq 0 ] && [ "$DRY_RUN" -eq 0 ]; then
   [ -n "${TAURI_SIGNING_PRIVATE_KEY:-}" ] || die "TAURI_SIGNING_PRIVATE_KEY is not set (add it to ${SIGNING_ENV}; see SETUP.md 'In-app updates'). Without it the release cannot be delivered to installed apps."
 fi
+UPDATER_PUBKEY_PLACEHOLDER=0
 UPDATER_PUBKEY="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["plugins"]["updater"]["pubkey"])' "$TAURI_CONF" 2>/dev/null || true)"
 if [ -z "$UPDATER_PUBKEY" ]; then
   if [ "$NO_RELEASE" -eq 0 ] && [ "$SKIP_BUILD" -eq 0 ] && [ "$DRY_RUN" -eq 0 ]; then
@@ -186,6 +187,7 @@ if [ -z "$UPDATER_PUBKEY" ]; then
   else
     c_yellow "   plugins.updater.pubkey missing from ${TAURI_CONF} — a real publish would abort here; continuing with a placeholder pubkey for this dry-run/local build."
     UPDATER_PUBKEY="<pubkey-not-yet-configured>"
+    UPDATER_PUBKEY_PLACEHOLDER=1
   fi
 fi
 
@@ -334,19 +336,33 @@ UPD_SIG="${UPD_TGZ}.sig"
 if [ "$SKIP_BUILD" -eq 0 ] && [ "$DRY_RUN" -eq 0 ]; then
   [ -s "$UPD_TGZ" ] || die "Updater tarball missing: $UPD_TGZ (is bundle.createUpdaterArtifacts true?)"
   [ -s "$UPD_SIG" ] || die "Updater signature missing: $UPD_SIG (was TAURI_SIGNING_PRIVATE_KEY set for the build?)"
-  # Both are base64-wrapped minisign blobs; the key id is bytes 2..10 of the second
-  # line's payload. A mismatch means installed apps would reject this release.
-  python3 - "$UPDATER_PUBKEY" "$UPD_SIG" <<'PY' || die "Updater signature was made with a different key than plugins.updater.pubkey. Check TAURI_SIGNING_PRIVATE_KEY."
+  if [ "$UPDATER_PUBKEY_PLACEHOLDER" -eq 1 ]; then
+    c_yellow "   plugins.updater.pubkey isn't configured yet — skipping the signature key-id check (this build isn't a real publish: --no-release/--skip-build/--dry-run)."
+  else
+    # Both are base64-wrapped minisign blobs; the key id is bytes 2..10 of the second
+    # line's payload. A mismatch means installed apps would reject this release.
+    # Exit 2 = couldn't parse either blob (not a mismatch); exit 1 = ids differ; 0 = match.
+    keyid_status=0
+    python3 - "$UPDATER_PUBKEY" "$UPD_SIG" <<'PY' || keyid_status=$?
 import base64, sys
 def keyid(b64):
     text = base64.b64decode(b64).decode()
     line = [l for l in text.splitlines() if l and not l.startswith("untrusted comment")][0]
     return base64.b64decode(line)[2:10]
-pub = keyid(sys.argv[1])
-sig = keyid(open(sys.argv[2]).read().strip())
+try:
+    pub = keyid(sys.argv[1])
+    sig = keyid(open(sys.argv[2]).read().strip())
+except Exception as e:
+    print(f"could not parse pubkey/.sig: {e}", file=sys.stderr)
+    sys.exit(2)
 sys.exit(0 if pub == sig else 1)
 PY
-  c_green "   ✅ Updater artefacts present; signature key id matches the app's pubkey."
+    case "$keyid_status" in
+      0) c_green "   ✅ Updater artefacts present; signature key id matches the app's pubkey." ;;
+      2) die "Could not parse plugins.updater.pubkey or ${UPD_SIG} as minisign blobs. Check TAURI_CONF and TAURI_SIGNING_PRIVATE_KEY." ;;
+      *) die "Updater signature was made with a different key than plugins.updater.pubkey. Check TAURI_SIGNING_PRIVATE_KEY." ;;
+    esac
+  fi
 fi
 
 # ---- confirm before remote ops --------------------------------------------
@@ -381,7 +397,7 @@ fi
 # ---- publish the GitHub release -------------------------------------------
 if [ "$NO_RELEASE" -eq 1 ]; then
   c_yellow "⏭️  --no-release: not publishing a GitHub release. Installed apps won't see this update until it's published. Publish later with:"
-  echo "     gh release create '$TAG' '$DMG' '$UPD_TGZ' '$UPD_SIG' <latest.json> --title 'Nixon v${NEW}' --generate-notes"
+  echo "     gh release create '$TAG' '$DMG' '$UPD_TGZ' '$UPD_SIG' --title 'Nixon v${NEW}' --generate-notes  # then build+attach latest.json (see release.sh's publish step)"
 else
   c_blue "🚀 Publishing GitHub release ${TAG}…"
   # release notes = this version's changelog section (anchored heading match,
@@ -416,12 +432,16 @@ json.dump(manifest, open(out, "w"), indent=2)
 PY
     rel_args+=( "$DMG" "$UPD_TGZ" "$UPD_SIG" "$MANIFEST" )
   else
-    c_yellow "   (no build artefacts to attach — --skip-build; release will have no assets and installed apps will NOT see it)"
+    c_yellow "   (no build artefacts to attach — --skip-build, or DMG missing on a real run; release will have no assets and installed apps will NOT see it)"
   fi
 
   if [ "$DRY_RUN" -eq 1 ]; then
     echo "  [dry-run] gh release create ${rel_args[*]}"
-    [ -f "$MANIFEST" ] && { echo "  [dry-run] latest.json:"; sed 's/^/    /' "$MANIFEST"; }
+    if [ -f "$MANIFEST" ]; then
+      echo "  [dry-run] latest.json:"
+      sed 's/^/    /' "$MANIFEST"
+      echo
+    fi
   else
     gh release create "${rel_args[@]}" \
       || { rm -f "$NOTES_FILE"; die "gh release create failed. Tag ${TAG} is already pushed — retry with: gh release create '$TAG' '$DMG' '$UPD_TGZ' '$UPD_SIG' '$MANIFEST' --title 'Nixon v${NEW}' --notes-file <notes>"; }
