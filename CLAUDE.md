@@ -67,6 +67,8 @@ cd frontend
 pnpm install
 ./dev-nixon.sh           # ← DEV launcher (wraps dev-gpu.sh; cargo on PATH). Runs as "Dev Nixon",
                          #   identifier ai.vinyl.app.debug — ISOLATED data from production.
+./dev-nixon.sh --demo        # seed 5 fictional meetings + audio into the DEBUG profile (specs/0059)
+./dev-nixon.sh --onboarding  # re-run onboarding with simulated downloads (--real-downloads to keep them)
 ./build-gpu.sh           # production build (also builds the sidecar) — needs cargo on PATH
 ./upgrade-nixon.sh       # rebuild + reinstall /Applications/Nixon.app, preserving data
 ```
@@ -91,7 +93,12 @@ so replacing the `.app` never loses it; migrations are forward-only). **Recordin
 fresh installs use `~/Movies/nixon-recordings/`. An install that has
 `~/Movies/meetily-recordings/` keeps writing there for as long as that folder exists
 (`audio/recording_preferences.rs` prefers the legacy folder whenever it is present, even if a
-`nixon-recordings` folder appears beside it), so nothing is moved or re-pointed.
+`nixon-recordings` folder appears beside it), so nothing is moved or re-pointed. On such a
+machine the debug build's recordings root is that same legacy folder, and `--demo`'s
+`demo-*` folders land there too — the seeder only ever deletes folders matching that
+`demo-` prefix, never anything else in the recordings root. Also note: `--onboarding`
+simulates the model downloads only (no bytes hit disk), so recording after a simulated
+onboarding still needs the real models downloaded and present on disk.
 **Don't call `dev-gpu.sh` / `build-gpu.sh` directly unless cargo is already on PATH.** They're
 upstream `#!/bin/bash` scripts that don't source rustup's env, so they fail with
 `cargo: command not found`. `dev-nixon.sh` sources `~/.cargo/env` first, then delegates to
@@ -146,7 +153,8 @@ capture layer (mix/VAD/pipeline/STT/DB) is covered by `cargo test` fixtures in
 --features metal --test transcription_engine --test vad_filter --test pipeline_integration
 --test db_lifecycle`. The Parakeet engine test skips cleanly when the model isn't downloaded;
 fixtures are generated at test time via macOS `say`. See `specs/0009`. (The Core Audio
-tap/mic itself still needs the manual smoke test in #4.)
+tap/mic itself still needs the manual smoke test in #4.) The fixture seeder is covered by
+`cargo test --features metal --test dev_fixtures_seed`.
 
 ## How we work
 

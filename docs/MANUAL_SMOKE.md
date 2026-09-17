@@ -20,6 +20,17 @@ the system-audio tap silently returns silence (see `CLAUDE.md` / ADR-0004).
 - [ ] Screen-recording permission prompt appears; after granting + relaunch, **system audio**
       is captured (not just mic).
 
+## 0a. Demo profile (specs/0059)
+- [ ] Run `./dev-nixon.sh --demo`. It seeds the DEBUG profile and launches: **Today** shows
+      activity, **Meetings** lists **5** meetings and **People** lists **7**.
+- [ ] Meeting 01 ("Product sync — Q4 firmware") already has a summary, action items, notes,
+      and playable audio.
+- [ ] Meeting 05 ("Vendor call — enclosure supplier") has no summary yet and offers
+      "Identify speakers".
+- [ ] Run `./dev-nixon.sh --onboarding`. Both simulated model downloads complete in about
+      **11 s** each, the Continue button enables once they finish, and completing onboarding
+      lands on the main app (not a stuck download step).
+
 ## 1. Core record → review loop (DoD #4)
 - [ ] Press **REC** on the transport rail from Today. It navigates to /record and starts; the
       live transcript streams in.

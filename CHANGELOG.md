@@ -14,7 +14,14 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 ## [Unreleased]
 
-_(nothing yet)_
+### Added
+
+- Dev-only fixture seeding (`--demo`), onboarding harness (`--onboarding`) and a Developer
+  section in Settings › Beta; debug builds only (specs/0059).
+
+### Changed
+
+- The headless screenshot mock is generated from the fixture dataset (`pnpm shots:mock`).
 
 ## [0.3.1] - 2026-09-16
 

@@ -25,6 +25,9 @@ guide; this file is the contribution workflow.
 ```bash
 cd frontend
 pnpm install
+./dev-nixon.sh --demo   # first run: seeds 5 fictional meetings + audio into the DEBUG
+                        # profile (specs/0059) so there's something to click around before
+                        # you've recorded anything real
 ./dev-nixon.sh       # DEV launcher → runs as "Dev Nixon" (ai.vinyl.app.debug), isolated data
 ./build-gpu.sh       # production build (also builds the llama-helper sidecar)
 ./upgrade-nixon.sh   # rebuild + reinstall /Applications/Nixon.app, preserving data
