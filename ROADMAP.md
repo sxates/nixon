@@ -16,7 +16,7 @@ This file is the **single source of truth for what we build next**. Ideas flow:
 Releases are driven by **real-meeting dogfood feedback batches** (1.1 ← `specs/0019`,
 1.2 ← `specs/0024`, 1.3 ← `specs/0029`), so Now/Next is re-reviewed at each release.
 The current ordering adopts the recommendations of the
-[2026-07-01 roadmap review](docs/reviews/2026-07-01-roadmap-review.md): three rounds of
+2026-07-01 roadmap review: three rounds of
 feedback say *finish the half-built advertised features first* (search, templates —
 each asked for twice), *fix calendar fidelity* (the most persistent pain), and *don't
 start the zero-pull items* (topics, analytics, pre-call prep) yet. Its open questions
@@ -40,7 +40,7 @@ are tracked at the bottom (owner).
   contradicts "meeting data never leaves the machine" — rip it out (0038 WS7 covers it, but it
   should not wait for the whole batch). Verify what it has been sending.
 - **Fork cleanup** — executing the
-  [fork-deprecation audit](docs/audits/2026-07-01-fork-deprecation-audit.md) as
+  fork-deprecation audit as
   `specs/0031`: ~6.5–7k LOC of dead meetily inheritance (Windows scripts + 4.5 MB binary,
   orphaned components, 16 npm packages, the parallel-Whisper subsystem, dead Tauri
   commands), plus the two live hazards it found (conflicting tailwind/postcss configs;

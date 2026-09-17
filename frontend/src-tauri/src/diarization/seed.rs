@@ -1,6 +1,6 @@
 //! specs/0050 — audio-derived speaker-count seed.
 //!
-//! The DER review (`docs/reviews/2026-08-09-diarization-der-eval.md`) showed clustering
+//! The 2026-08-09 diarization DER review (a design record, see CONTRIBUTING) showed clustering
 //! is near-optimal and the whole lever is the `AtMost(n)` seed. The calendar invite is
 //! an unreliable `n` (a distribution-list invite under-counts; a big optional invite
 //! over-counts), so we derive the count from the AUDIO instead: how many clusters
