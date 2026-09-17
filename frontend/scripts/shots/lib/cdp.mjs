@@ -11,6 +11,18 @@ export function readyPollScript() {
   return "document.documentElement.dataset.shotReady === '1'";
 }
 
+/** Race `promise` against a `ms`-timeout, rejecting with a message naming `label` (the
+ *  shot's URL) if it fires first. Always clears its own timer, on either outcome, so a
+ *  wedged CDP target fails fast instead of relying on each RPC's own 15s timeout to add
+ *  up past the run's time budget (specs/0060 Task 3 review). */
+export function withDeadline(promise, ms, label) {
+  let timer;
+  const deadline = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`shot deadline ${ms} ms exceeded: ${label}`)), ms);
+  });
+  return Promise.race([promise, deadline]).finally(() => clearTimeout(timer));
+}
+
 export async function launchChrome({ chromePath = process.env.CHROME_PATH || DEFAULT_CHROME } = {}) {
   const port = 9400 + Math.floor(Math.random() * 400);
   const profile = join(tmpdir(), `nixon-shots-${process.pid}`);
@@ -45,12 +57,16 @@ export function openSession(wsUrl) {
   return { ready: opened, send, on: (m, f) => listeners.set(m, f), close: () => ws.close() };
 }
 
-/** Open a fresh target, inject the mock, navigate, wait for readiness, capture, close the target. */
-export async function capture(browser, { url, mock, width, height, waitMs, readyTimeoutMs = 10000 }) {
-  const { targetId } = await browser.send('Target.createTarget', { url: 'about:blank' });
-  const { sessionId } = await browser.send('Target.attachToTarget', { targetId, flatten: true });
-  const s = (m, p, t) => browser.send(m, p, t, sessionId);
-  try {
+/** Open a fresh target, inject the mock, navigate, wait for readiness, capture, close the
+ *  target. The whole body races against `deadlineMs` (default 30s) — each CDP RPC already
+ *  has its own 15s timeout, but a target that keeps answering slowly (rather than timing
+ *  out outright) could otherwise take minutes to fail and blow the run's time budget. */
+export async function capture(browser, { url, mock, width, height, waitMs, readyTimeoutMs = 10000, deadlineMs = 30000 }) {
+  let targetId;
+  const body = (async () => {
+    ({ targetId } = await browser.send('Target.createTarget', { url: 'about:blank' }));
+    const { sessionId } = await browser.send('Target.attachToTarget', { targetId, flatten: true });
+    const s = (m, p, t) => browser.send(m, p, t, sessionId);
     await s('Page.enable'); await s('Runtime.enable');
     if (mock) await s('Page.addScriptToEvaluateOnNewDocument', { source: mock });
     await s('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
@@ -65,7 +81,10 @@ export async function capture(browser, { url, mock, width, height, waitMs, ready
     await sleep(waitMs);
     const shot = await s('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
     return Buffer.from(shot.data, 'base64');
+  })();
+  try {
+    return await withDeadline(body, deadlineMs, url);
   } finally {
-    await browser.send('Target.closeTarget', { targetId }).catch(() => {});
+    if (targetId) await browser.send('Target.closeTarget', { targetId }).catch(() => {});
   }
 }
