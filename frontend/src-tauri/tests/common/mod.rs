@@ -12,6 +12,7 @@
 #![allow(dead_code)] // helpers are shared across several test binaries; not all use all of them
 
 use std::path::{Path, PathBuf};
+#[cfg(not(debug_assertions))]
 use std::process::Command;
 
 use app_lib::audio::pipeline::TranscriptionChunk;
@@ -77,6 +78,12 @@ pub fn segment(text: &str, start: f64, end: f64) -> app_lib::transcripts::Transc
 /// Generate a 16 kHz mono WAV of `text` using macOS `say` into `out`.
 /// Returns `false` (with a logged reason) when `say` is unavailable or fails, so
 /// callers can skip rather than hard-fail on non-macOS / CI machines.
+#[cfg(debug_assertions)]
+pub fn synth_say_wav(text: &str, out: &Path) -> bool {
+    app_lib::dev_fixtures::wav::say_to_wav(text, None, out)
+}
+
+#[cfg(not(debug_assertions))]
 pub fn synth_say_wav(text: &str, out: &Path) -> bool {
     let status = Command::new("say")
         .arg("-o")
@@ -317,7 +324,14 @@ pub async fn feed(
     chunk_len: usize,
     capture_rate: u32,
 ) {
-    feed_device(audio_tx, samples, chunk_len, capture_rate, DeviceType::Microphone).await;
+    feed_device(
+        audio_tx,
+        samples,
+        chunk_len,
+        capture_rate,
+        DeviceType::Microphone,
+    )
+    .await;
 }
 
 /// As `feed`, but on a chosen capture device — so a test can drive DISTINCT mic and
