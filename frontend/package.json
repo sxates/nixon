@@ -26,7 +26,8 @@
         "lint": "next lint",
         "test": "vitest run",
         "test:watch": "vitest",
-        "shots:mock": "node scripts/shots/build-mock.mjs"
+        "shots:mock": "node scripts/shots/build-mock.mjs",
+        "shots": "node scripts/shots/run.mjs"
     },
     "dependencies": {
         "@blocknote/core": "0.36.0",

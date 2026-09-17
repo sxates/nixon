@@ -116,7 +116,7 @@ export default function RootLayout({
     // specs/0060: screenshot drivers wait for this attribute. 400 ms clears the
     // 0.25–0.3 s framer intro animations on every page. Set on both outcomes below —
     // a failed status check still renders onboarding.
-    let shotReadyTimer: ReturnType<typeof window.setTimeout> | undefined
+    let shotReadyTimer: number | undefined
     const markShotReady = () => {
       shotReadyTimer = window.setTimeout(() => { document.documentElement.dataset.shotReady = '1' }, 400)
     }
