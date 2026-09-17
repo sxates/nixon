@@ -50,2191 +50,2223 @@
       "speaker": "local",
       "channel": "microphone",
       "start": 0.0,
-      "end": 4.0,
-      "text": "Alright, let's get going, thanks everyone for blocking the time."
+      "end": 2.4,
+      "text": "Alright, let's get going, thanks everyone."
     },
     {
       "id": "seg_2",
       "speaker": "local",
       "channel": "microphone",
-      "start": 4.2,
-      "end": 12.2,
-      "text": "This is the monthly Aegis steerco, agenda is program status, budget, timeline risk, engineering readiness, then decisions and action items."
+      "start": 2.6,
+      "end": 7.0,
+      "text": "Usual agenda, program status, budget, timeline risk, engineering readiness, then decisions."
     },
     {
       "id": "seg_3",
       "speaker": "local",
       "channel": "microphone",
-      "start": 12.4,
-      "end": 16.8,
-      "text": "Sun, you want to open with where the program stands overall?"
+      "start": 7.2,
+      "end": 8.8,
+      "text": "Sun, want to open?"
     },
     {
       "id": "seg_4",
       "speaker": "spk_3",
       "channel": "system",
-      "start": 17.2,
-      "end": 17.8,
+      "start": 9.2,
+      "end": 9.8,
       "text": "Sure."
     },
     {
       "id": "seg_5",
       "speaker": "spk_3",
       "channel": "system",
-      "start": 18.1,
-      "end": 26.5,
+      "start": 10.1,
+      "end": 18.5,
       "text": "Aegis is still tracking to the trade show launch window in March, that's the anchor date everything else is built around."
     },
     {
       "id": "seg_6",
       "speaker": "spk_3",
       "channel": "system",
-      "start": 26.8,
-      "end": 38.4,
+      "start": 18.8,
+      "end": 30.4,
       "text": "We're about ten weeks out from needing production-intent units for the show floor demo, which is tighter than it sounds once you back out certification and packaging lead times."
     },
     {
       "id": "seg_7",
       "speaker": "spk_3",
       "channel": "system",
-      "start": 38.6,
-      "end": 49.0,
+      "start": 30.6,
+      "end": 41.0,
       "text": "Engineering readiness looks good on paper, the open risk is almost entirely on the manufacturing side, specifically the enclosure tooling, which Rafael's going to walk through."
     },
     {
       "id": "seg_8",
       "speaker": "spk_3",
       "channel": "system",
-      "start": 49.2,
-      "end": 63.6,
+      "start": 41.2,
+      "end": 55.6,
       "text": "From a program management view, I'd call us yellow overall, not red, but the enclosure risk is real enough that I want the room's full attention on it today rather than just a mention in passing."
     },
     {
       "id": "seg_9",
       "speaker": "local",
       "channel": "microphone",
-      "start": 64.3,
-      "end": 67.5,
+      "start": 56.3,
+      "end": 59.5,
       "text": "Understood, yellow overall, enclosure risk is the headline."
     },
     {
       "id": "seg_10",
       "speaker": "local",
       "channel": "microphone",
-      "start": 67.8,
-      "end": 69.8,
+      "start": 59.8,
+      "end": 61.8,
       "text": "Rafael, take us through it."
     },
     {
       "id": "seg_11",
       "speaker": "spk_2",
       "channel": "system",
-      "start": 70.8,
-      "end": 71.4,
+      "start": 62.8,
+      "end": 63.4,
       "text": "Thanks."
     },
     {
       "id": "seg_12",
       "speaker": "spk_2",
       "channel": "system",
-      "start": 71.7,
-      "end": 82.1,
+      "start": 63.6,
+      "end": 74.0,
       "text": "So the enclosure is a machined and anodized aluminum housing, it's a new design for Aegis, nothing carried over from the Vantage line's molded plastic enclosure."
     },
     {
       "id": "seg_13",
       "speaker": "spk_2",
       "channel": "system",
-      "start": 82.3,
-      "end": 93.9,
+      "start": 74.2,
+      "end": 85.8,
       "text": "We're working with the same supplier who did our Vantage tooling, Corvant Enclosures, and the short version is the anodizing step is adding more lead time than we scoped."
     },
     {
       "id": "seg_14",
       "speaker": "spk_2",
       "channel": "system",
-      "start": 94.2,
-      "end": 112.6,
+      "start": 86.0,
+      "end": 104.4,
       "text": "Original plan was six weeks for the full tool build including anodizing setup, current estimate from their last call is ten to twelve weeks once the tool is actually locked, and we're not locked yet because we're still iterating on a rib pattern for thermal dissipation."
     },
     {
       "id": "seg_15",
       "speaker": "spk_3",
       "channel": "system",
-      "start": 113.1,
-      "end": 117.1,
+      "start": 104.9,
+      "end": 108.9,
       "text": "How many more iterations do you expect before it's locked?"
     },
     {
       "id": "seg_16",
       "speaker": "spk_2",
       "channel": "system",
-      "start": 117.9,
-      "end": 119.9,
+      "start": 109.7,
+      "end": 111.7,
       "text": "Optimistically one more, realistically two."
     },
     {
       "id": "seg_17",
       "speaker": "spk_2",
       "channel": "system",
-      "start": 120.2,
-      "end": 133.4,
+      "start": 112.0,
+      "end": 125.2,
       "text": "The first two prototypes both showed hot spots near the radio module under sustained transmission, which is a new failure mode we didn't see on Vantage because the enclosure geometry is completely different."
     },
     {
       "id": "seg_18",
       "speaker": "spk_2",
       "channel": "system",
-      "start": 133.7,
-      "end": 151.3,
+      "start": 125.5,
+      "end": 143.1,
       "text": "We've got a third rib pattern from thermal modeling that should resolve it, prototypes should be back from the machine shop by Thursday, so I'd know within about a week and a half whether we're locking on iteration three or need a fourth pass."
     },
     {
       "id": "seg_19",
       "speaker": "spk_4",
       "channel": "system",
-      "start": 152.6,
-      "end": 163.8,
+      "start": 144.4,
+      "end": 155.6,
       "text": "Before you answer that, can you remind us what the actual cost is per additional prototype iteration, just so we can weigh it against the schedule risk properly?"
     },
     {
       "id": "seg_20",
       "speaker": "spk_2",
       "channel": "system",
-      "start": 164.1,
-      "end": 175.3,
+      "start": 155.9,
+      "end": 167.1,
       "text": "Sure, each prototype iteration is around eight thousand dollars for the machining and anodizing test run, plus roughly a week and a half of turnaround from the shop."
     },
     {
       "id": "seg_21",
       "speaker": "spk_2",
       "channel": "system",
-      "start": 175.6,
-      "end": 190.8,
+      "start": 167.3,
+      "end": 182.5,
       "text": "It's not the dominant cost in this program, but three or four iterations instead of the two we budgeted does add up, and more importantly it's the schedule impact that actually worries me more than the dollar figure."
     },
     {
       "id": "seg_22",
       "speaker": "spk_4",
       "channel": "system",
-      "start": 191.7,
-      "end": 200.9,
+      "start": 183.4,
+      "end": 192.6,
       "text": "Understood, that's helpful context, the dollar amount alone wouldn't have worried me, it's good to know the schedule risk is the bigger driver."
     },
     {
       "id": "seg_23",
       "speaker": "local",
       "channel": "microphone",
-      "start": 201.5,
-      "end": 207.9,
+      "start": 193.2,
+      "end": 199.6,
       "text": "If it's a fourth pass, what does that do to the ten week window Sun mentioned?"
     },
     {
       "id": "seg_24",
       "speaker": "spk_2",
       "channel": "system",
-      "start": 209.0,
-      "end": 233.0,
+      "start": 200.7,
+      "end": 224.7,
       "text": "If we need a fourth pass, we're probably eight to ten weeks behind the original enclosure timeline instead of four to six, which would put finished enclosures arriving close to or after the show floor deadline, not comfortably ahead of it like we'd want for a demo unit that actually needs to survive being handled by strangers for three days."
     },
     {
       "id": "seg_25",
       "speaker": "spk_3",
       "channel": "system",
-      "start": 233.4,
-      "end": 236.2,
+      "start": 225.1,
+      "end": 227.9,
       "text": "That's the scenario I wanted flagged today."
     },
     {
       "id": "seg_26",
       "speaker": "spk_3",
       "channel": "system",
-      "start": 236.4,
-      "end": 248.0,
+      "start": 228.2,
+      "end": 239.8,
       "text": "If we're at real risk of missing the demo unit deadline, we need a contingency conversation now, not in six weeks when there's no time left to execute one."
     },
     {
       "id": "seg_27",
       "speaker": "local",
       "channel": "microphone",
-      "start": 249.5,
-      "end": 250.1,
+      "start": 241.3,
+      "end": 241.9,
       "text": "Agreed."
     },
     {
       "id": "seg_28",
       "speaker": "local",
       "channel": "microphone",
-      "start": 250.3,
-      "end": 257.5,
+      "start": 242.2,
+      "end": 249.4,
       "text": "What would a contingency actually look like, Rafael, is there a faster path even if it costs more?"
     },
     {
       "id": "seg_29",
       "speaker": "spk_2",
       "channel": "system",
-      "start": 258.1,
-      "end": 259.7,
+      "start": 250.0,
+      "end": 251.6,
       "text": "A couple of options."
     },
     {
       "id": "seg_30",
       "speaker": "spk_2",
       "channel": "system",
-      "start": 259.9,
-      "end": 273.1,
+      "start": 251.8,
+      "end": 265.0,
       "text": "One, we could dual-source a rush tool from a second supplier in parallel, accept the extra cost, and use whichever finishes first, that's maybe three to four weeks faster but adds real budget."
     },
     {
       "id": "seg_31",
       "speaker": "spk_2",
       "channel": "system",
-      "start": 273.4,
-      "end": 289.0,
+      "start": 265.2,
+      "end": 280.8,
       "text": "Two, we could show a non-anodized, bead-blasted aluminum finish for the demo units specifically and finish the anodizing tooling properly for production units after the show, that's basically free time-wise but it's a cosmetic compromise on the demo hardware."
     },
     {
       "id": "seg_32",
       "speaker": "spk_4",
       "channel": "system",
-      "start": 289.8,
-      "end": 293.8,
+      "start": 281.6,
+      "end": 285.6,
       "text": "What's the actual cost delta on the dual-source option, roughly?"
     },
     {
       "id": "seg_33",
       "speaker": "spk_2",
       "channel": "system",
-      "start": 294.2,
-      "end": 310.2,
+      "start": 286.0,
+      "end": 302.0,
       "text": "Rough order of magnitude, an extra forty to sixty thousand dollars for a rush tool we'd essentially throw away or repurpose for spares afterward, plus expedite fees from Corvant if we ask them to compress their own schedule in parallel."
     },
     {
       "id": "seg_34",
       "speaker": "spk_4",
       "channel": "system",
-      "start": 310.9,
-      "end": 321.7,
+      "start": 302.7,
+      "end": 313.5,
       "text": "That's a meaningful number against the program budget we set at the top of the year, we don't have that kind of contingency sitting unused right now."
     },
     {
       "id": "seg_35",
       "speaker": "local",
       "channel": "microphone",
-      "start": 322.7,
-      "end": 332.7,
-      "text": "What if we go with the bead-blasted demo unit option instead, does that carry any risk beyond just looking less finished on the show floor?"
+      "start": 314.5,
+      "end": 318.9,
+      "text": "What about the bead-blasted option, any risk beyond looking less finished?"
     },
     {
       "id": "seg_36",
       "speaker": "spk_2",
       "channel": "system",
-      "start": 333.2,
-      "end": 346.0,
+      "start": 319.4,
+      "end": 332.2,
       "text": "Minimal technical risk, the thermal and mechanical properties are identical, it's purely cosmetic, and honestly a lot of trade show attendees handle pre-production units expecting them to look a little rough anyway."
     },
     {
       "id": "seg_37",
       "speaker": "spk_3",
       "channel": "system",
-      "start": 346.8,
-      "end": 361.2,
+      "start": 333.0,
+      "end": 347.4,
       "text": "I can live with that from a program perspective, it protects the date without blowing the budget, and it's honestly not a bad story to tell, \"here's the working hardware, final finish comes with production units.\""
     },
     {
       "id": "seg_38",
       "speaker": "spk_4",
       "channel": "system",
-      "start": 362.5,
-      "end": 370.9,
+      "start": 348.7,
+      "end": 357.1,
       "text": "I'd support that too, it's the more fiscally responsible path and the actual product being sold is the anodized version regardless."
     },
     {
       "id": "seg_39",
       "speaker": "local",
       "channel": "microphone",
-      "start": 371.2,
-      "end": 381.6,
+      "start": 357.4,
+      "end": 367.8,
       "text": "Sounds like we have rough consensus, let's make that the decision, bead-blasted finish for demo units, keep the anodizing tooling on its normal timeline for production."
     },
     {
       "id": "seg_40",
       "speaker": "local",
       "channel": "microphone",
-      "start": 381.9,
-      "end": 385.5,
+      "start": 368.1,
+      "end": 371.7,
       "text": "Rafael, can you confirm that with Corvant this week?"
     },
     {
       "id": "seg_41",
       "speaker": "spk_2",
       "channel": "system",
-      "start": 386.4,
-      "end": 396.0,
+      "start": 372.6,
+      "end": 382.2,
       "text": "Yes, I'll call them tomorrow and confirm they can turn bead-blasted units around fast enough once the rib pattern's locked, regardless of anodizing status."
     },
     {
       "id": "seg_42",
       "speaker": "local",
       "channel": "microphone",
-      "start": 396.6,
-      "end": 397.2,
+      "start": 382.8,
+      "end": 383.4,
       "text": "Good."
     },
     {
       "id": "seg_43",
       "speaker": "local",
       "channel": "microphone",
-      "start": 397.4,
-      "end": 401.4,
+      "start": 383.6,
+      "end": 387.6,
       "text": "Let's move to budget, Dele, where do things stand overall?"
     },
     {
       "id": "seg_44",
       "speaker": "spk_4",
       "channel": "system",
-      "start": 402.5,
-      "end": 416.9,
+      "start": 388.7,
+      "end": 403.1,
       "text": "Overall we're tracking about six percent over the original Aegis development budget, mostly driven by the enclosure iteration cost we just discussed, plus some additional bench equipment Maya's team needed for the new sensor calibration rig."
     },
     {
       "id": "seg_45",
       "speaker": "spk_4",
       "channel": "system",
-      "start": 417.1,
-      "end": 427.1,
+      "start": 403.4,
+      "end": 413.4,
       "text": "Neither overage is alarming on its own, but together they're eating into the contingency line faster than I'd like at this stage of the program."
     },
     {
       "id": "seg_46",
       "speaker": "local",
       "channel": "microphone",
-      "start": 427.5,
-      "end": 435.9,
+      "start": 413.8,
+      "end": 422.2,
       "text": "Is six percent something we need to formally reforecast, or is it within normal variance for a program at this stage?"
     },
     {
       "id": "seg_47",
       "speaker": "spk_4",
       "channel": "system",
-      "start": 437.4,
-      "end": 458.6,
+      "start": 423.7,
+      "end": 444.9,
       "text": "I'd call it within variance for now, but if the enclosure contingency conversation ends up costing us the dual-source option instead of the cheaper bead-blast path, that pushes us closer to ten percent, and at that point I would want a formal reforecast conversation with finance leadership rather than just noting it here."
     },
     {
       "id": "seg_48",
       "speaker": "spk_3",
       "channel": "system",
-      "start": 459.2,
-      "end": 466.4,
+      "start": 445.5,
+      "end": 452.7,
       "text": "Good thing we're going with the cheaper path then, that keeps us out of that conversation for now."
     },
     {
       "id": "seg_49",
       "speaker": "spk_4",
       "channel": "system",
-      "start": 467.2,
-      "end": 483.6,
+      "start": 453.5,
+      "end": 469.9,
       "text": "Agreed, and I'd like to keep it that way, so if any other risk surfaces that threatens to push another five or six points, I want to hear about it as early as Rafael flagged this one, not after the fact."
     },
     {
       "id": "seg_50",
       "speaker": "local",
       "channel": "microphone",
-      "start": 484.0,
-      "end": 489.6,
+      "start": 470.3,
+      "end": 475.9,
       "text": "Fair, that's a good norm for this group in general, early flags over surprises."
     },
     {
       "id": "seg_51",
       "speaker": "local",
       "channel": "microphone",
-      "start": 489.9,
-      "end": 491.9,
+      "start": 476.1,
+      "end": 478.1,
       "text": "Let's move to engineering readiness."
     },
     {
       "id": "seg_52",
       "speaker": "local",
       "channel": "microphone",
-      "start": 492.1,
-      "end": 495.3,
+      "start": 478.4,
+      "end": 481.6,
       "text": "Maya, take us through firmware and calibration status."
     },
     {
       "id": "seg_53",
       "speaker": "spk_0",
       "channel": "system",
-      "start": 496.0,
-      "end": 496.6,
+      "start": 482.3,
+      "end": 482.9,
       "text": "Sure."
     },
     {
       "id": "seg_54",
       "speaker": "spk_0",
       "channel": "system",
-      "start": 496.9,
-      "end": 520.5,
+      "start": 483.1,
+      "end": 506.7,
       "text": "Starting with calibration, since Aegis uses a different sensor package than Vantage, we can't just reuse the existing compensation tables, we're building a new calibration model from scratch, but the underlying pipeline architecture, the soak-test methodology, the statistical approach to characterizing drift, all of that carries over directly from the work we've done on Vantage over the past year."
     },
     {
       "id": "seg_55",
       "speaker": "spk_0",
       "channel": "system",
-      "start": 520.8,
-      "end": 526.4,
+      "start": 506.9,
+      "end": 512.5,
       "text": "I'd estimate we're saving several weeks of engineering time by not reinventing that part."
     },
     {
       "id": "seg_56",
       "speaker": "spk_3",
       "channel": "system",
-      "start": 527.4,
-      "end": 534.6,
+      "start": 513.5,
+      "end": 520.7,
       "text": "That's good to hear, I was worried calibration would be a bigger lift given it's a new sensor."
     },
     {
       "id": "seg_57",
       "speaker": "spk_0",
       "channel": "system",
-      "start": 535.1,
-      "end": 537.9,
+      "start": 521.2,
+      "end": 524.0,
       "text": "It's a lift, but a bounded one."
     },
     {
       "id": "seg_58",
       "speaker": "spk_0",
       "channel": "system",
-      "start": 538.1,
-      "end": 545.7,
+      "start": 524.2,
+      "end": 531.8,
       "text": "We've characterized the new sensor against twenty units so far, on temperature and humidity, pressure characterization starts next week."
     },
     {
       "id": "seg_59",
       "speaker": "spk_0",
       "channel": "system",
-      "start": 546.0,
-      "end": 558.0,
+      "start": 532.0,
+      "end": 544.0,
       "text": "Early data looks clean, tighter tolerances than I expected actually, which is good news for the accuracy claims in the marketing materials Sun's team wants to use at the show."
     },
     {
       "id": "seg_60",
       "speaker": "spk_3",
       "channel": "system",
-      "start": 558.8,
-      "end": 565.6,
+      "start": 544.8,
+      "end": 551.6,
       "text": "That's genuinely useful, I'll loop marketing in on preliminary numbers once you're comfortable sharing them, even informally."
     },
     {
       "id": "seg_61",
       "speaker": "spk_0",
       "channel": "system",
-      "start": 566.9,
-      "end": 577.3,
+      "start": 552.9,
+      "end": 563.3,
       "text": "I'd say give it two more weeks before anything goes to marketing, I don't want to hand over a number I have to walk back later."
     },
     {
       "id": "seg_62",
       "speaker": "spk_0",
       "channel": "system",
-      "start": 577.5,
-      "end": 587.9,
+      "start": 563.5,
+      "end": 573.9,
       "text": "Let me actually walk through why I'm confident in the methodology, since I know not everyone in this room lives in calibration curves day to day."
     },
     {
       "id": "seg_63",
       "speaker": "spk_0",
       "channel": "system",
-      "start": 588.1,
-      "end": 613.7,
+      "start": 574.1,
+      "end": 599.7,
       "text": "The core idea is we're not just checking that a sensor reads correctly at room temperature, we're characterizing how its reading drifts across the full operating envelope, so we run each unit through a soak chamber cycling between minus twenty and sixty degrees Celsius at several humidity setpoints, logging continuously, and comparing against a reference instrument that's itself traceable to a calibration lab standard."
     },
     {
       "id": "seg_64",
       "speaker": "spk_0",
       "channel": "system",
-      "start": 614.0,
-      "end": 622.4,
+      "start": 600.0,
+      "end": 608.4,
       "text": "Any systematic deviation from that reference gets baked into a per-unit or per-batch compensation table that the firmware applies at runtime."
     },
     {
       "id": "seg_65",
       "speaker": "spk_4",
       "channel": "system",
-      "start": 622.7,
-      "end": 632.3,
+      "start": 608.7,
+      "end": 618.3,
       "text": "How long does a full characterization run take per unit, since that presumably has cost implications if we're doing it at scale for production."
     },
     {
       "id": "seg_66",
       "speaker": "spk_0",
       "channel": "system",
-      "start": 633.2,
-      "end": 644.8,
+      "start": 619.2,
+      "end": 630.8,
       "text": "For engineering characterization like what we're doing now, it's about four days per batch of twenty units, since we're cycling slowly to avoid thermal shock artifacts confusing the data."
     },
     {
       "id": "seg_67",
       "speaker": "spk_0",
       "channel": "system",
-      "start": 645.0,
-      "end": 659.8,
+      "start": 631.0,
+      "end": 645.8,
       "text": "For production calibration, it's a much shorter targeted verification, not a full characterization, more like twenty minutes per unit on a fixture that checks against expected values at a couple of setpoints rather than the whole envelope."
     },
     {
       "id": "seg_68",
       "speaker": "spk_0",
       "channel": "system",
-      "start": 660.0,
-      "end": 666.4,
+      "start": 646.0,
+      "end": 652.4,
       "text": "The expensive four-day process is a one-time model-building exercise, not something we repeat per unit shipped."
     },
     {
       "id": "seg_69",
       "speaker": "spk_4",
       "channel": "system",
-      "start": 667.0,
-      "end": 673.4,
+      "start": 653.0,
+      "end": 659.4,
       "text": "That's reassuring, I was worried we'd baked a four-day-per-unit cost into the Aegis production plan somewhere."
     },
     {
       "id": "seg_70",
       "speaker": "spk_0",
       "channel": "system",
-      "start": 674.5,
-      "end": 685.3,
+      "start": 660.5,
+      "end": 671.3,
       "text": "No, that would make the unit economics fall apart immediately, the whole point of the characterization work up front is so production calibration stays fast and cheap."
     },
     {
       "id": "seg_71",
       "speaker": "spk_3",
       "channel": "system",
-      "start": 685.7,
-      "end": 696.1,
+      "start": 671.7,
+      "end": 682.1,
       "text": "Can you say more about what \"tighter tolerances than expected\" actually means in practice, is that a marketing claim we can make or an engineering nuance?"
     },
     {
       "id": "seg_72",
       "speaker": "spk_0",
       "channel": "system",
-      "start": 697.6,
-      "end": 701.2,
+      "start": 683.6,
+      "end": 687.2,
       "text": "It's real enough to be a marketing claim, cautiously."
     },
     {
       "id": "seg_73",
       "speaker": "spk_0",
       "channel": "system",
-      "start": 701.5,
-      "end": 717.5,
+      "start": 687.5,
+      "end": 703.5,
       "text": "Across the twenty units so far, humidity readings are holding within about a quarter of a percent of reference across the full range we've tested, versus roughly half a percent on the current Vantage line with its older sensor package."
     },
     {
       "id": "seg_74",
       "speaker": "spk_0",
       "channel": "system",
-      "start": 717.8,
-      "end": 722.2,
+      "start": 703.8,
+      "end": 708.2,
       "text": "Temperature is even tighter, well within a tenth of a degree."
     },
     {
       "id": "seg_75",
       "speaker": "spk_0",
       "channel": "system",
-      "start": 722.5,
-      "end": 733.3,
+      "start": 708.5,
+      "end": 719.3,
       "text": "I'd want the full sample size before anyone puts a specific number in a spec sheet, but directionally it's a genuine improvement, not just a rounding difference."
     },
     {
       "id": "seg_76",
       "speaker": "spk_3",
       "channel": "system",
-      "start": 733.9,
-      "end": 745.9,
+      "start": 719.9,
+      "end": 731.9,
       "text": "That's a good story for the show, more accurate than our existing flagship line, I'll make a note to have marketing frame it carefully once you give the final go-ahead."
     },
     {
       "id": "seg_77",
       "speaker": "spk_0",
       "channel": "system",
-      "start": 746.7,
-      "end": 750.7,
+      "start": 732.7,
+      "end": 736.7,
       "text": "Understood, two weeks, then I'll sign off on specific numbers."
     },
     {
       "id": "seg_78",
       "speaker": "local",
       "channel": "microphone",
-      "start": 751.1,
-      "end": 761.1,
-      "text": "This is great detail, thank you, I think it'll help when we're fielding questions from customers who ask more technical questions than \"does it work.\""
+      "start": 737.1,
+      "end": 739.5,
+      "text": "This is great detail, thank you."
     },
     {
       "id": "seg_79",
       "speaker": "spk_3",
       "channel": "system",
-      "start": 761.8,
-      "end": 765.0,
+      "start": 740.2,
+      "end": 743.4,
       "text": "Understood, I'll tell them two weeks, not sooner."
     },
     {
       "id": "seg_80",
       "speaker": "spk_0",
       "channel": "system",
-      "start": 766.0,
-      "end": 774.0,
+      "start": 744.4,
+      "end": 752.4,
       "text": "On the firmware architecture side, we looked at whether Aegis needs its own firmware codebase or can share with Vantage."
     },
     {
       "id": "seg_81",
       "speaker": "spk_0",
       "channel": "system",
-      "start": 774.2,
-      "end": 777.0,
+      "start": 752.6,
+      "end": 755.4,
       "text": "Short answer, more shareable than we expected."
     },
     {
       "id": "seg_82",
       "speaker": "spk_0",
       "channel": "system",
-      "start": 777.2,
-      "end": 789.6,
+      "start": 755.6,
+      "end": 768.0,
       "text": "The communication stack and the calibration pipeline architecture carry over largely unchanged, it's really the sensor driver layer and some power management specifics that need Aegis-specific code given the different hardware."
     },
     {
       "id": "seg_83",
       "speaker": "spk_1",
       "channel": "system",
-      "start": 790.1,
-      "end": 796.9,
+      "start": 768.5,
+      "end": 775.3,
       "text": "I can go deeper on that if useful, since I did most of the actual driver-layer investigation."
     },
     {
       "id": "seg_84",
       "speaker": "local",
       "channel": "microphone",
-      "start": 797.7,
-      "end": 798.9,
+      "start": 776.1,
+      "end": 777.3,
       "text": "Please do, Tomas."
     },
     {
       "id": "seg_85",
       "speaker": "local",
       "channel": "microphone",
-      "start": 799.1,
-      "end": 811.9,
+      "start": 777.5,
+      "end": 790.3,
       "text": "Before that, quickly, how did you two even validate that the shared approach was viable before sinking real time into a prototype, was there a spike or a proof of concept first?"
     },
     {
       "id": "seg_86",
       "speaker": "spk_1",
       "channel": "system",
-      "start": 813.2,
-      "end": 830.0,
+      "start": 791.6,
+      "end": 808.4,
       "text": "Yeah, about two weeks ago Maya and I spent a day and a half doing exactly that, a spike where we tried wiring the existing Vantage calibration code against a mocked-up Aegis sensor interface, just to see how much friction there was."
     },
     {
       "id": "seg_87",
       "speaker": "spk_1",
       "channel": "system",
-      "start": 830.2,
-      "end": 847.0,
+      "start": 808.6,
+      "end": 825.4,
       "text": "If it had been a fight the whole way, we'd have recommended forking instead, but it came together faster than either of us expected, which is what gave us the confidence to recommend the shared approach today rather than hedge on it."
     },
     {
       "id": "seg_88",
       "speaker": "local",
       "channel": "microphone",
-      "start": 847.3,
-      "end": 854.9,
+      "start": 825.7,
+      "end": 833.3,
       "text": "Good, I like that you tested the assumption before committing to it rather than just asserting it would work."
     },
     {
       "id": "seg_89",
       "speaker": "spk_0",
       "channel": "system",
-      "start": 855.8,
-      "end": 867.0,
+      "start": 834.2,
+      "end": 845.4,
       "text": "That's generally how we try to approach these decisions, a day and a half of spike work is cheap insurance against weeks of committing to the wrong architecture."
     },
     {
       "id": "seg_90",
       "speaker": "local",
       "channel": "microphone",
-      "start": 867.6,
-      "end": 868.8,
+      "start": 846.0,
+      "end": 847.2,
       "text": "Please do, Tomas."
     },
     {
       "id": "seg_91",
       "speaker": "spk_1",
       "channel": "system",
-      "start": 869.9,
-      "end": 870.5,
+      "start": 848.3,
+      "end": 848.9,
       "text": "Sure."
     },
     {
       "id": "seg_92",
       "speaker": "spk_1",
       "channel": "system",
-      "start": 870.8,
-      "end": 882.0,
+      "start": 849.1,
+      "end": 860.3,
       "text": "We prototyped a shared driver interface, basically an abstraction layer so the calibration pipeline and communication stack don't need to know which sensor package they're talking to underneath."
     },
     {
       "id": "seg_93",
       "speaker": "spk_1",
       "channel": "system",
-      "start": 882.2,
-      "end": 899.0,
+      "start": 860.5,
+      "end": 877.3,
       "text": "It's more upfront work than just forking the whole codebase, maybe three extra weeks of investment now, but it means every future firmware feature we build gets shared between product lines automatically instead of being implemented twice and drifting apart over time."
     },
     {
       "id": "seg_94",
       "speaker": "spk_0",
       "channel": "system",
-      "start": 899.4,
-      "end": 912.2,
+      "start": 877.7,
+      "end": 890.5,
       "text": "And it directly avoids the headcount problem we flagged internally a few weeks ago, we don't need a fully separate firmware team for Aegis if most of the codebase is genuinely shared."
     },
     {
       "id": "seg_95",
       "speaker": "local",
       "channel": "microphone",
-      "start": 913.7,
-      "end": 924.9,
-      "text": "That's a meaningful finding, three weeks now for ongoing savings on every future release sounds like an easy call, but I want to make sure it's not underestimated."
+      "start": 892.0,
+      "end": 893.6,
+      "text": "That's a meaningful finding."
     },
     {
       "id": "seg_96",
       "speaker": "local",
       "channel": "microphone",
-      "start": 925.1,
-      "end": 929.1,
+      "start": 893.9,
+      "end": 897.9,
       "text": "Tomas, how confident are you in the three week estimate?"
     },
     {
       "id": "seg_97",
       "speaker": "spk_1",
       "channel": "system",
-      "start": 929.7,
-      "end": 944.5,
+      "start": 898.5,
+      "end": 913.3,
       "text": "Reasonably confident, I've already got a rough prototype of the abstraction layer working against both the Vantage and Aegis sensor packages in a lab setup, it's not zero-to-one work at this point, it's refinement and test coverage."
     },
     {
       "id": "seg_98",
       "speaker": "spk_0",
       "channel": "system",
-      "start": 945.3,
-      "end": 961.7,
+      "start": 914.1,
+      "end": 930.5,
       "text": "I'd add, from the calibration side, that a shared architecture also means the statistical tooling I built for characterizing Vantage drift just works on Aegis data without modification, since it operates on the abstraction layer's output rather than raw sensor registers."
     },
     {
       "id": "seg_99",
       "speaker": "spk_0",
       "channel": "system",
-      "start": 962.0,
-      "end": 968.4,
+      "start": 930.8,
+      "end": 937.2,
       "text": "That wasn't something we explicitly planned for, it just fell out of doing the abstraction properly."
     },
     {
       "id": "seg_100",
       "speaker": "spk_1",
       "channel": "system",
-      "start": 968.8,
-      "end": 985.2,
+      "start": 937.6,
+      "end": 954.0,
       "text": "Right, and it goes both directions, any driver-level bug fix we make for Aegis because of some quirk in the new sensor package benefits Vantage too if it turns out to be a shared code path issue rather than something sensor-specific."
     },
     {
       "id": "seg_101",
       "speaker": "local",
       "channel": "microphone",
-      "start": 985.9,
-      "end": 987.9,
+      "start": 954.7,
+      "end": 956.7,
       "text": "That's a nice compounding benefit."
     },
     {
       "id": "seg_102",
       "speaker": "local",
       "channel": "microphone",
-      "start": 988.1,
-      "end": 996.9,
+      "start": 957.0,
+      "end": 965.8,
       "text": "What does the actual test coverage plan look like for the shared layer, since that's presumably the bulk of the three weeks?"
     },
     {
       "id": "seg_103",
       "speaker": "spk_1",
       "channel": "system",
-      "start": 997.9,
-      "end": 1019.1,
+      "start": 966.8,
+      "end": 988.0,
       "text": "Roughly a week is finishing the abstraction interface itself, then two weeks is building out a proper hardware-in-the-loop test matrix that exercises both sensor packages through the same test code, so we're not writing two parallel test suites that could drift apart from each other the same way two firmware forks would have."
     },
     {
       "id": "seg_104",
       "speaker": "spk_0",
       "channel": "system",
-      "start": 1019.6,
-      "end": 1035.2,
+      "start": 988.5,
+      "end": 1004.1,
       "text": "And I'll be pairing with him on the calibration-specific test cases within that matrix, since I know where the tricky edge cases are, humidity extremes mostly, and temperature transitions that happen faster than the sensor's thermal mass can track."
     },
     {
       "id": "seg_105",
       "speaker": "spk_1",
       "channel": "system",
-      "start": 1036.0,
-      "end": 1052.8,
+      "start": 1004.9,
+      "end": 1021.7,
       "text": "That pairing's already been useful actually, Maya caught a case yesterday where the abstraction layer was rounding a humidity reading before compensation instead of after, which would have introduced a small but real error on both product lines if it had shipped."
     },
     {
       "id": "seg_106",
       "speaker": "spk_0",
       "channel": "system",
-      "start": 1054.1,
-      "end": 1066.9,
+      "start": 1023.0,
+      "end": 1035.8,
       "text": "Small thing, but exactly the kind of thing that's much easier to catch when you're building the shared test matrix deliberately instead of discovering it separately on each product line months apart."
     },
     {
       "id": "seg_107",
       "speaker": "local",
       "channel": "microphone",
-      "start": 1067.2,
-      "end": 1073.6,
+      "start": 1036.1,
+      "end": 1042.5,
       "text": "Good, let's approve that approach then, shared codebase with the abstraction layer, rather than a fork."
     },
     {
       "id": "seg_108",
       "speaker": "local",
       "channel": "microphone",
-      "start": 1073.8,
-      "end": 1075.4,
+      "start": 1042.8,
+      "end": 1044.4,
       "text": "Any objection from anyone?"
     },
     {
       "id": "seg_109",
       "speaker": "spk_4",
       "channel": "system",
-      "start": 1076.3,
-      "end": 1084.7,
+      "start": 1045.3,
+      "end": 1053.7,
       "text": "No objection from budget, if anything it's better for budget long-term since it avoids duplicated engineering cost on every future release."
     },
     {
       "id": "seg_110",
       "speaker": "spk_2",
       "channel": "system",
-      "start": 1085.3,
-      "end": 1090.1,
+      "start": 1054.3,
+      "end": 1059.1,
       "text": "No objection from manufacturing, doesn't affect anything on my side either way."
     },
     {
       "id": "seg_111",
       "speaker": "spk_3",
       "channel": "system",
-      "start": 1091.2,
-      "end": 1096.8,
+      "start": 1060.2,
+      "end": 1065.8,
       "text": "Agreed from a program view too, one codebase is easier to support post-launch regardless."
     },
     {
       "id": "seg_112",
       "speaker": "local",
       "channel": "microphone",
-      "start": 1097.2,
-      "end": 1099.6,
-      "text": "Good, that's a clean decision then."
+      "start": 1066.2,
+      "end": 1068.2,
+      "text": "Good, that's a clean decision."
     },
     {
       "id": "seg_113",
       "speaker": "local",
       "channel": "microphone",
-      "start": 1099.8,
-      "end": 1111.4,
-      "text": "What about certification, Inès mentioned briefly on the firmware side that Aegis would need its own pass given the different radio module and form factor, where does that stand?"
+      "start": 1068.5,
+      "end": 1071.7,
+      "text": "Rafael, what about certification, where does that stand?"
     },
     {
       "id": "seg_114",
       "speaker": "spk_2",
       "channel": "system",
-      "start": 1112.9,
-      "end": 1130.1,
+      "start": 1073.2,
+      "end": 1090.4,
       "text": "Certification testing is scheduled for six weeks from now, that's actually one of the tighter dependencies feeding into the March date, if the enclosure rib pattern changes again it could shift the certification test samples too, since certification needs final-geometry units, not prototypes."
     },
     {
       "id": "seg_115",
       "speaker": "spk_3",
       "channel": "system",
-      "start": 1130.7,
-      "end": 1145.1,
+      "start": 1091.0,
+      "end": 1105.4,
       "text": "That's another reason the bead-blast decision matters, it decouples the demo unit deadline from the certification unit deadline, certification units can still wait for the properly anodized finish since they're not going on a show floor."
     },
     {
       "id": "seg_116",
       "speaker": "spk_2",
       "channel": "system",
-      "start": 1145.9,
-      "end": 1153.5,
+      "start": 1106.2,
+      "end": 1113.8,
       "text": "Right, that's actually a nice side benefit I hadn't fully connected until just now, thanks for pointing that out."
     },
     {
       "id": "seg_117",
       "speaker": "spk_2",
       "channel": "system",
-      "start": 1153.9,
-      "end": 1160.7,
+      "start": 1114.2,
+      "end": 1121.0,
       "text": "Since we're on certification, one more manufacturing-side item worth raising while everyone's here, the factory calibration station."
     },
     {
       "id": "seg_118",
       "speaker": "spk_2",
       "channel": "system",
-      "start": 1161.0,
-      "end": 1167.8,
+      "start": 1121.2,
+      "end": 1128.0,
       "text": "Maya's twenty-minute-per-unit verification process needs a physical fixture on the line, and we haven't built that yet."
     },
     {
       "id": "seg_119",
       "speaker": "spk_0",
       "channel": "system",
-      "start": 1168.5,
-      "end": 1173.3,
+      "start": 1128.7,
+      "end": 1133.5,
       "text": "Right, that's actually next on my list after the characterization work wraps."
     },
     {
       "id": "seg_120",
       "speaker": "spk_0",
       "channel": "system",
-      "start": 1173.5,
-      "end": 1199.5,
+      "start": 1133.8,
+      "end": 1159.8,
       "text": "The fixture itself is fairly simple, a reference chamber that can hit two or three setpoints quickly and a jig that seats the unit consistently so the sensor's exposed the same way every time, but building and validating the fixture itself typically takes a few weeks once we know the final enclosure geometry, since the jig has to match the physical shape of the unit."
     },
     {
       "id": "seg_121",
       "speaker": "spk_2",
       "channel": "system",
-      "start": 1200.5,
-      "end": 1207.7,
+      "start": 1160.8,
+      "end": 1168.0,
       "text": "Which loops back to the rib pattern decision again, everything seems to trace back to that this meeting."
     },
     {
       "id": "seg_122",
       "speaker": "local",
       "channel": "microphone",
-      "start": 1208.2,
-      "end": 1213.0,
+      "start": 1168.5,
+      "end": 1173.3,
       "text": "It does seem to be the pinch point for almost everything today."
     },
     {
       "id": "seg_123",
       "speaker": "local",
       "channel": "microphone",
-      "start": 1213.2,
-      "end": 1220.4,
+      "start": 1173.5,
+      "end": 1180.7,
       "text": "Maya, once the geometry is locked, how long before the calibration station itself is ready for production use?"
     },
     {
       "id": "seg_124",
       "speaker": "spk_0",
       "channel": "system",
-      "start": 1221.2,
-      "end": 1235.6,
+      "start": 1181.5,
+      "end": 1195.9,
       "text": "Call it three weeks from locked geometry to a validated station, that includes building the jig, running a pilot batch of fifty units through it to confirm repeatability, and training whoever's operating it on the line."
     },
     {
       "id": "seg_125",
       "speaker": "spk_0",
       "channel": "system",
-      "start": 1235.8,
-      "end": 1247.8,
+      "start": 1196.2,
+      "end": 1208.2,
       "text": "I'd want that three weeks to start as close to the rib pattern lock as possible so it's not sitting at the end of the critical path on its own."
     },
     {
       "id": "seg_126",
       "speaker": "spk_2",
       "channel": "system",
-      "start": 1249.1,
-      "end": 1259.1,
+      "start": 1209.5,
+      "end": 1219.5,
       "text": "I can make sure the jig fabrication request goes out same day as the geometry lock, no reason to wait for a formal handoff meeting."
     },
     {
       "id": "seg_127",
       "speaker": "spk_0",
       "channel": "system",
-      "start": 1259.4,
-      "end": 1269.0,
+      "start": 1219.8,
+      "end": 1229.4,
       "text": "That would help a lot actually, even a day or two saved there adds up given how tight the rest of the timeline is."
     },
     {
       "id": "seg_128",
       "speaker": "local",
       "channel": "microphone",
-      "start": 1269.9,
-      "end": 1283.9,
-      "text": "Good, let's treat that as implicit in the geometry-lock urgency we already discussed, not a separate action item, but Rafael, please loop Maya in the moment geometry locks so the jig request goes out immediately."
+      "start": 1230.3,
+      "end": 1235.1,
+      "text": "Good, let's treat that as implicit rather than a separate action item."
     },
     {
       "id": "seg_129",
-      "speaker": "spk_2",
-      "channel": "system",
-      "start": 1284.5,
-      "end": 1285.3,
-      "text": "Will do."
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 1235.3,
+      "end": 1238.5,
+      "text": "Rafael, loop Maya in the moment geometry locks."
     },
     {
       "id": "seg_130",
-      "speaker": "spk_0",
+      "speaker": "spk_2",
       "channel": "system",
-      "start": 1286.4,
-      "end": 1295.6,
-      "text": "One more thing while we're talking production readiness, has anyone thought about data handling for the units on the factory floor during calibration?"
+      "start": 1239.1,
+      "end": 1239.9,
+      "text": "Will do."
     },
     {
       "id": "seg_131",
       "speaker": "spk_0",
       "channel": "system",
-      "start": 1295.8,
-      "end": 1313.0,
-      "text": "We log every unit's characterization data into our internal system, and if Aegis units are also going to support the cloud connectivity feature out of the box, I want to make sure factory test data isn't accidentally reachable from a production cloud account."
+      "start": 1241.0,
+      "end": 1250.2,
+      "text": "One more thing while we're talking production readiness, has anyone thought about data handling for the units on the factory floor during calibration?"
     },
     {
       "id": "seg_132",
-      "speaker": "spk_1",
+      "speaker": "spk_0",
       "channel": "system",
-      "start": 1313.4,
-      "end": 1331.0,
-      "text": "Good catch, that's actually a real risk if the same firmware image is used for both factory testing and shipped units, the connectivity stack needs to know it's in a factory test mode and route data locally instead of to the production cloud service."
+      "start": 1250.5,
+      "end": 1267.7,
+      "text": "We log every unit's characterization data into our internal system, and if Aegis units are also going to support the cloud connectivity feature out of the box, I want to make sure factory test data isn't accidentally reachable from a production cloud account."
     },
     {
       "id": "seg_133",
-      "speaker": "spk_0",
+      "speaker": "spk_1",
       "channel": "system",
-      "start": 1332.5,
-      "end": 1342.5,
-      "text": "Right, and Vantage handles this today with a factory-mode flag that gets burned off during final production flashing, before the unit ever leaves the building."
+      "start": 1268.1,
+      "end": 1285.7,
+      "text": "Good catch, that's actually a real risk if the same firmware image is used for both factory testing and shipped units, the connectivity stack needs to know it's in a factory test mode and route data locally instead of to the production cloud service."
     },
     {
       "id": "seg_134",
       "speaker": "spk_0",
       "channel": "system",
-      "start": 1342.8,
-      "end": 1355.6,
-      "text": "I'd want the same pattern on Aegis, and since the connectivity stack is part of the shared codebase we just approved, it should mostly just work once we wire the flag through."
+      "start": 1287.2,
+      "end": 1297.2,
+      "text": "Right, and Vantage handles this today with a factory-mode flag that gets burned off during final production flashing, before the unit ever leaves the building."
     },
     {
       "id": "seg_135",
-      "speaker": "spk_1",
+      "speaker": "spk_0",
       "channel": "system",
-      "start": 1356.2,
-      "end": 1364.6,
-      "text": "Agreed, I'll make sure the factory-mode flag is part of the abstraction layer test matrix, not an afterthought bolted on later."
+      "start": 1297.5,
+      "end": 1310.3,
+      "text": "I'd want the same pattern on Aegis, and since the connectivity stack is part of the shared codebase we just approved, it should mostly just work once we wire the flag through."
     },
     {
       "id": "seg_136",
-      "speaker": "local",
-      "channel": "microphone",
-      "start": 1365.4,
-      "end": 1373.4,
-      "text": "Good, glad that surfaced now rather than after units were already on a factory floor talking to the wrong server."
+      "speaker": "spk_1",
+      "channel": "system",
+      "start": 1310.9,
+      "end": 1319.3,
+      "text": "Agreed, I'll make sure the factory-mode flag is part of the abstraction layer test matrix, not an afterthought bolted on later."
     },
     {
       "id": "seg_137",
-      "speaker": "spk_4",
-      "channel": "system",
-      "start": 1373.8,
-      "end": 1384.6,
-      "text": "That kind of thing is exactly what I worry about from a risk perspective, appreciate it being caught in a planning conversation instead of an incident report."
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 1320.1,
+      "end": 1328.1,
+      "text": "Good, glad that surfaced now rather than after units were already on a factory floor talking to the wrong server."
     },
     {
       "id": "seg_138",
-      "speaker": "local",
-      "channel": "microphone",
-      "start": 1385.3,
-      "end": 1389.3,
-      "text": "Good, sounds like the two decisions reinforce each other well."
+      "speaker": "spk_4",
+      "channel": "system",
+      "start": 1328.5,
+      "end": 1339.3,
+      "text": "That kind of thing is exactly what I worry about from a risk perspective, appreciate it being caught in a planning conversation instead of an incident report."
     },
     {
       "id": "seg_139",
       "speaker": "local",
       "channel": "microphone",
-      "start": 1389.5,
-      "end": 1395.9,
-      "text": "Let's talk timeline holistically for a minute, Sun, given everything we've covered, does March still hold?"
+      "start": 1340.0,
+      "end": 1344.0,
+      "text": "Good, sounds like the two decisions reinforce each other well."
     },
     {
       "id": "seg_140",
-      "speaker": "spk_3",
-      "channel": "system",
-      "start": 1396.9,
-      "end": 1403.7,
-      "text": "I think so, with the caveat that it's a tighter March than it was a month ago."
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 1344.2,
+      "end": 1350.6,
+      "text": "Let's talk timeline holistically for a minute, Sun, given everything we've covered, does March still hold?"
     },
     {
       "id": "seg_141",
       "speaker": "spk_3",
       "channel": "system",
-      "start": 1404.0,
-      "end": 1416.4,
-      "text": "The critical path now runs through certification testing in six weeks, which depends on final enclosure geometry, which depends on Rafael's rib pattern landing within the next week and a half."
+      "start": 1351.6,
+      "end": 1358.4,
+      "text": "I think so, with the caveat that it's a tighter March than it was a month ago."
     },
     {
       "id": "seg_142",
       "speaker": "spk_3",
       "channel": "system",
-      "start": 1416.7,
-      "end": 1423.1,
-      "text": "If that slips again, certification slips, and then March genuinely becomes at risk, not just tight."
+      "start": 1358.7,
+      "end": 1371.1,
+      "text": "The critical path now runs through certification testing in six weeks, which depends on final enclosure geometry, which depends on Rafael's rib pattern landing within the next week and a half."
     },
     {
       "id": "seg_143",
-      "speaker": "local",
-      "channel": "microphone",
-      "start": 1423.6,
-      "end": 1432.8,
-      "text": "So the rib pattern decision next week and a half is really the single most important date on this whole program right now."
+      "speaker": "spk_3",
+      "channel": "system",
+      "start": 1371.3,
+      "end": 1377.7,
+      "text": "If that slips again, certification slips, and then March genuinely becomes at risk, not just tight."
     },
     {
       "id": "seg_144",
-      "speaker": "spk_3",
-      "channel": "system",
-      "start": 1433.6,
-      "end": 1450.0,
-      "text": "That's exactly right, and I'd like us to treat it that way, meaning if Rafael needs anything from any of us to make that decision faster or with more confidence, that should be the top priority for the next ten days."
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 1378.2,
+      "end": 1387.4,
+      "text": "So the rib pattern decision next week and a half is really the single most important date on this whole program right now."
     },
     {
       "id": "seg_145",
-      "speaker": "spk_2",
+      "speaker": "spk_3",
       "channel": "system",
-      "start": 1451.3,
-      "end": 1464.1,
-      "text": "I appreciate that, I don't think I need anything beyond what's already moving, the thermal modeling and the machine shop turnaround are both on track, but I'll flag immediately if that changes."
+      "start": 1388.2,
+      "end": 1404.6,
+      "text": "That's exactly right, and I'd like us to treat it that way, meaning if Rafael needs anything from any of us to make that decision faster or with more confidence, that should be the top priority for the next ten days."
     },
     {
       "id": "seg_146",
-      "speaker": "local",
-      "channel": "microphone",
-      "start": 1464.4,
-      "end": 1474.8,
-      "text": "Good, let's make that an explicit ask then, everyone keep bandwidth open for Rafael for the next week and a half in case something comes up."
+      "speaker": "spk_2",
+      "channel": "system",
+      "start": 1405.9,
+      "end": 1418.7,
+      "text": "I appreciate that, I don't think I need anything beyond what's already moving, the thermal modeling and the machine shop turnaround are both on track, but I'll flag immediately if that changes."
     },
     {
       "id": "seg_147",
       "speaker": "local",
       "channel": "microphone",
-      "start": 1475.0,
-      "end": 1481.0,
-      "text": "Let's talk go-to-market readiness briefly, Sun, anything from marketing or sales we should know about?"
+      "start": 1419.0,
+      "end": 1422.2,
+      "text": "Good, let's make that an explicit ask then."
     },
     {
       "id": "seg_148",
-      "speaker": "spk_3",
-      "channel": "system",
-      "start": 1481.9,
-      "end": 1488.7,
-      "text": "Sales collateral is in progress, mostly waiting on final specs and the calibration accuracy numbers Maya mentioned."
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 1422.5,
+      "end": 1426.5,
+      "text": "Sun, anything from marketing or sales we should know about?"
     },
     {
       "id": "seg_149",
       "speaker": "spk_3",
       "channel": "system",
-      "start": 1489.0,
-      "end": 1502.2,
-      "text": "Marketing wants a name decision soon too, Aegis has been the internal codename this whole time, but legal's trademark search on a couple of finalist customer-facing names should come back by next week."
+      "start": 1427.4,
+      "end": 1434.2,
+      "text": "Sales collateral is in progress, mostly waiting on final specs and the calibration accuracy numbers Maya mentioned."
     },
     {
       "id": "seg_150",
-      "speaker": "spk_2",
+      "speaker": "spk_3",
       "channel": "system",
-      "start": 1502.8,
-      "end": 1513.2,
-      "text": "Out of curiosity, does the trade show booth design assume the anodized finish, or is that also flexible if we end up needing it to be?"
+      "start": 1434.5,
+      "end": 1447.7,
+      "text": "Marketing wants a name decision soon too, Aegis has been the internal codename this whole time, but legal's trademark search on a couple of finalist customer-facing names should come back by next week."
     },
     {
       "id": "seg_151",
-      "speaker": "spk_3",
+      "speaker": "spk_2",
       "channel": "system",
-      "start": 1514.3,
-      "end": 1532.7,
-      "text": "It assumes anodized for the hero unit in the display case, but the units people actually pick up and handle can be the bead-blasted ones we just agreed on, that's actually pretty common practice at these shows, a pristine display unit and more durable handling units."
+      "start": 1448.3,
+      "end": 1458.7,
+      "text": "Out of curiosity, does the trade show booth design assume the anodized finish, or is that also flexible if we end up needing it to be?"
     },
     {
       "id": "seg_152",
-      "speaker": "spk_2",
+      "speaker": "spk_3",
       "channel": "system",
-      "start": 1533.1,
-      "end": 1543.5,
-      "text": "Good, that solves a problem I was quietly worried about, whether the booth design itself was locked to a finish we might not hit in time."
+      "start": 1459.8,
+      "end": 1478.2,
+      "text": "It assumes anodized for the hero unit in the display case, but the units people actually pick up and handle can be the bead-blasted ones we just agreed on, that's actually pretty common practice at these shows, a pristine display unit and more durable handling units."
     },
     {
       "id": "seg_153",
-      "speaker": "spk_3",
+      "speaker": "spk_2",
       "channel": "system",
-      "start": 1545.0,
-      "end": 1558.2,
-      "text": "No, we built in that flexibility a while back, mostly because trade show logistics always have some hardware uncertainty this far out, it's rarely the actual product that's fully locked at this stage."
+      "start": 1478.6,
+      "end": 1489.0,
+      "text": "Good, that solves a problem I was quietly worried about, whether the booth design itself was locked to a finish we might not hit in time."
     },
     {
       "id": "seg_154",
-      "speaker": "spk_4",
+      "speaker": "spk_3",
       "channel": "system",
-      "start": 1558.8,
-      "end": 1568.8,
-      "text": "While you two are talking booth logistics, is there a firm budget for the booth itself, separate from the product development numbers we discussed earlier?"
+      "start": 1490.5,
+      "end": 1503.7,
+      "text": "No, we built in that flexibility a while back, mostly because trade show logistics always have some hardware uncertainty this far out, it's rarely the actual product that's fully locked at this stage."
     },
     {
       "id": "seg_155",
-      "speaker": "spk_3",
+      "speaker": "spk_4",
       "channel": "system",
-      "start": 1569.6,
-      "end": 1581.2,
-      "text": "Yes, separate line entirely, booth and event costs come out of the marketing events budget, not engineering or program contingency, so that overage conversation from earlier doesn't touch it."
+      "start": 1504.3,
+      "end": 1514.3,
+      "text": "While you two are talking booth logistics, is there a firm budget for the booth itself, separate from the product development numbers we discussed earlier?"
     },
     {
       "id": "seg_156",
-      "speaker": "spk_4",
+      "speaker": "spk_3",
       "channel": "system",
-      "start": 1581.6,
-      "end": 1586.8,
-      "text": "Good, just wanted to make sure I wasn't missing a cost bucket somewhere."
+      "start": 1515.1,
+      "end": 1526.7,
+      "text": "Yes, separate line entirely, booth and event costs come out of the marketing events budget, not engineering or program contingency, so that overage conversation from earlier doesn't touch it."
     },
     {
       "id": "seg_157",
-      "speaker": "spk_3",
+      "speaker": "spk_4",
       "channel": "system",
-      "start": 1587.5,
-      "end": 1593.5,
-      "text": "No, you're not, they're cleanly separated in the tracking sheet I sent around last month."
+      "start": 1527.1,
+      "end": 1532.3,
+      "text": "Good, just wanted to make sure I wasn't missing a cost bucket somewhere."
     },
     {
       "id": "seg_158",
-      "speaker": "spk_4",
+      "speaker": "spk_3",
       "channel": "system",
-      "start": 1594.5,
-      "end": 1602.1,
-      "text": "Do we have a budget line for the name change itself, packaging reprints, website updates, that sort of thing?"
+      "start": 1533.0,
+      "end": 1539.0,
+      "text": "No, you're not, they're cleanly separated in the tracking sheet I sent around last month."
     },
     {
       "id": "seg_159",
-      "speaker": "spk_3",
+      "speaker": "spk_4",
       "channel": "system",
-      "start": 1602.6,
-      "end": 1611.4,
-      "text": "Small one, yes, it's already in the original marketing budget, not something that would touch the engineering contingency line we discussed earlier."
+      "start": 1540.0,
+      "end": 1547.6,
+      "text": "Do we have a budget line for the name change itself, packaging reprints, website updates, that sort of thing?"
     },
     {
       "id": "seg_160",
-      "speaker": "spk_4",
+      "speaker": "spk_3",
       "channel": "system",
-      "start": 1612.2,
-      "end": 1615.8,
-      "text": "Good, just wanted to confirm those are separate pools."
+      "start": 1548.1,
+      "end": 1556.9,
+      "text": "Small one, yes, it's already in the original marketing budget, not something that would touch the engineering contingency line we discussed earlier."
     },
     {
       "id": "seg_161",
-      "speaker": "local",
-      "channel": "microphone",
-      "start": 1617.1,
-      "end": 1627.1,
-      "text": "Before we wrap the general discussion, let's do a quick risk roundtable, one thing each of you is watching that hasn't come up yet today."
+      "speaker": "spk_4",
+      "channel": "system",
+      "start": 1557.7,
+      "end": 1561.3,
+      "text": "Good, just wanted to confirm those are separate pools."
     },
     {
       "id": "seg_162",
       "speaker": "local",
       "channel": "microphone",
-      "start": 1627.3,
-      "end": 1629.3,
-      "text": "Rafael, anything beyond the enclosure?"
+      "start": 1562.6,
+      "end": 1572.6,
+      "text": "Before we wrap the general discussion, let's do a quick risk roundtable, one thing each of you is watching that hasn't come up yet today."
     },
     {
       "id": "seg_163",
-      "speaker": "spk_2",
-      "channel": "system",
-      "start": 1629.6,
-      "end": 1639.2,
-      "text": "Yes, actually, the sensor package itself, the one Maya's characterizing, comes from a single supplier right now, and we haven't qualified a second source."
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 1572.8,
+      "end": 1574.8,
+      "text": "Rafael, anything beyond the enclosure?"
     },
     {
       "id": "seg_164",
       "speaker": "spk_2",
       "channel": "system",
-      "start": 1639.5,
-      "end": 1655.1,
-      "text": "For Vantage that's fine, it's a mature part with plenty of supply, but Aegis's sensor is newer to the market and I'd want a backup source qualified before we're at meaningful production volume, not after a shortage hits us."
+      "start": 1575.1,
+      "end": 1584.7,
+      "text": "Yes, actually, the sensor package itself, the one Maya's characterizing, comes from a single supplier right now, and we haven't qualified a second source."
     },
     {
       "id": "seg_165",
-      "speaker": "local",
-      "channel": "microphone",
-      "start": 1656.0,
-      "end": 1659.6,
-      "text": "How long does qualifying a second source typically take?"
+      "speaker": "spk_2",
+      "channel": "system",
+      "start": 1585.0,
+      "end": 1600.6,
+      "text": "For Vantage that's fine, it's a mature part with plenty of supply, but Aegis's sensor is newer to the market and I'd want a backup source qualified before we're at meaningful production volume, not after a shortage hits us."
     },
     {
       "id": "seg_166",
-      "speaker": "spk_2",
-      "channel": "system",
-      "start": 1660.2,
-      "end": 1672.2,
-      "text": "Usually two to three months once we identify a candidate, since Maya's team has to recharacterize against the new part too, it's not just a mechanical and electrical fit check."
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 1601.5,
+      "end": 1605.1,
+      "text": "How long does qualifying a second source typically take?"
     },
     {
       "id": "seg_167",
-      "speaker": "spk_0",
+      "speaker": "spk_2",
       "channel": "system",
-      "start": 1673.3,
-      "end": 1684.1,
-      "text": "Right, if the second-source part has even slightly different behavior, we'd need at least a partial recharacterization, not the full four-day process necessarily, but not nothing either."
+      "start": 1605.7,
+      "end": 1617.7,
+      "text": "Usually two to three months once we identify a candidate, since Maya's team has to recharacterize against the new part too, it's not just a mechanical and electrical fit check."
     },
     {
       "id": "seg_168",
-      "speaker": "local",
-      "channel": "microphone",
-      "start": 1684.5,
-      "end": 1696.9,
-      "text": "Let's add sourcing qualification to the Q1-equivalent planning list for Aegis, whatever the right forum is for that, it doesn't need to block anything today but it shouldn't be forgotten either."
+      "speaker": "spk_0",
+      "channel": "system",
+      "start": 1618.8,
+      "end": 1629.6,
+      "text": "Right, if the second-source part has even slightly different behavior, we'd need at least a partial recharacterization, not the full four-day process necessarily, but not nothing either."
     },
     {
       "id": "seg_169",
-      "speaker": "spk_2",
-      "channel": "system",
-      "start": 1698.4,
-      "end": 1704.8,
-      "text": "Agreed, I'll start identifying candidates even before we formally kick that off, no reason to wait."
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 1630.0,
+      "end": 1635.2,
+      "text": "Let's add sourcing qualification to the Q1-equivalent planning list, it shouldn't be forgotten."
     },
     {
       "id": "seg_170",
-      "speaker": "local",
-      "channel": "microphone",
-      "start": 1705.4,
-      "end": 1706.0,
-      "text": "Good."
+      "speaker": "spk_2",
+      "channel": "system",
+      "start": 1636.7,
+      "end": 1643.1,
+      "text": "Agreed, I'll start identifying candidates even before we formally kick that off, no reason to wait."
     },
     {
       "id": "seg_171",
       "speaker": "local",
       "channel": "microphone",
-      "start": 1706.2,
-      "end": 1710.2,
-      "text": "Sun, anything on the schedule side beyond what we've covered?"
+      "start": 1643.7,
+      "end": 1644.3,
+      "text": "Good."
     },
     {
       "id": "seg_172",
-      "speaker": "spk_3",
-      "channel": "system",
-      "start": 1711.0,
-      "end": 1729.8,
-      "text": "The one thing I'd flag is how many of today's mitigations depend on things happening in parallel rather than in sequence, the bead-blast decision, the certification decoupling, the calibration station timeline all assume Rafael's geometry lock happens on schedule and everyone else moves the moment it does."
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 1644.5,
+      "end": 1648.5,
+      "text": "Sun, anything on the schedule side beyond what we've covered?"
     },
     {
       "id": "seg_173",
       "speaker": "spk_3",
       "channel": "system",
-      "start": 1730.0,
-      "end": 1736.8,
-      "text": "If there's any hidden sequential dependency we haven't surfaced, the whole plan compresses less than we think."
+      "start": 1649.3,
+      "end": 1668.1,
+      "text": "The one thing I'd flag is how many of today's mitigations depend on things happening in parallel rather than in sequence, the bead-blast decision, the certification decoupling, the calibration station timeline all assume Rafael's geometry lock happens on schedule and everyone else moves the moment it does."
     },
     {
       "id": "seg_174",
-      "speaker": "local",
-      "channel": "microphone",
-      "start": 1737.2,
-      "end": 1738.8,
-      "text": "That's a fair meta-risk."
+      "speaker": "spk_3",
+      "channel": "system",
+      "start": 1668.3,
+      "end": 1675.1,
+      "text": "If there's any hidden sequential dependency we haven't surfaced, the whole plan compresses less than we think."
     },
     {
       "id": "seg_175",
       "speaker": "local",
       "channel": "microphone",
-      "start": 1739.0,
-      "end": 1747.4,
-      "text": "Is there anything concrete you want from this group to protect against that, or is it more of a general caution?"
+      "start": 1675.5,
+      "end": 1677.1,
+      "text": "That's a fair meta-risk."
     },
     {
       "id": "seg_176",
-      "speaker": "spk_3",
-      "channel": "system",
-      "start": 1748.1,
-      "end": 1766.9,
-      "text": "Mostly a general caution for now, though I would like a very short, almost daily check-in between Rafael, Maya, and Tomas once the rib pattern decision lands, just so nobody's waiting on an email that sits for two days at a moment when two days actually matters."
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 1677.3,
+      "end": 1685.7,
+      "text": "Is there anything concrete you want from this group to protect against that, or is it more of a general caution?"
     },
     {
       "id": "seg_177",
-      "speaker": "spk_2",
+      "speaker": "spk_3",
       "channel": "system",
-      "start": 1767.9,
-      "end": 1773.1,
-      "text": "That's reasonable, we can do a quick standup-style sync for that specific window."
+      "start": 1686.4,
+      "end": 1705.2,
+      "text": "Mostly a general caution for now, though I would like a very short, almost daily check-in between Rafael, Maya, and Tomas once the rib pattern decision lands, just so nobody's waiting on an email that sits for two days at a moment when two days actually matters."
     },
     {
       "id": "seg_178",
-      "speaker": "spk_0",
+      "speaker": "spk_2",
       "channel": "system",
-      "start": 1773.6,
-      "end": 1775.2,
-      "text": "Works for me too."
+      "start": 1706.2,
+      "end": 1711.4,
+      "text": "That's reasonable, we can do a quick standup-style sync for that specific window."
     },
     {
       "id": "seg_179",
-      "speaker": "spk_1",
+      "speaker": "spk_0",
       "channel": "system",
-      "start": 1776.0,
-      "end": 1776.6,
-      "text": "Same."
+      "start": 1711.9,
+      "end": 1713.5,
+      "text": "Works for me too."
     },
     {
       "id": "seg_180",
-      "speaker": "local",
-      "channel": "microphone",
-      "start": 1777.9,
-      "end": 1786.3,
-      "text": "Good, let's set that up informally, doesn't need to be a calendar invite from me, just start it once geometry locks."
+      "speaker": "spk_1",
+      "channel": "system",
+      "start": 1714.3,
+      "end": 1714.9,
+      "text": "Same."
     },
     {
       "id": "seg_181",
       "speaker": "local",
       "channel": "microphone",
-      "start": 1786.5,
-      "end": 1789.3,
-      "text": "Dele, budget risk beyond what we discussed?"
+      "start": 1716.2,
+      "end": 1724.6,
+      "text": "Good, let's set that up informally, doesn't need to be a calendar invite from me, just start it once geometry locks."
     },
     {
       "id": "seg_182",
-      "speaker": "spk_4",
-      "channel": "system",
-      "start": 1789.6,
-      "end": 1791.2,
-      "text": "Component cost volatility, honestly."
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 1724.8,
+      "end": 1727.6,
+      "text": "Dele, budget risk beyond what we discussed?"
     },
     {
       "id": "seg_183",
       "speaker": "spk_4",
       "channel": "system",
-      "start": 1791.5,
-      "end": 1811.9,
-      "text": "A couple of the passive components on the Aegis board are sourced from regions with currency exposure we don't have on Vantage, and if exchange rates move against us before we lock pricing with our contract manufacturer, that eats margin in a way that's outside anyone's direct control in this room."
+      "start": 1727.9,
+      "end": 1729.5,
+      "text": "Component cost volatility, honestly."
     },
     {
       "id": "seg_184",
-      "speaker": "local",
-      "channel": "microphone",
-      "start": 1812.8,
-      "end": 1816.4,
-      "text": "Is that something we hedge against, or just monitor?"
+      "speaker": "spk_4",
+      "channel": "system",
+      "start": 1729.8,
+      "end": 1750.2,
+      "text": "A couple of the passive components on the Aegis board are sourced from regions with currency exposure we don't have on Vantage, and if exchange rates move against us before we lock pricing with our contract manufacturer, that eats margin in a way that's outside anyone's direct control in this room."
     },
     {
       "id": "seg_185",
-      "speaker": "spk_4",
-      "channel": "system",
-      "start": 1817.0,
-      "end": 1832.2,
-      "text": "For a program this size, monitoring is more realistic than formal hedging, but I want it on record as a watch item, since if it moves enough it could actually affect the retail price point marketing's been assuming."
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 1751.1,
+      "end": 1754.7,
+      "text": "Is that something we hedge against, or just monitor?"
     },
     {
       "id": "seg_186",
-      "speaker": "spk_3",
+      "speaker": "spk_4",
       "channel": "system",
-      "start": 1833.3,
-      "end": 1843.3,
-      "text": "Good to know, I'll make sure marketing's pricing assumptions have at least a little flex built in rather than being presented as fixed this early."
+      "start": 1755.3,
+      "end": 1770.5,
+      "text": "For a program this size, monitoring is more realistic than formal hedging, but I want it on record as a watch item, since if it moves enough it could actually affect the retail price point marketing's been assuming."
     },
     {
       "id": "seg_187",
-      "speaker": "local",
-      "channel": "microphone",
-      "start": 1843.7,
-      "end": 1846.1,
-      "text": "Appreciate the heads up either way."
+      "speaker": "spk_3",
+      "channel": "system",
+      "start": 1771.6,
+      "end": 1781.6,
+      "text": "Good to know, I'll make sure marketing's pricing assumptions have at least a little flex built in rather than being presented as fixed this early."
     },
     {
       "id": "seg_188",
       "speaker": "local",
       "channel": "microphone",
-      "start": 1846.3,
-      "end": 1851.1,
-      "text": "Tomas, anything from you, beyond the driver layer work we already covered?"
+      "start": 1782.0,
+      "end": 1784.4,
+      "text": "Appreciate the heads up either way."
     },
     {
       "id": "seg_189",
-      "speaker": "spk_1",
-      "channel": "system",
-      "start": 1852.6,
-      "end": 1856.2,
-      "text": "Test coverage gap, honestly, on the connectivity stack specifically."
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 1784.7,
+      "end": 1789.5,
+      "text": "Tomas, anything from you, beyond the driver layer work we already covered?"
     },
     {
       "id": "seg_190",
       "speaker": "spk_1",
       "channel": "system",
-      "start": 1856.5,
-      "end": 1877.3,
-      "text": "We've got good coverage on the sensor and calibration side because that's been a focus for months, but the cloud connectivity and the factory-mode flag work we just talked about is newer, and I don't want it to be the thing that's under-tested just because it came up later in the program."
+      "start": 1791.0,
+      "end": 1794.6,
+      "text": "Test coverage gap, honestly, on the connectivity stack specifically."
     },
     {
       "id": "seg_191",
-      "speaker": "spk_0",
+      "speaker": "spk_1",
       "channel": "system",
-      "start": 1877.9,
-      "end": 1885.1,
-      "text": "That's fair, I'd rather we say that out loud now than assume it's covered because everything else is."
+      "start": 1794.8,
+      "end": 1815.6,
+      "text": "We've got good coverage on the sensor and calibration side because that's been a focus for months, but the cloud connectivity and the factory-mode flag work we just talked about is newer, and I don't want it to be the thing that's under-tested just because it came up later in the program."
     },
     {
       "id": "seg_192",
-      "speaker": "local",
-      "channel": "microphone",
-      "start": 1885.9,
-      "end": 1893.9,
-      "text": "Agreed, let's make sure the three-week abstraction layer estimate explicitly accounts for connectivity test coverage, not just sensor driver coverage."
+      "speaker": "spk_0",
+      "channel": "system",
+      "start": 1816.2,
+      "end": 1823.4,
+      "text": "That's fair, I'd rather we say that out loud now than assume it's covered because everything else is."
     },
     {
       "id": "seg_193",
-      "speaker": "spk_1",
-      "channel": "system",
-      "start": 1894.3,
-      "end": 1903.5,
-      "text": "It does in my head, but I'll write it down explicitly in the test plan doc so it's not just in my head."
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 1824.2,
+      "end": 1832.2,
+      "text": "Agreed, let's make sure the three-week abstraction layer estimate explicitly accounts for connectivity test coverage, not just sensor driver coverage."
     },
     {
       "id": "seg_194",
       "speaker": "spk_1",
       "channel": "system",
-      "start": 1903.8,
-      "end": 1925.8,
-      "text": "While I've got the floor, one more thing on the abstraction layer, we also found that the retry and backoff behavior for the connectivity stack differs slightly between how Vantage handles it today and what the new Aegis radio module actually needs, since the radio has a different power-up latency profile after waking from sleep."
+      "start": 1832.6,
+      "end": 1841.8,
+      "text": "It does in my head, but I'll write it down explicitly in the test plan doc so it's not just in my head."
     },
     {
       "id": "seg_195",
-      "speaker": "spk_0",
+      "speaker": "spk_1",
       "channel": "system",
-      "start": 1926.5,
-      "end": 1930.1,
-      "text": "Is that a big rewrite or a parameter tweak?"
+      "start": 1842.0,
+      "end": 1864.0,
+      "text": "While I've got the floor, one more thing on the abstraction layer, we also found that the retry and backoff behavior for the connectivity stack differs slightly between how Vantage handles it today and what the new Aegis radio module actually needs, since the radio has a different power-up latency profile after waking from sleep."
     },
     {
       "id": "seg_196",
-      "speaker": "spk_1",
+      "speaker": "spk_0",
       "channel": "system",
-      "start": 1931.1,
-      "end": 1952.7,
-      "text": "Parameter tweak mostly, the retry timing constants need to be configurable per hardware target rather than hardcoded, which we should have done from the start honestly, this is a good forcing function to fix that properly instead of hardcoding a second set of constants for Aegis and hoping nobody forgets there are now two."
+      "start": 1864.7,
+      "end": 1868.3,
+      "text": "Is that a big rewrite or a parameter tweak?"
     },
     {
       "id": "seg_197",
-      "speaker": "spk_0",
+      "speaker": "spk_1",
       "channel": "system",
-      "start": 1953.2,
-      "end": 1959.6,
-      "text": "Agreed, that's exactly the kind of thing that's worth doing right once rather than patching twice."
+      "start": 1869.3,
+      "end": 1890.9,
+      "text": "Parameter tweak mostly, the retry timing constants need to be configurable per hardware target rather than hardcoded, which we should have done from the start honestly, this is a good forcing function to fix that properly instead of hardcoding a second set of constants for Aegis and hoping nobody forgets there are now two."
     },
     {
       "id": "seg_198",
-      "speaker": "spk_2",
+      "speaker": "spk_0",
       "channel": "system",
-      "start": 1960.4,
-      "end": 1965.2,
-      "text": "Does that affect the factory-mode flag work we discussed earlier at all?"
+      "start": 1891.4,
+      "end": 1897.8,
+      "text": "Agreed, that's exactly the kind of thing that's worth doing right once rather than patching twice."
     },
     {
       "id": "seg_199",
-      "speaker": "spk_1",
+      "speaker": "spk_2",
       "channel": "system",
-      "start": 1966.5,
-      "end": 1978.5,
-      "text": "No, those are independent, the factory-mode flag controls where data goes, the retry constants control how aggressively we try to send it, they interact but they're separate pieces of configuration."
+      "start": 1898.6,
+      "end": 1903.4,
+      "text": "Does that affect the factory-mode flag work we discussed earlier at all?"
     },
     {
       "id": "seg_200",
-      "speaker": "spk_2",
+      "speaker": "spk_1",
       "channel": "system",
-      "start": 1978.8,
-      "end": 1985.2,
-      "text": "Good, just wanted to make sure we weren't tangling two different fixes together without realizing it."
+      "start": 1904.7,
+      "end": 1916.7,
+      "text": "No, those are independent, the factory-mode flag controls where data goes, the retry constants control how aggressively we try to send it, they interact but they're separate pieces of configuration."
     },
     {
       "id": "seg_201",
-      "speaker": "local",
-      "channel": "microphone",
-      "start": 1986.1,
-      "end": 1986.7,
-      "text": "Good."
+      "speaker": "spk_2",
+      "channel": "system",
+      "start": 1917.0,
+      "end": 1923.4,
+      "text": "Good, just wanted to make sure we weren't tangling two different fixes together without realizing it."
     },
     {
       "id": "seg_202",
       "speaker": "local",
       "channel": "microphone",
-      "start": 1987.0,
-      "end": 1991.4,
-      "text": "Maya, last one, anything beyond the sourcing risk Rafael just raised?"
+      "start": 1924.3,
+      "end": 1924.9,
+      "text": "Good."
     },
     {
       "id": "seg_203",
-      "speaker": "spk_0",
-      "channel": "system",
-      "start": 1992.0,
-      "end": 2013.6,
-      "text": "Just that the humidity extreme test cases I mentioned earlier are still thin, twenty units isn't a huge sample at the tails of the range, and if we find something in the next batch of twenty that contradicts what we're seeing now, the \"tighter tolerances\" story could get more nuanced before it gets simpler."
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 1925.2,
+      "end": 1929.6,
+      "text": "Maya, last one, anything beyond the sourcing risk Rafael just raised?"
     },
     {
       "id": "seg_204",
       "speaker": "spk_0",
       "channel": "system",
-      "start": 2013.8,
-      "end": 2020.6,
-      "text": "I'd rather flag that possibility now than have it be a surprise if the number moves later."
+      "start": 1930.2,
+      "end": 1951.8,
+      "text": "Just that the humidity extreme test cases I mentioned earlier are still thin, twenty units isn't a huge sample at the tails of the range, and if we find something in the next batch of twenty that contradicts what we're seeing now, the \"tighter tolerances\" story could get more nuanced before it gets simpler."
     },
     {
       "id": "seg_205",
-      "speaker": "spk_3",
+      "speaker": "spk_0",
       "channel": "system",
-      "start": 2021.7,
-      "end": 2026.5,
-      "text": "Appreciated, I'll keep that in mind before committing to specific claims externally."
+      "start": 1952.0,
+      "end": 1958.8,
+      "text": "I'd rather flag that possibility now than have it be a surprise if the number moves later."
     },
     {
       "id": "seg_206",
-      "speaker": "local",
-      "channel": "microphone",
-      "start": 2026.9,
-      "end": 2037.3,
-      "text": "Good, that was a genuinely useful round, thank you all, that's exactly the kind of thing I want surfaced here rather than discovered in three weeks."
+      "speaker": "spk_3",
+      "channel": "system",
+      "start": 1959.9,
+      "end": 1964.7,
+      "text": "Appreciated, I'll keep that in mind before committing to specific claims externally."
     },
     {
       "id": "seg_207",
       "speaker": "local",
       "channel": "microphone",
-      "start": 2037.5,
-      "end": 2049.1,
-      "text": "What about sales training, has anyone thought about how the field sales team gets up to speed on a genuinely new product line rather than an iteration on Vantage?"
+      "start": 1965.1,
+      "end": 1969.1,
+      "text": "Good, that was a genuinely useful round, thank you all."
     },
     {
       "id": "seg_208",
       "speaker": "spk_3",
       "channel": "system",
-      "start": 2050.6,
-      "end": 2062.6,
-      "text": "Yes, we're planning a half-day enablement session about a month before launch, covering the product story, the accuracy improvements Maya described, and how to answer the most likely technical objections."
+      "start": 1970.6,
+      "end": 1983.4,
+      "text": "While we're on that, one more thing worth raising, sales training, since this is a genuinely new product line rather than an iteration on Vantage, the field sales team needs real ramp-up."
     },
     {
       "id": "seg_209",
       "speaker": "spk_3",
       "channel": "system",
-      "start": 2062.8,
-      "end": 2071.2,
-      "text": "I'd like Maya or Tomas to help build the technical objection-handling section, since sales reps get asked surprisingly deep questions sometimes."
+      "start": 1983.7,
+      "end": 1995.3,
+      "text": "We're planning a half-day enablement session about a month before launch, covering the product story, the accuracy improvements Maya described, and how to answer the most likely technical objections."
     },
     {
       "id": "seg_210",
-      "speaker": "spk_0",
+      "speaker": "spk_3",
       "channel": "system",
-      "start": 2071.8,
-      "end": 2087.0,
-      "text": "Happy to help with that, I can put together a short one-pager on the calibration story that translates the technical details into something a sales rep can actually use in a conversation without oversimplifying it into something misleading."
+      "start": 1995.5,
+      "end": 2003.9,
+      "text": "I'd like Maya or Tomas to help build the technical objection-handling section, since sales reps get asked surprisingly deep questions sometimes."
     },
     {
       "id": "seg_211",
-      "speaker": "spk_3",
+      "speaker": "spk_0",
       "channel": "system",
-      "start": 2087.8,
-      "end": 2096.2,
-      "text": "That would be great, that's usually the hardest part, getting something accurate that doesn't require an engineering degree to deliver confidently."
+      "start": 2004.5,
+      "end": 2019.7,
+      "text": "Happy to help with that, I can put together a short one-pager on the calibration story that translates the technical details into something a sales rep can actually use in a conversation without oversimplifying it into something misleading."
     },
     {
       "id": "seg_212",
-      "speaker": "spk_4",
+      "speaker": "spk_3",
       "channel": "system",
-      "start": 2096.6,
-      "end": 2106.6,
-      "text": "Is there a budget line for the enablement session itself, or does that come out of the same events pool as the trade show booth?"
+      "start": 2020.5,
+      "end": 2028.9,
+      "text": "That would be great, that's usually the hardest part, getting something accurate that doesn't require an engineering degree to deliver confidently."
     },
     {
       "id": "seg_213",
-      "speaker": "spk_3",
+      "speaker": "spk_4",
       "channel": "system",
-      "start": 2107.3,
-      "end": 2114.1,
-      "text": "Same pool, it's a smaller cost, mostly just facilitator time and materials, nothing that needs separate approval."
+      "start": 2029.3,
+      "end": 2039.3,
+      "text": "Is there a budget line for the enablement session itself, or does that come out of the same events pool as the trade show booth?"
     },
     {
       "id": "seg_214",
-      "speaker": "spk_4",
+      "speaker": "spk_3",
       "channel": "system",
-      "start": 2115.1,
-      "end": 2117.5,
-      "text": "Good, just tracking where things sit."
+      "start": 2040.0,
+      "end": 2046.8,
+      "text": "Same pool, it's a smaller cost, mostly just facilitator time and materials, nothing that needs separate approval."
     },
     {
       "id": "seg_215",
-      "speaker": "local",
-      "channel": "microphone",
-      "start": 2118.0,
-      "end": 2122.4,
-      "text": "Anything else on go-to-market before we wrap up the general discussion?"
+      "speaker": "spk_4",
+      "channel": "system",
+      "start": 2047.8,
+      "end": 2050.2,
+      "text": "Good, just tracking where things sit."
     },
     {
       "id": "seg_216",
-      "speaker": "spk_3",
-      "channel": "system",
-      "start": 2123.2,
-      "end": 2138.8,
-      "text": "Just that once we have a final product name, I'll need updated firmware version strings and any user-facing text that currently says Aegis internally, so that's worth flagging to Tomas and Maya now rather than as a surprise later."
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 2050.7,
+      "end": 2055.1,
+      "text": "Anything else on go-to-market before we wrap up the general discussion?"
     },
     {
       "id": "seg_217",
-      "speaker": "spk_1",
+      "speaker": "spk_3",
       "channel": "system",
-      "start": 2140.1,
-      "end": 2148.9,
-      "text": "Good to know, I'll grep for internal naming references once we have the go-ahead, that's a mechanical change, not a big lift."
+      "start": 2055.9,
+      "end": 2071.5,
+      "text": "Just that once we have a final product name, I'll need updated firmware version strings and any user-facing text that currently says Aegis internally, so that's worth flagging to Tomas and Maya now rather than as a surprise later."
     },
     {
       "id": "seg_218",
-      "speaker": "local",
-      "channel": "microphone",
-      "start": 2149.2,
-      "end": 2158.0,
-      "text": "One more topic before action items, I want us to explicitly carry forward a lesson from Vantage into Aegis if we can."
+      "speaker": "spk_1",
+      "channel": "system",
+      "start": 2072.8,
+      "end": 2081.6,
+      "text": "Good to know, I'll grep for internal naming references once we have the go-ahead, that's a mechanical change, not a big lift."
     },
     {
       "id": "seg_219",
       "speaker": "local",
       "channel": "microphone",
-      "start": 2158.2,
-      "end": 2172.2,
-      "text": "Maya, you found that drift issue with Solenne a couple weeks back, is there something structural we should build into Aegis from day one so we're not relying on a customer noticing before we do?"
+      "start": 2081.9,
+      "end": 2084.3,
+      "text": "One more thing before action items."
     },
     {
       "id": "seg_220",
       "speaker": "spk_0",
       "channel": "system",
-      "start": 2173.1,
-      "end": 2176.7,
-      "text": "Yes, actually, I've been meaning to bring this up."
+      "start": 2085.2,
+      "end": 2090.0,
+      "text": "Actually, I've been meaning to bring this up myself, one more topic."
     },
     {
       "id": "seg_221",
       "speaker": "spk_0",
       "channel": "system",
-      "start": 2176.9,
-      "end": 2192.1,
-      "text": "On Vantage, the failure mode was that our compensation table quietly stopped matching the actual hardware after a component substitution, and nothing detected that mismatch automatically, it took a customer complaint and then some digging on my part."
+      "start": 2090.2,
+      "end": 2107.8,
+      "text": "I want us to explicitly carry forward a lesson from Vantage into Aegis, tied to that drift issue with Solenne a couple weeks back, something structural we should build in from day one so we're not relying on a customer noticing before we do."
     },
     {
       "id": "seg_222",
       "speaker": "spk_0",
       "channel": "system",
-      "start": 2192.3,
-      "end": 2205.9,
-      "text": "For Aegis, I want to build in a first-boot sanity check that cross-references the sensor's reported part identifier against the loaded compensation table, and flags a mismatch immediately rather than silently drifting for months."
+      "start": 2108.1,
+      "end": 2123.3,
+      "text": "On Vantage, the failure mode was that our compensation table quietly stopped matching the actual hardware after a component substitution, and nothing detected that mismatch automatically, it took a customer complaint and then some digging on my part."
     },
     {
       "id": "seg_223",
-      "speaker": "local",
-      "channel": "microphone",
-      "start": 2206.5,
-      "end": 2214.5,
-      "text": "That seems like it should be cheap to build if we're doing it from the start rather than retrofitting it."
+      "speaker": "spk_0",
+      "channel": "system",
+      "start": 2123.6,
+      "end": 2137.2,
+      "text": "For Aegis, I want to build in a first-boot sanity check that cross-references the sensor's reported part identifier against the loaded compensation table, and flags a mismatch immediately rather than silently drifting for months."
     },
     {
       "id": "seg_224",
-      "speaker": "spk_0",
-      "channel": "system",
-      "start": 2215.6,
-      "end": 2230.0,
-      "text": "Very cheap, it's maybe a day of work if it's part of the initial architecture, the reason it wasn't on Vantage is purely that nobody thought to add it years ago, not that it's technically hard."
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 2137.8,
+      "end": 2145.8,
+      "text": "That seems like it should be cheap to build if we're doing it from the start rather than retrofitting it."
     },
     {
       "id": "seg_225",
-      "speaker": "spk_1",
+      "speaker": "spk_0",
       "channel": "system",
-      "start": 2230.4,
-      "end": 2238.0,
-      "text": "I can build that alongside the abstraction layer work, it fits naturally as part of the driver initialization sequence."
+      "start": 2146.9,
+      "end": 2161.3,
+      "text": "Very cheap, it's maybe a day of work if it's part of the initial architecture, the reason it wasn't on Vantage is purely that nobody thought to add it years ago, not that it's technically hard."
     },
     {
       "id": "seg_226",
-      "speaker": "spk_0",
+      "speaker": "spk_1",
       "channel": "system",
-      "start": 2239.5,
-      "end": 2262.7,
-      "text": "That would be great, and longer term, once cloud connectivity is live on Aegis, I'd also like aggregate drift monitoring across the fleet, essentially watching for any part or batch that's trending away from its expected calibration curve over time, so we catch a systemic issue proactively instead of waiting for individual complaints to accumulate into a pattern."
+      "start": 2161.7,
+      "end": 2169.3,
+      "text": "I can build that alongside the abstraction layer work, it fits naturally as part of the driver initialization sequence."
     },
     {
       "id": "seg_227",
-      "speaker": "spk_3",
+      "speaker": "spk_0",
       "channel": "system",
-      "start": 2263.3,
-      "end": 2274.9,
-      "text": "That sounds like a genuinely good product story too, \"we monitor your sensors so you don't have to,\" that's worth a line in the marketing materials once it exists."
+      "start": 2170.8,
+      "end": 2194.0,
+      "text": "That would be great, and longer term, once cloud connectivity is live on Aegis, I'd also like aggregate drift monitoring across the fleet, essentially watching for any part or batch that's trending away from its expected calibration curve over time, so we catch a systemic issue proactively instead of waiting for individual complaints to accumulate into a pattern."
     },
     {
       "id": "seg_228",
-      "speaker": "spk_0",
+      "speaker": "spk_3",
       "channel": "system",
-      "start": 2275.7,
-      "end": 2288.9,
-      "text": "Right, though I'd want it built and proven internally for a quarter or two before we make external claims about it, I don't want a repeat of promising something before it's actually reliable."
+      "start": 2194.6,
+      "end": 2206.2,
+      "text": "That sounds like a genuinely good product story too, \"we monitor your sensors so you don't have to,\" that's worth a line in the marketing materials once it exists."
     },
     {
       "id": "seg_229",
-      "speaker": "spk_4",
+      "speaker": "spk_0",
       "channel": "system",
-      "start": 2289.3,
-      "end": 2297.3,
-      "text": "Does fleet-wide monitoring have infrastructure cost implications worth flagging to me now, or is that small relative to everything else?"
+      "start": 2207.0,
+      "end": 2220.2,
+      "text": "Right, though I'd want it built and proven internally for a quarter or two before we make external claims about it, I don't want a repeat of promising something before it's actually reliable."
     },
     {
       "id": "seg_230",
-      "speaker": "spk_0",
+      "speaker": "spk_4",
       "channel": "system",
-      "start": 2298.0,
-      "end": 2310.8,
-      "text": "Small for now, at expected Aegis volumes in year one it's a modest amount of additional cloud storage and some scheduled analysis jobs, nothing that changes the budget conversation we had earlier."
+      "start": 2220.6,
+      "end": 2228.6,
+      "text": "Does fleet-wide monitoring have infrastructure cost implications worth flagging to me now, or is that small relative to everything else?"
     },
     {
       "id": "seg_231",
       "speaker": "spk_0",
       "channel": "system",
-      "start": 2311.1,
-      "end": 2319.5,
-      "text": "It would become a bigger conversation at much higher volume, but that's a good problem to have and a future one."
+      "start": 2229.3,
+      "end": 2242.1,
+      "text": "Small for now, at expected Aegis volumes in year one it's a modest amount of additional cloud storage and some scheduled analysis jobs, nothing that changes the budget conversation we had earlier."
     },
     {
       "id": "seg_232",
-      "speaker": "local",
-      "channel": "microphone",
-      "start": 2320.5,
-      "end": 2341.7,
-      "text": "Good, let's not scope the fleet monitoring formally today, but Maya, please make sure the first-boot sanity check is explicitly in scope for the abstraction layer work already approved, that one I do want locked in now given how cheap it is and how directly it addresses something that already burned us once."
+      "speaker": "spk_0",
+      "channel": "system",
+      "start": 2242.3,
+      "end": 2250.7,
+      "text": "It would become a bigger conversation at much higher volume, but that's a good problem to have and a future one."
     },
     {
       "id": "seg_233",
-      "speaker": "spk_0",
-      "channel": "system",
-      "start": 2342.2,
-      "end": 2349.0,
-      "text": "Understood, I'll make sure Tomas and I both treat it as in scope, not a stretch goal."
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 2251.7,
+      "end": 2254.9,
+      "text": "Let's not scope the fleet monitoring formally today."
     },
     {
       "id": "seg_234",
-      "speaker": "spk_1",
-      "channel": "system",
-      "start": 2349.8,
-      "end": 2351.4,
-      "text": "Agreed, noting it now."
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 2255.2,
+      "end": 2256.8,
+      "text": "The sanity check though—"
     },
     {
       "id": "seg_235",
-      "speaker": "local",
-      "channel": "microphone",
-      "start": 2352.7,
-      "end": 2355.5,
-      "text": "Great, let's move to action items then."
+      "speaker": "spk_0",
+      "channel": "system",
+      "start": 2257.3,
+      "end": 2267.7,
+      "text": "Right, that one I want locked in now, not deferred, given how cheap it is and how directly it addresses something that already burned us once."
     },
     {
       "id": "seg_236",
-      "speaker": "local",
-      "channel": "microphone",
-      "start": 2355.8,
-      "end": 2367.0,
-      "text": "First, Rafael will finalize the rib pattern decision, ideally within the next week and a half, and will confirm the bead-blasted demo unit path with Corvant this week."
+      "speaker": "spk_0",
+      "channel": "system",
+      "start": 2267.9,
+      "end": 2279.5,
+      "text": "I'll make sure it's explicitly in scope for the abstraction layer work already approved, and that Tomas and I both treat it as in scope, not a stretch goal."
     },
     {
       "id": "seg_237",
-      "speaker": "spk_2",
+      "speaker": "spk_0",
       "channel": "system",
-      "start": 2367.3,
-      "end": 2371.7,
-      "text": "Confirmed, I'll have an update on both by early next week."
+      "start": 2279.8,
+      "end": 2306.2,
+      "text": "Honestly, the fact that it's this cheap and we still didn't have it on Vantage is the part that bugs me, it's the kind of gap that only ever gets found in hindsight unless someone deliberately puts a checklist item in front of it, so I'd rather over-communicate that it's locked in than assume everyone remembers a decision from a steerco meeting three months from now."
     },
     {
       "id": "seg_238",
-      "speaker": "local",
-      "channel": "microphone",
-      "start": 2372.6,
-      "end": 2385.4,
-      "text": "Second, Sun will hold marketing off from using preliminary calibration accuracy numbers for at least two more weeks, and will keep the room updated on the trademark search for the final —"
+      "speaker": "spk_1",
+      "channel": "system",
+      "start": 2307.0,
+      "end": 2308.6,
+      "text": "Agreed, noting it now."
     },
     {
       "id": "seg_239",
-      "speaker": "spk_4",
-      "channel": "system",
-      "start": 2386.0,
-      "end": 2394.0,
-      "text": "Sorry, quick one before you move on, does that trademark search cover international markets too, or just domestic for now?"
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 2309.9,
+      "end": 2312.7,
+      "text": "Great, let's move to action items then."
     },
     {
       "id": "seg_240",
       "speaker": "local",
       "channel": "microphone",
-      "start": 2395.1,
-      "end": 2398.3,
-      "text": "Wait, go ahead, that's a fair question actually."
+      "start": 2312.9,
+      "end": 2324.1,
+      "text": "First, Rafael will finalize the rib pattern decision, ideally within the next week and a half, and will confirm the bead-blasted demo unit path with Corvant this week."
     },
     {
       "id": "seg_241",
-      "speaker": "spk_3",
+      "speaker": "spk_2",
       "channel": "system",
-      "start": 2398.7,
-      "end": 2409.9,
-      "text": "Just domestic for the initial filing, international follows once we've committed to the name domestically, that's standard practice for us and keeps legal costs reasonable at this stage."
+      "start": 2324.4,
+      "end": 2328.8,
+      "text": "Confirmed, I'll have an update on both by early next week."
     },
     {
       "id": "seg_242",
-      "speaker": "spk_4",
-      "channel": "system",
-      "start": 2411.4,
-      "end": 2413.8,
-      "text": "Got it, thanks, that answers it."
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 2329.7,
+      "end": 2342.5,
+      "text": "Second, Sun will hold marketing off from using preliminary calibration accuracy numbers for at least two more weeks, and will keep the room updated on the trademark search for the final —"
     },
     {
       "id": "seg_243",
-      "speaker": "local",
-      "channel": "microphone",
-      "start": 2414.4,
-      "end": 2428.4,
-      "text": "Okay, continuing, second, Sun will hold marketing off from using preliminary calibration accuracy numbers for at least two more weeks, and will keep the room updated on the trademark search for the final product name."
+      "speaker": "spk_4",
+      "channel": "system",
+      "start": 2343.1,
+      "end": 2351.1,
+      "text": "Sorry, quick one before you move on, does that trademark search cover international markets too, or just domestic for now?"
     },
     {
       "id": "seg_244",
-      "speaker": "spk_3",
-      "channel": "system",
-      "start": 2429.2,
-      "end": 2429.8,
-      "text": "Confirmed."
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 2352.2,
+      "end": 2355.4,
+      "text": "Wait, go ahead, that's a fair question actually."
     },
     {
       "id": "seg_245",
-      "speaker": "local",
-      "channel": "microphone",
-      "start": 2430.2,
-      "end": 2443.4,
-      "text": "Third, Maya and Tomas will continue building out the shared firmware abstraction layer, including the first-boot sanity check and the factory-mode data routing, targeting full test coverage within the three-week estimate discussed today."
+      "speaker": "spk_3",
+      "channel": "system",
+      "start": 2355.8,
+      "end": 2367.0,
+      "text": "Just domestic for the initial filing, international follows once we've committed to the name domestically, that's standard practice for us and keeps legal costs reasonable at this stage."
     },
     {
       "id": "seg_246",
-      "speaker": "spk_0",
+      "speaker": "spk_4",
       "channel": "system",
-      "start": 2444.1,
-      "end": 2449.3,
-      "text": "Confirmed, we'll check in on progress at next month's steerco if not sooner."
+      "start": 2368.5,
+      "end": 2370.9,
+      "text": "Got it, thanks, that answers it."
     },
     {
       "id": "seg_247",
-      "speaker": "spk_1",
-      "channel": "system",
-      "start": 2450.3,
-      "end": 2450.9,
-      "text": "Agreed."
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 2371.5,
+      "end": 2385.5,
+      "text": "Okay, continuing, second, Sun will hold marketing off from using preliminary calibration accuracy numbers for at least two more weeks, and will keep the room updated on the trademark search for the final product name."
     },
     {
       "id": "seg_248",
-      "speaker": "local",
-      "channel": "microphone",
-      "start": 2451.4,
-      "end": 2463.0,
-      "text": "And fourth, Dele will monitor the budget contingency line given the enclosure situation and flag proactively if we approach the ten percent threshold that would trigger a formal reforecast."
+      "speaker": "spk_3",
+      "channel": "system",
+      "start": 2386.3,
+      "end": 2386.9,
+      "text": "Confirmed."
     },
     {
       "id": "seg_249",
-      "speaker": "spk_4",
-      "channel": "system",
-      "start": 2463.8,
-      "end": 2471.8,
-      "text": "Confirmed, I'll have an updated forecast view ready for next steerco regardless, just to keep everyone honest on the numbers."
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 2387.3,
+      "end": 2400.5,
+      "text": "Third, Maya and Tomas will continue building out the shared firmware abstraction layer, including the first-boot sanity check and the factory-mode data routing, targeting full test coverage within the three-week estimate discussed today."
     },
     {
       "id": "seg_250",
-      "speaker": "spk_2",
+      "speaker": "spk_0",
       "channel": "system",
-      "start": 2473.1,
-      "end": 2481.1,
-      "text": "Should I fold the second-source sensor qualification cost into that forecast too, even though we haven't formally kicked it off?"
+      "start": 2401.2,
+      "end": 2416.4,
+      "text": "Confirmed, we'll check in on progress at the interim check-in if not sooner, and I'll make sure the sanity check and factory-mode flag work show up as line items in that update, not just the headline abstraction-layer number."
     },
     {
       "id": "seg_251",
-      "speaker": "spk_4",
+      "speaker": "spk_1",
       "channel": "system",
-      "start": 2481.4,
-      "end": 2490.2,
-      "text": "Yes please, even a rough placeholder number is more useful to me than finding out about it later as an unbudgeted surprise."
+      "start": 2417.4,
+      "end": 2418.0,
+      "text": "Agreed."
     },
     {
       "id": "seg_252",
-      "speaker": "spk_2",
-      "channel": "system",
-      "start": 2491.1,
-      "end": 2499.1,
-      "text": "Will do, I'll get you a rough order of magnitude by next week once I've talked to a candidate supplier."
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 2418.5,
+      "end": 2430.1,
+      "text": "And fourth, Dele will monitor the budget contingency line given the enclosure situation and flag proactively if we approach the ten percent threshold that would trigger a formal reforecast."
     },
     {
       "id": "seg_253",
-      "speaker": "local",
-      "channel": "microphone",
-      "start": 2499.7,
-      "end": 2506.1,
-      "text": "Good, that's a nice example of exactly the kind of proactive flagging we talked about earlier."
+      "speaker": "spk_4",
+      "channel": "system",
+      "start": 2430.9,
+      "end": 2438.9,
+      "text": "Confirmed, I'll have an updated forecast view ready for next steerco regardless, just to keep everyone honest on the numbers."
     },
     {
       "id": "seg_254",
-      "speaker": "local",
-      "channel": "microphone",
-      "start": 2506.3,
-      "end": 2514.7,
-      "text": "Anything on next steerco's date, is it the usual monthly cadence or does the rib pattern timeline argue for meeting sooner?"
+      "speaker": "spk_2",
+      "channel": "system",
+      "start": 2440.2,
+      "end": 2448.2,
+      "text": "Should I fold the second-source sensor qualification cost into that forecast too, even though we haven't formally kicked it off?"
     },
     {
       "id": "seg_255",
-      "speaker": "spk_3",
+      "speaker": "spk_4",
       "channel": "system",
-      "start": 2515.8,
-      "end": 2528.6,
-      "text": "I'd actually suggest a short check-in in two weeks rather than waiting the full month, just given how much of today hinged on decisions landing in the next week and a half."
+      "start": 2448.5,
+      "end": 2457.3,
+      "text": "Yes please, even a rough placeholder number is more useful to me than finding out about it later as an unbudgeted surprise."
     },
     {
       "id": "seg_256",
-      "speaker": "local",
-      "channel": "microphone",
-      "start": 2529.0,
-      "end": 2537.8,
-      "text": "Agreed, let's do a shorter interim check-in in two weeks, and keep the full monthly steerco on the regular cadence after that."
+      "speaker": "spk_2",
+      "channel": "system",
+      "start": 2458.2,
+      "end": 2466.2,
+      "text": "Will do, I'll get you a rough order of magnitude by next week once I've talked to a candidate supplier."
     },
     {
       "id": "seg_257",
-      "speaker": "spk_2",
-      "channel": "system",
-      "start": 2539.3,
-      "end": 2546.1,
-      "text": "Works for me, I should have a clear answer on the rib pattern well before then anyway."
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 2466.8,
+      "end": 2469.2,
+      "text": "Good, nice example of proactive flagging."
     },
     {
       "id": "seg_258",
-      "speaker": "spk_0",
-      "channel": "system",
-      "start": 2546.7,
-      "end": 2550.7,
-      "text": "Same, that timing works for a calibration progress update too."
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 2469.4,
+      "end": 2471.4,
+      "text": "Anything on next steerco's date?"
     },
     {
       "id": "seg_259",
-      "speaker": "spk_4",
+      "speaker": "spk_3",
       "channel": "system",
-      "start": 2551.5,
-      "end": 2552.7,
-      "text": "Fine by me."
+      "start": 2472.5,
+      "end": 2485.3,
+      "text": "I'd actually suggest a short check-in in two weeks rather than waiting the full month, just given how much of today hinged on decisions landing in the next week and a half."
     },
     {
       "id": "seg_260",
-      "speaker": "spk_1",
-      "channel": "system",
-      "start": 2553.1,
-      "end": 2554.3,
-      "text": "Works for me."
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 2485.7,
+      "end": 2494.5,
+      "text": "Agreed, let's do a shorter interim check-in in two weeks, and keep the full monthly steerco on the regular cadence after that."
     },
     {
       "id": "seg_261",
-      "speaker": "local",
-      "channel": "microphone",
-      "start": 2555.0,
-      "end": 2562.6,
-      "text": "Great, I'll get that on the calendar today, both the two-week check-in and the regular monthly slot after that."
+      "speaker": "spk_2",
+      "channel": "system",
+      "start": 2496.0,
+      "end": 2502.8,
+      "text": "Works for me, I should have a clear answer on the rib pattern well before then anyway."
     },
     {
       "id": "seg_262",
-      "speaker": "spk_3",
+      "speaker": "spk_0",
       "channel": "system",
-      "start": 2563.6,
-      "end": 2575.2,
-      "text": "Sounds good, I'll make sure my updates are ready for whichever one ends up being the venue for the certification testing results, since those should land right around then."
+      "start": 2503.4,
+      "end": 2514.2,
+      "text": "Same, that timing works for a calibration progress update too, I should have the full pressure characterization results by then as well, not just temperature and humidity."
     },
     {
       "id": "seg_263",
-      "speaker": "local",
-      "channel": "microphone",
-      "start": 2575.7,
-      "end": 2584.9,
-      "text": "Good point, let's default to covering certification results at the two-week check-in specifically, even if it ends up being a short agenda otherwise."
+      "speaker": "spk_4",
+      "channel": "system",
+      "start": 2515.0,
+      "end": 2516.2,
+      "text": "Fine by me."
     },
     {
       "id": "seg_264",
-      "speaker": "spk_3",
+      "speaker": "spk_1",
       "channel": "system",
-      "start": 2585.7,
-      "end": 2590.9,
-      "text": "Works for me, I'll flag it as the headline item on that invite."
+      "start": 2516.6,
+      "end": 2517.8,
+      "text": "Works for me."
     },
     {
       "id": "seg_265",
       "speaker": "local",
       "channel": "microphone",
-      "start": 2592.2,
-      "end": 2604.2,
-      "text": "Great, four action items plus the interim check-in, thanks everyone, this was a genuinely productive session, especially getting ahead of the enclosure risk instead of discovering it in six weeks."
+      "start": 2518.5,
+      "end": 2526.1,
+      "text": "Great, I'll get that on the calendar today, both the two-week check-in and the regular monthly slot after that."
     },
     {
       "id": "seg_266",
-      "speaker": "spk_0",
+      "speaker": "spk_3",
       "channel": "system",
-      "start": 2604.5,
-      "end": 2610.9,
-      "text": "Agreed, feels like we actually made real decisions today instead of just reviewing a status deck."
+      "start": 2527.1,
+      "end": 2538.7,
+      "text": "Sounds good, I'll make sure my updates are ready for whichever one ends up being the venue for the certification testing results, since those should land right around then."
     },
     {
       "id": "seg_267",
-      "speaker": "spk_2",
-      "channel": "system",
-      "start": 2611.8,
-      "end": 2619.0,
-      "text": "Same, thanks for pushing on the contingency options rather than letting the enclosure risk just sit there unresolved."
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 2539.2,
+      "end": 2548.4,
+      "text": "Good point, let's default to covering certification results at the two-week check-in specifically, even if it ends up being a short agenda otherwise."
     },
     {
       "id": "seg_268",
-      "speaker": "local",
-      "channel": "microphone",
-      "start": 2619.6,
-      "end": 2620.8,
-      "text": "That's the goal."
+      "speaker": "spk_3",
+      "channel": "system",
+      "start": 2549.2,
+      "end": 2554.4,
+      "text": "Works for me, I'll flag it as the headline item on that invite."
     },
     {
       "id": "seg_269",
       "speaker": "local",
       "channel": "microphone",
-      "start": 2621.1,
-      "end": 2623.5,
-      "text": "Thanks all, talk in two weeks."
+      "start": 2555.7,
+      "end": 2562.1,
+      "text": "Great, four action items plus the interim check-in, thanks everyone, this was a genuinely productive session."
     },
     {
       "id": "seg_270",
-      "speaker": "spk_3",
+      "speaker": "spk_0",
       "channel": "system",
-      "start": 2624.6,
-      "end": 2625.4,
-      "text": "Thanks all."
+      "start": 2562.4,
+      "end": 2568.8,
+      "text": "Agreed, feels like we actually made real decisions today instead of just reviewing a status deck."
     },
     {
       "id": "seg_271",
       "speaker": "spk_2",
       "channel": "system",
-      "start": 2625.8,
-      "end": 2629.4,
-      "text": "Thanks, I'll keep everyone posted on the rib pattern."
+      "start": 2569.7,
+      "end": 2576.9,
+      "text": "Same, thanks for pushing on the contingency options rather than letting the enclosure risk just sit there unresolved."
     },
     {
       "id": "seg_272",
-      "speaker": "spk_0",
-      "channel": "system",
-      "start": 2630.9,
-      "end": 2631.7,
-      "text": "Thanks everyone."
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 2577.5,
+      "end": 2578.7,
+      "text": "That's the goal."
     },
     {
       "id": "seg_273",
-      "speaker": "spk_4",
-      "channel": "system",
-      "start": 2632.3,
-      "end": 2633.5,
-      "text": "Thanks, talk soon."
+      "speaker": "local",
+      "channel": "microphone",
+      "start": 2578.9,
+      "end": 2581.3,
+      "text": "Thanks all, talk in two weeks."
     },
     {
       "id": "seg_274",
+      "speaker": "spk_3",
+      "channel": "system",
+      "start": 2582.4,
+      "end": 2583.2,
+      "text": "Thanks all."
+    },
+    {
+      "id": "seg_275",
+      "speaker": "spk_2",
+      "channel": "system",
+      "start": 2583.6,
+      "end": 2587.2,
+      "text": "Thanks, I'll keep everyone posted on the rib pattern."
+    },
+    {
+      "id": "seg_276",
+      "speaker": "spk_0",
+      "channel": "system",
+      "start": 2588.7,
+      "end": 2589.5,
+      "text": "Thanks everyone."
+    },
+    {
+      "id": "seg_277",
+      "speaker": "spk_4",
+      "channel": "system",
+      "start": 2590.1,
+      "end": 2591.3,
+      "text": "Thanks, talk soon."
+    },
+    {
+      "id": "seg_278",
       "speaker": "spk_1",
       "channel": "system",
-      "start": 2634.3,
-      "end": 2635.1,
+      "start": 2592.1,
+      "end": 2592.9,
       "text": "Bye all."
     }
   ],
