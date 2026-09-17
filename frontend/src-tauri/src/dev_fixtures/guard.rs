@@ -4,11 +4,15 @@ pub const ENV_NO_AUDIO: &str = "NIXON_FIXTURES_NO_AUDIO";
 pub const ENV_FAKE_DOWNLOADS: &str = "NIXON_FAKE_DOWNLOADS";
 pub const ENV_RESET_ONBOARDING: &str = "NIXON_RESET_ONBOARDING";
 
+/// Pure check backing [`is_debug_identifier`]: an identifier counts as a dev
+/// build only when present and suffixed with `.debug` (ADR-0004).
+pub(crate) fn identifier_is_debug(id: Option<&str>) -> bool {
+    id.map(|s| s.ends_with(".debug")).unwrap_or(false)
+}
+
 /// True only when the running bundle is the isolated dev identifier (ADR-0004).
 pub fn is_debug_identifier() -> bool {
-    crate::app_paths::bundle_identifier()
-        .map(|id| id.ends_with(".debug"))
-        .unwrap_or(false)
+    identifier_is_debug(crate::app_paths::bundle_identifier())
 }
 
 pub fn env_flag(name: &str) -> bool {
@@ -24,17 +28,24 @@ pub struct DevFlags {
 }
 
 impl DevFlags {
-    pub fn from_env() -> Self {
+    /// Pure builder backing [`DevFlags::from_env`]: reads each variable through
+    /// `lookup` instead of the process environment, so tests can supply values
+    /// without mutating shared, unsynchronised process state.
+    pub(crate) fn from_lookup(lookup: impl Fn(&str) -> Option<String>) -> Self {
         Self {
-            fixtures: matches!(std::env::var(ENV_FIXTURES).as_deref(), Ok("demo")),
-            no_audio: env_flag(ENV_NO_AUDIO),
-            fake_downloads: env_flag(ENV_FAKE_DOWNLOADS),
-            reset_onboarding: env_flag(ENV_RESET_ONBOARDING),
+            fixtures: lookup(ENV_FIXTURES).as_deref() == Some("demo"),
+            no_audio: matches!(lookup(ENV_NO_AUDIO).as_deref(), Some("1")),
+            fake_downloads: matches!(lookup(ENV_FAKE_DOWNLOADS).as_deref(), Some("1")),
+            reset_onboarding: matches!(lookup(ENV_RESET_ONBOARDING).as_deref(), Some("1")),
         }
+    }
+
+    pub fn from_env() -> Self {
+        Self::from_lookup(|k| std::env::var(k).ok())
     }
 }
 
-/// Shared gate: log once and return false when a dev path must not run.
+/// Shared gate: log and return false when a dev path must not run.
 pub fn allowed(what: &str) -> bool {
     if is_debug_identifier() {
         true
@@ -56,22 +67,47 @@ mod tests {
         assert!(!env_flag("NIXON_TEST_FLAG_B"));
         assert!(!env_flag("NIXON_TEST_FLAG_C"));
     }
+    fn lookup_from(
+        vars: std::collections::HashMap<&'static str, &'static str>,
+    ) -> impl Fn(&str) -> Option<String> {
+        move |k: &str| vars.get(k).map(|v| v.to_string())
+    }
     #[test]
     fn fixtures_flag_requires_demo_value() {
-        std::env::set_var(ENV_FIXTURES, "demo");
-        assert!(DevFlags::from_env().fixtures);
-        std::env::set_var(ENV_FIXTURES, "1");
-        assert!(!DevFlags::from_env().fixtures);
-        std::env::remove_var(ENV_FIXTURES);
+        use std::collections::HashMap;
+        assert!(
+            DevFlags::from_lookup(lookup_from(HashMap::from([(ENV_FIXTURES, "demo")]))).fixtures
+        );
+        assert!(!DevFlags::from_lookup(lookup_from(HashMap::from([(ENV_FIXTURES, "1")]))).fixtures);
+        let all_set = DevFlags::from_lookup(lookup_from(HashMap::from([
+            (ENV_FIXTURES, "demo"),
+            (ENV_NO_AUDIO, "1"),
+            (ENV_FAKE_DOWNLOADS, "1"),
+            (ENV_RESET_ONBOARDING, "1"),
+        ])));
+        assert!(all_set.fixtures);
+        assert!(all_set.no_audio);
+        assert!(all_set.fake_downloads);
+        assert!(all_set.reset_onboarding);
+        let none_set = DevFlags::from_lookup(lookup_from(HashMap::new()));
+        assert!(!none_set.fixtures);
+        assert!(!none_set.no_audio);
+        assert!(!none_set.fake_downloads);
+        assert!(!none_set.reset_onboarding);
+    }
+    #[test]
+    fn identifier_is_debug_requires_the_debug_suffix() {
+        assert!(!identifier_is_debug(None));
+        assert!(!identifier_is_debug(Some("ai.vinyl.app")));
+        assert!(identifier_is_debug(Some("ai.vinyl.app.debug")));
+        assert!(!identifier_is_debug(Some("debug")));
     }
     #[test]
     fn debug_identifier_is_false_when_uninitialised() {
-        // bundle identifier is a OnceLock; in unit tests it is unset -> must fail closed
-        assert!(
-            !is_debug_identifier()
-                || crate::app_paths::bundle_identifier()
-                    .map(|s| s.ends_with(".debug"))
-                    .unwrap_or(false)
-        );
+        // The bundle identifier is a process-wide OnceLock that only the Tauri
+        // `setup` hook ever populates; `cargo test --lib` never runs that hook,
+        // so it is guaranteed unset here and this genuinely exercises the
+        // fail-closed default rather than asserting a tautology.
+        assert!(!is_debug_identifier());
     }
 }
