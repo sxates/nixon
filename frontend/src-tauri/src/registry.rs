@@ -14,6 +14,10 @@ use crate::{
     llm_activity, meetings, notifications, ollama, onboarding, openai, openrouter, parakeet_engine,
     people, power, search, settings, summary, transcripts, updater, utils, whisper_engine, zoom,
 };
+// specs/0059: the whole `dev_fixtures` module is `#![cfg(debug_assertions)]`-gated, so
+// this import must be too — a release build has no `crate::dev_fixtures` to resolve.
+#[cfg(debug_assertions)]
+use crate::dev_fixtures;
 
 // Concrete over `tauri::Wry` (not generic over `R: Runtime`): several registered
 // commands take a plain `AppHandle` / `State<...<tauri::Wry>>`, so a generic
@@ -255,6 +259,13 @@ pub fn invoke_handler() -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Sen
         onboarding::save_onboarding_status_cmd,
         onboarding::reset_onboarding_status_cmd,
         onboarding::complete_onboarding,
+        // specs/0059 — debug builds only
+        #[cfg(debug_assertions)]
+        dev_fixtures::commands::dev_load_fixtures,
+        #[cfg(debug_assertions)]
+        dev_fixtures::commands::dev_reset_onboarding,
+        #[cfg(debug_assertions)]
+        dev_fixtures::commands::dev_get_flags,
         // System settings commands
         #[cfg(target_os = "macos")]
         utils::open_system_settings,

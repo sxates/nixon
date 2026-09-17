@@ -3,6 +3,7 @@
 #![cfg(debug_assertions)]
 
 pub mod audio;
+pub mod commands;
 pub mod dataset;
 pub mod fake_downloads;
 pub mod folder;
