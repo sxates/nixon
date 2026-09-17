@@ -18,8 +18,18 @@ backend, your meetings, the calendar, or live audio.
    with `serve-out.mjs` (no server, no HMR — deterministic).
 
 ## Files
-- `tauri-mock.js` — browser stub of the Tauri runtime + the sample data screens render. **Edit
-  the FIXTURES here to change what shows up.**
+- `tauri-mock.js` — browser stub of the Tauri runtime + the sample data screens render.
+  **GENERATED** from `src-tauri/fixtures/demo/` (specs/0059's dev-fixtures dataset:
+  `people.json` + `meetings/*.json`) by `build-mock.mjs` — don't hand-edit it. To change
+  what shows up, edit the fixture dataset (or `build-mock.mjs`'s command shapes) and
+  regenerate with `node scripts/shots/build-mock.mjs` (or `pnpm shots:mock`).
+  `src/__tests__/mock-contract.test.ts` fails the build if the mock ever answers a Tauri
+  command that doesn't exist in `src-tauri/src/registry.rs`. It also reads three URL
+  params, consumed by the specs/0060 screenshot pipeline: `onboardingStep` (1–5, forces
+  the onboarding wizard to that step), `theme` (`deck`|`faceplate`, mapped to the app's
+  real dark/light preference), and `sidebar=open` (expands the sidebar; collapsed is the
+  default).
+- `build-mock.mjs` — generates `tauri-mock.js` from the fixture dataset.
 - `serve-out.mjs` — tiny static server for the `out/` export (maps clean URLs → `*.html`).
 - `screenshot.mjs` — CDP screenshot driver: injects the mock, navigates, waits, captures.
 
@@ -57,8 +67,10 @@ node scripts/shots/serve-out.mjs "$WT/frontend/out" 3211 &
 ```
 
 ## Limits
-- Mock data only (no real meetings / calendar / audio / summaries).
-- The sidebar renders collapsed by default (fresh profile). To show it expanded, set the
-  relevant `localStorage` key in `tauri-mock.js` before the app reads it.
+- Fixture data only (no real calendar / audio / live recording).
+- The sidebar renders collapsed by default (fresh profile). Add `?sidebar=open` to the
+  screenshot URL to expand it.
 - After UI changes you must **rebuild** the export to re-screenshot.
+- After fixture-dataset changes (`src-tauri/fixtures/demo/`) you must **regenerate**
+  `tauri-mock.js` (`pnpm shots:mock`) before rebuilding the export.
 - macOS path to Chrome is hardcoded; override with `CHROME_PATH=...`.
