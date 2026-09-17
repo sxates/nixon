@@ -17,7 +17,11 @@ import { UpdateStatusProvider, useUpdateStatus, describeStatus } from '@/context
 const wrapper = ({ children }: { children: React.ReactNode }) => <UpdateStatusProvider>{children}</UpdateStatusProvider>;
 const emit = (payload: unknown) => act(() => listeners.get('update-status')?.({ payload }));
 
-beforeEach(() => { listeners.clear(); invoke.mockClear(); });
+beforeEach(() => {
+  listeners.clear();
+  invoke.mockReset();
+  invoke.mockImplementation(async (_cmd: string): Promise<unknown> => ({ state: 'idle', last_checked: null }));
+});
 
 describe('UpdateStatusProvider (specs/0058)', () => {
   it('seeds from api_get_update_status and follows the event', async () => {
@@ -47,6 +51,7 @@ describe('UpdateStatusProvider (specs/0058)', () => {
 
   it('ignores malformed payloads', async () => {
     const { result } = renderHook(() => useUpdateStatus(), { wrapper });
+    await waitFor(() => expect(invoke).toHaveBeenCalledWith('api_get_update_status'));
     emit({ nope: true });
     expect(result.current.status.state).toBe('idle');
   });
