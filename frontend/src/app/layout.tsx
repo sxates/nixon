@@ -13,6 +13,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { safeListen, makeSafeUnlisten } from '@/lib/safe-listen'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { RecordingStateProvider } from '@/contexts/RecordingStateContext'
+import { UpdateStatusProvider } from '@/contexts/UpdateStatusContext'
 import { ThemeProvider, useTheme } from '@/contexts/ThemeContext'
 import { OllamaDownloadProvider } from '@/contexts/OllamaDownloadContext'
 import { TranscriptProvider } from '@/contexts/TranscriptContext'
@@ -278,6 +279,7 @@ export default function RootLayout({
             block) applies during onboarding too. */}
         <ThemeProvider>
           <RecordingStateProvider>
+            <UpdateStatusProvider>
             <TranscriptProvider>
               <ConfigProvider>
                 <OllamaDownloadProvider>
@@ -364,6 +366,7 @@ export default function RootLayout({
                 </OllamaDownloadProvider>
               </ConfigProvider>
             </TranscriptProvider>
+            </UpdateStatusProvider>
           </RecordingStateProvider>
           <ThemedToaster offset={showOnboarding ? undefined : RAIL_TOAST_OFFSET} />
         </ThemeProvider>
