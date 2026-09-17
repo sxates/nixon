@@ -25,7 +25,8 @@
         "tauri:build:coreml": "tauri build -- --features coreml",
         "lint": "next lint",
         "test": "vitest run",
-        "test:watch": "vitest"
+        "test:watch": "vitest",
+        "shots:mock": "node scripts/shots/build-mock.mjs"
     },
     "dependencies": {
         "@blocknote/core": "0.36.0",
