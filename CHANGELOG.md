@@ -14,6 +14,10 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 ## [Unreleased]
 
+_(nothing yet)_
+
+## [0.3.0] - 2026-09-16
+
 ### Added
 
 - **In-app updates.** Nixon checks GitHub for new versions about every six hours,
