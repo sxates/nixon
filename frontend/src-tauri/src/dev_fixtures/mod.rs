@@ -4,6 +4,7 @@
 
 pub mod audio;
 pub mod dataset;
+pub mod fake_downloads;
 pub mod folder;
 pub mod guard;
 pub mod seed;

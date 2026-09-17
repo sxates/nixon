@@ -133,6 +133,16 @@ pub async fn builtin_ai_download_model<R: Runtime>(
     state: State<'_, ModelManagerState>,
     model_name: String,
 ) -> Result<(), String> {
+    #[cfg(debug_assertions)]
+    if crate::dev_fixtures::fake_downloads::active() {
+        crate::dev_fixtures::fake_downloads::run(
+            &app,
+            crate::dev_fixtures::fake_downloads::Model::BuiltinAi,
+            &model_name,
+        )
+        .await;
+        return Ok(());
+    }
     let manager = {
         // Ensure manager is initialized
         {
@@ -273,6 +283,12 @@ pub async fn builtin_ai_is_model_ready<R: Runtime>(
     model_name: String,
     refresh: Option<bool>, // NEW: Optional refresh parameter
 ) -> Result<bool, String> {
+    #[cfg(debug_assertions)]
+    if crate::dev_fixtures::fake_downloads::is_faked_present(
+        crate::dev_fixtures::fake_downloads::Model::BuiltinAi,
+    ) {
+        return Ok(true);
+    }
     let manager = {
         // Ensure manager is initialized
         {

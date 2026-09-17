@@ -118,6 +118,16 @@ pub async fn api_get_meeting_speakers<R: Runtime>(
 /// `diarization-progress` per stage. No-op if already cached.
 #[tauri::command]
 pub async fn api_download_diarization_models<R: Runtime>(app: AppHandle<R>) -> Result<(), String> {
+    #[cfg(debug_assertions)]
+    if crate::dev_fixtures::fake_downloads::active() {
+        crate::dev_fixtures::fake_downloads::run(
+            &app,
+            crate::dev_fixtures::fake_downloads::Model::Diarization,
+            "diarization",
+        )
+        .await;
+        return Ok(());
+    }
     tauri::async_runtime::spawn_blocking(move || {
         let progress = move |stage: models::DownloadStage| {
             let label = match stage {
@@ -137,6 +147,12 @@ pub async fn api_download_diarization_models<R: Runtime>(app: AppHandle<R>) -> R
 /// Whether both diarization models are present (and a plausible size) on disk.
 #[tauri::command]
 pub async fn api_diarization_models_present() -> Result<bool, String> {
+    #[cfg(debug_assertions)]
+    if crate::dev_fixtures::fake_downloads::is_faked_present(
+        crate::dev_fixtures::fake_downloads::Model::Diarization,
+    ) {
+        return Ok(true);
+    }
     Ok(models::models_present())
 }
 

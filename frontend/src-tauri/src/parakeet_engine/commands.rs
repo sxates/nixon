@@ -157,6 +157,12 @@ pub async fn parakeet_is_model_loaded() -> Result<bool, String> {
 
 #[command]
 pub async fn parakeet_has_available_models() -> Result<bool, String> {
+    #[cfg(debug_assertions)]
+    if crate::dev_fixtures::fake_downloads::is_faked_present(
+        crate::dev_fixtures::fake_downloads::Model::Parakeet,
+    ) {
+        return Ok(true);
+    }
     let engine = {
         let guard = PARAKEET_ENGINE.lock().unwrap();
         guard.as_ref().cloned()
@@ -388,6 +394,16 @@ pub async fn parakeet_download_model<R: Runtime>(
     app_handle: AppHandle<R>,
     model_name: String,
 ) -> Result<(), String> {
+    #[cfg(debug_assertions)]
+    if crate::dev_fixtures::fake_downloads::active() {
+        crate::dev_fixtures::fake_downloads::run(
+            &app_handle,
+            crate::dev_fixtures::fake_downloads::Model::Parakeet,
+            &model_name,
+        )
+        .await;
+        return Ok(());
+    }
     let engine = {
         let guard = PARAKEET_ENGINE.lock().unwrap();
         guard.as_ref().cloned()
