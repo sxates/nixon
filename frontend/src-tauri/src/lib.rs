@@ -120,6 +120,10 @@ pub fn run() {
                 })
                 .build(),
         );
+
+        // specs/0058 — in-app updates. Desktop-only like the plugins above; the
+        // driver's `updater_builder()` needs this plugin's state to be registered.
+        builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
     }
 
     builder
@@ -146,7 +150,6 @@ pub fn run() {
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_updater::Builder::new().build())
         // specs/0058 — updater state (status machine; the payload is staged on disk).
         .manage(updater::UpdaterState::default())
         .manage(Arc::new(RwLock::new(
