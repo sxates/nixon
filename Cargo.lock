@@ -3836,6 +3836,7 @@ dependencies = [
  "reqwest 0.11.27",
  "ringbuf",
  "rubato 0.15.0",
+ "semver",
  "serde",
  "serde_json",
  "sherpa-rs",
