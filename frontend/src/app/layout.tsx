@@ -13,6 +13,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { safeListen, makeSafeUnlisten } from '@/lib/safe-listen'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { RecordingStateProvider } from '@/contexts/RecordingStateContext'
+import { UpdateStatusProvider } from '@/contexts/UpdateStatusContext'
 import { ThemeProvider, useTheme } from '@/contexts/ThemeContext'
 import { OllamaDownloadProvider } from '@/contexts/OllamaDownloadContext'
 import { TranscriptProvider } from '@/contexts/TranscriptContext'
@@ -278,92 +279,94 @@ export default function RootLayout({
             block) applies during onboarding too. */}
         <ThemeProvider>
           <RecordingStateProvider>
-            <TranscriptProvider>
-              <ConfigProvider>
-                <OllamaDownloadProvider>
-                  <OnboardingProvider>
-                    <SidebarProvider>
-                        <TooltipProvider>
-                          {/* spec 0051 WS2 — hoisted above RecordingPostProcessingProvider (and
-                              out of the showOnboarding ternary, so it's ALWAYS mounted): the
-                              tray / global-shortcut stop path runs through
-                              RecordingPostProcessingProvider, which calls useRecordingStop
-                              unconditionally, and useRecordingStop now reads useBacklog() to
-                              hand a 'process-now' meeting to the backlog. That handoff must be
-                              live outside onboarding too.
+            <UpdateStatusProvider>
+              <TranscriptProvider>
+                <ConfigProvider>
+                  <OllamaDownloadProvider>
+                    <OnboardingProvider>
+                      <SidebarProvider>
+                          <TooltipProvider>
+                            {/* spec 0051 WS2 — hoisted above RecordingPostProcessingProvider (and
+                                out of the showOnboarding ternary, so it's ALWAYS mounted): the
+                                tray / global-shortcut stop path runs through
+                                RecordingPostProcessingProvider, which calls useRecordingStop
+                                unconditionally, and useRecordingStop now reads useBacklog() to
+                                hand a 'process-now' meeting to the backlog. That handoff must be
+                                live outside onboarding too.
+  
+                                Being always-mounted means the backlog's mount effect also
+                                fires DURING onboarding, when the Rust `AppState` is not yet
+                                managed. `api_list_deferred_meetings` therefore uses
+                                `try_state` and answers with an empty list on that path
+                                (spec 0051 final review, Finding 2) — with `state()` it
+                                panicked, and a panicking command never sends its IPC
+                                response, so the frontend promise hung forever and the
+                                backlog stayed dead for the session. */}
+                            <DeferredBacklogProvider>
+                            <RecordingPostProcessingProvider>
+                              <PermissionsModalProvider>
+                              <ImportDialogProvider onOpen={handleOpenImportDialog}>
+                                {/* Download progress toast provider - listens for background downloads */}
+                                <DownloadProgressToastProvider />
+  
+                                {/* Show onboarding or main app */}
+                                {showOnboarding ? (
+                                  <OnboardingFlow onComplete={handleOnboardingComplete} />
+                                ) : (
+                                  <div className="flex">
+                                    {/* Scoped to the Sidebar and the transport rail deliberately
+                                        (specs/0052 + 0057): they are the only two consumers — the rail's
+                                        queue is the second (decision 8) — and every llm-activity-changed
+                                        event sets state here. Hoisting it above MainContent would
+                                        re-render the whole page tree on each background task transition
+                                        — a prep pass emits a burst of them. */}
+                                    <LlmActivityProvider>
+                                      <Sidebar />
+                                      {/* specs/0057 decision 7 — THE transport: fixed bottom rail on
+                                          every post-onboarding route, with the deck status, the REC/HOLD/
+                                          STOP keys and the one global queue. Replaces GlobalRecordingBar
+                                          and the deferred-backlog pill. */}
+                                      <TransportRail />
+                                    </LlmActivityProvider>
+                                    <MainContent>{children}</MainContent>
+                                    {/* ⌘K command palette — global, every route (post-onboarding) */}
+                                    <CommandPalette />
+                                    {/* Request OS notification permission up front (post-onboarding) */}
+                                    <NotificationPermissionBootstrap />
+                                    {/* Zoom auto-detection — global listeners for record/stop (post-onboarding) */}
+                                    <ZoomAutoDetect />
+                                    {/* Calendar "time to join" alerts — app-wide, fires before meetings (spec 0008) */}
+                                    <CalendarAlerts />
+                                    {/* Voiceprint retraction feedback — app-wide undo toast when a span
+                                        correction quarantines a person's polluted voice samples (spec 0039 WS3) */}
+                                    <VoiceprintRetractionListener />
+                                    {/* "Enable recording" permissions modal — opened from the sidebar
+                                        Permissions nav item (spec 0014) */}
+                                    <PermissionsModal />
+                                    {/* Relaunch recovery — prompt to resume a crash-interrupted
+                                        recording, one at a time (spec 0037) */}
+                                    <ResumeRecordingPrompt />
+                                  </div>
+                                )}
+                                {/* Import audio overlay and dialog */}
+                                <ImportDropOverlay visible={showDropOverlay} />
+                                <ConditionalImportDialog
+                                  showImportDialog={showImportDialog}
+                                  handleImportDialogClose={handleImportDialogClose}
+                                  importFilePath={importFilePath}
+                                />
+                              </ImportDialogProvider>
+                              </PermissionsModalProvider>
+                            </RecordingPostProcessingProvider>
+                            </DeferredBacklogProvider>
+                          </TooltipProvider>
+                        </SidebarProvider>
+                    </OnboardingProvider>
 
-                              Being always-mounted means the backlog's mount effect also
-                              fires DURING onboarding, when the Rust `AppState` is not yet
-                              managed. `api_list_deferred_meetings` therefore uses
-                              `try_state` and answers with an empty list on that path
-                              (spec 0051 final review, Finding 2) — with `state()` it
-                              panicked, and a panicking command never sends its IPC
-                              response, so the frontend promise hung forever and the
-                              backlog stayed dead for the session. */}
-                          <DeferredBacklogProvider>
-                          <RecordingPostProcessingProvider>
-                            <PermissionsModalProvider>
-                            <ImportDialogProvider onOpen={handleOpenImportDialog}>
-                              {/* Download progress toast provider - listens for background downloads */}
-                              <DownloadProgressToastProvider />
-
-                              {/* Show onboarding or main app */}
-                              {showOnboarding ? (
-                                <OnboardingFlow onComplete={handleOnboardingComplete} />
-                              ) : (
-                                <div className="flex">
-                                  {/* Scoped to the Sidebar and the transport rail deliberately
-                                      (specs/0052 + 0057): they are the only two consumers — the rail's
-                                      queue is the second (decision 8) — and every llm-activity-changed
-                                      event sets state here. Hoisting it above MainContent would
-                                      re-render the whole page tree on each background task transition
-                                      — a prep pass emits a burst of them. */}
-                                  <LlmActivityProvider>
-                                    <Sidebar />
-                                    {/* specs/0057 decision 7 — THE transport: fixed bottom rail on
-                                        every post-onboarding route, with the deck status, the REC/HOLD/
-                                        STOP keys and the one global queue. Replaces GlobalRecordingBar
-                                        and the deferred-backlog pill. */}
-                                    <TransportRail />
-                                  </LlmActivityProvider>
-                                  <MainContent>{children}</MainContent>
-                                  {/* ⌘K command palette — global, every route (post-onboarding) */}
-                                  <CommandPalette />
-                                  {/* Request OS notification permission up front (post-onboarding) */}
-                                  <NotificationPermissionBootstrap />
-                                  {/* Zoom auto-detection — global listeners for record/stop (post-onboarding) */}
-                                  <ZoomAutoDetect />
-                                  {/* Calendar "time to join" alerts — app-wide, fires before meetings (spec 0008) */}
-                                  <CalendarAlerts />
-                                  {/* Voiceprint retraction feedback — app-wide undo toast when a span
-                                      correction quarantines a person's polluted voice samples (spec 0039 WS3) */}
-                                  <VoiceprintRetractionListener />
-                                  {/* "Enable recording" permissions modal — opened from the sidebar
-                                      Permissions nav item (spec 0014) */}
-                                  <PermissionsModal />
-                                  {/* Relaunch recovery — prompt to resume a crash-interrupted
-                                      recording, one at a time (spec 0037) */}
-                                  <ResumeRecordingPrompt />
-                                </div>
-                              )}
-                              {/* Import audio overlay and dialog */}
-                              <ImportDropOverlay visible={showDropOverlay} />
-                              <ConditionalImportDialog
-                                showImportDialog={showImportDialog}
-                                handleImportDialogClose={handleImportDialogClose}
-                                importFilePath={importFilePath}
-                              />
-                            </ImportDialogProvider>
-                            </PermissionsModalProvider>
-                          </RecordingPostProcessingProvider>
-                          </DeferredBacklogProvider>
-                        </TooltipProvider>
-                      </SidebarProvider>
-                  </OnboardingProvider>
-
-                </OllamaDownloadProvider>
-              </ConfigProvider>
-            </TranscriptProvider>
+                  </OllamaDownloadProvider>
+                </ConfigProvider>
+              </TranscriptProvider>
+            </UpdateStatusProvider>
           </RecordingStateProvider>
           <ThemedToaster offset={showOnboarding ? undefined : RAIL_TOAST_OFFSET} />
         </ThemeProvider>

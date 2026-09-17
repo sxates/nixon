@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { invoke } from "@tauri-apps/api/core"
 import { Switch } from "./ui/switch"
 import { useConfig, NotificationSettings } from "@/contexts/ConfigContext"
 import { SettingsGroup, SettingsRow, SettingsSection } from "@/components/ui/settings"
@@ -16,6 +17,24 @@ export function PreferenceSettings() {
   const [notificationsEnabled, setNotificationsEnabled] = useState<boolean | null>(null);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [previousNotificationsEnabled, setPreviousNotificationsEnabled] = useState<boolean | null>(null);
+
+  // specs/0058 — auto-download preference, independent of the notifications
+  // state above (its own backend commands, its own SettingsSection).
+  const [autoUpdate, setAutoUpdate] = useState<boolean | null>(null);
+  useEffect(() => {
+    invoke<{ auto_update: boolean }>('api_get_updater_settings')
+      .then((s) => setAutoUpdate(s.auto_update))
+      .catch(() => setAutoUpdate(true));
+  }, []);
+  const onAutoUpdate = async (next: boolean) => {
+    setAutoUpdate(next);
+    try {
+      await invoke('api_set_updater_settings', { autoUpdate: next });
+    } catch (e) {
+      console.error('Failed to save update setting', e);
+      setAutoUpdate(!next);
+    }
+  };
 
   // Lazy load preferences on mount (only loads if not already cached)
   useEffect(() => {
@@ -84,24 +103,43 @@ export function PreferenceSettings() {
   // Notifications only. The recordings storage location moved to the Recordings
   // tab (it duplicated the save-location row there).
   return (
-    <SettingsSection
-      title="Notifications"
-      description="What Nixon tells you while a meeting is being recorded."
-    >
-      <SettingsGroup>
-        <SettingsRow
-          label="Meeting start and end notifications"
-          description="Notify me when a recording starts and when it stops."
-          control={
-            <Switch
-              checked={notificationsEnabled ?? false}
-              onCheckedChange={setNotificationsEnabled}
-              disabled={loading}
-              aria-label="Meeting start and end notifications"
-            />
-          }
-        />
-      </SettingsGroup>
-    </SettingsSection>
+    <div className="space-y-8">
+      <SettingsSection
+        title="Notifications"
+        description="What Nixon tells you while a meeting is being recorded."
+      >
+        <SettingsGroup>
+          <SettingsRow
+            label="Meeting start and end notifications"
+            description="Notify me when a recording starts and when it stops."
+            control={
+              <Switch
+                checked={notificationsEnabled ?? false}
+                onCheckedChange={setNotificationsEnabled}
+                disabled={loading}
+                aria-label="Meeting start and end notifications"
+              />
+            }
+          />
+        </SettingsGroup>
+      </SettingsSection>
+
+      <SettingsSection title="Updates" description="How Nixon gets new versions.">
+        <SettingsGroup>
+          <SettingsRow
+            label="Download updates automatically"
+            description="Checks GitHub every few hours and downloads new versions in the background. You always choose when to restart."
+            control={
+              <Switch
+                checked={autoUpdate ?? true}
+                onCheckedChange={onAutoUpdate}
+                disabled={autoUpdate === null}
+                aria-label="Download updates automatically"
+              />
+            }
+          />
+        </SettingsGroup>
+      </SettingsSection>
+    </div>
   )
 }

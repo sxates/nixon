@@ -15,6 +15,8 @@
 #   6. Publish a GitHub Release on the tag, with notes from the changelog and
 #      the DMG attached (needs the `gh` CLI, authenticated). Skipped with
 #      --no-release; download builds elsewhere via `gh release download`.
+#      Publishes DMG + updater tarball + latest.json; needs
+#      TAURI_SIGNING_PRIVATE_KEY (specs/0058).
 #
 # Usage:
 #   ./release.sh <major|minor|patch|X.Y.Z> [--skip-build] [--no-release] [--yes] [--dry-run] [--allow-degraded]
@@ -55,7 +57,7 @@ for arg in "$@"; do
     major|minor|patch) BUMP="$arg" ;;
     [0-9]*.[0-9]*.[0-9]*) BUMP="$arg" ;;
     -h|--help)
-      sed -n '3,31p' "$0"; exit 0 ;;
+      sed -n '3,33p' "$0"; exit 0 ;;
     *) die "Unknown argument: $arg (expected major|minor|patch|X.Y.Z and optional flags)" ;;
   esac
 done
@@ -169,6 +171,26 @@ if [ "$NO_RELEASE" -eq 0 ] && [ "$SKIP_BUILD" -eq 0 ] && [ "$DRY_RUN" -eq 0 ] &&
   [ "${NOTARIZE:-0}" -eq 1 ] || die "Publishing a release needs notarization creds (APPLE_API_KEY+APPLE_API_ISSUER, or APPLE_ID+APPLE_PASSWORD+APPLE_TEAM_ID via ${SIGNING_ENV}). Restore the creds, or --no-release, or --allow-degraded."
 fi
 
+# ---- updater signing key (specs/0058) -------------------------------------
+# tauri build signs Nixon.app.tar.gz with the minisign key in TAURI_SIGNING_PRIVATE_KEY;
+# installed apps refuse any payload not signed by the pubkey in tauri.conf.json. An
+# unsigned update is not "degraded", it is undeliverable — so --allow-degraded does
+# NOT waive this. Only --no-release / --skip-build / --dry-run get past it.
+if [ "$NO_RELEASE" -eq 0 ] && [ "$SKIP_BUILD" -eq 0 ] && [ "$DRY_RUN" -eq 0 ]; then
+  [ -n "${TAURI_SIGNING_PRIVATE_KEY:-}" ] || die "TAURI_SIGNING_PRIVATE_KEY is not set (add it to ${SIGNING_ENV}; see SETUP.md 'In-app updates'). Without it the release cannot be delivered to installed apps."
+fi
+UPDATER_PUBKEY_PLACEHOLDER=0
+UPDATER_PUBKEY="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["plugins"]["updater"]["pubkey"])' "$TAURI_CONF" 2>/dev/null || true)"
+if [ -z "$UPDATER_PUBKEY" ]; then
+  if [ "$NO_RELEASE" -eq 0 ] && [ "$SKIP_BUILD" -eq 0 ] && [ "$DRY_RUN" -eq 0 ]; then
+    die "plugins.updater.pubkey missing from ${TAURI_CONF}."
+  else
+    c_yellow "   plugins.updater.pubkey missing from ${TAURI_CONF} — a real publish would abort here; continuing with a placeholder pubkey for this dry-run/local build."
+    UPDATER_PUBKEY="<pubkey-not-yet-configured>"
+    UPDATER_PUBKEY_PLACEHOLDER=1
+  fi
+fi
+
 # ---- compute the new version ----------------------------------------------
 CUR="$(node -p "require('./$PKG_JSON').version" 2>/dev/null)" \
   || die "Couldn't read current version from $PKG_JSON"
@@ -255,7 +277,15 @@ if [ "$SKIP_BUILD" -eq 0 ]; then
   [ -f "$HOME/.cargo/env" ] && source "$HOME/.cargo/env"
   if [ "$DRY_RUN" -eq 0 ]; then
     ( cd frontend && ./build-gpu.sh ) || die "Build failed. The release commit is local only (not pushed) — fix and re-run, or 'git reset --hard HEAD~1' to undo the bump."
-    [ -f "$DMG" ] || c_yellow "⚠️  Build finished but expected DMG not found at $DMG"
+    # specs/0058: a *published* release missing the DMG is a release nobody can install,
+    # and the warning was easy to scroll past. Only --no-release (local build) warns.
+    if [ ! -f "$DMG" ]; then
+      if [ "$NO_RELEASE" -eq 1 ]; then
+        c_yellow "⚠️  Build finished but expected DMG not found at $DMG"
+      else
+        die "Build finished but the DMG is missing at $DMG. Refusing to publish a release without it — check the bundle step and re-run."
+      fi
+    fi
   else
     echo "  [dry-run] would run frontend/build-gpu.sh → target/release/bundle/dmg/Nixon_${NEW}_aarch64.dmg"
   fi
@@ -308,6 +338,42 @@ if [ "${SIGN_MODE:-adhoc}" = "developerid" ] && [ "$SKIP_BUILD" -eq 0 ] \
   fi
 fi
 
+# ---- updater artefacts (specs/0058) ---------------------------------------
+UPD_TGZ="target/release/bundle/macos/Nixon.app.tar.gz"
+UPD_SIG="${UPD_TGZ}.sig"
+if [ "$SKIP_BUILD" -eq 0 ] && [ "$DRY_RUN" -eq 0 ]; then
+  [ -s "$UPD_TGZ" ] || die "Updater tarball missing: $UPD_TGZ (is bundle.createUpdaterArtifacts true?)"
+  [ -s "$UPD_SIG" ] || die "Updater signature missing: $UPD_SIG (was TAURI_SIGNING_PRIVATE_KEY set for the build?)"
+  if [ "$UPDATER_PUBKEY_PLACEHOLDER" -eq 1 ]; then
+    c_yellow "   plugins.updater.pubkey isn't configured yet — skipping the signature key-id check (this build isn't a real publish: --no-release/--skip-build/--dry-run)."
+  else
+    # Both are base64-wrapped minisign blobs; the key id is bytes 2..10 of the second
+    # line's payload. A mismatch means installed apps would reject this release.
+    # Exit 2 = couldn't parse either blob (not a mismatch); exit 1 = ids differ; 0 = match.
+    keyid_status=0
+    python3 - "$UPDATER_PUBKEY" "$UPD_SIG" <<'PY' || keyid_status=$?
+import base64, sys
+def keyid(b64):
+    text = base64.b64decode(b64).decode()
+    line = [l for l in text.splitlines() if l and not l.startswith("untrusted comment")][0]
+    return base64.b64decode(line)[2:10]
+try:
+    pub = keyid(sys.argv[1])
+    sig = keyid(open(sys.argv[2]).read().strip())
+except Exception as e:
+    print(f"could not parse pubkey/.sig: {e}", file=sys.stderr)
+    sys.exit(2)
+sys.exit(0 if pub == sig else 1)
+PY
+    case "$keyid_status" in
+      0) c_green "   ✅ Updater artefacts present; signature key id matches the app's pubkey." ;;
+      2) die "Could not parse plugins.updater.pubkey or ${UPD_SIG} as minisign blobs. Check TAURI_CONF and TAURI_SIGNING_PRIVATE_KEY." ;;
+      127) die "python3 not found — the updater signature key-id check can't run. Install python3 (it is also used to build latest.json) and re-run." ;;
+      *) die "Updater signature was made with a different key than plugins.updater.pubkey. Check TAURI_SIGNING_PRIVATE_KEY." ;;
+    esac
+  fi
+fi
+
 # ---- confirm before remote ops --------------------------------------------
 if [ "$ASSUME_YES" -eq 0 ] && [ "$DRY_RUN" -eq 0 ]; then
   printf '\nAbout to merge %s → main, tag %s, and push both to origin. Continue? [y/N] ' "$BRANCH" "$TAG"
@@ -339,8 +405,8 @@ fi
 
 # ---- publish the GitHub release -------------------------------------------
 if [ "$NO_RELEASE" -eq 1 ]; then
-  c_yellow "⏭️  --no-release: not publishing a GitHub release. Publish later with:"
-  echo "     gh release create '$TAG' '$DMG' --title 'Nixon v${NEW}' --generate-notes"
+  c_yellow "⏭️  --no-release: not publishing a GitHub release. Installed apps won't see this update until it's published. Publish later with:"
+  echo "     gh release create '$TAG' '$DMG' '$UPD_TGZ' '$UPD_SIG' --title 'Nixon v${NEW}' --generate-notes  # then build+attach latest.json (see release.sh's publish step)"
 else
   c_blue "🚀 Publishing GitHub release ${TAG}…"
   # release notes = this version's changelog section (anchored heading match,
@@ -354,17 +420,43 @@ else
   [ -s "$NOTES_FILE" ] || printf 'Nixon v%s\n' "$NEW" > "$NOTES_FILE"
 
   rel_args=( "$TAG" --title "Nixon v${NEW}" --notes-file "$NOTES_FILE" )
-  if [ "$SKIP_BUILD" -eq 0 ] && [ -f "$DMG" ]; then
-    rel_args+=( "$DMG" )
+  MANIFEST="$(mktemp -d)/latest.json"
+  if [ "$SKIP_BUILD" -eq 0 ]; then
+    # specs/0058: the manifest the installed app polls. Versioned asset URL so an
+    # older manifest can never point at a newer tarball.
+    python3 - "$NEW" "$NOTES_FILE" "$UPD_SIG" "$TAG" "$MANIFEST" "$DRY_RUN" <<'PY'
+import json, sys, datetime, os
+ver, notes_file, sig_file, tag, out, dry = sys.argv[1:7]
+sig = open(sig_file).read().strip() if os.path.exists(sig_file) else ("<signature>" if dry == "1" else "")
+if not sig: sys.exit("missing updater signature")
+manifest = {
+  "version": ver,
+  "notes": open(notes_file).read().strip(),
+  "pub_date": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+  "platforms": {"darwin-aarch64": {
+    "signature": sig,
+    "url": f"https://github.com/sxates/nixon/releases/download/{tag}/Nixon.app.tar.gz"}},
+}
+json.dump(manifest, open(out, "w"), indent=2)
+PY
+    rel_args+=( "$DMG" "$UPD_TGZ" "$UPD_SIG" "$MANIFEST" )
   else
-    c_yellow "   (no DMG to attach — --skip-build or DMG missing; release will have no asset)"
+    # Only --skip-build reaches this now: on a real publish a missing DMG, updater
+    # tarball or signature already died above, so an asset-less release can no longer
+    # happen by accident.
+    c_yellow "   (--skip-build: no build artefacts to attach — this release will have no assets and installed apps will NOT see it)"
   fi
 
   if [ "$DRY_RUN" -eq 1 ]; then
     echo "  [dry-run] gh release create ${rel_args[*]}"
+    if [ -f "$MANIFEST" ]; then
+      echo "  [dry-run] latest.json:"
+      sed 's/^/    /' "$MANIFEST"
+      echo
+    fi
   else
     gh release create "${rel_args[@]}" \
-      || { rm -f "$NOTES_FILE"; die "gh release create failed. Tag ${TAG} is already pushed — retry with: gh release create '$TAG' '$DMG' --title 'Nixon v${NEW}' --generate-notes"; }
+      || { rm -f "$NOTES_FILE"; die "gh release create failed. Tag ${TAG} is already pushed — retry with: gh release create '$TAG' '$DMG' '$UPD_TGZ' '$UPD_SIG' '$MANIFEST' --title 'Nixon v${NEW}' --generate-notes"; }
   fi
   rm -f "$NOTES_FILE"
 fi
@@ -375,6 +467,7 @@ if [ "$SKIP_BUILD" -eq 0 ] && [ "$DRY_RUN" -eq 0 ]; then
 fi
 echo "   Tag: ${TAG} (pushed to origin)"
 if [ "$NO_RELEASE" -eq 0 ] && [ "$DRY_RUN" -eq 0 ]; then
+  echo "   Installed apps will pick this update up on their own (in-app updater, specs/0058)."
   echo "   Install on another Mac (avoids Gatekeeper quarantine):"
   echo "     gh release download '$TAG' -R sxates/nixon && open Nixon_${NEW}_aarch64.dmg"
 fi

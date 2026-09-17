@@ -65,6 +65,18 @@ fn handle_menu_event<R: Runtime>(app: &AppHandle<R>, item_id: &str) {
                 let _ = window.eval("window.location.assign('/settings')");
             }
         }
+        "install_update" => {
+            let app = app.clone();
+            tauri::async_runtime::spawn(async move {
+                if let Err(e) = crate::updater::driver::install_and_restart(app.clone()).await {
+                    // The refusal already went out as `update-install-refused`; bring the
+                    // window forward so the user can actually read it. A tray click with
+                    // no window on screen would otherwise fail in total silence.
+                    log::warn!("updater: tray install refused: {e}");
+                    focus_main_window(&app);
+                }
+            });
+        }
         "quit" => app.exit(0),
         _ => {}
     }
@@ -353,7 +365,7 @@ fn build_menu<R: Runtime>(
                 .build(app)?,
         );
     } else {
-        match state {
+        match &state {
             RecordingState::Stopped => {
                 // Accelerator is a display hint only — the global-shortcut plugin
                 // (registered in lib.rs) does the actual system-wide key capture.
@@ -421,13 +433,30 @@ fn build_menu<R: Runtime>(
         }
     }
 
-    builder
+    let mut builder = builder
         .item(&PredefinedMenuItem::separator(app)?)
         .item(&MenuItemBuilder::with_id("open_window", "Open Main Window").build(app)?)
-        .item(&MenuItemBuilder::with_id("settings", "Settings").build(app)?)
+        .item(&MenuItemBuilder::with_id("settings", "Settings").build(app)?);
+
+    // specs/0058 — only when a verified update is staged AND nothing is recording.
+    let ready = crate::updater::ready_version(app);
+    if offers_install_item(ready.as_deref(), &state) {
+        let version = ready.expect("offers_install_item confirmed ready.is_some()");
+        builder = builder.item(
+            &MenuItemBuilder::with_id("install_update", format!("Restart to update to {version}"))
+                .build(app)?,
+        );
+    }
+
+    builder
         .item(&PredefinedMenuItem::separator(app)?)
         .item(&MenuItemBuilder::with_id("quit", "Quit").build(app)?)
         .build()
+}
+
+/// specs/0058 — the tray offers the install item only in this exact case.
+pub(crate) fn offers_install_item(ready: Option<&str>, state: &RecordingState) -> bool {
+    ready.is_some() && matches!(state, RecordingState::Stopped)
 }
 
 pub(crate) fn focus_main_window<R: Runtime>(app: &AppHandle<R>) {
@@ -473,5 +502,16 @@ mod tests {
             assert_eq!(image.width(), 44, "unexpected width for {:?}", state);
             assert_eq!(image.height(), 44, "unexpected height for {:?}", state);
         }
+    }
+
+    #[test]
+    fn install_item_only_when_ready_and_stopped() {
+        assert!(offers_install_item(Some("0.3.0"), &RecordingState::Stopped));
+        assert!(!offers_install_item(None, &RecordingState::Stopped));
+        assert!(!offers_install_item(
+            Some("0.3.0"),
+            &RecordingState::Recording
+        ));
+        assert!(!offers_install_item(Some("0.3.0"), &RecordingState::Paused));
     }
 }

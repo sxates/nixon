@@ -1,7 +1,7 @@
 {
     "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
     "productName": "Nixon",
-    "version": "0.2.0",
+    "version": "0.3.0",
     "identifier": "ai.vinyl.app",
     "build": {
         "frontendDist": "../out",
@@ -78,6 +78,7 @@
         }
     },
     "bundle": {
+        "createUpdaterArtifacts": true,
         "active": true,
         "targets": [
             "app",
@@ -102,6 +103,14 @@
             "frameworks": [
                 "frameworks/libsherpa-onnx-c-api.dylib",
                 "frameworks/libonnxruntime.1.17.1.dylib"
+            ]
+        }
+    },
+    "plugins": {
+        "updater": {
+            "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDI3QzY3QTcwQzJGMzU4QTkKUldTcFdQUENjSHJHSnowMkxjMGZKS1RaK0Jvb254Z3RPMVRod3hIMGNBLy95WFI3aGxQQ2wrdjYK",
+            "endpoints": [
+                "https://github.com/sxates/nixon/releases/latest/download/latest.json"
             ]
         }
     }
