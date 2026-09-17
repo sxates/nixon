@@ -3892,6 +3892,7 @@ dependencies = [
  "semver",
  "serde",
  "serde_json",
+ "sha2",
  "sherpa-rs",
  "sherpa-rs-sys",
  "silero",
