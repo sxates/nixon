@@ -22,6 +22,9 @@ export interface Transcript {
   // as snake_case. NULL/absent until the meeting has been diarized.
   speaker?: string | null;       // Stable per-meeting key ("local","spk_0",…)
   speaker_name?: string | null;  // Resolved display name ("You","Speaker 1",…)
+  // specs/0061 W5: true once the user has manually corrected this segment's text.
+  // Backend (MeetingTranscript) always serializes this field.
+  user_edited?: boolean;
   // Capture-channel tag (specs/0029 WS3.4): 'microphone' | 'system' | 'mixed'.
   // Set at capture time from pre-mix RMS dominance; passed through on save so the
   // offline diarization pass can keep mic-tagged segments attributed to "You".
@@ -174,6 +177,8 @@ export interface TranscriptSegmentData {
   // present, `speakerName` is the label shown above the segment text.
   speaker?: string | null;       // stable per-meeting key ("local","spk_0",…)
   speakerName?: string | null;   // resolved display name ("You","Speaker 1",…)
+  // specs/0061 W5: true once the user has manually corrected this segment's text.
+  user_edited?: boolean;
 }
 
 /** A diarized speaker for a meeting (specs/0010, P1-C/P2). Mirrors `SpeakerDto`

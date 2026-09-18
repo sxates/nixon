@@ -264,7 +264,7 @@ impl MeetingsRepository {
         let transcripts = sqlx::query_as::<_, TranscriptWithSpeaker>(
             "SELECT t.id, t.meeting_id, t.transcript, t.timestamp,
                     t.audio_start_time, t.audio_end_time, t.duration, t.speaker,
-                    s.display_name AS speaker_name
+                    s.display_name AS speaker_name, t.user_edited
              FROM transcripts t
              LEFT JOIN speakers s
                ON s.meeting_id = t.meeting_id AND s.speaker_key = t.speaker

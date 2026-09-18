@@ -3,6 +3,7 @@
 
 use log::{debug as log_debug, error as log_error, info as log_info, warn as log_warn};
 use serde::{Deserialize, Serialize};
+use sqlx::SqlitePool;
 use tauri::{AppHandle, Runtime};
 
 use crate::{database::repositories::transcript::TranscriptsRepository, state::AppState};
@@ -221,4 +222,87 @@ pub async fn api_save_transcript<R: Runtime>(
             Err(format!("Failed to save transcript: {}", e))
         }
     }
+}
+
+/// Overwrite one transcript segment's text with a user correction (specs/0061 W5
+/// — the first external user wanted to fix a garbled line). Trims surrounding
+/// whitespace and rejects an empty result. Sets `user_edited = 1` so the Enhance
+/// dialog can warn before a regenerate/retranscribe would discard the edit, and
+/// nulls `word_timestamps` — the per-word stamps no longer correspond to the
+/// (now different) text, matching the same null-out `diarization/split.rs`
+/// already does after re-splitting a segment's boundaries.
+///
+/// The `UPDATE ... SET transcript = ?` below re-fires the specs/0033 FTS5
+/// external-content trigger `transcripts_fts_au` (`AFTER UPDATE OF transcript ON
+/// transcripts`), which deletes the stale indexed text and inserts the new text —
+/// no separate FTS maintenance is needed here.
+///
+/// Body of [`api_set_segment_text`], extracted so tests can drive it without an
+/// `AppHandle`. Scoped by BOTH `id` and `meeting_id` so a transcript id belonging
+/// to a different meeting can never be edited through this command.
+pub async fn set_segment_text_inner(
+    pool: &SqlitePool,
+    meeting_id: &str,
+    transcript_id: &str,
+    text: &str,
+) -> Result<(), String> {
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        return Err("Text cannot be empty".to_string());
+    }
+
+    let result = sqlx::query(
+        "UPDATE transcripts SET transcript = ?, user_edited = 1, word_timestamps = NULL \
+         WHERE id = ? AND meeting_id = ?",
+    )
+    .bind(trimmed)
+    .bind(transcript_id)
+    .bind(meeting_id)
+    .execute(pool)
+    .await
+    .map_err(|e| format!("Failed to update transcript: {e}"))?;
+
+    if result.rows_affected() == 0 {
+        return Err(format!(
+            "No transcript '{transcript_id}' found for this meeting"
+        ));
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn api_set_segment_text<R: Runtime>(
+    _app: AppHandle<R>,
+    state: tauri::State<'_, AppState>,
+    meeting_id: String,
+    transcript_id: String,
+    text: String,
+) -> Result<(), String> {
+    let pool = state.db_manager.pool();
+    set_segment_text_inner(pool, &meeting_id, &transcript_id, &text).await
+}
+
+/// Count segments the user has manually corrected in a meeting (specs/0061 W5).
+/// The Enhance dialog uses this to warn before a regenerate/retranscribe would
+/// silently discard those edits.
+///
+/// Body of [`api_count_user_edited`], extracted so tests can drive it without an
+/// `AppHandle`.
+pub async fn count_user_edited_inner(pool: &SqlitePool, meeting_id: &str) -> Result<i64, String> {
+    sqlx::query_scalar("SELECT COUNT(*) FROM transcripts WHERE meeting_id = ? AND user_edited = 1")
+        .bind(meeting_id)
+        .fetch_one(pool)
+        .await
+        .map_err(|e| format!("Failed to count user-edited transcripts: {e}"))
+}
+
+#[tauri::command]
+pub async fn api_count_user_edited<R: Runtime>(
+    _app: AppHandle<R>,
+    state: tauri::State<'_, AppState>,
+    meeting_id: String,
+) -> Result<i64, String> {
+    let pool = state.db_manager.pool();
+    count_user_edited_inner(pool, &meeting_id).await
 }

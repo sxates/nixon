@@ -139,6 +139,11 @@ pub struct TranscriptWithSpeaker {
     /// Resolved display name from the `speakers` table ("You","Speaker 1",rename),
     /// NULL when the segment is unlabeled or no matching speaker row exists.
     pub speaker_name: Option<String>,
+    /// True once the user has manually corrected this segment's text
+    /// (specs/0061 W5, `transcripts::set_segment_text_inner`). Drives the
+    /// Enhance dialog's "you have N edited lines" warning before a
+    /// regenerate/retranscribe would discard them.
+    pub user_edited: bool,
 }
 
 /// A diarization speaker for one meeting (specs/0010). Maps a per-meeting
