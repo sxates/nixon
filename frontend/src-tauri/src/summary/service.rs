@@ -293,8 +293,8 @@ impl SummaryService {
     }
 
     /// Resolves a **fixed** (non-Auto) template id for summary generation —
-    /// the `(None, id)` arm of [`process_transcript_background`]'s template
-    /// match. Falls back to the default fixed template
+    /// the `(None, id)` arm of [`SummaryService::process_transcript_background`]'s
+    /// template match. Falls back to the default fixed template
     /// ([`templates::DEFAULT_TEMPLATE_ID`]) when `id` no longer resolves
     /// (specs/0061 W6): a built-in removed in an app update (e.g. the retired
     /// Psychiatric Session template) or a deleted custom override must not

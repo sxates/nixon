@@ -3,7 +3,7 @@
 //! [`resolve_provider_config`] is the single place that turns a stored provider/model
 //! choice into everything a call needs (API key, Ollama endpoint, CustomOpenAI endpoint +
 //! tuning). It replaces two previously duplicated ~40-line blocks: the summary run
-//! (`summary/service.rs::process_transcript_background`) and the manual action-item
+//! (`summary/background.rs::process_transcript_background`) and the manual action-item
 //! extraction command (`action_items/commands.rs::api_extract_action_items`). Action-item
 //! extraction deliberately reuses the summary's provider posture (specs/0034, decided
 //! 2026-07-03: no separate extraction provider setting), so the two must never drift.

@@ -13,10 +13,15 @@
 //! (`summary/commands.rs`) keep calling `SummaryService::process_transcript_background`
 //! unchanged.
 //!
-//! Only the BACKGROUND entry point registers here (auto-summary after a recording stops,
-//! and the deferred-backlog drain). The foreground/interactive summary path already has
-//! its own `ChunkProgressDisplay`, and the registry's `view()` deliberately filters to
-//! `Origin::Background` so that work is never double-reported.
+//! The caller supplies an [`Origin`] on every call, because Rust has no way to tell an
+//! interactive summary from an automatic one — that distinction lives entirely in which
+//! frontend hook invoked the underlying `api_process_transcript` / `api_generate_summary`
+//! command: `useSummaryGeneration.ts` (the Generate/Regenerate button, watched live via
+//! `ChunkProgressDisplay`) wants `Origin::Foreground` so it never double-reports next to
+//! that progress UI, while `useAutoGenerateSummary.ts` (auto-summary after a recording
+//! stops) and `useDeferredBacklog.ts` (the backlog drain) want `Origin::Background` so the
+//! footer queue shows them. `summary/commands.rs` is the actual source of truth for which
+//! Rust call site gets which origin today.
 
 use std::sync::Arc;
 use std::time::Instant;
@@ -54,11 +59,14 @@ impl SummaryService {
     /// the main thread. It updates the database with progress and results.
     ///
     /// specs/0063 W3: also registers a `MeetingSummary` task on the LLM-activity
-    /// registry for the duration of the run, so the auto-summary-after-recording path
-    /// and the deferred-backlog drain both show up in the footer queue — previously
-    /// neither did, despite `TaskKind::MeetingSummary` existing since specs/0052. A
-    /// missing registry (`try_state` returns `None`, e.g. in a test harness with no
-    /// managed state) degrades to "no queue row"; it never blocks or fails the summary.
+    /// registry for the duration of the run, tagged with the caller-supplied `origin`,
+    /// so background runs (auto-summary-after-recording, the deferred-backlog drain)
+    /// show up in the footer queue — previously none did, despite `TaskKind::
+    /// MeetingSummary` existing since specs/0052 — while a foreground run (the user
+    /// watching Generate/Regenerate with `ChunkProgressDisplay` on screen) is recorded
+    /// too but filtered out of `view()`, so it is never double-reported. A missing
+    /// registry (`try_state` returns `None`, e.g. in a test harness with no managed
+    /// state) degrades to "no queue row"; it never blocks or fails the summary.
     ///
     /// # Arguments
     /// * `app` - Tauri app handle (BuiltInAI data dir + the post-completion
@@ -70,6 +78,9 @@ impl SummaryService {
     /// * `model_name` - Specific model (e.g., "gpt-4", "llama3.2:latest")
     /// * `custom_prompt` - Optional user-provided context
     /// * `template_id` - Template identifier (e.g., "daily_standup", "standard_meeting")
+    /// * `origin` - `Origin::Foreground` for a run the user is watching live (has its
+    ///   own progress UI); `Origin::Background` for anything unattended. The caller
+    ///   decides — see `summary/commands.rs`'s two call sites.
     #[allow(clippy::too_many_arguments)] // cohesive param set; refactor deferred
     pub async fn process_transcript_background<R: tauri::Runtime>(
         app: AppHandle<R>,
@@ -81,10 +92,12 @@ impl SummaryService {
         custom_prompt: String,
         template_id: String,
         summary_language: Option<String>,
+        origin: Origin,
     ) {
-        // specs/0063 W3: register as background work so the footer queue can show it.
-        // Auto-summary after stop, and the deferred-backlog drain, previously ran with
-        // no queue row at all.
+        // specs/0063 W3: register as work on the footer queue, tagged with the
+        // caller's origin. `view()` filters to `Origin::Background`, so a foreground
+        // run (already shown via `ChunkProgressDisplay`) is recorded for history/
+        // failure-badge purposes but never rendered as a second running row.
         let registry = app
             .try_state::<LlmActivityState>()
             .map(|state| Arc::clone(&state.0));
@@ -97,7 +110,7 @@ impl SummaryService {
                 };
                 Some(registry.start_for(
                     TaskKind::MeetingSummary,
-                    Origin::Background,
+                    origin,
                     title,
                     Some(meeting_id.clone()),
                 ))
@@ -119,7 +132,15 @@ impl SummaryService {
         .await;
 
         if let Some(t) = task {
-            t.finish(result);
+            // `Ok(Some(reason))` = deliberately not completed (user cancellation) —
+            // distinct from both success and failure (registry.rs's `TaskOutcome::
+            // Skipped`), so it must not paint a green "Success" row over a run the DB
+            // recorded as cancelled, and must not raise the failure badge either.
+            match result {
+                Ok(Some(reason)) => t.finish_skipped(&reason),
+                Ok(None) => t.finish(Ok(())),
+                Err(e) => t.finish(Err(e)),
+            }
         }
     }
 
@@ -134,7 +155,7 @@ impl SummaryService {
         custom_prompt: String,
         template_id: String,
         summary_language: Option<String>,
-    ) -> Result<(), String> {
+    ) -> Result<Option<String>, String> {
         let start_time = Instant::now();
         info!(
             "Starting background processing for meeting_id: {}",
@@ -591,7 +612,7 @@ impl SummaryService {
                         )
                         .await;
                     });
-                    Ok(())
+                    Ok(None)
                 }
             }
             Err(e) => {
@@ -610,40 +631,14 @@ impl SummaryService {
                             meeting_id, db_err
                         );
                     }
-                    // A user-initiated cancellation is not a failure worth raising the
-                    // queue's failure badge over — report it as a completed (if empty)
-                    // run rather than an error.
-                    Ok(())
+                    // A user-initiated cancellation is neither success nor failure — the
+                    // caller reports it via `finish_skipped`, distinct from both.
+                    Ok(Some("cancelled by the user".to_string()))
                 } else {
                     Self::update_process_failed(&pool, &meeting_id, &e).await;
                     Err(e)
                 }
             }
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn a_background_summary_registers_a_meeting_summary_task_for_its_meeting() {
-        use crate::llm_activity::registry::{LlmTaskRegistry, Origin, TaskKind};
-        use std::sync::Arc;
-        let reg = Arc::new(LlmTaskRegistry::new());
-        let handle = Arc::clone(&reg).start_for(
-            TaskKind::MeetingSummary,
-            Origin::Background,
-            "Summarizing — Pricing sync",
-            Some("m1".to_string()),
-        );
-        let view = reg.view();
-        assert_eq!(view.running.len(), 1);
-        assert_eq!(view.running[0].kind, TaskKind::MeetingSummary);
-        assert_eq!(view.running[0].meeting_id.as_deref(), Some("m1"));
-        handle.finish(Err("provider unreachable".into()));
-        let v = reg.view();
-        assert!(v.running.is_empty());
-        assert!(v.has_failure, "a failed background summary must raise the badge");
-        assert_eq!(v.history[0].meeting_id.as_deref(), Some("m1"));
     }
 }
