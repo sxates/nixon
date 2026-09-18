@@ -35,6 +35,16 @@ the system-audio tap silently returns silence (see `CLAUDE.md` / ADR-0004).
       **11 s** each, the Continue button enables once they finish, and completing onboarding
       lands on the main app (not a stuck download step).
 
+## 0b. Screenshots (specs/0060)
+- [ ] `cd frontend && pnpm shots` renders every manifest entry, in both themes, into
+      `docs/screenshots/headless/` — none come back blank/empty.
+- [ ] `pnpm shots:diff` prints `0 changed` on a clean tree.
+- [ ] From a terminal with Screen Recording permission, with `./dev-nixon.sh --demo`
+      running, `pnpm shots:real` renders every manifest entry — including `record-live`,
+      with the level meters actually moving — and none show the "DEV" badge.
+- [ ] `?onboardingStep=3` shows the model-download cards actually in progress (not already
+      complete, not still queued).
+
 ## 1. Core record → review loop (DoD #4)
 - [ ] Press **REC** on the transport rail from Today. It navigates to /record and starts; the
       live transcript streams in.
