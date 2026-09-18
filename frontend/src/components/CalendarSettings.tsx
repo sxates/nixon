@@ -129,10 +129,11 @@ export function CalendarSettings() {
   // now live in the shared `useGoogleCalendarConnect` hook (specs/0061 W1
   // Task 3), which the onboarding Calendar step also uses.
   const {
-    connecting: hookConnecting,
+    connecting: googleConnecting,
     connect: hookConnect,
     status: hookGoogleStatus,
     refresh: refreshGoogleStatus,
+    cancel: cancelGoogleConnect,
   } = useGoogleCalendarConnect();
   /**
    * Local shadow of the hook's status, kept in sync via the effect below.
@@ -145,13 +146,6 @@ export function CalendarSettings() {
   useEffect(() => {
     setGoogleStatus(hookGoogleStatus);
   }, [hookGoogleStatus]);
-  /**
-   * "Dismiss" hides the pending state locally without cancelling the
-   * in-flight hook connect call (the backend invoke itself times out after 5
-   * minutes) — a late success still refreshes status and toasts.
-   */
-  const [dismissed, setDismissed] = useState(false);
-  const googleConnecting = hookConnecting && !dismissed;
   const [googleSyncing, setGoogleSyncing] = useState(false);
   const [authRequired, setAuthRequired] = useState(false);
   const [disconnectOpen, setDisconnectOpen] = useState(false);
@@ -241,10 +235,8 @@ export function CalendarSettings() {
   }, []);
 
   // Google connect / reconnect: long-running (browser consent, ≤5 min).
-  // Status/sequence-guard/toasts live in useGoogleCalendarConnect; this just
-  // clears the local "dismissed" override and reacts to a successful result.
+  // Status/sequence-guard/toasts live in useGoogleCalendarConnect.
   const handleGoogleConnect = useCallback(async () => {
-    setDismissed(false);
     const result = await hookConnect();
     if (result.ok) {
       setAuthRequired(false);
@@ -252,11 +244,13 @@ export function CalendarSettings() {
   }, [hookConnect]);
 
   // Dismiss the pending state. The backend command itself times out after 5
-  // minutes; this just stops waiting on it in the UI — the hook's connect
-  // call keeps running and still refreshes status / toasts if it succeeds.
+  // minutes, so the underlying invoke keeps running — but `cancel()`
+  // invalidates it in the hook, so its eventual resolution is fully silent
+  // (no toast, no status refresh) instead of surfacing minutes after the
+  // user gave up (specs/0061 W1 Task 3 fix, controller ruling R14).
   const handleGoogleConnectDismiss = useCallback(() => {
-    setDismissed(true);
-  }, []);
+    cancelGoogleConnect();
+  }, [cancelGoogleConnect]);
 
   // Per-calendar sync toggle — optimistic, revert on failure (house pattern).
   const handleCalendarToggle = useCallback(

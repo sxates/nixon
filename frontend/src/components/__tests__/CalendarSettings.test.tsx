@@ -162,6 +162,59 @@ describe('CalendarSettings — Google row render states', () => {
     ).toBeNull();
   });
 
+  // specs/0061 W1 Task 3 fix (controller ruling R14) — the gap that hid the
+  // original defect: the test above uses a connect promise that never
+  // resolves, so a dismissed-then-resolved connect was never exercised. The
+  // backend invoke itself can't be aborted (it waits up to 5 minutes for
+  // browser consent), so after Cancel it can still resolve — and it must do
+  // so silently: no toast (sonner renders at the app root, so it would
+  // surface even after navigating away from Settings), and no extra status
+  // re-fetch.
+  it('(c) dismissing, then letting the connect call resolve anyway, stays silent (no toast, no re-fetch)', async () => {
+    let resolveConnect: (value: { email: string }) => void = () => {};
+    mockBackend(
+      { configured: true, connected: false },
+      {
+        api_google_calendar_connect: () =>
+          new Promise((resolve) => {
+            resolveConnect = resolve;
+          }),
+      },
+    );
+    render(<CalendarSettings />);
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: /connect google calendar/i }),
+    );
+    const cancel = await screen.findByRole('button', { name: /^cancel$/i });
+
+    const statusCallsBeforeDismiss = invoke.mock.calls.filter(
+      ([cmd]) => cmd === 'api_google_calendar_status',
+    ).length;
+
+    fireEvent.click(cancel);
+    await screen.findByRole('button', { name: /connect google calendar/i });
+
+    // The backend call resolves anyway, well after the dismiss.
+    await act(async () => {
+      resolveConnect({ email: 'ada@example.com' });
+      // Flush every microtask in the hook's post-resolution chain.
+      await new Promise((r) => setTimeout(r, 0));
+    });
+
+    expect(toastMock.success).not.toHaveBeenCalled();
+    expect(toastMock.error).not.toHaveBeenCalled();
+    const statusCallsAfter = invoke.mock.calls.filter(
+      ([cmd]) => cmd === 'api_google_calendar_status',
+    ).length;
+    expect(statusCallsAfter).toBe(statusCallsBeforeDismiss);
+    // Still shows the disconnected state — the dismissed connect did not
+    // silently flip the card to "connected".
+    expect(
+      await screen.findByRole('button', { name: /connect google calendar/i }),
+    ).toBeInTheDocument();
+  });
+
   it('(d) connected: email, last-synced, per-calendar checkboxes, Sync now, Disconnect', async () => {
     mockBackend(CONNECTED_STATUS);
     render(<CalendarSettings />);
