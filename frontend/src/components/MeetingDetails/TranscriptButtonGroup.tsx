@@ -127,6 +127,7 @@ export function TranscriptButtonGroup({
     isRunning: isDiarizing,
     stage: diarizationStage,
     progressPct: diarizationPct,
+    downloadProgress,
     identifySpeakers,
   } = useDiarization({
     meetingId,
@@ -194,11 +195,10 @@ export function TranscriptButtonGroup({
           >
             {isDiarizing && <Loader2 className="animate-spin" size={16} />}
             <span>
-              {isDiarizing
-                ? hasRealProgress
+              {downloadProgress?.label ??
+                (hasRealProgress
                   ? `Identifying… ${diarizationPct}%`
-                  : 'Identifying…'
-                : 'Identify speakers'}
+                  : (diarizationStage ?? 'Identify speakers'))}
             </span>
           </Button>
         )}

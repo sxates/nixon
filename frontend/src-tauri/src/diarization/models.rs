@@ -18,7 +18,7 @@
 //! `diarization-progress` event without re-plumbing this code.
 
 use anyhow::{anyhow, Context, Result};
-use std::io::Write;
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 
 /// Filename of the extracted segmentation model on disk.
@@ -82,17 +82,40 @@ fn file_at_least(path: &Path, min: u64) -> bool {
         .unwrap_or(false)
 }
 
+/// Human-readable label for a download stage + byte-progress pair (specs/0061
+/// W2). Pure and side-effect-free so it's unit-testable without a network call;
+/// the Tauri command layer sends its output straight through as UI copy.
+/// `total == 0` means "unknown" (headers didn't report `Content-Length`, or the
+/// stage does no streaming at all, e.g. extraction) — degrade to stage-only text
+/// rather than showing a "0 MB" or "NaN" fraction.
+pub fn progress_label(stage: DownloadStage, downloaded: u64, total: u64) -> String {
+    let stage_text = match stage {
+        DownloadStage::Segmentation => "downloading segmentation model",
+        DownloadStage::Embedding => "downloading embedding model",
+        DownloadStage::Extracting => "extracting model",
+    };
+    if total == 0 {
+        return stage_text.to_string();
+    }
+    let downloaded_mb = downloaded as f64 / (1024.0 * 1024.0);
+    let total_mb = total as f64 / (1024.0 * 1024.0);
+    format!("{stage_text} · {downloaded_mb:.1} MB / {total_mb:.1} MB")
+}
+
 /// Ensure both models are present, downloading any that are missing.
 ///
 /// Returns the resolved [`ModelPaths`]. Idempotent: present-and-valid models are
-/// left untouched. `progress` (if any) is called with each [`DownloadStage`] as
-/// it begins, so later slices can emit UI events; pass `None` for a silent run.
+/// left untouched. `progress` (if any) is called with `(stage, downloaded_bytes,
+/// total_bytes)` throughout each download (`total_bytes` is 0 until the response
+/// headers are read, and stays 0 for the whole call if the server never sent
+/// `Content-Length`) and once with `(Extracting, 0, 0)`, so later slices can
+/// emit UI events; pass `None` for a silent run.
 ///
 /// This is a **blocking** call (uses `reqwest::blocking`, matching how the
 /// build-time ffmpeg fetch and the synchronous parts of model setup work). Run it
 /// off the UI thread (e.g. `tauri::async_runtime::spawn_blocking`) in the
 /// orchestration slice.
-pub fn ensure_models(progress: Option<&dyn Fn(DownloadStage)>) -> Result<ModelPaths> {
+pub fn ensure_models(progress: Option<&dyn Fn(DownloadStage, u64, u64)>) -> Result<ModelPaths> {
     let paths = model_paths();
     std::fs::create_dir_all(&paths.dir)
         .with_context(|| format!("create diarization models dir {}", paths.dir.display()))?;
@@ -103,13 +126,14 @@ pub fn ensure_models(progress: Option<&dyn Fn(DownloadStage)>) -> Result<ModelPa
         .context("build HTTP client for diarization model download")?;
 
     if !file_at_least(&paths.segmentation, SEGMENTATION_MIN_BYTES) {
-        if let Some(cb) = progress {
-            cb(DownloadStage::Segmentation);
-        }
         log::info!("Downloading diarization segmentation model…");
-        let bytes = download(&client, SEGMENTATION_URL)?;
+        let bytes = download(&client, SEGMENTATION_URL, |downloaded, total| {
+            if let Some(cb) = progress {
+                cb(DownloadStage::Segmentation, downloaded, total);
+            }
+        })?;
         if let Some(cb) = progress {
-            cb(DownloadStage::Extracting);
+            cb(DownloadStage::Extracting, 0, 0);
         }
         extract_segmentation_onnx(&bytes, &paths.segmentation)?;
         if !file_at_least(&paths.segmentation, SEGMENTATION_MIN_BYTES) {
@@ -122,11 +146,12 @@ pub fn ensure_models(progress: Option<&dyn Fn(DownloadStage)>) -> Result<ModelPa
     }
 
     if !file_at_least(&paths.embedding, EMBEDDING_MIN_BYTES) {
-        if let Some(cb) = progress {
-            cb(DownloadStage::Embedding);
-        }
         log::info!("Downloading diarization embedding model…");
-        let bytes = download(&client, EMBEDDING_URL)?;
+        let bytes = download(&client, EMBEDDING_URL, |downloaded, total| {
+            if let Some(cb) = progress {
+                cb(DownloadStage::Embedding, downloaded, total);
+            }
+        })?;
         write_atomic(&paths.embedding, &bytes)?;
         if !file_at_least(&paths.embedding, EMBEDDING_MIN_BYTES) {
             return Err(anyhow!(
@@ -140,18 +165,34 @@ pub fn ensure_models(progress: Option<&dyn Fn(DownloadStage)>) -> Result<ModelPa
     Ok(paths)
 }
 
-fn download(client: &reqwest::blocking::Client, url: &str) -> Result<Vec<u8>> {
-    let resp = client
+/// Stream the response body, calling `on_chunk(downloaded_so_far, total)` after
+/// every read so a caller can surface byte-level progress (specs/0061 W2) instead
+/// of blocking silently until the whole ~101 MB body has arrived.
+fn download(
+    client: &reqwest::blocking::Client,
+    url: &str,
+    mut on_chunk: impl FnMut(u64, u64),
+) -> Result<Vec<u8>> {
+    let mut resp = client
         .get(url)
         .send()
-        .with_context(|| format!("GET {url}"))?;
-    if !resp.status().is_success() {
-        return Err(anyhow!("download failed for {url}: HTTP {}", resp.status()));
+        .with_context(|| format!("GET {url}"))?
+        .error_for_status()
+        .with_context(|| format!("download failed for {url}"))?;
+    let total = resp.content_length().unwrap_or(0);
+    let mut buf = Vec::with_capacity(total as usize);
+    let mut chunk = [0u8; 64 * 1024];
+    loop {
+        let n = resp
+            .read(&mut chunk)
+            .with_context(|| format!("read body of {url}"))?;
+        if n == 0 {
+            break;
+        }
+        buf.extend_from_slice(&chunk[..n]);
+        on_chunk(buf.len() as u64, total);
     }
-    let bytes = resp
-        .bytes()
-        .with_context(|| format!("read body of {url}"))?;
-    Ok(bytes.to_vec())
+    Ok(buf)
 }
 
 /// Atomically write `bytes` to `path` (write to a temp sibling, then rename) so a
@@ -213,6 +254,22 @@ mod tests {
         let expected = file_at_least(&p.segmentation, SEGMENTATION_MIN_BYTES)
             && file_at_least(&p.embedding, EMBEDDING_MIN_BYTES);
         assert_eq!(present, expected);
+    }
+
+    #[test]
+    fn progress_label_includes_byte_counts_in_mb() {
+        assert_eq!(
+            progress_label(DownloadStage::Embedding, 12_582_912, 105_906_176),
+            "downloading embedding model · 12.0 MB / 101.0 MB"
+        );
+    }
+
+    #[test]
+    fn progress_label_is_stage_only_when_total_unknown() {
+        assert_eq!(
+            progress_label(DownloadStage::Extracting, 0, 0),
+            "extracting model"
+        );
     }
 
     #[test]
