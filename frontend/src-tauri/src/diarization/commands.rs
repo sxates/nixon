@@ -72,7 +72,7 @@ pub async fn api_diarize_meeting<R: Runtime>(
     if meeting_id.trim().is_empty() {
         return Err("meeting_id cannot be empty".to_string());
     }
-    let started = pipeline::diarize_meeting(app, meeting_id);
+    let started = crate::diarization::launch::diarize_meeting(app, meeting_id);
     Ok(DiarizeStartDto {
         started,
         already_running: !started,
