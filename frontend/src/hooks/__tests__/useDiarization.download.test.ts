@@ -5,17 +5,31 @@ import { renderHook, act } from '@testing-library/react';
 // 4-second toast saying a speaker model was downloading, then had no feedback
 // at all while ~108 MB downloaded silently. This covers the fix: a persistent
 // ("diar-dl") toast that tracks byte progress and only then resolves.
+//
+// `listeners` maps event name -> the list of handlers currently registered for
+// it (one real Tauri event can have many subscribers — e.g. two open meetings
+// each mount their own `useDiarization`), so `emit*` below fires every mounted
+// hook the way the real event bus would, not just the most recently mounted one.
 
 const { invokeMock, listeners } = vi.hoisted(() => ({
   invokeMock: vi.fn(),
-  listeners: new Map<string, (event: { payload: unknown }) => void>(),
+  listeners: new Map<string, Array<(event: { payload: unknown }) => void>>(),
 }));
 vi.mock('@tauri-apps/api/core', () => ({ invoke: invokeMock }));
 vi.mock('@/lib/safe-listen', () => ({
   safeListen: vi.fn(
     (eventName: string, handler: (event: { payload: unknown }) => void) => {
-      listeners.set(eventName, handler);
-      return () => listeners.delete(eventName);
+      const handlers = listeners.get(eventName) ?? [];
+      handlers.push(handler);
+      listeners.set(eventName, handlers);
+      return () => {
+        const current = listeners.get(eventName);
+        if (!current) return;
+        listeners.set(
+          eventName,
+          current.filter((h) => h !== handler),
+        );
+      };
     },
   ),
 }));
@@ -37,7 +51,9 @@ const emitDownloadProgress = (payload: {
   total_bytes: number;
 }) => {
   act(() => {
-    listeners.get('diarization-download-progress')?.({ payload });
+    for (const handler of listeners.get('diarization-download-progress') ?? []) {
+      handler({ payload });
+    }
   });
 };
 
@@ -107,5 +123,95 @@ describe('useDiarization — model download progress + persistent toast', () => 
       'Speaker model ready',
       expect.objectContaining({ id: 'diar-dl', duration: 3000 }),
     );
+  });
+
+  // Important finding 1 (review round 2): the download-progress event carries
+  // no meeting_id, so every mounted hook receives it. Only the hook that
+  // actually started the download may surface it — otherwise an unrelated,
+  // idle meeting's "Identify speakers" button would render the downloading
+  // meeting's byte progress, with no per-meeting event ever able to clear it.
+  it('does not leak a download it did not start onto a different meeting', async () => {
+    invokeMock.mockImplementation((cmd: string) => {
+      switch (cmd) {
+        case 'api_diarization_status':
+          return Promise.resolve(null);
+        case 'api_diarization_models_present':
+          return Promise.resolve(false);
+        case 'api_download_diarization_models':
+          return new Promise(() => {}); // never resolves within this test
+        case 'api_diarize_meeting':
+          return Promise.resolve({ started: true, alreadyRunning: false });
+        default:
+          return Promise.resolve(null);
+      }
+    });
+
+    const meetingA = renderHook(() => useDiarization({ meetingId: 'meeting-a' }));
+    const meetingB = renderHook(() => useDiarization({ meetingId: 'meeting-b' }));
+    await act(async () => {});
+
+    // Meeting A starts "Identify speakers" and kicks off the model download.
+    act(() => {
+      void meetingA.result.current.identifySpeakers();
+    });
+    await act(async () => {});
+
+    emitDownloadProgress({
+      stage: 'downloading embedding model · 12.0 MB / 101.0 MB',
+      downloaded_bytes: 12_582_912,
+      total_bytes: 105_906_176,
+    });
+
+    expect(meetingA.result.current.downloadProgress?.label).toContain('MB /');
+    // Meeting B never touched "Identify speakers" — it must not see A's progress.
+    expect(meetingB.result.current.downloadProgress).toBeNull();
+
+    // ...and a later progress tick still must not leak into B.
+    emitDownloadProgress({
+      stage: 'downloading embedding model · 80.0 MB / 101.0 MB',
+      downloaded_bytes: 83_886_080,
+      total_bytes: 105_906_176,
+    });
+    expect(meetingB.result.current.downloadProgress).toBeNull();
+  });
+
+  // Important finding 2 (review round 2): a download failure must resolve the
+  // persistent `diar-dl` toast to an error, not leave it stuck as "loading"
+  // forever (sonner loading toasts don't auto-dismiss).
+  it('resolves the persistent toast to an error when the download fails', async () => {
+    invokeMock.mockImplementation((cmd: string) => {
+      switch (cmd) {
+        case 'api_diarization_status':
+          return Promise.resolve(null);
+        case 'api_diarization_models_present':
+          return Promise.resolve(false);
+        case 'api_download_diarization_models':
+          return Promise.reject(new Error('network error'));
+        case 'api_diarize_meeting':
+          return Promise.resolve({ started: true, alreadyRunning: false });
+        default:
+          return Promise.resolve(null);
+      }
+    });
+
+    const { result } = renderHook(() => useDiarization({ meetingId: 'm1' }));
+    await act(async () => {});
+
+    await act(async () => {
+      await result.current.identifySpeakers();
+    });
+
+    expect(toast.loading).toHaveBeenCalledWith(
+      'Downloading speaker model',
+      expect.objectContaining({ id: 'diar-dl' }),
+    );
+    // The toast must resolve via the SAME id (not a second, unrelated toast),
+    // and must never have been resolved with toast.success.
+    expect(toast.error).toHaveBeenCalledWith(
+      'Could not download speaker model',
+      expect.objectContaining({ id: 'diar-dl', description: 'network error' }),
+    );
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(result.current.downloadProgress).toBeNull();
   });
 });

@@ -165,9 +165,36 @@ pub fn ensure_models(progress: Option<&dyn Fn(DownloadStage, u64, u64)>) -> Resu
     Ok(paths)
 }
 
-/// Stream the response body, calling `on_chunk(downloaded_so_far, total)` after
-/// every read so a caller can surface byte-level progress (specs/0061 W2) instead
-/// of blocking silently until the whole ~101 MB body has arrived.
+/// A ~1 MiB throttle for progress reporting (specs/0061 W2 fix round 2, R21):
+/// the raw read loop below yields 64 KiB chunks (1600+ per ~101 MB model), and
+/// firing `on_chunk` on every one of them means 1600+ IPC emits and React state
+/// updates, plus (via the pipeline.rs caller) 1600+ registry locks, for a single
+/// download. Report at this granularity instead — still far finer than the
+/// single stage string that shipped before, and cheap enough not to matter.
+const PROGRESS_REPORT_STEP_BYTES: u64 = 1024 * 1024;
+
+/// Pure check for a truncated download (specs/0061 W2 fix round 2, R20):
+/// `total == 0` means the server never sent (or we never read) a
+/// `Content-Length`, so there's nothing to compare against — not an error.
+/// Only `downloaded < total` is flagged: a gzip-encoded body legitimately
+/// decompresses to *more* bytes than the (compressed) `Content-Length`, so a
+/// `!=` check would spuriously fail a perfectly good download.
+fn check_download_complete(url: &str, downloaded: u64, total: u64) -> Result<()> {
+    if total > 0 && downloaded < total {
+        return Err(anyhow!(
+            "short read for {url}: expected {total} bytes, got {downloaded} (connection likely dropped)"
+        ));
+    }
+    Ok(())
+}
+
+/// Stream the response body, calling `on_chunk(downloaded_so_far, total)` at
+/// roughly [`PROGRESS_REPORT_STEP_BYTES`] granularity (plus always once more at
+/// completion, so the UI never stalls just short of done) so a caller can
+/// surface byte-level progress (specs/0061 W2) instead of blocking silently
+/// until the whole ~101 MB body has arrived. Errors if the connection closes
+/// (a clean EOF) before `Content-Length` bytes were read — see
+/// [`check_download_complete`].
 fn download(
     client: &reqwest::blocking::Client,
     url: &str,
@@ -182,6 +209,7 @@ fn download(
     let total = resp.content_length().unwrap_or(0);
     let mut buf = Vec::with_capacity(total as usize);
     let mut chunk = [0u8; 64 * 1024];
+    let mut last_reported: u64 = 0;
     loop {
         let n = resp
             .read(&mut chunk)
@@ -190,8 +218,17 @@ fn download(
             break;
         }
         buf.extend_from_slice(&chunk[..n]);
-        on_chunk(buf.len() as u64, total);
+        let downloaded = buf.len() as u64;
+        if downloaded - last_reported >= PROGRESS_REPORT_STEP_BYTES {
+            on_chunk(downloaded, total);
+            last_reported = downloaded;
+        }
     }
+    // Always report the final byte count, even if it fell short of a full
+    // PROGRESS_REPORT_STEP_BYTES step since the last report, so the UI reflects
+    // reality (including a short read) rather than stalling just short of done.
+    on_chunk(buf.len() as u64, total);
+    check_download_complete(url, buf.len() as u64, total)?;
     Ok(buf)
 }
 
@@ -270,6 +307,40 @@ mod tests {
             progress_label(DownloadStage::Extracting, 0, 0),
             "extracting model"
         );
+    }
+
+    #[test]
+    fn check_download_complete_ok_when_total_unknown() {
+        assert!(check_download_complete("u", 0, 0).is_ok());
+        assert!(check_download_complete("u", 42, 0).is_ok());
+    }
+
+    #[test]
+    fn check_download_complete_ok_when_full() {
+        assert!(check_download_complete("u", 100, 100).is_ok());
+    }
+
+    #[test]
+    fn check_download_complete_errs_on_short_read() {
+        let err = check_download_complete("u", 50, 100).unwrap_err();
+        let msg = format!("{err}");
+        assert!(
+            msg.contains("50"),
+            "message should name actual bytes: {msg}"
+        );
+        assert!(
+            msg.contains("100"),
+            "message should name expected bytes: {msg}"
+        );
+    }
+
+    /// specs/0061 W2 fix round 2 (R20): a gzip-compressed body means
+    /// `Content-Length` is the compressed size while `buf.len()` holds
+    /// decompressed bytes, so `downloaded > total` is legitimate — must never
+    /// be flagged as truncated (a `!=` check would spuriously fail this).
+    #[test]
+    fn check_download_complete_ok_when_downloaded_exceeds_total() {
+        assert!(check_download_complete("u", 150, 100).is_ok());
     }
 
     #[test]

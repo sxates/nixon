@@ -111,6 +111,16 @@ export function useDiarization({
   const lastStageRef = useRef<string | null>(null);
   const lastPctRef = useRef<number>(-1);
 
+  // specs/0061 W2 fix round 2 (Important 1): `diarization-download-progress`
+  // carries no meeting_id (there's only ever one model download at a time,
+  // system-wide), so every mounted `useDiarization` instance — one per open
+  // meeting — receives the same broadcast event. Only the instance that
+  // actually kicked off *this* download should react to it; otherwise an
+  // idle, unrelated meeting's button renders the downloading meeting's byte
+  // progress and never clears it (no per-meeting complete/error event exists
+  // to reset a hook that never started the download in the first place).
+  const isDownloadingRef = useRef(false);
+
   // Keep the latest onComplete without re-subscribing the event listeners.
   const onCompleteRef = useRef(onComplete);
   useEffect(() => {
@@ -181,6 +191,9 @@ export function useDiarization({
     const disposeDownloadProgress = safeListen<DiarizationDownloadProgressPayload>(
       'diarization-download-progress',
       (event) => {
+        // Only the hook instance that started this download reacts (see
+        // isDownloadingRef above) — an unrelated mounted meeting ignores it.
+        if (!isDownloadingRef.current) return;
         const label = event.payload.stage;
         setDownloadProgress({ label });
         toast.loading('Downloading speaker model', {
@@ -198,6 +211,7 @@ export function useDiarization({
         setStage(null);
         setProgressPct(null);
         setDownloadProgress(null);
+        isDownloadingRef.current = false;
         resetProgressGuard(null, -1);
         const count = event.payload.speaker_count;
         const found =
@@ -227,6 +241,7 @@ export function useDiarization({
         setStage(null);
         setProgressPct(null);
         setDownloadProgress(null);
+        isDownloadingRef.current = false;
         resetProgressGuard(null, -1);
         toast.error('Could not identify speakers', {
           description: event.payload.error || 'Diarization failed.',
@@ -250,6 +265,7 @@ export function useDiarization({
     setStage('preparing');
     setProgressPct(null);
     setDownloadProgress(null);
+    isDownloadingRef.current = false;
     resetProgressGuard('preparing', -1);
 
     // Tracks whether the `diar-dl` loading toast is on screen, so a download
@@ -271,7 +287,11 @@ export function useDiarization({
           description: '~108 MB, one time',
         });
         downloadToastShown = true;
+        // Only this hook (the one that made the request) should react to the
+        // broadcast progress event — see isDownloadingRef above.
+        isDownloadingRef.current = true;
         await invoke('api_download_diarization_models');
+        isDownloadingRef.current = false;
         setDownloadProgress(null);
         toast.success('Speaker model ready', { id: 'diar-dl', duration: 3000 });
         downloadToastShown = false;
@@ -303,6 +323,7 @@ export function useDiarization({
       setStage(null);
       setProgressPct(null);
       setDownloadProgress(null);
+      isDownloadingRef.current = false;
       resetProgressGuard(null, -1);
       const description = error instanceof Error ? error.message : String(error);
       if (downloadToastShown) {
