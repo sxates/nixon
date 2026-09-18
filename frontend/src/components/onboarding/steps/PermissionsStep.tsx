@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { OnboardingContainer } from '../OnboardingContainer';
 import { PermissionRow } from '../shared';
 import { useOnboarding } from '@/contexts/OnboardingContext';
+import type { ProbeResult } from '@/types/onboarding';
 
 export function PermissionsStep() {
   const { setPermissionStatus, setPermissionsSkipped, permissions, goNext } = useOnboarding();
@@ -77,18 +78,24 @@ export function PermissionsStep() {
     setIsPending(true);
     try {
       console.log('[PermissionsStep] Triggering Audio Capture permission...');
-      // Backend creates Core Audio tap, captures audio, and verifies it's not silence
-      // Returns true if permission granted and audio verified, false if denied (silence)
-      const granted = await invoke<boolean>('trigger_system_audio_permission_command');
-      console.log('[PermissionsStep] System audio permission result:', granted);
+      // Backend creates the Core Audio tap, plays a brief tone, and probes
+      // whether the tap actually heard it (specs/0061 W3) instead of assuming
+      // grant from tap construction alone.
+      const probe = await invoke<ProbeResult>('trigger_system_audio_permission_command');
+      console.log('[PermissionsStep] System audio probe result:', probe);
 
-      if (granted) {
+      if (probe.state === 'granted') {
         setPermissionStatus('systemAudio', 'authorized');
-        console.log('[PermissionsStep] Audio Capture permission verified - audio is not silence');
+        console.log('[PermissionsStep] Audio Capture permission verified - real audio heard');
+      } else if (probe.state === 'silent') {
+        // The tap opened but only heard silence — honest "not yet", not a
+        // denial. No toast: the row itself carries the copy.
+        setPermissionStatus('systemAudio', 'silent');
+        console.log('[PermissionsStep] Audio Capture probe silent - no audio heard yet');
       } else {
-        // Permission was denied (audio is silence)
+        // Tap construction itself failed.
         setPermissionStatus('systemAudio', 'denied');
-        console.log('[PermissionsStep] Audio Capture permission denied - audio is silence');
+        console.log('[PermissionsStep] Audio Capture probe failed:', probe.message);
       }
     } catch (err) {
       console.error('[PermissionsStep] Failed to request system audio permission:', err);

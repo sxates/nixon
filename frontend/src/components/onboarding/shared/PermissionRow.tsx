@@ -1,12 +1,16 @@
 import React from 'react';
-import { CheckCircle2, Loader2, XCircle } from 'lucide-react';
+import { CheckCircle2, Info, Loader2, XCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import type { PermissionRowProps } from '@/types/onboarding';
 
+/** specs/0061 W3: exact onboarding copy for a tap that opened but only heard silence. */
+export const SILENT_AUDIO_CAPTURE_COPY = 'Not yet — macOS may ask again when you first record.';
+
 export function PermissionRow({ icon, title, description, status, isPending = false, onAction }: PermissionRowProps) {
   const isAuthorized = status === 'authorized';
   const isDenied = status === 'denied';
+  const isSilent = status === 'silent';
   const isChecking = isPending;
 
   const getButtonText = () => {
@@ -48,6 +52,11 @@ export function PermissionRow({ icon, title, description, status, isPending = fa
               <span className="text-destructive flex items-center gap-1">
                 <XCircle className="w-3.5 h-3.5" />
                 Access Denied - Please grant in System Settings
+              </span>
+            ) : isSilent ? (
+              <span className="text-muted-foreground flex items-center gap-1">
+                <Info className="w-3.5 h-3.5" />
+                {SILENT_AUDIO_CAPTURE_COPY}
               </span>
             ) : (
               <span>{description}</span>

@@ -1,6 +1,16 @@
 export type OnboardingStep = 1 | 2 | 3 | 4 | 5;
 
-export type PermissionStatus = 'checking' | 'not_determined' | 'authorized' | 'denied';
+export type PermissionStatus = 'checking' | 'not_determined' | 'authorized' | 'denied' | 'silent';
+
+/**
+ * Result of probing the Audio Capture tap with real audio (specs/0061 W3),
+ * mirroring the Rust `PermissionProbe` enum
+ * (`#[serde(tag = "state", rename_all = "snake_case")]`).
+ */
+export type ProbeResult =
+  | { state: 'granted' }
+  | { state: 'silent' }
+  | { state: 'failed'; message: string };
 
 export interface OnboardingPermissions {
   microphone: PermissionStatus;
