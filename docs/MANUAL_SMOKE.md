@@ -231,7 +231,7 @@ the system-audio tap silently returns silence (see `CLAUDE.md` / ADR-0004).
       meeting never diarized an owner, and the reassignment sticks.
 - [ ] On any meeting, click a transcript line's pencil, change its text, and save — the
       line shows an `edited` mark and the new wording is findable via search.
-- [ ] In that meeting's channel strip, click a speaker's row — the transcript filters to
+- [ ] In Meeting 05's channel strip, click a speaker's row — the transcript filters to
       that speaker and jumps to their first line. Click the same row again to clear the
       filter.
 

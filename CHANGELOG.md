@@ -24,7 +24,9 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 - Editable transcript text: click a line's pencil to correct it inline. A saved edit is
   marked `edited` and stays searchable (the correction re-indexes for full-text search); a
   failed save keeps the editor open with what you typed instead of discarding it.
-  Re-transcribing now warns how many manually-edited lines it will replace (specs/0061 W5).
+  Re-transcribing now warns how many manually-edited lines it will replace, or — if that
+  count can't be fetched — shows a generic warning rather than silently reading as "no
+  edits at risk" (specs/0061 W5).
 - Click a speaker's row in a meeting's channel strip to filter the transcript to that
   speaker and jump to their first line; click the row again to clear the filter. When
   diarization over-splits one person into several speaker keys later assigned to the same
@@ -53,14 +55,20 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 - The Speakers section on a meeting page is boxed like Participants, with its title inside
   the box (specs/0064 item 4).
 
+### Fixed
+
+- A meeting pinned to a summary template id that no longer resolves — a built-in removed in
+  an app update, or a deleted custom template — now falls back to the default template
+  (with a logged warning) instead of having its summary generation marked failed
+  (specs/0061 W6).
+
 ### Removed
 
 - The dead "Test Mic" audio-level monitor and the "File format" row from Recording
   settings — neither did anything a user could act on (specs/0061 W6).
 - The Psychiatric Session built-in summary template (specs/0061 W6). Meetings already
-  pinned to it fall back to the default template at generation time — the same fallback
-  now covers any other unresolvable stored template id, such as a user-deleted custom
-  template, not just this one.
+  pinned to it fall back to the default template at generation time — see Fixed, above,
+  for the general-case guarantee this also relies on.
 
 ## [0.3.1] - 2026-09-16
 
