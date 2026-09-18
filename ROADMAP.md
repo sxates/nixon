@@ -169,7 +169,7 @@ the user-visible part.)*
   place; blocked on a real-audio soak test.
 - ~~**Dev-build signing identity**~~ — **✅ done 2026-07-03**: dev builds are re-signed with a
   stable Apple Development identity via a `build.runner` cargo wrapper
-  (`src-tauri/scripts/cargo-dev-sign.sh`, dev config only), ending both the Screen-Recording
+  (`src-tauri/scripts/cargo-dev-sign.sh`, dev config only), ending both the Audio-Capture
   re-grant gotcha and the Keychain password prompts on rebuild (ADR-0004 §Dev-build gotchas).
 - **Test strategy** (`specs/0023`, ongoing) — keep growing the lifecycle-regression harness
   and Vitest coverage alongside each feature.

@@ -33,7 +33,7 @@ pnpm install
 ./upgrade-nixon.sh   # rebuild + reinstall /Applications/Nixon.app, preserving data
 ```
 
-Requires **microphone** and **screen-recording** permission (the latter is what lets the
+Requires **microphone** and **audio-capture** permission (the latter is what lets the
 Core Audio tap capture system/Zoom audio — no BlackHole needed). Dev and production are
 separate apps with separate data (ADR-0004).
 

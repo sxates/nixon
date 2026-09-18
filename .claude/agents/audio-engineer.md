@@ -18,7 +18,7 @@ full context before starting.
 ## What you must know
 - macOS system audio is captured via a **Core Audio process tap**
   (`audio/capture/core_audio.rs`) — **no BlackHole/virtual device required**, only
-  screen-recording permission. Don't regress this; it's a key advantage.
+  audio-capture permission. Don't regress this; it's a key advantage.
 - Mic + system are mixed in `audio/pipeline.rs` (RMS ducking) while **Silero VAD**
   (`audio/vad.rs`) filters silence before transcription. There are two parallel paths:
   full-audio recording vs VAD-filtered transcription.
@@ -32,6 +32,6 @@ full context before starting.
   the 48kHz capture / 16kHz STT resampling assumptions. Reason about real-time safety.
 - Prefer extending the existing modular `audio/` structure over rewrites.
 - Verify with `cargo check` + `cargo clippy` in `frontend/src-tauri`. Note when a change
-  needs a live mic/screen-recording test the user must run (you can't grant permissions).
+  needs a live mic/audio-capture test the user must run (you can't grant permissions).
 - Keep diffs reviewable; the user reviews everything. Don't reintroduce the legacy `backend/`.
 - Don't `git push` or open PRs.

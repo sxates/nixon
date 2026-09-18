@@ -10,7 +10,7 @@
 # DB migrations are forward-only/additive, so schema upgrades keep existing rows.
 #
 # Caveat: dev builds are ad-hoc signed ("-"), so the signature changes every build and macOS may
-# ask you to re-grant Screen Recording on first launch after an upgrade (one click; no data impact).
+# ask you to re-grant Audio Capture on first launch after an upgrade (one click; no data impact).
 set -euo pipefail
 
 source "$HOME/.cargo/env" 2>/dev/null || true
@@ -57,7 +57,7 @@ echo "🔨 Building Nixon.app (release, Metal)..."
 # One-time legacy cleanup (specs/0057 rename): before 0057 this app installed as
 # /Applications/Vinyl.app. Leaving it behind would put two bundles on disk sharing the SAME
 # bundle id ai.vinyl.app — so the same SQLite DB, the same single-instance lock, and the same
-# TCC (mic/screen-recording) grants. Data lives under the bundle IDENTIFIER, not the .app, so
+# TCC (mic/audio-capture) grants. Data lives under the bundle IDENTIFIER, not the .app, so
 # removing the old bundle loses nothing. Idempotent: a no-op once Vinyl.app is gone.
 if [ -d "/Applications/Vinyl.app" ]; then
   echo "🧹 Removing the pre-rename /Applications/Vinyl.app (same bundle id; your data is identifier-keyed and untouched)..."
@@ -78,5 +78,5 @@ cp -R "$APP_SRC" "/Applications/"
 xattr -cr "/Applications/Nixon.app" 2>/dev/null || true
 
 echo "✅ Upgraded. Your meetings/notes/settings are intact."
-echo "   If macOS asks on first launch, re-grant Screen Recording (System Settings > Privacy)."
+echo "   If macOS asks on first launch, re-grant Audio Capture (System Settings > Privacy)."
 open "/Applications/Nixon.app"

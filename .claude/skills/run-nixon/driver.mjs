@@ -3,7 +3,7 @@
  * run-nixon driver — drive the Nixon frontend in a real browser and screenshot it.
  *
  * Nixon is a Tauri 2 + Next.js desktop app. The native window needs macOS
- * screen-recording/mic permissions, Metal, and downloaded models — not automatable
+ * audio-capture/mic permissions, Metal, and downloaded models — not automatable
  * headless. But the *frontend* (the React UI where most PRs land) can be rendered in
  * plain Chrome IF we stub the Tauri `invoke` IPC bridge it calls on bootstrap. This
  * driver does exactly that: it injects a `window.__TAURI_INTERNALS__` shim returning
