@@ -56,6 +56,25 @@ pub async fn api_llm_activity_retry(app: AppHandle, meeting_id: String) -> Resul
     Ok(())
 }
 
+/// Dismiss ONE failed background task, addressed by its registry id (specs/0063 W3 Task 6).
+///
+/// Distinct from [`api_llm_activity_dismiss`], which acknowledges the WHOLE failure history
+/// at once and keeps every record. This one calls `LlmTaskRegistry::take_record`, which
+/// removes exactly that record and recomputes `has_failure` from what remains — so
+/// dismissing one queue row never makes an unrelated row's failure vanish too. A `task_id`
+/// that is already gone (a double-click, a race with Retry) is not an error: the row the
+/// user was looking at is already gone from the queue, which is what they wanted.
+#[tauri::command]
+pub async fn api_llm_activity_dismiss_task(
+    app: AppHandle,
+    state: State<'_, LlmActivityState>,
+    task_id: u64,
+) -> Result<(), String> {
+    state.0.take_record(task_id);
+    emit_activity(&app, &state.0.view());
+    Ok(())
+}
+
 /// Retry one failed background task, addressed by its registry id (specs/0063 W3).
 ///
 /// Distinct from [`api_llm_activity_retry`], which is prep-brief-only and addressed by

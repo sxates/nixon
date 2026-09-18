@@ -74,6 +74,22 @@ describe('QueuePanel', () => {
     expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
   });
 
+  // fix-round 1: the first version of this wired every row's Dismiss to the header's
+  // full-history api_llm_activity_dismiss, so one row's button silently cleared every
+  // OTHER failure too. It must dismiss only its own record, by numeric task id.
+  it('renders Dismiss on a failed askAI row and dismisses only that task, not the global history', () => {
+    const view = buildQueueView(
+      backlogView([]),
+      llmView([], [{ id: 9, kind: 'askAI', label: 'Ask AI', error: 'boom', meetingId: 'm1', outcome: { type: 'failed', error: 'boom' } }]),
+    );
+    render(<QueuePanel view={view} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+
+    expect(invokeMock).toHaveBeenCalledWith('api_llm_activity_dismiss_task', { taskId: 9 });
+    expect(llm.dismiss).not.toHaveBeenCalled();
+  });
+
   it('still clears the whole failure history from the header "Dismiss failures" control', () => {
     const view = buildQueueView(
       backlogView([]),
@@ -84,5 +100,6 @@ describe('QueuePanel', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Dismiss failures' }));
 
     expect(llm.dismiss).toHaveBeenCalled();
+    expect(invokeMock).not.toHaveBeenCalledWith('api_llm_activity_dismiss_task', expect.anything());
   });
 });

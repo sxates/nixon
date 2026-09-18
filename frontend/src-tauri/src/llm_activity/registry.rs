@@ -198,6 +198,14 @@ impl LlmTaskRegistry {
         self.notify();
     }
 
+    /// The kind of the history record at `id`, without removing it — lets a caller decide
+    /// whether it is even going to act (e.g. `retry_task` checking retryability) before
+    /// paying the cost of `take_record`, so a decision to refuse never destroys the record
+    /// it refused to touch (specs/0063 W3 Task 6).
+    pub fn peek_kind(&self, id: u64) -> Option<TaskKind> {
+        self.lock().history.iter().find(|r| r.id == id).map(|r| r.kind)
+    }
+
     /// Remove a finished record and hand it back — used by Retry (specs/0063 W3), which must
     /// clear the row and the lamp it is retrying, not leave them behind looking untouched.
     /// `has_failure` is recomputed from what remains rather than simply cleared: retrying one
@@ -514,6 +522,34 @@ mod tests {
         let id = reg.view().history[0].id;
         reg.take_record(id);
         assert!(reg.view().has_failure, "one failure remains, so the badge stays");
+    }
+
+    /// The per-record dismiss path (`api_llm_activity_dismiss_task`, fix-round 1 on
+    /// specs/0063 W3 Task 6) is `take_record` under a different name — so a non-retryable
+    /// kind (which the frontend renders as Dismiss, never Retry) must remove only its own
+    /// record and leave an unrelated failure's badge lit, same as any other `take_record`.
+    #[test]
+    fn taking_a_non_retryable_kinds_record_leaves_another_failure_lit() {
+        let reg = registry();
+        let ask_ai = Arc::clone(&reg).start_for(TaskKind::AskAI, Origin::Background, "Ask AI", Some("m1".into()));
+        ask_ai.finish(Err("boom".into()));
+        let prep = Arc::clone(&reg).start_for(TaskKind::PrepBrief, Origin::Background, "Prep", Some("m2".into()));
+        prep.finish(Err("boom".into()));
+
+        let ask_ai_id = reg
+            .view()
+            .history
+            .iter()
+            .find(|r| r.kind == TaskKind::AskAI)
+            .expect("the AskAI record")
+            .id;
+
+        reg.take_record(ask_ai_id);
+
+        let remaining = reg.view();
+        assert_eq!(remaining.history.len(), 1);
+        assert_eq!(remaining.history[0].kind, TaskKind::PrepBrief);
+        assert!(remaining.has_failure, "the other failure's badge must stay lit");
     }
 
     #[test]

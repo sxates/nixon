@@ -387,6 +387,7 @@ pub fn invoke_handler() -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Sen
         // Background LLM activity indicator (specs/0052)
         llm_activity::commands::api_llm_activity_snapshot,
         llm_activity::commands::api_llm_activity_dismiss,
+        llm_activity::commands::api_llm_activity_dismiss_task,
         llm_activity::commands::api_llm_activity_retry,
         llm_activity::commands::api_llm_activity_retry_task,
     ]
