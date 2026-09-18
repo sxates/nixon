@@ -56,7 +56,7 @@ The app lives under `frontend/` (Tauri 2 + Next.js 14 + React 18). ~44k LOC of R
 | Transcription (STT) | `frontend/src-tauri/src/whisper_engine/`, `parakeet_engine/`, `audio/transcription/` | Whisper.cpp (whisper-rs) + Nvidia Parakeet; real-time/streaming |
 | Summarization | `frontend/src-tauri/src/summary/processor.rs`, `service.rs`, `llm_client.rs`, `templates/` | chunking + template-fill report |
 | LLM providers | `frontend/src-tauri/src/{ollama,anthropic,openai,groq,openrouter}/` | Ollama (local) + cloud |
-| Database | `frontend/src-tauri/src/database/` (sqlx) + `frontend/src-tauri/migrations/` | SQLite at `~/Library/Application Support/<bundle-id>/meeting_minutes.sqlite`; bundle id = **`ai.vinyl.app`** (production `Nixon.app`) or **`ai.vinyl.app.debug`** (dev "Dev Nixon") — isolated from each other and from meetily's `com.meetily.ai` (ADR-0004) |
+| Database | `frontend/src-tauri/src/database/` (sqlx) + `frontend/src-tauri/migrations/` | SQLite at `~/Library/Application Support/<bundle-id>/meeting_minutes.sqlite`; bundle id = **`ai.vinyl.app`** (production `Nixon.app`) or **`ai.vinyl.app.debug`** (dev "Dev Nixon") — isolated from each other and from meetily's `com.meetily.ai` (ADR-0004); `api_set_segment_text` (specs/0061 W5) edits this DB only — the recording folder's `transcripts.json` stays the raw, unedited capture |
 | Frontend UI | `frontend/src/` | Next.js; BlockNote editor (`components/BlockNoteEditor/`, `AISummary/`) |
 | Notes (exists, unused by summary) | `meeting_notes` table; `frontend/src/app/notes/[id]/` | reuse for note-enhancement (`specs/0003`) |
 
