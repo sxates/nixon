@@ -14,6 +14,24 @@ data is sent); this can be turned off in Settings.
 > v0.4.0 (MIT) and diverges substantially. See [`CHANGELOG.md`](CHANGELOG.md) for the
 > post-fork history.
 
+## Screenshots
+
+| Today | Recording |
+|---|---|
+| ![Today view](docs/screenshots/real/today.faceplate.png) | ![Live recording with VU meters](docs/screenshots/real/record-live.faceplate.png) |
+
+| Transcript with speakers | Summary |
+|---|---|
+| ![Transcript](docs/screenshots/real/meeting-transcript.faceplate.png) | ![Summary](docs/screenshots/real/meeting-summary.faceplate.png) |
+
+| Ask AI | Settings |
+|---|---|
+| ![Ask AI](docs/screenshots/real/ask.faceplate.png) | ![Recording settings](docs/screenshots/real/settings-recordings.faceplate.png) |
+
+Deck (dark) variants live in [`docs/screenshots/real`](docs/screenshots/real). Every image is rendered from the fictional demo dataset (`./dev-nixon.sh --demo`).
+
+*Images are regenerated with `pnpm shots:real` from a terminal that has Screen Recording permission; see [`docs/screenshots/README.md`](docs/screenshots/README.md).*
+
 ## Features
 
 - **On-device transcription** — Whisper.cpp or NVIDIA Parakeet, real-time, with

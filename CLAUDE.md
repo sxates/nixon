@@ -72,6 +72,9 @@ pnpm install
                               # the cached audio (folders are stable, so it's seconds) — use
                               # --no-audio for fast iteration when audio doesn't matter
 ./dev-nixon.sh --onboarding  # re-run onboarding with simulated downloads (--real-downloads to keep them)
+pnpm shots               # headless screenshot capture of every route, both themes (specs/0060)
+pnpm shots:diff          # pixelmatch contact sheet vs HEAD (docs/screenshots/diff/index.html)
+pnpm shots:real   # real-window captures; needs ./dev-nixon.sh --demo running + Screen Recording for the terminal
 ./build-gpu.sh           # production build (also builds the sidecar) — needs cargo on PATH
 ./upgrade-nixon.sh       # rebuild + reinstall /Applications/Nixon.app, preserving data
 ```
@@ -146,6 +149,8 @@ A change is done when:
    over 800 lines unless allowlisted; allowlisted files may only shrink).
 2c. `scripts/check-off-token-colors.sh` passes (specs/0057: no raw Tailwind palette classes —
    everything goes through the semantic tokens so Deck/Faceplate stay in parity).
+2d. For UI changes, run `pnpm shots` then `pnpm shots:diff` from `frontend/` and look at the
+   sheet (specs/0060).
 3. The app still launches via `./clean_run.sh`.
 4. The relevant smoke path still works (record → live transcript → summary).
 

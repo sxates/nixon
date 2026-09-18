@@ -18,6 +18,9 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 - Dev-only fixture seeding (`--demo`), onboarding harness (`--onboarding`) and a Developer
   section in Settings › Beta; debug builds only (specs/0059).
+- Screenshot pipeline: `pnpm shots` (headless, both themes), `pnpm shots:diff` (contact
+  sheet), `pnpm shots:real` (real window via a debug-only control listener); README
+  screenshots (specs/0060).
 
 ### Changed
 
