@@ -41,10 +41,10 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
   non-retryable tasks) that works. Failed deferred backlog meetings and failed background AI
   work (summaries, extractions, prep briefs, diarization) can now be retried from the Queue
   (specs/0063 W3).
-- A summary that generates successfully but then fails to save now shows as "Failed" in the
-  Queue instead of being silently logged (specs/0063 W3).
-- A summary you cancel now records as skipped in the Queue rather than as a success
-  (specs/0063 W3).
+- A background summary run (the post-diarization re-summarize, or a summary retried from
+  the Queue) that generates successfully but then fails to save now shows as "Failed" in
+  the Queue instead of being silently logged (specs/0063 W3).
+- A summary you cancel is now recorded as skipped rather than as a success (specs/0063 W3).
 
 ## [0.4.0] - 2026-09-18
 

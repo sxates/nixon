@@ -103,8 +103,11 @@ the system-audio tap silently returns silence (see `CLAUDE.md` / ADR-0004).
 - [ ] Force a failure (e.g. stop Ollama), then **Retry** on the failed row re-runs it, and
       **Dismiss failures** clears the failed rows from the panel.
 - [ ] Closing and reopening the panel keeps the counts consistent with what is actually running.
-- [ ] A running **diarization pass** appears as a row in the Queue panel with a stage label
-      (not a loading spinner); while it runs, the row stays visible and shows progress.
+- [ ] A running **diarization pass** appears as a row in the Queue panel with the stage
+      label **AI** (every running background LLM/task row, diarization included, maps to
+      that label — there is no speakers-specific one) and a static 60% progress bar with no
+      percentage; it does not move — the row's liveness is the lamp and the counter, not
+      the bar.
 - [ ] Open a meeting with a transcript and summary, click **"Identify speakers"** to run
       diarization. Once it finishes, the automatic re-summarize should appear as a Queue row;
       it disappears once complete (or shows "Failed" if generation fails).
@@ -115,9 +118,11 @@ the system-audio tap silently returns silence (see `CLAUDE.md` / ADR-0004).
       removes and the lamp clears.
 - [ ] A **non-retryable failure** (e.g. Ask AI, if supported) shows a **Dismiss** button
       instead of Retry; clicking it removes only that row, leaving other failures intact.
-- [ ] **Today has only one queue popover:** click the **Processing** button or check the state
-      — it opens the rail's Queue panel. There is no separate queue popover on the Today page
-      itself.
+- [ ] **Today has only one queue popover:** with backlog work running, the Today header
+      button reads **Processing… (k of N)** — click it and confirm it opens the rail's
+      Queue panel rather than a popover of its own. When idle it instead reads
+      **Process N meetings** and clicking it starts the drain, not the queue. There is no
+      separate queue popover on the Today page itself.
 
 ## 5. Channel strip on a meeting (specs/0057 §3.5)
 - [ ] Open a meeting → **Transcript** tab. The speaker list is a channel strip: **CH 1** is

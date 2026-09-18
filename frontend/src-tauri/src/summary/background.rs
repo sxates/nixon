@@ -1,12 +1,13 @@
-//! The background summary entry point, plus its queue reporting.
+//! The full background summary run: `process_transcript_background` (chunking, provider
+//! calls, caching, persistence) plus its queue reporting (resolving the LLM-activity
+//! registry, starting a `MeetingSummary` task, reporting its outcome).
 //!
-//! `process_transcript_background` used to live in [`crate::summary::service`], but that
-//! file sits at its file-size-ratchet ceiling (specs/0042 WS6) with no headroom for new
-//! code. The run lifecycle this module adds — resolving the LLM-activity registry,
-//! starting a `MeetingSummary` task, and reporting its outcome — is a separable concern
-//! from the summary generation itself (chunking, provider calls, caching, persistence),
-//! so it lives here instead. This is the SAME split `diarization::launch` already made
-//! for the same reason (specs/0063 W3).
+//! This whole ~500-line orchestration used to live in [`crate::summary::service`], but
+//! that file sat at its file-size-ratchet ceiling (specs/0042 WS6) with no headroom for
+//! the queue-reporting code this module adds, so the run moved here in one piece.
+//! `service.rs` now holds what is left: cancellation tokens, context-budget resolution,
+//! and template/cache/language helpers shared by callers outside the run itself. This is
+//! the SAME split `diarization::launch` already made for the same reason (specs/0063 W3).
 //!
 //! `impl SummaryService` is declared a second time here — Rust allows multiple inherent
 //! impl blocks for a type across modules in the same crate — so call sites

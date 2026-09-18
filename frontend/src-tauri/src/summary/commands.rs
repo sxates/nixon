@@ -577,9 +577,10 @@ pub async fn start_summary_generation_for_meeting<R: Runtime>(
             String::new(), // no custom prompt
             template_id,   // persisted per-meeting choice, else DEFAULT_SUMMARY_TEMPLATE_ID
             None,          // auto-detect summary language
-            // specs/0063 W3 fix round 1 (I1): this path has no live viewer — it is
-            // the Day Agenda's one-click "Summarize" (never opens the meeting), so
-            // Background is correct here.
+            // specs/0063 W3 fix round 1 (I1): this path has no live viewer — its two
+            // real callers are `summary/refresh.rs` (the automatic post-diarization
+            // re-summarize) and `llm_activity/retry.rs` (a Queue retry), neither of
+            // which is watching a live progress UI — so Background is correct here.
             Origin::Background,
         )
         .await;

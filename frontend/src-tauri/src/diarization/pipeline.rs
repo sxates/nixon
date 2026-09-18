@@ -1,7 +1,9 @@
 //! Offline diarization orchestration (specs/0010, ADR-0005, P1-B2).
 //!
-//! `diarize_meeting(app, meeting_id)` runs the post-meeting pass on a background
-//! task and emits progress/complete/error events:
+//! The public entry point, `diarize_meeting(app, meeting_id)`, lives in
+//! [`crate::diarization::launch`] (run-slot guard, spawn, queue reporting, terminal
+//! event — specs/0063 W3). This module holds the pass itself, run by `launch` on a
+//! background task and emitting progress/complete/error events:
 //!
 //! 1. Resolve the meeting's recording folder (`meetings.folder_path`) → its
 //!    `system.wav` (`audio::system_channel_wav`). Errors clearly if absent —
