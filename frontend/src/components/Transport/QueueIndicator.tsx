@@ -4,6 +4,9 @@ import React from 'react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useBacklog } from '@/contexts/DeferredBacklogProvider';
 import { useOptionalLlmActivity } from '@/contexts/LlmActivityProvider';
+import { useRecordingState } from '@/contexts/RecordingStateContext';
+import { useTranscripts } from '@/contexts/TranscriptContext';
+import { useQueueOpen } from '@/contexts/QueueOpenContext';
 import { buildQueueView } from '@/lib/transport/queue-view';
 import { LampDot } from './LampDot';
 import { QueuePanel } from './QueuePanel';
@@ -18,7 +21,15 @@ export function QueueIndicator() {
   // useOptionalLlmActivity, never the throwing hook: the rail is mounted app-wide and must
   // survive a tree where the LLM provider isn't above it.
   const llm = useOptionalLlmActivity();
-  const view = buildQueueView(backlog, llm);
+  const { isProcessing } = useRecordingState();
+  // Same source TransportStatus (the rail's left zone) reads its live title from — the
+  // '+ New Call' guard is its placeholder-for-unnamed-session, not a real title. No
+  // sidebar-title fallback here (specs/0063 W3 Task 6): `buildQueueView` already falls back
+  // to a generic "Recording" title, so a plain null on the rare gap is enough.
+  const { meetingTitle } = useTranscripts();
+  const recordingTitle = meetingTitle && meetingTitle !== '+ New Call' ? meetingTitle : null;
+  const { open, setOpen } = useQueueOpen();
+  const view = buildQueueView(backlog, llm, { isProcessing, title: recordingTitle });
 
   const line = view.running
     ? `${view.running.stageLabel} · ${view.running.title}`
@@ -29,7 +40,7 @@ export function QueueIndicator() {
         : 'Idle';
 
   return (
-    <Popover>
+    <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <button
           type="button"

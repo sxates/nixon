@@ -21,6 +21,7 @@ import { loadBetaFeatures } from '@/types/betaFeatures'
 import { RecordingPostProcessingProvider } from '@/contexts/RecordingPostProcessingProvider'
 import { ImportAudioDialog, ImportDropOverlay } from '@/components/ImportAudio'
 import { DeferredBacklogProvider } from '@/contexts/DeferredBacklogProvider'
+import { QueueOpenProvider } from '@/contexts/QueueOpenContext'
 import { ImportDialogProvider } from '@/contexts/ImportDialogContext'
 import { PermissionsModalProvider } from '@/contexts/PermissionsModalContext'
 import { isAudioExtension, getAudioFormatsDisplayList } from '@/constants/audioFormats'
@@ -314,6 +315,7 @@ export default function RootLayout({
                                 panicked, and a panicking command never sends its IPC
                                 response, so the frontend promise hung forever and the
                                 backlog stayed dead for the session. */}
+                            <QueueOpenProvider>
                             <DeferredBacklogProvider>
                             <RecordingPostProcessingProvider>
                               <PermissionsModalProvider>
@@ -337,6 +339,7 @@ export default function RootLayout({
                               </PermissionsModalProvider>
                             </RecordingPostProcessingProvider>
                             </DeferredBacklogProvider>
+                            </QueueOpenProvider>
                           </TooltipProvider>
                         </SidebarProvider>
                     </OnboardingProvider>

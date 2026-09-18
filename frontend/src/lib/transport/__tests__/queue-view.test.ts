@@ -155,6 +155,29 @@ describe('buildQueueView', () => {
     expect(v.lamp).toBe('amber');
   });
 
+  // specs/0063 W3 Task 6 — the numeric registry id, kept separate from the prefixed
+  // string `id` so a Retry click never has to string-slice `llm:` back off.
+  it('carries the numeric task id on a running LLM row', () => {
+    const v = buildQueueView(
+      backlog([]),
+      llm([{ id: 42, kind: 'meetingSummary', label: 'Summarizing', note: null, meetingId: 'm1' }]),
+    );
+    expect(v.rows[0].taskId).toBe(42);
+  });
+
+  it('carries the numeric task id on a failed LLM row', () => {
+    const v = buildQueueView(
+      backlog([]),
+      llm([], [{ id: 7, kind: 'prepBrief', label: 'X', error: 'boom', meetingId: 'm1', outcome: { type: 'failed', error: 'boom' } }]),
+    );
+    expect(v.rows[0].taskId).toBe(7);
+  });
+
+  it('has no task id on a backlog row', () => {
+    const v = buildQueueView(backlog([{ meeting: meeting('a', 'X'), status: 'error' }]), llm([]));
+    expect(v.rows[0].taskId).toBeUndefined();
+  });
+
   it('defaults the recording parameter when omitted, matching existing two-argument callers', () => {
     const v = buildQueueView(backlog([]), llm([]));
     expect(v.rows).toEqual([]);
