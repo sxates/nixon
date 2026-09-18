@@ -41,53 +41,79 @@ async function main() {
   if (opt.theme) shots = shots.filter((s) => s.theme === opt.theme);
   let currentTheme = null;
   let failures = 0;
+  // Tracked so SIGINT/SIGTERM can clean up a take that's actually in progress.
+  let currentPlayer = null;
+  let recordingActive = false;
+
+  const onSignal = (signal) => () => {
+    console.error(`\n${signal} — cleaning up`);
+    currentPlayer?.kill();
+    (recordingActive ? c.send({ cmd: 'stop_recording' }).catch(() => {}) : Promise.resolve()).finally(() =>
+      process.exit(130),
+    );
+  };
+  process.on('SIGINT', onSignal('SIGINT'));
+  process.on('SIGTERM', onSignal('SIGTERM'));
+
   await c.send({ cmd: 'hide_dev_badge', value: true });
-  for (const shot of shots) {
-    try {
-      const [w, h] = shot.entry.viewport;
-      await c.send({ cmd: 'resize', w, h });
-      if (currentTheme !== shot.theme) {
-        await c.send({ cmd: 'theme', value: shot.theme === 'deck' ? 'dark' : 'light' });
-        await c.send({ cmd: 'ready' });
-        currentTheme = shot.theme;
-      }
-      if (shot.entry.onboardingStep) await c.send({ cmd: 'onboarding_step', value: shot.entry.onboardingStep });
-      else await c.send({ cmd: 'navigate', route: shot.entry.route });
-      await c.send({ cmd: 'ready' });
-      await c.send({ cmd: 'hide_dev_badge', value: true });
-      let player = null;
-      if (shot.entry.state === 'recording') {
-        // Ruling (Task 5 review): make sure no real meeting is selected before
-        // start_recording — a control-driven stop's `recording-stopped` listener
-        // would otherwise overwrite that meeting's cached folder path.
-        await c.send({ cmd: 'navigate', route: '/' });
-        await c.send({ cmd: 'ready' });
-        await c.send({ cmd: 'start_recording', title: 'Screenshot take' });
-        if (opt.audio) player = spawn('afplay', [opt.audio], { stdio: 'ignore' });
-      }
-      await sleep(shot.entry.wait);
+  try {
+    for (const shot of shots) {
       try {
-        const { window_number } = await c.send({ cmd: 'window' });
-        execFileSync('screencapture', ['-l', String(window_number), '-o', '-x', join(opt.out, shot.file)]);
-        console.log('ok  ', shot.file);
-      } finally {
-        if (shot.entry.state === 'recording') {
-          player?.kill();
-          await c.send({ cmd: 'stop_recording' });
+        const [w, h] = shot.entry.viewport;
+        await c.send({ cmd: 'resize', w, h });
+        if (currentTheme !== shot.theme) {
+          await c.send({ cmd: 'theme', value: shot.theme === 'deck' ? 'dark' : 'light' });
+          await c.send({ cmd: 'ready' });
+          currentTheme = shot.theme;
         }
+        if (shot.entry.onboardingStep) await c.send({ cmd: 'onboarding_step', value: shot.entry.onboardingStep });
+        else await c.send({ cmd: 'navigate', route: shot.entry.route });
+        await c.send({ cmd: 'ready' });
+        await c.send({ cmd: 'hide_dev_badge', value: true });
+        if (shot.entry.state === 'recording') {
+          // Ruling (Task 5 review): make sure no real meeting is selected before
+          // start_recording — a control-driven stop's `recording-stopped` listener
+          // would otherwise overwrite that meeting's cached folder path.
+          await c.send({ cmd: 'navigate', route: '/' });
+          await c.send({ cmd: 'ready' });
+          await c.send({ cmd: 'start_recording', title: 'Screenshot take' });
+          recordingActive = true;
+          // `navigate '/'` above was a full reload (wipes hide_dev_badge's DOM flag) —
+          // return to the shot's real route (e.g. /record) and re-hide the badge before
+          // capturing, or the PNG would show Home with the DEV badge visible.
+          await c.send({ cmd: 'navigate', route: shot.entry.route });
+          await c.send({ cmd: 'ready' });
+          await c.send({ cmd: 'hide_dev_badge', value: true });
+          if (opt.audio) currentPlayer = spawn('afplay', [opt.audio], { stdio: 'ignore' });
+        }
+        await sleep(shot.entry.wait);
+        try {
+          const { window_number } = await c.send({ cmd: 'window' });
+          execFileSync('screencapture', ['-l', String(window_number), '-o', '-x', join(opt.out, shot.file)]);
+          console.log('ok  ', shot.file, `(route=${shot.entry.route})`);
+        } finally {
+          if (shot.entry.state === 'recording') {
+            currentPlayer?.kill();
+            currentPlayer = null;
+            await c.send({ cmd: 'stop_recording' });
+            recordingActive = false;
+          }
+        }
+      } catch (e) {
+        failures++;
+        console.error('ERR ', shot.file, e.message);
       }
-    } catch (e) {
-      failures++;
-      console.error('ERR ', shot.file, e.message);
     }
+  } finally {
+    // Structural: this runs whether the loop finished cleanly or something above threw
+    // past the per-shot try/catch, so onboarding/the badge are never left mid-flight.
+    if (shots.some((s) => s.entry.onboardingStep)) {
+      await c.send({ cmd: 'onboarding_complete' }).catch(() => {});
+      await c.send({ cmd: 'ready' }).catch(() => {});
+    }
+    await c.send({ cmd: 'hide_dev_badge', value: false }).catch(() => {});
+    c.close();
   }
-  // onboarding shots leave the store incomplete: restore.
-  if (shots.some((s) => s.entry.onboardingStep)) {
-    await c.send({ cmd: 'onboarding_complete' });
-    await c.send({ cmd: 'ready' }).catch(() => {});
-  }
-  await c.send({ cmd: 'hide_dev_badge', value: false }).catch(() => {});
-  c.close();
   process.exit(failures ? 1 : 0);
 }
 

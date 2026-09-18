@@ -11,14 +11,22 @@ export function parseReply(line) {
   return r;
 }
 export function readPort() {
-  return Number(
-    readFileSync(join(homedir(), 'Library', 'Application Support', 'ai.vinyl.app.debug', 'dev-control.port'), 'utf8').trim(),
-  );
+  try {
+    return Number(
+      readFileSync(
+        join(homedir(), 'Library', 'Application Support', 'ai.vinyl.app.debug', 'dev-control.port'),
+        'utf8',
+      ).trim(),
+    );
+  } catch {
+    throw new Error('dev-control.port not found; launch the dev app with ./dev-nixon.sh --demo (or --control) first');
+  }
 }
 
 export function connect(port) {
   const sock = net.connect({ host: '127.0.0.1', port });
   let buf = '';
+  let closed = false;
   const queue = [];
   sock.on('data', (d) => {
     buf += d.toString();
@@ -39,6 +47,10 @@ export function connect(port) {
   sock.on('error', (e) => {
     while (queue.length) queue.shift().rej(e);
   });
+  sock.on('close', () => {
+    closed = true;
+    while (queue.length) queue.shift().rej(new Error('control socket closed'));
+  });
   const ready = new Promise((res, rej) => {
     sock.once('connect', res);
     sock.once('error', rej);
@@ -47,6 +59,10 @@ export function connect(port) {
     ready,
     send: (obj, timeoutMs = 30000) =>
       new Promise((res, rej) => {
+        if (closed) {
+          rej(new Error('control socket closed'));
+          return;
+        }
         const t = setTimeout(() => rej(new Error('timeout ' + obj.cmd)), timeoutMs);
         queue.push({
           res: (v) => {
