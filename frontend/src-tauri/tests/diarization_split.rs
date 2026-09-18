@@ -206,6 +206,35 @@ async fn overridden_row_is_never_split() {
     assert_eq!(count, 1);
 }
 
+// specs/0061 review, M1 — a hand-edited row must be left whole exactly like an
+// overridden row: the edit already cleared `word_timestamps`, so re-splitting it
+// falls back to char-proportional apportioning and machine-cuts text the user
+// fixed by hand, degrading its `edited` mark/count for no benefit (no words lost).
+#[tokio::test]
+async fn user_edited_row_is_never_split() {
+    let (_dir, db) = fresh_db().await;
+    let pool = db.pool();
+    let (meeting_id, row_id) = seed_meeting_with_row(pool, MERGED_TEXT, 0.0, 6.7).await;
+
+    sqlx::query("UPDATE transcripts SET user_edited = 1, word_timestamps = NULL WHERE id = ?")
+        .bind(&row_id)
+        .execute(pool)
+        .await
+        .expect("mark user_edited");
+
+    let n = split_straddling_rows(pool, &meeting_id, &handoff_turns())
+        .await
+        .expect("split");
+    assert_eq!(n, 0, "a hand-edited row must not split");
+
+    let count: i64 = sqlx::query_scalar("SELECT count(*) FROM transcripts WHERE meeting_id = ?")
+        .bind(&meeting_id)
+        .fetch_one(pool)
+        .await
+        .expect("count");
+    assert_eq!(count, 1);
+}
+
 #[tokio::test]
 async fn mic_row_is_never_split() {
     let (_dir, db) = fresh_db().await;
@@ -308,7 +337,10 @@ async fn system_tagged_row_is_not_carved_into_you_by_an_owner_turn() {
     let n = split_straddling_rows(pool, &meeting_id, &turns)
         .await
         .expect("split");
-    assert_eq!(n, 0, "a system-tagged row must not be carved by an owner turn");
+    assert_eq!(
+        n, 0,
+        "a system-tagged row must not be carved by an owner turn"
+    );
 
     let rows: Vec<(String, Option<String>)> = sqlx::query_as(
         "SELECT id, channel FROM transcripts WHERE meeting_id = ? ORDER BY audio_start_time",
