@@ -337,6 +337,9 @@ pub fn invoke_handler() -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Sen
         // Span-level manual correction + new-speaker mint (specs/0039 WS2)
         diarization::corrections::api_set_segment_speakers,
         diarization::corrections::api_create_meeting_speaker,
+        // Owner-always-assignable + empty-speaker pruning (specs/0061 W4)
+        diarization::speaker_maintenance::api_prune_empty_speakers,
+        diarization::speaker_maintenance::api_first_segment_for_speaker,
         diarization::commands::api_get_meeting_attendees,
         diarization::commands::api_assign_speaker_to_attendee,
         diarization::commands::api_get_speaker_suggestions,

@@ -418,6 +418,16 @@ pub async fn api_merge_speakers<R: Runtime>(
     SpeakersRepository::merge(pool, &meeting_id, &from_key, &into_key)
         .await
         .map_err(|e| format!("Failed to merge speakers: {e}"))?;
+    // specs/0061 W4: `merge` already deletes `from_key`'s own row unconditionally, but a
+    // merge is also a natural moment to sweep any OTHER speaker left empty by an earlier
+    // correction. Best-effort: never fail an already-committed merge over a cleanup pass.
+    if let Err(e) =
+        crate::diarization::speaker_maintenance::prune_empty_speakers_inner(pool, &meeting_id).await
+    {
+        log::warn!(
+            "api_merge_speakers: prune-after-merge failed for {meeting_id} (continuing): {e}"
+        );
+    }
     // specs/0044 WS3: a merge collapses the resolved name set — debounced refresh.
     crate::summary::refresh::schedule_name_refresh(&app, pool.clone(), &meeting_id);
     Ok(())

@@ -13,6 +13,7 @@
 use crate::database::models::SpeakerModel;
 use chrono::Utc;
 use sqlx::{Error as SqlxError, FromRow, SqlitePool};
+use std::collections::HashMap;
 use uuid::Uuid;
 
 /// A previously-identified speaker row that carries a stored voiceprint — the
@@ -430,5 +431,76 @@ impl SpeakersRepository {
 
         tx.commit().await?;
         Ok(reassigned)
+    }
+
+    /// Per-speaker count of transcript rows currently held in a meeting (specs/0061 W4) —
+    /// the "is this speaker empty" signal [`crate::diarization::speaker_maintenance::
+    /// prune_empty_speakers_inner`] checks before deleting a `speakers` row. A key absent
+    /// from the map has zero rows.
+    pub async fn segment_counts(
+        pool: &SqlitePool,
+        meeting_id: &str,
+    ) -> Result<HashMap<String, i64>, SqlxError> {
+        let rows = sqlx::query_as::<_, (String, i64)>(
+            "SELECT speaker, COUNT(*) FROM transcripts
+             WHERE meeting_id = ? AND speaker IS NOT NULL
+             GROUP BY speaker",
+        )
+        .bind(meeting_id)
+        .fetch_all(pool)
+        .await?;
+        Ok(rows.into_iter().collect())
+    }
+
+    /// Whether this meeting's speaker key has any stored voiceprint sample referencing it
+    /// (specs/0061 W4) — the prune safety check: deleting a speaker a voiceprint still
+    /// references would orphan biometric provenance, so such a row is never pruned.
+    pub async fn has_voiceprint(
+        pool: &SqlitePool,
+        meeting_id: &str,
+        speaker_key: &str,
+    ) -> Result<bool, SqlxError> {
+        sqlx::query_scalar(
+            "SELECT EXISTS(SELECT 1 FROM voiceprints WHERE source_meeting_id = ? AND source_speaker_key = ?)",
+        )
+        .bind(meeting_id)
+        .bind(speaker_key)
+        .fetch_one(pool)
+        .await
+    }
+
+    /// Delete one `speakers` row for a meeting. Returns `Ok(false)` when no matching row
+    /// existed (idempotent). Callers own the safety checks (not `local`, zero transcript
+    /// rows, no voiceprint) — see [`crate::diarization::speaker_maintenance::
+    /// prune_empty_speakers_inner`].
+    pub async fn delete(
+        pool: &SqlitePool,
+        meeting_id: &str,
+        speaker_key: &str,
+    ) -> Result<bool, SqlxError> {
+        let res = sqlx::query("DELETE FROM speakers WHERE meeting_id = ? AND speaker_key = ?")
+            .bind(meeting_id)
+            .bind(speaker_key)
+            .execute(pool)
+            .await?;
+        Ok(res.rows_affected() > 0)
+    }
+
+    /// The earliest (by `audio_start_time`) transcript row id a speaker currently holds in
+    /// a meeting (specs/0061 W4) — the click-to-filter jump target.
+    pub async fn first_segment_id(
+        pool: &SqlitePool,
+        meeting_id: &str,
+        speaker_key: &str,
+    ) -> Result<Option<String>, SqlxError> {
+        sqlx::query_scalar(
+            "SELECT id FROM transcripts
+             WHERE meeting_id = ? AND speaker = ?
+             ORDER BY audio_start_time ASC LIMIT 1",
+        )
+        .bind(meeting_id)
+        .bind(speaker_key)
+        .fetch_optional(pool)
+        .await
     }
 }

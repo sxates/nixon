@@ -7,12 +7,15 @@
 //! path in `registry.rs` moved.
 
 use serde::Serialize;
+use sqlx::SqlitePool;
 use tauri::{AppHandle, Emitter, Manager, Runtime};
 
 use crate::database::repositories::people::PeopleRepository;
 use crate::database::repositories::speaker::SpeakersRepository;
 use crate::database::repositories::transcript_speaker_overrides::TranscriptSpeakerOverridesRepository;
 use crate::diarization::commands::SpeakerDto;
+use crate::diarization::speaker_maintenance::{ensure_local_speaker, prune_empty_speakers_inner};
+use crate::diarization::LOCAL_SPEAKER_KEY;
 use crate::state::AppState;
 
 /// Reassign a SINGLE transcript line to another speaker (specs/0019 WS2.3, note 8) —
@@ -20,25 +23,33 @@ use crate::state::AppState;
 /// Updates the live transcript AND records a sticky override (keyed by transcript id) so
 /// the correction survives a later offline re-diarization (which otherwise rebuilds all
 /// speaker keys from scratch). Errors if the line doesn't belong to the meeting.
-#[tauri::command]
-pub async fn api_set_segment_speaker<R: Runtime>(
-    app: AppHandle<R>,
-    meeting_id: String,
-    transcript_id: String,
-    speaker_key: String,
+/// Body of [`api_set_segment_speaker`], extracted so tests can drive it without an
+/// `AppHandle`. See that command's docs. specs/0061 W4: when the target is the owner
+/// (`LOCAL_SPEAKER_KEY`), ensures the `local`/"You" speaker row exists first — no mic-tagged
+/// segment ever produced one for some meetings, which otherwise made "You" unreassignable —
+/// and prunes any speaker the reassignment left empty afterward.
+pub(crate) async fn set_segment_speaker_inner(
+    pool: &SqlitePool,
+    meeting_id: &str,
+    transcript_id: &str,
+    speaker_key: &str,
 ) -> Result<(), String> {
     if transcript_id.trim().is_empty() || speaker_key.trim().is_empty() {
         return Err("transcript_id and speaker_key cannot be empty".to_string());
     }
-    let state = app.state::<AppState>();
-    let pool = state.db_manager.pool();
+
+    if speaker_key == LOCAL_SPEAKER_KEY {
+        ensure_local_speaker(pool, meeting_id)
+            .await
+            .map_err(|e| format!("Failed to ensure the owner speaker exists: {e}"))?;
+    }
 
     // REVIEW(0039): single-line reassignment has no voiceprint retraction hook (only the SPAN
     // command `api_set_segment_speakers` does). A one-line correction is rarely material enough
     // to invalidate a cluster's voiceprint, so this is intentional for now — flag for the owner
     // rather than moving the hook here tonight.
     let applied =
-        TranscriptSpeakerOverridesRepository::set(pool, &meeting_id, &transcript_id, &speaker_key)
+        TranscriptSpeakerOverridesRepository::set(pool, meeting_id, transcript_id, speaker_key)
             .await
             .map_err(|e| format!("Failed to set segment speaker: {e}"))?;
     if !applied {
@@ -46,7 +57,24 @@ pub async fn api_set_segment_speaker<R: Runtime>(
             "No transcript '{transcript_id}' found for this meeting"
         ));
     }
+
+    prune_empty_speakers_inner(pool, meeting_id)
+        .await
+        .map_err(|e| format!("Failed to prune empty speakers: {e}"))?;
+
     Ok(())
+}
+
+#[tauri::command]
+pub async fn api_set_segment_speaker<R: Runtime>(
+    app: AppHandle<R>,
+    meeting_id: String,
+    transcript_id: String,
+    speaker_key: String,
+) -> Result<(), String> {
+    let state = app.state::<AppState>();
+    let pool = state.db_manager.pool();
+    set_segment_speaker_inner(pool, &meeting_id, &transcript_id, &speaker_key).await
 }
 
 /// Drop a line's manual speaker override (specs/0019 WS2.3) so it reverts to the
@@ -77,21 +105,30 @@ pub async fn api_clear_segment_speaker<R: Runtime>(
 ///
 /// No event is emitted (matching the single-line path): the caller re-fetches speakers +
 /// transcripts after this resolves, per the specs/0039 Design ("No new events").
-#[tauri::command]
-pub async fn api_set_segment_speakers<R: Runtime>(
-    app: AppHandle<R>,
-    meeting_id: String,
+/// Body of [`api_set_segment_speakers`], extracted so tests can drive it without an
+/// `AppHandle`. See that command's docs. Returns `(reassigned count, retraction target
+/// keys)` — the caller (the real command) uses the latter to emit `voiceprint-retracted`,
+/// which needs an `AppHandle` this function doesn't have. specs/0061 W4: when the target is
+/// the owner, ensures the `local`/"You" row exists before applying, and prunes any speaker
+/// the reassignment left empty afterward.
+pub(crate) async fn set_segment_speakers_inner(
+    pool: &SqlitePool,
+    meeting_id: &str,
     transcript_ids: Vec<String>,
-    speaker_key: String,
-) -> Result<u64, String> {
+    speaker_key: &str,
+) -> Result<(u64, Vec<String>), String> {
     if speaker_key.trim().is_empty() {
         return Err("speaker_key cannot be empty".to_string());
     }
     if transcript_ids.is_empty() {
         return Err("Select at least one line to reassign".to_string());
     }
-    let state = app.state::<AppState>();
-    let pool = state.db_manager.pool();
+
+    if speaker_key == LOCAL_SPEAKER_KEY {
+        ensure_local_speaker(pool, meeting_id)
+            .await
+            .map_err(|e| format!("Failed to ensure the owner speaker exists: {e}"))?;
+    }
 
     // specs/0039 WS3 retraction hook (task 8). Capture the "corrected-away" cluster keys
     // and their material fraction BEFORE `set_many` overwrites `transcripts.speaker` — once
@@ -99,19 +136,39 @@ pub async fn api_set_segment_speakers<R: Runtime>(
     // pure reads and fully best-effort: any error just yields an empty target set so the
     // reassignment below is never blocked.
     let retraction_targets =
-        capture_retraction_targets(pool, &meeting_id, &transcript_ids, &speaker_key).await;
+        capture_retraction_targets(pool, meeting_id, &transcript_ids, speaker_key).await;
 
     let applied = TranscriptSpeakerOverridesRepository::set_many(
         pool,
-        &meeting_id,
+        meeting_id,
         &transcript_ids,
-        &speaker_key,
+        speaker_key,
     )
     .await
     .map_err(|e| format!("Failed to reassign the selected lines: {e}"))?;
     if applied == 0 {
         return Err("None of the selected lines belong to this meeting".to_string());
     }
+
+    prune_empty_speakers_inner(pool, meeting_id)
+        .await
+        .map_err(|e| format!("Failed to prune empty speakers: {e}"))?;
+
+    Ok((applied, retraction_targets))
+}
+
+#[tauri::command]
+pub async fn api_set_segment_speakers<R: Runtime>(
+    app: AppHandle<R>,
+    meeting_id: String,
+    transcript_ids: Vec<String>,
+    speaker_key: String,
+) -> Result<u64, String> {
+    let state = app.state::<AppState>();
+    let pool = state.db_manager.pool();
+
+    let (applied, retraction_targets) =
+        set_segment_speakers_inner(pool, &meeting_id, transcript_ids, &speaker_key).await?;
 
     // Retract (quarantine) the voiceprint samples the materially-corrected-away clusters
     // contributed, and emit `voiceprint-retracted` per affected person so the UI can offer
@@ -388,15 +445,20 @@ pub async fn api_create_meeting_speaker<R: Runtime>(
     })
 }
 
+/// Shared test fixtures for the correction commands AND
+/// [`crate::diarization::speaker_maintenance`] (specs/0061 W4) — `pub(crate)` so both
+/// modules' `#[cfg(test)]` code can build on the same in-memory-DB helpers.
 #[cfg(test)]
-mod tests {
-    use super::*;
+pub(crate) mod test_support {
+    use crate::database::repositories::speaker::SpeakersRepository;
+    use crate::diarization::LOCAL_SPEAKER_KEY;
     use sqlx::SqlitePool;
+    use uuid::Uuid;
 
     /// In-memory pool through the app's real migration set (matches the repo tests).
     /// `foreign_keys` is ON by sqlx default, so transcripts need their meeting and a
     /// speaker's `person_id` must reference a real people row.
-    async fn pool_with_schema() -> SqlitePool {
+    pub(crate) async fn pool_with_schema() -> SqlitePool {
         let pool = sqlx::sqlite::SqlitePoolOptions::new()
             .max_connections(1)
             .connect("sqlite::memory:")
@@ -406,38 +468,41 @@ mod tests {
         pool
     }
 
-    async fn insert_meeting(pool: &SqlitePool, id: &str) {
+    /// Insert a meeting with a fresh, unique id and return it.
+    pub(crate) async fn insert_meeting(pool: &SqlitePool) -> String {
+        let id = format!("meeting-{}", Uuid::new_v4());
         let now = chrono::Utc::now().to_rfc3339();
         sqlx::query("INSERT INTO meetings (id, title, created_at, updated_at) VALUES (?, ?, ?, ?)")
-            .bind(id)
+            .bind(&id)
             .bind("t")
             .bind(&now)
             .bind(&now)
             .execute(pool)
             .await
             .unwrap();
+        id
     }
 
-    /// Insert `n` transcript lines `t{start}..` for `meeting` under `speaker`; returns their ids.
-    async fn insert_lines(
+    async fn insert_lines_inner(
         pool: &SqlitePool,
         meeting: &str,
         start: usize,
         n: usize,
-        speaker: &str,
+        speaker: Option<&str>,
     ) -> Vec<String> {
         let now = chrono::Utc::now().to_rfc3339();
         let mut ids = Vec::new();
         for i in start..start + n {
-            let id = format!("t{i}");
+            let id = format!("{meeting}-t{i}");
             sqlx::query(
-                "INSERT INTO transcripts (id, meeting_id, transcript, timestamp, speaker)
-                 VALUES (?, ?, ?, ?, ?)",
+                "INSERT INTO transcripts (id, meeting_id, transcript, timestamp, audio_start_time, speaker)
+                 VALUES (?, ?, ?, ?, ?, ?)",
             )
             .bind(&id)
             .bind(meeting)
             .bind("hi")
             .bind(&now)
+            .bind(i as f64)
             .bind(speaker)
             .execute(pool)
             .await
@@ -447,36 +512,80 @@ mod tests {
         ids
     }
 
-    /// A speaker row optionally linked to a durable person.
-    async fn insert_speaker(pool: &SqlitePool, meeting: &str, key: &str, person_id: Option<&str>) {
-        use crate::database::repositories::speaker::SpeakersRepository;
-        SpeakersRepository::upsert(pool, meeting, key, key, false, None, None, None)
-            .await
-            .unwrap();
-        if let Some(pid) = person_id {
-            sqlx::query(
-                "UPDATE speakers SET person_id = ? WHERE meeting_id = ? AND speaker_key = ?",
-            )
-            .bind(pid)
+    /// Insert `n` unassigned (`speaker IS NULL`) transcript lines for `meeting`, each with a
+    /// distinct ascending `audio_start_time` (so ordering tests have something real to
+    /// override); returns their ids.
+    pub(crate) async fn insert_lines(pool: &SqlitePool, meeting: &str, n: usize) -> Vec<String> {
+        insert_lines_inner(pool, meeting, 0, n, None).await
+    }
+
+    /// Insert `n` transcript lines `{meeting}-t{start}..` for `meeting` under `speaker`;
+    /// returns their ids.
+    pub(crate) async fn insert_lines_with_speaker(
+        pool: &SqlitePool,
+        meeting: &str,
+        start: usize,
+        n: usize,
+        speaker: &str,
+    ) -> Vec<String> {
+        insert_lines_inner(pool, meeting, start, n, Some(speaker)).await
+    }
+
+    /// A speaker row with the given display name (`is_local` inferred from the key).
+    pub(crate) async fn insert_speaker(
+        pool: &SqlitePool,
+        meeting: &str,
+        key: &str,
+        display_name: &str,
+    ) {
+        SpeakersRepository::upsert(
+            pool,
+            meeting,
+            key,
+            display_name,
+            key == LOCAL_SPEAKER_KEY,
+            None,
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+    }
+
+    /// A speaker row (display name defaults to the key) linked to a durable person.
+    pub(crate) async fn insert_speaker_with_person(
+        pool: &SqlitePool,
+        meeting: &str,
+        key: &str,
+        person_id: &str,
+    ) {
+        insert_speaker(pool, meeting, key, key).await;
+        sqlx::query("UPDATE speakers SET person_id = ? WHERE meeting_id = ? AND speaker_key = ?")
+            .bind(person_id)
             .bind(meeting)
             .bind(key)
             .execute(pool)
             .await
             .unwrap();
-        }
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::test_support::*;
+    use super::*;
 
     /// specs/0039 WS3: a small bystander cluster incidentally swept into a large span must
     /// NOT be retracted — only the span-dominant corrected-away speaker is.
     #[tokio::test]
     async fn bystander_in_large_span_is_not_retracted() {
         let pool = pool_with_schema().await;
-        insert_meeting(&pool, "m1").await;
+        let m = insert_meeting(&pool).await;
         // 38 dominant lines + a 2-line innocent bystander = a 40-line span reassigned to spk_2.
-        let mut span = insert_lines(&pool, "m1", 0, 38, "spk_1").await;
-        span.extend(insert_lines(&pool, "m1", 38, 2, "spk_bystander").await);
+        let mut span = insert_lines_with_speaker(&pool, &m, 0, 38, "spk_1").await;
+        span.extend(insert_lines_with_speaker(&pool, &m, 38, 2, "spk_bystander").await);
 
-        let material = capture_retraction_targets(&pool, "m1", &span, "spk_2").await;
+        let material = capture_retraction_targets(&pool, &m, &span, "spk_2").await;
         assert!(
             material.contains(&"spk_1".to_string()),
             "the span-dominant speaker is retracted"
@@ -492,15 +601,15 @@ mod tests {
     #[tokio::test]
     async fn same_person_drift_merge_is_not_retracted() {
         let pool = pool_with_schema().await;
-        insert_meeting(&pool, "m1").await;
+        let m = insert_meeting(&pool).await;
         let person = PeopleRepository::create(&pool, "Ana", None, None, None)
             .await
             .unwrap();
-        insert_speaker(&pool, "m1", "spk_1", Some(&person.id)).await;
-        insert_speaker(&pool, "m1", "spk_2", Some(&person.id)).await;
-        let span = insert_lines(&pool, "m1", 0, 10, "spk_1").await;
+        insert_speaker_with_person(&pool, &m, "spk_1", &person.id).await;
+        insert_speaker_with_person(&pool, &m, "spk_2", &person.id).await;
+        let span = insert_lines_with_speaker(&pool, &m, 0, 10, "spk_1").await;
 
-        let material = capture_retraction_targets(&pool, "m1", &span, "spk_2").await;
+        let material = capture_retraction_targets(&pool, &m, &span, "spk_2").await;
         assert!(
             material.is_empty(),
             "a same-person drift-merge must not retract the person's own voice"
@@ -512,18 +621,18 @@ mod tests {
     #[tokio::test]
     async fn genuine_full_speaker_correction_is_retracted() {
         let pool = pool_with_schema().await;
-        insert_meeting(&pool, "m1").await;
+        let m = insert_meeting(&pool).await;
         let a = PeopleRepository::create(&pool, "A", None, None, None)
             .await
             .unwrap();
         let b = PeopleRepository::create(&pool, "B", None, None, None)
             .await
             .unwrap();
-        insert_speaker(&pool, "m1", "spk_1", Some(&a.id)).await;
-        insert_speaker(&pool, "m1", "spk_2", Some(&b.id)).await;
-        let span = insert_lines(&pool, "m1", 0, 10, "spk_1").await;
+        insert_speaker_with_person(&pool, &m, "spk_1", &a.id).await;
+        insert_speaker_with_person(&pool, &m, "spk_2", &b.id).await;
+        let span = insert_lines_with_speaker(&pool, &m, 0, 10, "spk_1").await;
 
-        let material = capture_retraction_targets(&pool, "m1", &span, "spk_2").await;
+        let material = capture_retraction_targets(&pool, &m, &span, "spk_2").await;
         assert_eq!(material, vec!["spk_1".to_string()]);
     }
 }
