@@ -53,8 +53,16 @@ interface TranscriptPanelProps {
   onScrollToSegmentDone?: () => void;
 
   /** specs/0061 W4 (task 3) — a speaker key clicked in the channel strip; when set,
-   *  only that speaker's segments render, above a "Showing: <name>" chip. */
+   *  only that speaker's segments render, above a "Showing: <name>" chip. This is the
+   *  group's PRIMARY key, used only to resolve the chip's display name — see
+   *  `speakerFilterKeys` for which segments actually match. */
   speakerFilter?: string | null;
+  /** specs/0061 W4 task 3, ruling R36 — every member key of the selected consolidated
+   *  speaker group (a group can span several raw diarization keys mapped to the same
+   *  Person). A segment renders when its `speaker` is ANY of these. Falls back to
+   *  `[speakerFilter]` when omitted, so a caller with no consolidation concept (e.g. a
+   *  single ungrouped key) can pass just `speakerFilter`. */
+  speakerFilterKeys?: string[] | null;
   /** Clear the filter (the chip's own "Clear speaker filter" button). */
   onClearSpeakerFilter?: () => void;
 
@@ -89,6 +97,7 @@ export function TranscriptPanel({
   isScrollTargetVisible = true,
   onScrollToSegmentDone,
   speakerFilter,
+  speakerFilterKeys,
   onClearSpeakerFilter,
   className = 'hidden md:flex md:w-1/4 lg:w-1/3 min-w-0 border-r border-border bg-card flex-col relative shrink-0',
 }: TranscriptPanelProps) {
@@ -280,13 +289,19 @@ export function TranscriptPanel({
     }));
   }, [transcripts, usePagination, segments]);
 
-  // specs/0061 W4 (task 3) — filter to just the clicked speaker's lines. Talk-time
-  // totals (useMeetingTalkTime, in SpeakerLegend) read the whole meeting separately
-  // and are unaffected by this view-local filter.
+  // specs/0061 W4 (task 3), ruling R36 — filter to just the selected group's lines.
+  // Matches ANY member key (a consolidated group can span several raw diarization
+  // keys), not only the primary — a single-key caller can just pass `speakerFilter`
+  // and rely on the fallback. Talk-time totals (useMeetingTalkTime, in SpeakerLegend)
+  // read the whole meeting separately and are unaffected by this view-local filter.
+  const effectiveFilterKeys = useMemo(
+    () => speakerFilterKeys ?? (speakerFilter ? [speakerFilter] : null),
+    [speakerFilterKeys, speakerFilter],
+  );
   const convertedSegments = useMemo(() => {
-    if (!speakerFilter) return allSegments;
-    return allSegments.filter((s) => s.speaker === speakerFilter);
-  }, [allSegments, speakerFilter]);
+    if (!effectiveFilterKeys) return allSegments;
+    return allSegments.filter((s) => !!s.speaker && effectiveFilterKeys.includes(s.speaker));
+  }, [allSegments, effectiveFilterKeys]);
 
   // The filter chip's label — resolve the clicked key against the speaker
   // directory so it reads a real name ("Tomas"); fall back to the raw key in the

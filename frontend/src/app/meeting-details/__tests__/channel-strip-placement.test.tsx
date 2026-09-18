@@ -172,13 +172,29 @@ describe('meeting-details channel strip placement (specs/0057 Plan 3, Task 5)', 
     render(<PageContent meeting={meeting} summaryData={null} />);
 
     const strip = await screen.findByRole('table', { name: 'Channels' });
-    // 3 speaker rows -> 2 channels (spk_0 + spk_1 share a personId): 2 data rows.
-    // specs/0061 W4 task 3 — PageContent always wires a real onSelectSpeaker now,
-    // so ChannelStrip's data rows render as `role="button"` (ruling R4), not
-    // `role="row"`; `data-testid="channel-row"` is the role-agnostic row count.
+    // 3 speaker rows -> 2 channels (spk_0 + spk_1 share a personId): header + 2 rows.
+    // specs/0061 W4 task 3, ruling R37 — the row stays `role="row"` (a bare
+    // `role="button"` row, R4's first attempt, would have orphaned its
+    // `role="cell"` children); the selection affordance is a real `<button>`
+    // INSIDE the channel cell instead, so the row-count-by-role assertion is
+    // exactly what it always was.
     await waitFor(() => {
-      expect(within(strip).getAllByTestId('channel-row')).toHaveLength(2);
+      expect(within(strip).getAllByRole('row')).toHaveLength(3);
     });
+    // The new per-row toggle button (ruling R37): one per channel, named for its
+    // speaker, unpressed until clicked — this is the property R4/R37 actually
+    // added, so pin its ARIA here rather than just the row count.
+    const toggles = within(strip).getAllByRole('button', { name: /^Filter transcript to / });
+    expect(toggles).toHaveLength(2);
+    for (const toggle of toggles) {
+      expect(toggle).toHaveAttribute('aria-pressed', 'false');
+    }
+    expect(
+      within(strip).getByRole('button', { name: 'Filter transcript to You' }),
+    ).toBeInTheDocument();
+    expect(
+      within(strip).getByRole('button', { name: 'Filter transcript to Sarah Chen' }),
+    ).toBeInTheDocument();
     // The reel-label card is gone (0.1.0 canvas feedback); the identity line carries the
     // voice count now, still consolidated.
     const line = screen.getByTestId('meeting-identity-line').textContent ?? '';

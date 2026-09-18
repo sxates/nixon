@@ -25,6 +25,9 @@ import { TranscriptPanel } from '@/components/MeetingDetails/TranscriptPanel';
 const SEGMENTS: TranscriptSegmentData[] = [
   { id: 'seg-1', timestamp: 0, text: 'line from tomas', speaker: 'spk_1', speakerName: 'Tomas' },
   { id: 'seg-2', timestamp: 3, text: 'line from priya', speaker: 'spk_2', speakerName: 'Priya' },
+  // A second raw diarization key consolidated under the same Person as spk_1 (ruling
+  // R36) — the filter must include this line too when spk_1's group is selected.
+  { id: 'seg-3', timestamp: 5, text: 'line from tomas alt key', speaker: 'spk_3', speakerName: 'Tomas' },
 ];
 
 function makeSpeakersController(speakers: MeetingSpeaker[]): UseSpeakersReturn {
@@ -94,6 +97,23 @@ describe('TranscriptPanel — speaker filter chip (specs/0061 W4 task 3)', () =>
     renderPanel({ speakerFilter: 'spk_1', onClearSpeakerFilter: onClear });
     fireEvent.click(screen.getByRole('button', { name: 'Clear speaker filter' }));
     expect(onClear).toHaveBeenCalledTimes(1);
+  });
+
+  it('filters by every member key of a consolidated group, not just the primary (ruling R36)', () => {
+    renderPanel({ speakerFilter: 'spk_1', speakerFilterKeys: ['spk_1', 'spk_3'] });
+    expect(screen.getByText('line from tomas')).toBeInTheDocument();
+    expect(screen.getByText('line from tomas alt key')).toBeInTheDocument();
+    expect(screen.queryByText('line from priya')).not.toBeInTheDocument();
+    // The chip's display name still resolves from the PRIMARY key.
+    expect(screen.getByText('Showing: Tomas')).toBeInTheDocument();
+  });
+
+  it('falls back to [speakerFilter] as a single key when speakerFilterKeys is omitted', () => {
+    renderPanel({ speakerFilter: 'spk_1' });
+    expect(screen.getByText('line from tomas')).toBeInTheDocument();
+    // spk_3 is a DIFFERENT key than the bare `speakerFilter` — excluded without
+    // `speakerFilterKeys` naming it explicitly.
+    expect(screen.queryByText('line from tomas alt key')).not.toBeInTheDocument();
   });
 
   it('does not hang or crash when the filter matches no loaded segments', () => {

@@ -486,21 +486,32 @@ impl SpeakersRepository {
         Ok(res.rows_affected() > 0)
     }
 
-    /// The earliest (by `audio_start_time`) transcript row id a speaker currently holds in
-    /// a meeting (specs/0061 W4) — the click-to-filter jump target.
+    /// The earliest (by `audio_start_time`) transcript row id across ANY of `speaker_keys`
+    /// in a meeting (specs/0061 W4; widened by controller ruling R36 to take a
+    /// consolidated group's full member-key set, not just its primary key — the group's
+    /// true earliest line can belong to a non-primary key, and only SQL sees
+    /// `audio_start_time`, so a single-key-then-frontend-compare approach can't order
+    /// correctly). Empty `speaker_keys` short-circuits to `None` (never queries).
     pub async fn first_segment_id(
         pool: &SqlitePool,
         meeting_id: &str,
-        speaker_key: &str,
+        speaker_keys: &[String],
     ) -> Result<Option<String>, SqlxError> {
-        sqlx::query_scalar(
+        if speaker_keys.is_empty() {
+            return Ok(None);
+        }
+        let placeholders = std::iter::repeat_n("?", speaker_keys.len())
+            .collect::<Vec<_>>()
+            .join(", ");
+        let sql = format!(
             "SELECT id FROM transcripts
-             WHERE meeting_id = ? AND speaker = ?
-             ORDER BY audio_start_time ASC LIMIT 1",
-        )
-        .bind(meeting_id)
-        .bind(speaker_key)
-        .fetch_optional(pool)
-        .await
+             WHERE meeting_id = ? AND speaker IN ({placeholders})
+             ORDER BY audio_start_time ASC LIMIT 1"
+        );
+        let mut query = sqlx::query_scalar(&sql).bind(meeting_id);
+        for key in speaker_keys {
+            query = query.bind(key);
+        }
+        query.fetch_optional(pool).await
     }
 }

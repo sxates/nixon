@@ -143,6 +143,10 @@ export function SpeakerLegend({
       colorClass: speakerBgClass(g.primary.isLocal ? 'local' : g.primary.speakerKey),
       seconds: groupSeconds(seconds, g.keys),
       share: groupSeconds(shares, g.keys),
+      // specs/0061 W4 task 3, ruling R37 — names the row's select button
+      // ("Filter transcript to <name>"); the visible name cell is unaffected
+      // (still `renderName`/`SpeakerChip`).
+      displayName: g.primary.displayName,
     }));
   }, [groups, transcripts, fullSeconds]);
 

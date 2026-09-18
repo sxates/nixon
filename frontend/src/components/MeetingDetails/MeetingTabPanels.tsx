@@ -62,8 +62,13 @@ interface MeetingTabPanelsProps {
    *  shares it. */
   speakersController: UseSpeakersReturn;
   /** specs/0061 W4 (task 3) — a speaker clicked in the channel strip; filters the
-   *  Transcript tab to just their lines. */
+   *  Transcript tab to just their lines. The PRIMARY key of the selected group (used
+   *  for the chip's display-name lookup); see `speakerFilterKeys` for matching. */
   speakerFilter?: string | null;
+  /** specs/0061 W4 task 3, ruling R36 — every member key of the selected consolidated
+   *  group; TranscriptPanel matches a segment's `speaker` against any of these, not
+   *  just the primary key. */
+  speakerFilterKeys?: string[] | null;
   /** Clear the filter (the transcript's "Clear speaker filter" chip button). */
   onClearSpeakerFilter?: () => void;
 }
@@ -103,6 +108,7 @@ export function MeetingTabPanels({
   onRefetchTranscripts,
   speakersController,
   speakerFilter,
+  speakerFilterKeys,
   onClearSpeakerFilter,
 }: MeetingTabPanelsProps) {
   return (
@@ -203,6 +209,7 @@ export function MeetingTabPanels({
           onRefetchTranscripts={onRefetchTranscripts}
           speakersController={speakersController}
           speakerFilter={speakerFilter}
+          speakerFilterKeys={speakerFilterKeys}
           onClearSpeakerFilter={onClearSpeakerFilter}
         />
       </div>
