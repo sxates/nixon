@@ -3,23 +3,23 @@
 # historical reasons; entries may only SHRINK (see scripts/check-file-size.sh).
 # Adding a new entry requires reviewer sign-off in the PR.
 2338 frontend/src-tauri/src/calendar/google/sync.rs
-2228 frontend/src-tauri/src/audio/recording_saver.rs
+1553 frontend/src-tauri/src/audio/recording_saver.rs
 1724 frontend/src-tauri/src/summary/processor.rs
 1549 frontend/src-tauri/src/audio/pipeline.rs
 1866 frontend/src-tauri/src/diarization/sherpa.rs
 1733 frontend/src-tauri/src/database/repositories/action_item.rs
 1493 frontend/src-tauri/src/audio/recording_commands.rs
-1630 frontend/src-tauri/src/diarization/pipeline.rs
-978 frontend/src-tauri/src/diarization/commands.rs
+1626 frontend/src-tauri/src/diarization/pipeline.rs
+964 frontend/src-tauri/src/diarization/commands.rs
 1398 frontend/src/components/ModelSettingsModal.tsx
 1276 frontend/src-tauri/src/audio/import.rs
-1189 frontend/src-tauri/src/summary/service.rs
+871 frontend/src-tauri/src/summary/service.rs
 1274 frontend/src-tauri/src/whisper_engine/whisper_engine.rs
 1157 frontend/src-tauri/src/action_items/extractor.rs
 1183 frontend/src-tauri/src/parakeet_engine/parakeet_engine.rs
 951 frontend/src-tauri/src/audio/retranscription.rs
 1062 frontend/src-tauri/src/aggregation/prompts.rs
-1022 frontend/src/components/VirtualizedTranscriptView.tsx
+829 frontend/src/components/VirtualizedTranscriptView.tsx
 1020 frontend/src-tauri/src/calendar/google/oauth.rs
 991 frontend/src-tauri/src/audio/audio_processing.rs
 931 frontend/src-tauri/src/database/repositories/google_calendar.rs
