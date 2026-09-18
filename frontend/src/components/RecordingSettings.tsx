@@ -14,7 +14,6 @@ import {
   retentionChoiceToSelectValue,
 } from '@/lib/audio-retention';
 import { toast } from 'sonner';
-import { useConfig } from '@/contexts/ConfigContext';
 import { useSidebar } from '@/components/Sidebar/SidebarProvider';
 import {
   noticeForSetting,
@@ -30,7 +29,6 @@ import {
 export interface RecordingPreferences {
   save_folder: string;
   auto_save: boolean;
-  file_format: string;
   preferred_mic_device: string | null;
   preferred_system_device: string | null;
   /** Auto-delete recording audio after N days (specs/0029 WS7.1); null = keep forever. */
@@ -49,11 +47,6 @@ interface RecordingSettingsProps {
 }
 
 export function RecordingSettings({ onSave }: RecordingSettingsProps) {
-  // Auto-summary on meeting end (specs/0029 WS7.3). Shared ConfigContext state — the
-  // SAME `isAutoSummary` the toggle in Summary settings uses, so the two surfaces can
-  // never disagree. Surfaced here too because this is where recording-lifecycle
-  // options live and users look for it after a call ends.
-  const { isAutoSummary, toggleIsAutoSummary } = useConfig();
   // spec 0051 WS3: `activeRecordingMeetingId` is the recording id that survives
   // navigating away from /record — which is exactly where the user is when they change
   // a setting mid-meeting. The 'intro-call' placeholder is not a real recording.
@@ -84,7 +77,6 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
   const [preferences, setPreferences] = useState<RecordingPreferences>({
     save_folder: '',
     auto_save: true,
-    file_format: 'mp4',
     preferred_mic_device: null,
     preferred_system_device: null,
     retention_days: null,
@@ -309,13 +301,6 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
     }
   };
 
-  // Auto-summary toggle (specs/0029 WS7.3). Persistence is synchronous localStorage via
-  // ConfigContext; the toast just matches the "Preference saved" feedback of siblings.
-  const handleAutoSummaryToggle = (enabled: boolean) => {
-    toggleIsAutoSummary(enabled);
-    toast.success('Preference saved');
-  };
-
   // Audio retention (specs/0029 WS7.1) — ONE control ("Delete audio recordings":
   // Immediately / after N days / Never) mapped onto the UNCHANGED backend pair
   // { auto_save, retention_days } via lib/audio-retention.ts. Writes through the
@@ -408,6 +393,37 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
       await invoke('open_recordings_folder');
     } catch (error) {
       console.error('Failed to open recordings folder:', error);
+    }
+  };
+
+  // Change where NEW recordings are saved (specs/0061 W6). Existing meetings keep their
+  // own folder_path — only new recordings land in the newly chosen folder. Persists
+  // through the same set_recording_preferences path the app reads at startup
+  // (recording_preferences.rs's RECORDINGS_ROOT cache is re-seeded on every save).
+  const handleChangeFolder = async () => {
+    let picked: string | null;
+    try {
+      picked = await invoke<string | null>('select_recording_folder');
+    } catch (error) {
+      console.error('Failed to open folder picker:', error);
+      toast.error('Failed to open folder picker');
+      return;
+    }
+    if (!picked) return; // user cancelled
+
+    const previous = preferences;
+    const newPreferences = { ...preferences, save_folder: picked };
+    setPreferences(newPreferences);
+    try {
+      await invoke('set_recording_preferences', { preferences: newPreferences });
+      onSave?.(newPreferences);
+      toast.success('Preference saved', {
+        description: 'New recordings will be saved to the selected folder.',
+      });
+    } catch (error) {
+      console.error('Failed to save recording folder preference:', error);
+      setPreferences(previous); // revert on failure
+      toast.error('Failed to save preference');
     }
   };
 
@@ -529,20 +545,6 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
             }
           />
 
-          {/* Auto-summarize on meeting end (specs/0029 WS7.3) — same ConfigContext state as
-              the Auto Summary toggle in Summary settings; one source of truth, two surfaces. */}
-          <SettingsRow
-            label="Summarize automatically when a meeting ends"
-            description="Generate an AI summary as soon as a recording stops, using your configured summary model."
-            control={
-              <Switch
-                checked={isAutoSummary}
-                onCheckedChange={handleAutoSummaryToggle}
-                aria-label="Summarize automatically when a meeting ends"
-              />
-            }
-          />
-
           <SettingsRow
             label="Recording start notification"
             description="Show a reminder to tell participants when recording starts."
@@ -567,6 +569,13 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
             }
           />
         </SettingsGroup>
+
+        {/* specs/0061 W6 — this used to be a SECOND "Summarize automatically" switch here,
+            duplicating the one under Summary (same ConfigContext state, two surfaces to
+            keep in sync). One control, one place; this just points to it. */}
+        <SettingsNote tone="muted">
+          Automatic summaries are configured under Summary.
+        </SettingsNote>
 
         {/* Zoom mute gate (specs/0049) — opt-in, needs Accessibility permission.
             Renders its own ruled-row card in the same vocabulary. */}
@@ -605,7 +614,7 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
           {diarizationEnabled && (
             <SettingsRow
               label="Label speakers live while recording"
-              description="Show provisional speaker labels on the live transcript as you record, instead of only after the meeting. Uses extra CPU."
+              description="Shows provisional numbered labels while you record. Names are matched when the recording ends."
               control={
                 <Switch
                   checked={liveDiarizationEnabled}
@@ -646,9 +655,10 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
               label="Store voiceprints for other people"
               description={
                 <>
-                  Off by default. When on, Nixon remembers other people&apos;s voices to suggest
-                  names automatically in future meetings. When off, names still suggest within a
-                  single meeting, but no cross-meeting voice memory is kept for others.
+                  Off by default. Storing other people&apos;s voiceprints is opt-in because it
+                  is biometric data. When on, Nixon remembers other people&apos;s voices to
+                  suggest names automatically in future meetings. When off, names still suggest
+                  within a single meeting, but no cross-meeting voice memory is kept for others.
                   Voiceprints stay on this Mac either way.
                 </>
               }
@@ -753,22 +763,15 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
                 </span>
               }
               control={
-                <Button variant="outline" size="sm" onClick={handleOpenFolder}>
-                  <FolderOpen className="h-4 w-4" />
-                  Open folder
-                </Button>
-              }
-            />
-          )}
-
-          {preferences.auto_save && (
-            <SettingsRow
-              label="File format"
-              description={`Saved with a timestamp: recording_YYYYMMDD_HHMMSS.${preferences.file_format}`}
-              control={
-                <span className="text-sm text-muted-foreground">
-                  {preferences.file_format.toUpperCase()}
-                </span>
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" onClick={handleOpenFolder}>
+                    <FolderOpen className="h-4 w-4" />
+                    Open folder
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={handleChangeFolder}>
+                    Change…
+                  </Button>
+                </div>
               }
             />
           )}
