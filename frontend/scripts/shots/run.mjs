@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // run.mjs — capture every manifest entry headless (specs/0060).
-//   node scripts/shots/run.mjs [--out DIR] [--only a,b] [--theme deck] [--no-build] [--worktree-build]
+//   node scripts/shots/run.mjs [--out DIR] [--only a,b] [--theme deck] [--no-build] [--isolated-build]
 import { spawn, execSync } from 'node:child_process';
 import { mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
@@ -19,17 +19,22 @@ export function summarize(results) {
 
 function args() {
   const a = process.argv.slice(2); const get = (k) => { const i = a.indexOf(k); return i >= 0 ? a[i + 1] : undefined; };
-  return { out: get('--out') ?? join(repo, 'docs', 'screenshots', 'headless'), only: get('--only')?.split(','), theme: get('--theme'), noBuild: a.includes('--no-build'), worktreeBuild: a.includes('--worktree-build') };
+  return { out: get('--out') ?? join(repo, 'docs', 'screenshots', 'headless'), only: get('--only')?.split(','), theme: get('--theme'), noBuild: a.includes('--no-build'), isolatedBuild: a.includes('--isolated-build') || a.includes('--worktree-build') };
 }
 
-function buildExport({ worktreeBuild }) {
-  if (!worktreeBuild) { execSync('./node_modules/.bin/next build', { cwd: frontend, stdio: 'inherit' }); return join(frontend, 'out'); }
-  const wt = execSync('mktemp -d').toString().trim() + '/wt';
-  execSync(`git worktree add --detach "${wt}" HEAD`, { cwd: repo, stdio: 'inherit' });
-  execSync(`ln -s "${frontend}/node_modules" "${wt}/frontend/node_modules"`);
-  execSync('./node_modules/.bin/next build', { cwd: `${wt}/frontend`, stdio: 'inherit' });
-  process.on('exit', () => { try { execSync(`git worktree remove --force "${wt}"`, { cwd: repo }); } catch {} });
-  return `${wt}/frontend/out`;
+// `next build`/`next dev` both write to `.next`; building in place while a dev server is
+// running corrupts chunks. An isolated build rsyncs the working tree (not `git worktree
+// add`, which renders HEAD and would silently ignore uncommitted changes) into a scratch
+// dir, symlinks node_modules in (no reinstall), and builds there.
+function buildExport({ isolatedBuild }) {
+  if (!isolatedBuild) { execSync('./node_modules/.bin/next build', { cwd: frontend, stdio: 'inherit' }); return join(frontend, 'out'); }
+  const tmp = execSync('mktemp -d').toString().trim();
+  const dest = join(tmp, 'frontend');
+  execSync(`rsync -a --exclude .git --exclude node_modules --exclude .next --exclude out --exclude target "${frontend}/" "${dest}/"`, { stdio: 'inherit' });
+  execSync(`ln -s "${frontend}/node_modules" "${dest}/node_modules"`);
+  execSync('./node_modules/.bin/next build', { cwd: dest, stdio: 'inherit' });
+  process.on('exit', () => { try { execSync(`rm -rf "${tmp}"`); } catch {} });
+  return join(dest, 'out');
 }
 
 function serve(root) {
@@ -41,36 +46,44 @@ function serve(root) {
 }
 
 async function main() {
+  process.on('SIGINT', () => process.exit(130));
   const opt = args();
   const devServerUp = (() => { try { execSync('lsof -i :3118 -sTCP:LISTEN', { stdio: 'ignore' }); return true; } catch { return false; } })();
-  const root = opt.noBuild ? join(frontend, 'out') : buildExport({ worktreeBuild: opt.worktreeBuild || devServerUp });
+  const root = opt.noBuild ? join(frontend, 'out') : buildExport({ isolatedBuild: opt.isolatedBuild || devServerUp });
   const server = await serve(root);
   const chrome = await launchChrome();
-  const browser = openSession(chrome.browserWs); await browser.ready;
-  const mock = readFileSync(join(here, 'tauri-mock.js'), 'utf8');
-  mkdirSync(opt.out, { recursive: true });
-  let shots = expand(loadManifest(), { headless: true });
-  if (opt.only) shots = shots.filter((s) => opt.only.includes(s.name));
-  if (opt.theme) shots = shots.filter((s) => s.theme === opt.theme);
-  const results = [];
-  for (const shot of shots) {
-    const t0 = Date.now();
-    try {
-      const png = await capture(browser, { url: shot.url(`http://127.0.0.1:${server.port}`), mock, width: shot.entry.viewport[0], height: shot.entry.viewport[1], waitMs: shot.entry.wait, deadlineMs: shot.entry.wait + 30000 });
-      writeFileSync(join(opt.out, shot.file), png);
-      results.push({ file: shot.file, status: 'ok', ms: Date.now() - t0 });
-      console.log('ok  ', shot.file);
-    } catch (e) {
-      results.push({ file: shot.file, status: 'error', ms: Date.now() - t0, error: String(e.message || e) });
-      console.error('ERR ', shot.file, e.message);
+  try {
+    const browser = openSession(chrome.browserWs); await browser.ready;
+    const mock = readFileSync(join(here, 'tauri-mock.js'), 'utf8');
+    mkdirSync(opt.out, { recursive: true });
+    let shots = expand(loadManifest(), { headless: true });
+    if (opt.only) shots = shots.filter((s) => opt.only.includes(s.name));
+    if (opt.theme) shots = shots.filter((s) => s.theme === opt.theme);
+    const results = [];
+    for (const shot of shots) {
+      const t0 = Date.now();
+      try {
+        const png = await capture(browser, { url: shot.url(`http://127.0.0.1:${server.port}`), mock, width: shot.entry.viewport[0], height: shot.entry.viewport[1], waitMs: shot.entry.wait, deadlineMs: shot.entry.wait + 30000 });
+        writeFileSync(join(opt.out, shot.file), png);
+        results.push({ file: shot.file, status: 'ok', ms: Date.now() - t0 });
+        console.log('ok  ', shot.file);
+      } catch (e) {
+        results.push({ file: shot.file, status: 'error', ms: Date.now() - t0, error: String(e.message || e) });
+        console.error('ERR ', shot.file, e.message);
+      }
     }
+    const sha = (() => { try { return execSync('git rev-parse --short HEAD', { cwd: repo }).toString().trim(); } catch { return 'unknown'; } })();
+    // No `at` timestamp: a no-change run must produce byte-identical manifest-run.json,
+    // or `git status` is never clean after `pnpm shots`.
+    writeFileSync(join(opt.out, 'manifest-run.json'), JSON.stringify({ sha, shots: results }, null, 2));
+    browser.close();
+    const s = summarize(results);
+    console.log(`${s.ok} ok, ${s.errors} errors`);
+    process.exitCode = s.exitCode;
+  } finally {
+    chrome.kill();
+    server.kill();
   }
-  const sha = (() => { try { return execSync('git rev-parse --short HEAD', { cwd: repo }).toString().trim(); } catch { return 'unknown'; } })();
-  writeFileSync(join(opt.out, 'manifest-run.json'), JSON.stringify({ sha, at: new Date().toISOString(), shots: results }, null, 2));
-  browser.close(); chrome.kill(); server.kill();
-  const s = summarize(results);
-  console.log(`${s.ok} ok, ${s.errors} errors`);
-  process.exit(s.exitCode);
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) main().catch((e) => { console.error(e); process.exit(1); });

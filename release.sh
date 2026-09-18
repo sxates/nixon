@@ -270,6 +270,23 @@ c_blue "💾 Committing release bump…"
 run "git add '$PKG_JSON' '$TAURI_CONF' '$CARGO_TOML' '$CARGO_LOCK' '$CHANGELOG'"
 run "git commit -m 'release: v${NEW}'"
 
+# ---- screenshot freshness reminder (specs/0060) ---------------------------
+# Non-blocking nudge to refresh docs/screenshots/real before cutting a release. This must
+# run BEFORE the new tag is created below: comparing against a tag this same run just cut
+# always looks "stale" (it's seconds old), so compare against the tag this release
+# supersedes instead. Every substitution falls back with `|| true`/`:-0` so this can never
+# trip `set -euo pipefail` on a fresh repo with no prior tag or no screenshots yet.
+PREV_TAG="$(git describe --tags --abbrev=0 HEAD 2>/dev/null || true)"
+if [ -n "$PREV_TAG" ]; then
+  NEWEST_PNG_RAW="$(find "$REPO_ROOT/docs/screenshots/real" -name '*.png' -exec stat -f %m {} \; 2>/dev/null | sort -rn | head -1 || true)"
+  NEWEST_PNG_TS="${NEWEST_PNG_RAW:-0}"
+  PREV_TAG_TS="$(git log -1 --format=%ct "$PREV_TAG" 2>/dev/null || true)"
+  PREV_TAG_TS="${PREV_TAG_TS:-0}"
+  if [ -z "$NEWEST_PNG_RAW" ] || [ "$NEWEST_PNG_TS" -le "$PREV_TAG_TS" ]; then
+    c_yellow "ℹ️  docs/screenshots/real is missing or older than ${PREV_TAG} — run pnpm shots:real to refresh the README images before releasing."
+  fi
+fi
+
 # ---- build the production DMG ----------------------------------------------
 if [ "$SKIP_BUILD" -eq 0 ]; then
   c_blue "🏗️  Building production DMG (this takes a while)…"
@@ -462,24 +479,6 @@ PY
 fi
 
 c_green "✅ Released v${NEW}."
-if [ "$DRY_RUN" -eq 0 ]; then
-  # Non-blocking: just a nudge to refresh the README's real screenshots before/after
-  # cutting a release. `git tag -a` (above) creates a loose ref, so the common case is a
-  # plain mtime comparison; fall back to comparing commit timestamps numerically if the
-  # ref has since been packed (e.g. this tag was cut by an earlier, separate run).
-  TAG_REF="$REPO_ROOT/.git/refs/tags/${TAG}"
-  if [ -f "$TAG_REF" ]; then
-    STALE_SHOTS="$(find "$REPO_ROOT/docs/screenshots/real" -name '*.png' -newer "$TAG_REF" 2>/dev/null)"
-  else
-    TAG_TS="$(git -C "$REPO_ROOT" log -1 --format=%ct "$TAG" 2>/dev/null || echo 0)"
-    NEWEST_PNG_TS="$(find "$REPO_ROOT/docs/screenshots/real" -name '*.png' -exec stat -f %m {} \; 2>/dev/null | sort -rn | head -1)"
-    NEWEST_PNG_TS="${NEWEST_PNG_TS:-0}"
-    [ "$NEWEST_PNG_TS" -gt "$TAG_TS" ] && STALE_SHOTS="present" || STALE_SHOTS=""
-  fi
-  if [ -z "$STALE_SHOTS" ]; then
-    c_yellow "ℹ️  docs/screenshots/real is older than this tag — run pnpm shots:real to refresh the README images"
-  fi
-fi
 if [ "$SKIP_BUILD" -eq 0 ] && [ "$DRY_RUN" -eq 0 ]; then
   echo "   DMG: ${REPO_ROOT}/target/release/bundle/dmg/Nixon_${NEW}_aarch64.dmg"
 fi

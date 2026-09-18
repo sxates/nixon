@@ -2,6 +2,7 @@
 //! Newline-delimited JSON over 127.0.0.1; port written to <app_data_dir>/dev-control.port.
 use serde::Deserialize;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Mutex;
 use tauri::{AppHandle, Manager};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::TcpListener;
@@ -12,6 +13,12 @@ use super::guard;
 // listener at a time, same as the rest of this debug-only protocol.
 pub static SHOT_READY: AtomicBool = AtomicBool::new(false);
 pub const PORT_FILE: &str = "dev-control.port";
+
+/// The title `start_recording` most recently began a take under (default
+/// `"Screenshot take"`), so `stop_recording` only discards DB rows/on-disk folders for a
+/// take *this* listener started — never a real recording the user began from the UI in the
+/// same debug session.
+static STARTED_TITLE: Mutex<Option<String>> = Mutex::new(None);
 
 #[derive(Debug, Deserialize)]
 #[serde(tag = "cmd", rename_all = "snake_case")]
@@ -69,7 +76,7 @@ impl Reply {
 
 pub fn navigate_js(route: &str) -> String {
     format!(
-        "window.location.assign({})",
+        "document.documentElement.dataset.shotReady='';window.location.assign({})",
         serde_json::to_string(route).unwrap()
     )
 }
@@ -121,8 +128,13 @@ pub fn spawn_if_requested(app: AppHandle) {
             port_file.display()
         );
         loop {
-            let Ok((sock, _)) = listener.accept().await else {
-                continue;
+            let (sock, _) = match listener.accept().await {
+                Ok(pair) => pair,
+                Err(e) => {
+                    log::warn!("[dev] control accept failed: {e}");
+                    tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+                    continue;
+                }
             };
             let app = app.clone();
             tauri::async_runtime::spawn(async move {
@@ -157,7 +169,7 @@ async fn handle(app: &AppHandle, req: Request) -> Reply {
                 return Reply::err("theme must be light|dark");
             }
             win.eval(format!(
-                "localStorage.setItem('nixon.theme', '{value}'); location.reload()"
+                "document.documentElement.dataset.shotReady='';localStorage.setItem('nixon.theme', '{value}'); location.reload()"
             ))
             .map(|_| Reply::ok(serde_json::json!({})))
             .unwrap_or_else(|e| Reply::err(e.to_string()))
@@ -170,7 +182,8 @@ async fn handle(app: &AppHandle, req: Request) -> Reply {
                 .await
             {
                 Ok(()) => {
-                    let _ = win.eval("location.reload()");
+                    let _ =
+                        win.eval("document.documentElement.dataset.shotReady='';location.reload()");
                     Reply::ok(serde_json::json!({}))
                 }
                 Err(e) => Reply::err(e.to_string()),
@@ -184,7 +197,8 @@ async fn handle(app: &AppHandle, req: Request) -> Reply {
             .await
             {
                 Ok(()) => {
-                    let _ = win.eval("location.reload()");
+                    let _ =
+                        win.eval("document.documentElement.dataset.shotReady='';location.reload()");
                     Reply::ok(serde_json::json!({}))
                 }
                 Err(e) => Reply::err(e.to_string()),
@@ -261,6 +275,7 @@ fn window_info(_: &tauri::WebviewWindow) -> Reply {
 /// Tauri command delegates to (`audio/capture_commands.rs`), with no device override
 /// and no meeting to resume — every screenshot take is a fresh, throwaway recording.
 async fn start_recording(app: &AppHandle, title: String) -> Reply {
+    *STARTED_TITLE.lock().unwrap() = Some(title.clone());
     match crate::audio::recording_commands::start_recording_with_devices_and_meeting(
         app.clone(),
         None,
@@ -272,7 +287,12 @@ async fn start_recording(app: &AppHandle, title: String) -> Reply {
     .await
     {
         Ok(()) => Reply::ok(serde_json::json!({})),
-        Err(e) => Reply::err(e),
+        Err(e) => {
+            // Nothing actually started; don't leave a stale title around to wrongly
+            // authorize cleanup of some later, unrelated recording of the same name.
+            *STARTED_TITLE.lock().unwrap() = None;
+            Reply::err(e)
+        }
     }
 }
 
@@ -295,6 +315,12 @@ async fn start_recording(app: &AppHandle, title: String) -> Reply {
 /// deletes out from under it, leaving that meeting's metadata pointing at a missing
 /// folder. Driver-side mitigation: `navigate` to `/` (no meeting selected) before
 /// `start_recording` so no real meeting's IndexedDB metadata can be clobbered.
+///
+/// Second guard (specs/0060 review): `stop_recording` stops *whatever* recording is in
+/// progress, which might be a real one the user started from the UI in the same debug
+/// session — not this listener's own throwaway take. Only run the DB/fs cleanup below when
+/// the stopped recording's `meeting_name` matches the title `start_recording` most recently
+/// used (`STARTED_TITLE`); otherwise leave it alone.
 async fn stop_recording_and_discard(app: &AppHandle) -> Reply {
     let args = crate::audio::recording_commands::RecordingArgs {
         save_path: String::new(),
@@ -308,6 +334,24 @@ async fn stop_recording_and_discard(app: &AppHandle) -> Reply {
         .get("folder_path")
         .and_then(|v| v.as_str())
         .map(str::to_string);
+    let meeting_name = stop_info
+        .get("meeting_name")
+        .and_then(|v| v.as_str())
+        .map(str::to_string);
+
+    let started_title = STARTED_TITLE.lock().unwrap().take();
+    let started_here = matches!(
+        (&meeting_name, &started_title),
+        (Some(m), Some(t)) if m == t
+    );
+
+    if !started_here {
+        log::warn!(
+            "[dev] control stop_recording: meeting_name {meeting_name:?} != started title \
+             {started_title:?}; skipping DB/fs cleanup (not this listener's take)"
+        );
+        return Reply::ok(serde_json::json!({ "folder_path": folder_path }));
+    }
 
     if let Some(folder_path) = &folder_path {
         if let Some(state) = app.try_state::<crate::state::AppState>() {
@@ -329,7 +373,7 @@ async fn stop_recording_and_discard(app: &AppHandle) -> Reply {
 
         let root = crate::audio::recordings_root();
         let path = std::path::Path::new(folder_path);
-        if path.starts_with(&root) {
+        if path.starts_with(&root) && path != root {
             if let Err(e) = std::fs::remove_dir_all(path) {
                 log::error!("[dev] control stop_recording: folder cleanup failed: {e}");
             }
@@ -337,6 +381,20 @@ async fn stop_recording_and_discard(app: &AppHandle) -> Reply {
     }
 
     Reply::ok(serde_json::json!({ "folder_path": folder_path }))
+}
+
+/// Best-effort removal of the port file on app exit (called from `lib.rs`'s
+/// `RunEvent::Exit`), so a stale port from a previous run's crashed/killed process never
+/// causes a screenshot driver to connect to a dead listener. Missing file / remove failure
+/// isn't worth surfacing above debug — the file existing at all is itself best-effort.
+pub fn cleanup_port_file() {
+    let port_file = crate::app_paths::app_data_dir().join(PORT_FILE);
+    if let Err(e) = std::fs::remove_file(&port_file) {
+        log::debug!(
+            "[dev] control cleanup_port_file: {} ({e})",
+            port_file.display()
+        );
+    }
 }
 
 #[cfg(test)]
@@ -378,7 +436,7 @@ mod tests {
     fn navigate_js_escapes_the_route() {
         assert_eq!(
             navigate_js("/a?b=1&c=\"x\""),
-            "window.location.assign(\"/a?b=1&c=\\\"x\\\"\")"
+            "document.documentElement.dataset.shotReady='';window.location.assign(\"/a?b=1&c=\\\"x\\\"\")"
         );
     }
 

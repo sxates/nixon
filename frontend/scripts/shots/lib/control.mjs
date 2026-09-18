@@ -23,6 +23,16 @@ export function readPort() {
   }
 }
 
+// A stale port file (dev app killed/crashed without cleanup) or no dev app running at all
+// both surface as ECONNREFUSED — `port not found` (readPort's error) doesn't cover this
+// case, since the file is still there and reads fine.
+function mapConnError(e) {
+  if (e && e.code === 'ECONNREFUSED') {
+    return new Error('dev-control.port is stale or Dev Nixon is not running with --demo/--control');
+  }
+  return e;
+}
+
 export function connect(port) {
   const sock = net.connect({ host: '127.0.0.1', port });
   let buf = '';
@@ -35,17 +45,21 @@ export function connect(port) {
       const line = buf.slice(0, i + 1);
       buf = buf.slice(i + 1);
       const q = queue.shift();
-      if (q) {
-        try {
-          q.res(parseReply(line));
-        } catch (e) {
-          q.rej(e);
-        }
+      if (!q) continue;
+      // `q` is the entry a client-side timeout already rejected (marked `dead` below):
+      // this line is its late reply. Shift it off the queue (so the *next* line goes to
+      // the next real request) but don't resolve/reject an already-settled promise.
+      if (q.dead) continue;
+      try {
+        q.res(parseReply(line));
+      } catch (e) {
+        q.rej(e);
       }
     }
   });
   sock.on('error', (e) => {
-    while (queue.length) queue.shift().rej(e);
+    const mapped = mapConnError(e);
+    while (queue.length) queue.shift().rej(mapped);
   });
   sock.on('close', () => {
     closed = true;
@@ -53,7 +67,7 @@ export function connect(port) {
   });
   const ready = new Promise((res, rej) => {
     sock.once('connect', res);
-    sock.once('error', rej);
+    sock.once('error', (e) => rej(mapConnError(e)));
   });
   return {
     ready,
@@ -63,8 +77,7 @@ export function connect(port) {
           rej(new Error('control socket closed'));
           return;
         }
-        const t = setTimeout(() => rej(new Error('timeout ' + obj.cmd)), timeoutMs);
-        queue.push({
+        const entry = {
           res: (v) => {
             clearTimeout(t);
             res(v);
@@ -73,7 +86,15 @@ export function connect(port) {
             clearTimeout(t);
             rej(e);
           },
-        });
+        };
+        // On timeout the entry stays at the queue head (not spliced out) — marking it
+        // `dead` tells the `data` handler above to shift-and-drop its late reply instead
+        // of resolving it onto whatever the *next* queued request turns out to be.
+        const t = setTimeout(() => {
+          entry.dead = true;
+          entry.rej(new Error('timeout ' + obj.cmd));
+        }, timeoutMs);
+        queue.push(entry);
         sock.write(frame(obj));
       }),
     close: () => sock.end(),

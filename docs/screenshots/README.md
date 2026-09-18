@@ -66,5 +66,6 @@ re-capture instead.
    stale state (wrong tab, a stray DEV badge, an empty list); re-run with `--only <name>`
    for just those after fixing the cause.
 5. Commit the refreshed `docs/screenshots/real/*.png` alongside the change. `release.sh`
-   prints a non-blocking reminder when that directory is older than the tag being cut, as a
-   backstop — it does not block the release.
+   prints a non-blocking reminder, checked before the build, when that directory is missing
+   or older than the *previous* release tag — comparing against the tag this run is about
+   to cut would always look stale — as a backstop; it does not block the release.
