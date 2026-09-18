@@ -412,7 +412,7 @@ pub async fn set_audio_backend(backend: String) -> Result<(), String> {
     {
         use crate::audio::capture::AudioCaptureBackend;
         use crate::audio::permissions::{
-            check_screen_recording_permission, request_screen_recording_permission,
+            check_audio_capture_permission, request_audio_capture_permission,
         };
 
         let backend_enum = AudioCaptureBackend::from_string(&backend)
@@ -424,11 +424,11 @@ pub async fn set_audio_backend(backend: String) -> Result<(), String> {
             info!("📍 Permission dialog will appear automatically when recording starts");
 
             // Check if permission is already granted (this is informational only)
-            if !check_screen_recording_permission() {
+            if !check_audio_capture_permission() {
                 warn!("⚠️  Audio Capture permission may not be granted");
 
                 // Attempt to open System Settings (opens System Settings)
-                if let Err(e) = request_screen_recording_permission() {
+                if let Err(e) = request_audio_capture_permission() {
                     error!("Failed to open System Settings: {}", e);
                 }
 

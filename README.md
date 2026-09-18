@@ -49,7 +49,7 @@ Deck (dark) variants live in [`docs/screenshots/real`](docs/screenshots/real). E
 ## Requirements
 
 - macOS on Apple Silicon (Metal).
-- **Microphone** and **screen-recording** permission. (Screen recording is what
+- **Microphone** and **audio-capture** permission. (Audio capture is what
   lets the Core Audio tap capture system / Zoom audio — no BlackHole needed.)
 
 ## Build & run (macOS / Metal)

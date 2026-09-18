@@ -41,12 +41,12 @@ export function PermissionWarning({
     }
   };
 
-  const openScreenRecordingSettings = async () => {
+  const openAudioCaptureSettings = async () => {
     if (isMacOS) {
       try {
         await invoke('open_system_settings', { preferencePane: 'Privacy_ScreenCapture' });
       } catch (error) {
-        console.error('Failed to open screen recording settings:', error);
+        console.error('Failed to open audio capture settings:', error);
       }
     }
   };
@@ -77,11 +77,11 @@ export function PermissionWarning({
             )}
             {isMacOS && !hasSystemAudio && (
               <button
-                onClick={openScreenRecordingSettings}
+                onClick={openAudioCaptureSettings}
                 className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-brand-foreground bg-brand hover:bg-brand/90 rounded-md transition-colors"
               >
                 <Speaker className="h-4 w-4" />
-                Open Screen Recording Settings
+                Open Audio Capture Settings
               </button>
             )}
             <button
@@ -124,7 +124,7 @@ export function PermissionWarning({
                     <p className="font-medium">To enable system audio on macOS:</p>
                     <ul className="list-disc list-inside ml-2 space-y-1">
                       <li>Install a virtual audio device (e.g., BlackHole 2ch)</li>
-                      <li>Grant Screen Recording permission to Nixon</li>
+                      <li>Grant Audio Capture permission to Nixon</li>
                       <li>Configure your audio routing in Audio MIDI Setup</li>
                     </ul>
                   </div>

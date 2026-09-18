@@ -40,14 +40,14 @@ export function describeRecordingStartError(err: unknown): RecordingStartErrorCo
     return {
       title: 'System Audio Not Available',
       message:
-        'Unable to capture system audio. Please check that:\n• A virtual audio device (like BlackHole) is installed\n• The app has screen recording permissions (macOS)\n• System audio is properly configured',
+        'Unable to capture system audio. Please check that:\n• A virtual audio device (like BlackHole) is installed\n• The app has audio-capture permissions (macOS)\n• System audio is properly configured',
     };
   }
   if (errorMsg.includes('permission')) {
     return {
       title: 'Permission Required',
       message:
-        'Recording permissions are required. Please:\n• Grant microphone access in System Settings\n• Grant screen recording access for system audio (macOS)\n• Restart the app after granting permissions',
+        'Recording permissions are required. Please:\n• Grant microphone access in System Settings\n• Grant audio-capture access for system audio (macOS)\n• Restart the app after granting permissions',
     };
   }
   return {

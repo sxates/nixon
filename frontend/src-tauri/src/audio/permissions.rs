@@ -15,7 +15,7 @@ use std::process::Command;
 /// This function returns true because the actual permission prompt happens automatically
 /// when AudioHardwareCreateProcessTap is called by the cidre library.
 #[cfg(target_os = "macos")]
-pub fn check_screen_recording_permission() -> bool {
+pub fn check_audio_capture_permission() -> bool {
     info!("ℹ️  Core Audio tap requires Audio Capture permission (macOS 14.4+)");
     info!("📍 Permission dialog will appear automatically when recording starts");
     info!("   If already granted: System Settings → Privacy & Security → Audio Capture");
@@ -25,14 +25,14 @@ pub fn check_screen_recording_permission() -> bool {
 }
 
 #[cfg(not(target_os = "macos"))]
-pub fn check_screen_recording_permission() -> bool {
+pub fn check_audio_capture_permission() -> bool {
     true // Not required on other platforms
 }
 
 /// Request Audio Capture permission from the user
 /// This will open System Settings to the Privacy & Security page
 #[cfg(target_os = "macos")]
-pub fn request_screen_recording_permission() -> Result<()> {
+pub fn request_audio_capture_permission() -> Result<()> {
     info!("🔐 Opening System Settings for Audio Capture permission...");
 
     // Open System Settings to Privacy & Security page
@@ -55,20 +55,20 @@ pub fn request_screen_recording_permission() -> Result<()> {
 }
 
 #[cfg(not(target_os = "macos"))]
-pub fn request_screen_recording_permission() -> Result<()> {
+pub fn request_audio_capture_permission() -> Result<()> {
     Ok(()) // Not required on other platforms
 }
 
 /// Check and request Audio Capture permission if not granted
 /// Returns true if permission is granted, false otherwise
-pub fn ensure_screen_recording_permission() -> bool {
-    if check_screen_recording_permission() {
+pub fn ensure_audio_capture_permission() -> bool {
+    if check_audio_capture_permission() {
         return true;
     }
 
     warn!("Audio Capture permission not granted - requesting...");
 
-    if let Err(e) = request_screen_recording_permission() {
+    if let Err(e) = request_audio_capture_permission() {
         error!("Failed to request Audio Capture permission: {}", e);
         return false;
     }
@@ -76,16 +76,16 @@ pub fn ensure_screen_recording_permission() -> bool {
     false // Permission will be granted after restart
 }
 
-/// Tauri command to check Screen Recording permission
+/// Tauri command to check Audio Capture permission
 #[tauri::command]
-pub async fn check_screen_recording_permission_command() -> bool {
-    check_screen_recording_permission()
+pub async fn check_audio_capture_permission_command() -> bool {
+    check_audio_capture_permission()
 }
 
-/// Tauri command to request Screen Recording permission
+/// Tauri command to request Audio Capture permission
 #[tauri::command]
-pub async fn request_screen_recording_permission_command() -> Result<(), String> {
-    request_screen_recording_permission().map_err(|e| e.to_string())
+pub async fn request_audio_capture_permission_command() -> Result<(), String> {
+    request_audio_capture_permission().map_err(|e| e.to_string())
 }
 
 /// Trigger system audio permission request and verify it was granted
@@ -147,7 +147,7 @@ mod tests {
 
     #[test]
     fn test_check_permission() {
-        let has_permission = check_screen_recording_permission();
-        println!("Has Screen Recording permission: {}", has_permission);
+        let has_permission = check_audio_capture_permission();
+        println!("Has Audio Capture permission: {}", has_permission);
     }
 }

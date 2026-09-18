@@ -12,14 +12,14 @@ import { SettingsGroup, SettingsRow, SettingsSection } from '@/components/ui/set
 /**
  * "Recording permissions" control for Settings → General (spec 0038 WS7.a).
  *
- * Surfaces the current microphone + screen-recording (system audio) status and a
+ * Surfaces the current microphone + audio-capture (system audio) status and a
  * single action that opens the SAME "Enable recording" permissions modal used by
  * first-run prompting (`PermissionsModalContext`). This replaces the former
  * top-level "Permissions" sidebar nav entry — the modal itself is unchanged.
  *
  * Microphone availability is inferred from the audio-device list (the existing
- * `usePermissionCheck` pattern); screen-recording is read directly via
- * `check_screen_recording_permission_command`. Both degrade gracefully on the
+ * `usePermissionCheck` pattern); audio-capture is read directly via
+ * `check_audio_capture_permission_command`. Both degrade gracefully on the
  * bare dev binary (a failed read resolves to "not granted").
  */
 export function RecordingPermissionsSettings() {
@@ -27,28 +27,28 @@ export function RecordingPermissionsSettings() {
   const { hasMicrophone, isChecking, checkPermissions } = usePermissionCheck();
   const isLinux = useIsLinux();
 
-  const [screenRecording, setScreenRecording] = useState<boolean>(false);
+  const [audioCapture, setAudioCapture] = useState<boolean>(false);
   const [refreshing, setRefreshing] = useState(false);
 
-  const refreshScreenRecording = useCallback(async () => {
+  const refreshAudioCapture = useCallback(async () => {
     try {
-      const granted = await invoke<boolean>('check_screen_recording_permission_command');
-      setScreenRecording(granted);
+      const granted = await invoke<boolean>('check_audio_capture_permission_command');
+      setAudioCapture(granted);
     } catch (error) {
       // Command unavailable (bare dev binary) — treat as not granted.
-      console.warn('[RecordingPermissionsSettings] screen-recording check failed:', error);
-      setScreenRecording(false);
+      console.warn('[RecordingPermissionsSettings] audio-capture check failed:', error);
+      setAudioCapture(false);
     }
   }, []);
 
   useEffect(() => {
-    void refreshScreenRecording();
-  }, [refreshScreenRecording]);
+    void refreshAudioCapture();
+  }, [refreshAudioCapture]);
 
   const handleRecheck = async () => {
     setRefreshing(true);
     try {
-      await Promise.all([checkPermissions(), refreshScreenRecording()]);
+      await Promise.all([checkPermissions(), refreshAudioCapture()]);
     } finally {
       setRefreshing(false);
     }
@@ -68,18 +68,18 @@ export function RecordingPermissionsSettings() {
       granted: hasMicrophone,
     },
     {
-      key: 'screen',
-      label: 'Screen recording',
+      key: 'audio',
+      label: 'Audio capture',
       sub: 'Record other participants (system audio)',
       icon: <Volume2 className="h-4 w-4 text-muted-foreground" aria-hidden="true" />,
-      granted: screenRecording,
+      granted: audioCapture,
     },
   ];
 
   return (
     <SettingsSection
       title="Recording permissions"
-      description="Nixon needs microphone and screen-recording access to capture and transcribe meetings. Everything is processed locally on your Mac."
+      description="Nixon needs microphone and audio-capture access to capture and transcribe meetings. Everything is processed locally on your Mac."
     >
       <SettingsGroup>
         {rows.map((row) => (
