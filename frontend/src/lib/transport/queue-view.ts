@@ -1,5 +1,5 @@
 import type { BacklogItem, BacklogItemStatus, BacklogView } from '@/lib/deferred-backlog';
-import type { LlmActivityView } from '@/contexts/LlmActivityProvider';
+import type { LlmActivityView, LlmTaskKind } from '@/contexts/LlmActivityProvider';
 
 export type QueueStage = 'waiting' | 'transcribing' | 'diarizing' | 'summarizing' | 'llm' | 'done' | 'error';
 
@@ -8,11 +8,13 @@ export interface QueueRow {
   title: string;
   stage: QueueStage;
   stageLabel: string;
-  source: 'backlog' | 'llm';
+  source: 'backlog' | 'llm' | 'recording';
   error?: string | null;
   meetingId?: string | null;
-  /** LLM failure rows only: whether a Retry command exists for it (prep briefs, spec 0052). */
+  /** Failed rows only: whether a retry dispatch exists for it (specs/0063 W3). */
   retryable?: boolean;
+  /** Failed rows only: which control the row offers — a real Retry, or just Dismiss. */
+  action?: 'retry' | 'dismiss' | null;
 }
 
 export interface QueueView {
@@ -32,13 +34,22 @@ export const QUEUE_STAGE_LABEL: Record<QueueStage, string> = {
   summarizing: 'Summarizing',
   llm: 'AI',
   done: 'Done',
-  error: 'Retry',
+  error: 'Failed',
 };
 
 const ACTIVE: BacklogItemStatus[] = ['transcribing', 'diarizing', 'summarizing'];
 
+/**
+ * Kinds `retry_task` in `llm_activity/retry.rs::is_retryable` knows how to re-dispatch.
+ * The two lists are not linked by the compiler — if that Rust `matches!` arm changes,
+ * this array must change with it, or a queue row will offer a Retry that fails, or hide
+ * one that would have worked.
+ */
+const RETRYABLE_KINDS: readonly LlmTaskKind[] = ['prepBrief', 'meetingSummary', 'actionItems', 'diarization'];
+
 function backlogRow(item: BacklogItem): QueueRow {
   const stage = item.status as QueueStage;
+  const isError = item.status === 'error';
   return {
     id: `backlog:${item.meeting.id}`,
     title: item.meeting.title,
@@ -46,6 +57,7 @@ function backlogRow(item: BacklogItem): QueueRow {
     stageLabel: QUEUE_STAGE_LABEL[stage],
     source: 'backlog',
     meetingId: item.meeting.id,
+    ...(isError ? { retryable: true, action: 'retry' as const } : {}),
   };
 }
 
@@ -53,7 +65,23 @@ function backlogRow(item: BacklogItem): QueueRow {
  * specs/0057 decision 8 — merge the deferred backlog and background LLM activity into ONE
  * ordered queue: active backlog item, running AI tasks, waiting items, failures, done.
  */
-export function buildQueueView(backlog: BacklogView, llm: LlmActivityView | null): QueueView {
+export function buildQueueView(
+  backlog: BacklogView,
+  llm: LlmActivityView | null,
+  recording: { isProcessing: boolean; title: string | null } = { isProcessing: false, title: null },
+): QueueView {
+  const transcribing: QueueRow[] = recording.isProcessing
+    ? [
+        {
+          id: 'transcription',
+          title: recording.title ?? 'Recording',
+          stage: 'transcribing',
+          stageLabel: QUEUE_STAGE_LABEL.transcribing,
+          source: 'recording',
+          meetingId: null,
+        },
+      ]
+    : [];
   const active = backlog.items.filter((i) => ACTIVE.includes(i.status)).map(backlogRow);
   const running = (llm?.running ?? []).map<QueueRow>((t) => ({
     id: `llm:${t.id}`,
@@ -70,21 +98,25 @@ export function buildQueueView(backlog: BacklogView, llm: LlmActivityView | null
   // those would report an error twice, so the whole failed-history slice is gated on the flag.
   const llmFailures = (llm?.hasFailure ? llm.history : [])
     .filter((h) => h.outcome.type === 'failed')
-    .map<QueueRow>((h) => ({
-      id: `llm:${h.id}`,
-      title: h.label,
-      stage: 'error',
-      stageLabel: QUEUE_STAGE_LABEL.error,
-      source: 'llm',
-      error: h.outcome.type === 'failed' ? h.outcome.error : null,
-      meetingId: h.meetingId,
-      retryable: h.kind === 'prepBrief' && Boolean(h.meetingId),
-    }));
+    .map<QueueRow>((h) => {
+      const retryable = RETRYABLE_KINDS.includes(h.kind) && Boolean(h.meetingId);
+      return {
+        id: `llm:${h.id}`,
+        title: h.label,
+        stage: 'error',
+        stageLabel: QUEUE_STAGE_LABEL.error,
+        source: 'llm',
+        error: h.outcome.type === 'failed' ? h.outcome.error : null,
+        meetingId: h.meetingId,
+        retryable,
+        action: retryable ? 'retry' : 'dismiss',
+      };
+    });
   const done = backlog.items.filter((i) => i.status === 'done').map(backlogRow);
 
-  const rows = [...active, ...running, ...waiting, ...backlogErrors, ...llmFailures, ...done];
+  const rows = [...transcribing, ...active, ...running, ...waiting, ...backlogErrors, ...llmFailures, ...done];
   const failures = backlogErrors.length + llmFailures.length;
-  const runningRow = active[0] ?? running[0] ?? null;
+  const runningRow = transcribing[0] ?? active[0] ?? running[0] ?? null;
   const nextUp = rows.find((r) => r !== runningRow && r.stage !== 'done' && r.stage !== 'error') ?? null;
   const lamp = failures > 0 ? 'red' : runningRow ? 'amber' : 'off';
   return { rows, running: runningRow, nextUp, count: rows.filter((r) => r.stage !== 'done').length, lamp, failures };
