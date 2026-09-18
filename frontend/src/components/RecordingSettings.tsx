@@ -590,7 +590,7 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
           {/* Speaker diarization (specs/0010) — opt-in, default off. */}
           <SettingsRow
             label="Speaker diarization"
-            description="Label who spoke in the transcript. Runs on-device after the meeting and downloads a small model (~35 MB) the first time."
+            description="Label who spoke in the transcript. Runs on-device after the meeting and downloads a small model (~108 MB) the first time."
             control={
               <Switch
                 checked={diarizationEnabled}

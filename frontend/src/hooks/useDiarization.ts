@@ -3,8 +3,11 @@
  *
  * Encapsulates the "Identify speakers" flow for a single meeting:
  *  1. Ensure the two ONNX models are present (`api_diarization_models_present`);
- *     if not, kick off `api_download_diarization_models` (~35 MB, one-time) and
- *     surface progress.
+ *     if not, kick off `api_download_diarization_models` (~108 MB, one-time) and
+ *     surface progress via a persistent toast (id `diar-dl`) that updates with
+ *     byte progress (`diarization-download-progress`, specs/0061 W2) and then
+ *     resolves, rather than a fire-and-forget toast that leaves the user with no
+ *     feedback for the rest of the download.
  *  2. Start the background pass (`api_diarize_meeting`), which returns immediately.
  *  3. Listen for `diarization-{progress,complete,error}` events (via `safeListen`):
  *     - progress  → update the stage text shown next to the spinner
@@ -35,6 +38,17 @@ interface DiarizationProgressPayload {
   stage: string;
   /** 0–100 progress within the current stage (currently only "diarizing"). */
   pct?: number;
+}
+/**
+ * Byte-level model-download progress (specs/0061 W2). `stage` is already the
+ * fully formatted label (`models::progress_label` on the Rust side), e.g.
+ * "downloading embedding model · 12.0 MB / 101.0 MB", or stage-only text when
+ * `total_bytes` is 0 (unknown) — no MB math needed on this side.
+ */
+interface DiarizationDownloadProgressPayload {
+  stage: string;
+  downloaded_bytes: number;
+  total_bytes: number;
 }
 interface DiarizationCompletePayload {
   meeting_id: string;
@@ -77,6 +91,9 @@ interface UseDiarizationReturn {
   stage: string | null;
   /** 0–100 progress within the current stage, or null if not reported. */
   progressPct: number | null;
+  /** Byte-level model-download progress label (specs/0061 W2), or null when
+   *  no download is in flight (models already cached, or a run finished). */
+  downloadProgress: { label: string } | null;
   identifySpeakers: () => Promise<void>;
 }
 
@@ -87,6 +104,7 @@ export function useDiarization({
   const [isRunning, setIsRunning] = useState(false);
   const [stage, setStage] = useState<string | null>(null);
   const [progressPct, setProgressPct] = useState<number | null>(null);
+  const [downloadProgress, setDownloadProgress] = useState<{ label: string } | null>(null);
 
   // Monotonic-progress guard (specs/0029 WS3.1 defense-in-depth): within one
   // stage the percentage must never move backwards. A stage change resets it.
@@ -157,6 +175,21 @@ export function useDiarization({
       },
     );
 
+    // Byte-level model-download progress (specs/0061 W2): updates the persistent
+    // "diar-dl" toast's description and the hook's own `downloadProgress` (which
+    // the button label prefers over the coarse stage/pct above while it's set).
+    const disposeDownloadProgress = safeListen<DiarizationDownloadProgressPayload>(
+      'diarization-download-progress',
+      (event) => {
+        const label = event.payload.stage;
+        setDownloadProgress({ label });
+        toast.loading('Downloading speaker model', {
+          id: 'diar-dl',
+          description: label,
+        });
+      },
+    );
+
     const disposeComplete = safeListen<DiarizationCompletePayload>(
       'diarization-complete',
       (event) => {
@@ -164,6 +197,7 @@ export function useDiarization({
         setIsRunning(false);
         setStage(null);
         setProgressPct(null);
+        setDownloadProgress(null);
         resetProgressGuard(null, -1);
         const count = event.payload.speaker_count;
         const found =
@@ -192,6 +226,7 @@ export function useDiarization({
         setIsRunning(false);
         setStage(null);
         setProgressPct(null);
+        setDownloadProgress(null);
         resetProgressGuard(null, -1);
         toast.error('Could not identify speakers', {
           description: event.payload.error || 'Diarization failed.',
@@ -202,6 +237,7 @@ export function useDiarization({
     return () => {
       cancelled = true;
       disposeProgress();
+      disposeDownloadProgress();
       disposeComplete();
       disposeError();
     };
@@ -213,18 +249,32 @@ export function useDiarization({
     setIsRunning(true);
     setStage('preparing');
     setProgressPct(null);
+    setDownloadProgress(null);
     resetProgressGuard('preparing', -1);
 
+    // Tracks whether the `diar-dl` loading toast is on screen, so a download
+    // failure below resolves *that* toast to an error instead of leaving it
+    // stuck open forever while a second, unrelated error toast appears.
+    let downloadToastShown = false;
+
     try {
-      // 1. Ensure models are present; download on demand (~35 MB, one-time).
+      // 1. Ensure models are present; download on demand (~108 MB, one-time).
+      // A persistent toast (id `diar-dl`) tracks byte progress via the
+      // `diarization-download-progress` listener above and then resolves —
+      // replacing the old fire-and-forget toast that went silent for the rest
+      // of the download (specs/0061 W2).
       const present = await invoke<boolean>('api_diarization_models_present');
       if (!present) {
-        setStage('downloading models (~35 MB, one-time)');
-        toast.info('Downloading speaker model', {
-          description:
-            'A one-time ~35 MB download is needed before the first run. This may take a moment.',
+        setStage('downloading models (~108 MB, one-time)');
+        toast.loading('Downloading speaker model', {
+          id: 'diar-dl',
+          description: '~108 MB, one time',
         });
+        downloadToastShown = true;
         await invoke('api_download_diarization_models');
+        setDownloadProgress(null);
+        toast.success('Speaker model ready', { id: 'diar-dl', duration: 3000 });
+        downloadToastShown = false;
       }
 
       // 2. Start the background pass. Completion/errors arrive via events.
@@ -252,12 +302,16 @@ export function useDiarization({
       setIsRunning(false);
       setStage(null);
       setProgressPct(null);
+      setDownloadProgress(null);
       resetProgressGuard(null, -1);
-      toast.error('Could not identify speakers', {
-        description: error instanceof Error ? error.message : String(error),
-      });
+      const description = error instanceof Error ? error.message : String(error);
+      if (downloadToastShown) {
+        toast.error('Could not download speaker model', { id: 'diar-dl', description });
+      } else {
+        toast.error('Could not identify speakers', { description });
+      }
     }
   }, [meetingId, isRunning, resetProgressGuard]);
 
-  return { isRunning, stage, progressPct, identifySpeakers };
+  return { isRunning, stage, progressPct, downloadProgress, identifySpeakers };
 }

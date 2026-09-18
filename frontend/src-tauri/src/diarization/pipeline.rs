@@ -542,13 +542,9 @@ fn diarize_audio_blocking<R: Runtime>(
     // 1. Models (download on demand). Emit a coarse progress event per stage.
     let app_for_progress = app.clone();
     let mid = meeting_id.clone();
-    let progress = move |stage: models::DownloadStage| {
-        let label = match stage {
-            models::DownloadStage::Segmentation => "downloading segmentation model",
-            models::DownloadStage::Embedding => "downloading embedding model",
-            models::DownloadStage::Extracting => "extracting model",
-        };
-        registry_update(&mid, label, None);
+    let progress = move |stage: models::DownloadStage, downloaded: u64, total: u64| {
+        let label = models::progress_label(stage, downloaded, total);
+        registry_update(&mid, &label, None);
         let _ = app_for_progress.emit(
             EVENT_PROGRESS,
             serde_json::json!({ "meeting_id": mid, "stage": label }),
