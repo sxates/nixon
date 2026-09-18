@@ -102,7 +102,8 @@ async fn a_meeting_pinned_to_a_removed_template_still_resolves_to_the_default() 
         .expect("a meeting with an explicit choice must read back Some(..), not None");
     assert_eq!(persisted, "psychatric_session");
 
-    let template = SummaryService::resolve_fixed_template("m2", &persisted);
+    let template = SummaryService::resolve_fixed_template("m2", &persisted)
+        .expect("the default-template fallback must resolve");
     let default_template = get_template(DEFAULT_TEMPLATE_ID).expect("default template resolves");
     assert_eq!(
         template.name, default_template.name,

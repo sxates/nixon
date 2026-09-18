@@ -314,16 +314,27 @@ impl SummaryService {
     /// fingerprinting ([`template_cache_fingerprint`]) and generation see, so
     /// a substituted template is cached and generated under a fingerprint
     /// that matches what was actually produced — never a mismatched one.
-    pub fn resolve_fixed_template(meeting_id: &str, id: &str) -> Template {
+    ///
+    /// Returns `Err` rather than panicking (specs/0061 review, I4) when even the
+    /// DEFAULT template fails to resolve — reachable, not theoretical: `get_template`
+    /// prefers a custom-directory override, so a corrupt or invalid user override of
+    /// `standard_meeting` hits exactly this path. The caller must route `Err` through
+    /// `update_process_failed`, same as before this fallback existed, rather than
+    /// leaving the meeting stuck in "processing" forever behind a panicked task.
+    pub fn resolve_fixed_template(meeting_id: &str, id: &str) -> Result<Template, String> {
         match templates::get_template(id) {
-            Ok(template) => template,
+            Ok(template) => Ok(template),
             Err(e) => {
                 warn!(
                     "Meeting {}: template '{}' no longer resolves ({}); falling back to the default template '{}'",
                     meeting_id, id, e, templates::DEFAULT_TEMPLATE_ID
                 );
-                templates::get_template(templates::DEFAULT_TEMPLATE_ID)
-                    .expect("the shared default template must always resolve")
+                templates::get_template(templates::DEFAULT_TEMPLATE_ID).map_err(|default_err| {
+                    format!(
+                        "template '{}' failed to resolve ({}), and the default template '{}' also failed to resolve ({})",
+                        id, e, templates::DEFAULT_TEMPLATE_ID, default_err
+                    )
+                })
             }
         }
     }
@@ -554,8 +565,17 @@ impl SummaryService {
             }
             // Every fixed template: unchanged path, except a dangling id now
             // degrades to the default (specs/0061 W6) — see
-            // `Self::resolve_fixed_template`.
-            (None, id) => Self::resolve_fixed_template(&meeting_id, id),
+            // `Self::resolve_fixed_template`. If even the default fails to resolve
+            // (specs/0061 review, I4 — e.g. a corrupt custom override of
+            // `standard_meeting`), fail the run the same way the pre-fallback code
+            // did rather than panicking inside this spawned background task.
+            (None, id) => match Self::resolve_fixed_template(&meeting_id, id) {
+                Ok(template) => template,
+                Err(e) => {
+                    Self::update_process_failed(&pool, &meeting_id, &e).await;
+                    return;
+                }
+            },
         };
 
         let will_derive = template_id == AUTO_TEMPLATE_ID && auto_template.is_none();

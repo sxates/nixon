@@ -8,10 +8,16 @@ use crate::summary::templates::Template;
 // calls — never the old `update_process_failed` path. Calling
 // `SummaryService::resolve_fixed_template` directly exercises that real
 // production code, not a reimplementation of it.
+//
+// specs/0061 review, I4 — `resolve_fixed_template` now returns
+// `Result<Template, String>` instead of panicking when even the default
+// template fails to resolve; these two tests are updated to the new
+// signature (both still exercise the success paths).
 #[test]
 fn resolve_fixed_template_falls_back_to_default_when_id_does_not_resolve() {
     let template =
-        SummaryService::resolve_fixed_template("meeting-under-test", "psychatric_session");
+        SummaryService::resolve_fixed_template("meeting-under-test", "psychatric_session")
+            .expect("the default template fallback must resolve");
     let default_template = templates::get_template(templates::DEFAULT_TEMPLATE_ID)
         .expect("the default template must resolve");
     assert_eq!(template.name, default_template.name);
@@ -20,7 +26,8 @@ fn resolve_fixed_template_falls_back_to_default_when_id_does_not_resolve() {
 
 #[test]
 fn resolve_fixed_template_uses_the_real_template_when_it_resolves() {
-    let template = SummaryService::resolve_fixed_template("meeting-under-test", "daily_standup");
+    let template = SummaryService::resolve_fixed_template("meeting-under-test", "daily_standup")
+        .expect("a resolvable template id must resolve");
     assert_eq!(template.name, "Daily Standup");
 }
 
