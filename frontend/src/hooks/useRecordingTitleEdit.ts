@@ -28,7 +28,7 @@ export interface UseRecordingTitleEditReturn {
  */
 export function useRecordingTitleEdit(): UseRecordingTitleEditReturn {
   const { meetingTitle, setMeetingTitle } = useTranscripts();
-  const { refetchMeetings, activeRecordingMeetingId } = useSidebar();
+  const { refetchMeetings, activeRecordingMeetingId, setCurrentMeeting } = useSidebar();
 
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState('');
@@ -44,6 +44,10 @@ export function useRecordingTitleEdit(): UseRecordingTitleEditReturn {
           meetingId: activeRecordingMeetingId,
           title,
         });
+        // specs/0063 item 5 — the rail and the meetings list both read SidebarProvider;
+        // without this the footer keeps the pre-rename name for the rest of the session.
+        // Same pattern as useMeetingData.ts:152.
+        setCurrentMeeting({ id: activeRecordingMeetingId, title });
         void refetchMeetings();
       } catch (error) {
         console.error('Failed to rename meeting:', error);
@@ -52,7 +56,7 @@ export function useRecordingTitleEdit(): UseRecordingTitleEditReturn {
         });
       }
     },
-    [activeRecordingMeetingId, refetchMeetings],
+    [activeRecordingMeetingId, refetchMeetings, setCurrentMeeting],
   );
 
   const startEditingTitle = useCallback(() => {
