@@ -28,6 +28,7 @@
         "test:watch": "vitest",
         "shots:mock": "node scripts/shots/build-mock.mjs",
         "shots": "node scripts/shots/run.mjs",
+        "shots:real": "node scripts/shots/real.mjs",
         "shots:diff": "node scripts/shots/diff.mjs"
     },
     "dependencies": {
