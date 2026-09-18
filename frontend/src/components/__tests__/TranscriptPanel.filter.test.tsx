@@ -123,4 +123,27 @@ describe('TranscriptPanel — speaker filter chip (specs/0061 W4 task 3)', () =>
     // Falls back to the raw key when no MeetingSpeaker matches it.
     expect(screen.getByText('Showing: spk_nobody')).toBeInTheDocument();
   });
+
+  // specs/0061 review, I3 — the cross-task defect: a meeting still marked `defer`
+  // that genuinely has loaded transcripts must not flip into the "hasn't been
+  // processed yet" / "Process now" empty state just because the active speaker
+  // filter happens to match zero of the LOADED segments. "Process now" routes to
+  // `replace_meeting_transcripts`, which deletes every transcript row (including any
+  // user edits) with no warning — so misfiring this state on a filter miss is a
+  // real data-loss risk, not just a display glitch.
+  it('does not show the unprocessed/"Process now" state when a zero-match filter hides a deferred meeting\'s transcripts', async () => {
+    invoke.mockImplementation((cmd: string) => {
+      if (cmd === 'api_get_meeting_processing_mode') return Promise.resolve('defer');
+      if (cmd === 'api_meeting_audio_available') return Promise.resolve(true);
+      return Promise.resolve(null);
+    });
+
+    renderPanel({ speakerFilter: 'spk_nobody' });
+
+    // Wait for the processing-mode/audio-availability probes to resolve.
+    await screen.findByText('Showing: spk_nobody');
+
+    expect(screen.queryByText(/hasn't been processed yet/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Process now' })).not.toBeInTheDocument();
+  });
 });

@@ -342,8 +342,18 @@ export function TranscriptPanel({
   // still marked deferred, and no transcript segments loaded yet. Drives the
   // "hasn't been processed yet" transcript empty state instead of the generic
   // welcome copy. Gated to !isRecording below — meaningless mid-recording.
+  //
+  // specs/0061 review, I3 — this MUST read the unfiltered `allSegments`, not the
+  // speaker-filtered `convertedSegments`: whether the meeting has transcripts at all
+  // is unrelated to which speaker filter chip happens to be active. A meeting still
+  // marked `defer` (the backlog only clears that marker after transcribe + diarize +
+  // summarize ALL succeed, so a failed summarize leaves it set) that genuinely has
+  // loaded transcripts must never flip into "hasn't been processed yet" just because
+  // the active speaker filter matches zero of them — that state's "Process now"
+  // affordance routes to `replace_meeting_transcripts`, which deletes every
+  // transcript row (including user edits) with no warning.
   const unprocessed = isUnprocessedRecording({
-    hasTranscripts: convertedSegments.length > 0,
+    hasTranscripts: allSegments.length > 0,
     isDeferred: processingMode === 'defer',
     audioAvailable: audioAvailable === true,
   });
@@ -357,8 +367,15 @@ export function TranscriptPanel({
     <div className={cn(className)}>
       {/* Control area — sits tight under the document tabs. */}
       <div className="pb-3 border-b border-border">
+        {/* specs/0061 review, I3 — transcriptCount below is the unfiltered count:
+            it drives "Copy Transcript" disabled state, the sparse-transcript
+            warning, and the diarize button, none of which should react to the
+            view-local speaker filter. `totalCount` (paginated) is already
+            meeting-wide; the non-paginated branch already reads raw
+            `transcripts`, so only this fallback needed correcting from the
+            filtered `convertedSegments`. */}
         <TranscriptButtonGroup
-          transcriptCount={usePagination ? (totalCount ?? convertedSegments.length) : (transcripts?.length || 0)}
+          transcriptCount={usePagination ? (totalCount ?? allSegments.length) : (transcripts?.length || 0)}
           onCopyTranscript={onCopyTranscript}
           onOpenMeetingFolder={onOpenMeetingFolder}
           meetingId={meetingId}
@@ -400,8 +417,11 @@ export function TranscriptPanel({
         />
       </div>
 
-      {/* Custom prompt input at bottom of transcript section */}
-      {!isRecording && convertedSegments.length > 0 && (
+      {/* Custom prompt input at bottom of transcript section. specs/0061 review, I3 —
+          gated on the unfiltered allSegments: this box feeds the AI summary for the
+          WHOLE meeting, so an active speaker filter that happens to match zero
+          segments must not hide it. */}
+      {!isRecording && allSegments.length > 0 && (
         <div className="p-1 border-t border-border">
           <textarea
             placeholder="Add context for AI summary. For example people involved, meeting overview, objective etc..."
