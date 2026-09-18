@@ -105,13 +105,14 @@ the system-audio tap silently returns silence (see `CLAUDE.md` / ADR-0004).
 - [ ] Closing and reopening the panel keeps the counts consistent with what is actually running.
 - [ ] A running **diarization pass** appears as a row in the Queue panel with a stage label
       (not a loading spinner); while it runs, the row stays visible and shows progress.
-- [ ] Open a meeting with a summary, click **"Identify speakers"** to run diarization. Once
-      it finishes, the automatic re-summarize should appear as a Queue row; it disappears
-      once complete (or shows "Failed" if generation fails).
+- [ ] Open a meeting with a transcript and summary, click **"Identify speakers"** to run
+      diarization. Once it finishes, the automatic re-summarize should appear as a Queue row;
+      it disappears once complete (or shows "Failed" if generation fails).
 - [ ] Force a failed **extraction** (e.g. stop Ollama, or point the active provider at a bad
-      endpoint or key), then open a meeting with action items and click **"Scan again"**. The
-      Queue shows the failed extraction row with a red lamp. Click **Retry** — the row removes
-      and the lamp clears.
+      endpoint or key). Open a meeting with a summary but no extracted action items — the
+      Action items section reads "None found in this meeting's summary." Click **"Scan again"**.
+      The Queue shows the failed extraction row with a red lamp. Click **Retry** — the row
+      removes and the lamp clears.
 - [ ] A **non-retryable failure** (e.g. Ask AI, if supported) shows a **Dismiss** button
       instead of Retry; clicking it removes only that row, leaving other failures intact.
 - [ ] **Today has only one queue popover:** click the **Processing** button or check the state
