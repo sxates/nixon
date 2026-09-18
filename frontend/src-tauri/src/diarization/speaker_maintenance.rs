@@ -72,14 +72,17 @@ pub(crate) async fn prune_empty_speakers_inner(
     Ok(removed)
 }
 
-/// The earliest transcript row id a speaker currently holds in a meeting (specs/0061 W4
-/// task 3's click-to-filter jump target).
+/// The earliest transcript row id ANY of the given speaker keys currently holds in a
+/// meeting (specs/0061 W4 task 3's click-to-filter jump target). Takes every member key
+/// of a consolidated speaker group (controller ruling R36) — a group's true earliest
+/// line can belong to a non-primary key, so the ordering must span all of them in SQL
+/// (the id alone carries no timestamp for a frontend-side comparison to work with).
 pub(crate) async fn first_segment_id_inner(
     pool: &SqlitePool,
     meeting_id: &str,
-    speaker_key: &str,
+    speaker_keys: &[String],
 ) -> anyhow::Result<Option<String>> {
-    Ok(SpeakersRepository::first_segment_id(pool, meeting_id, speaker_key).await?)
+    Ok(SpeakersRepository::first_segment_id(pool, meeting_id, speaker_keys).await?)
 }
 
 /// Delete every empty speaker for a meeting (specs/0061 W4). The panel calls this after
@@ -99,17 +102,20 @@ pub async fn api_prune_empty_speakers<R: Runtime>(
         .map_err(|e| format!("Failed to prune empty speakers: {e}"))
 }
 
-/// The earliest transcript line id for a speaker in a meeting, or `None` when the speaker
-/// has no segments (specs/0061 W4 task 3's click-to-filter).
+/// The earliest transcript line id across ALL of the given speaker keys in a meeting, or
+/// `None` when none of them have segments (specs/0061 W4 task 3's click-to-filter).
+/// Takes every member key of a consolidated speaker group (controller ruling R36) so a
+/// group whose displayed identity spans several raw diarization keys still jumps to its
+/// true earliest line, not just the primary key's own earliest.
 #[tauri::command]
 pub async fn api_first_segment_for_speaker<R: Runtime>(
     app: AppHandle<R>,
     meeting_id: String,
-    speaker_key: String,
+    speaker_keys: Vec<String>,
 ) -> Result<Option<String>, String> {
     let state = app.state::<AppState>();
     let pool = state.db_manager.pool();
-    first_segment_id_inner(pool, &meeting_id, &speaker_key)
+    first_segment_id_inner(pool, &meeting_id, &speaker_keys)
         .await
         .map_err(|e| format!("Failed to look up the speaker's first segment: {e}"))
 }
@@ -196,9 +202,54 @@ mod tests {
             .unwrap();
         }
         assert_eq!(
-            first_segment_id_inner(&pool, &m, "spk_0").await.unwrap(),
+            first_segment_id_inner(&pool, &m, &["spk_0".to_string()])
+                .await
+                .unwrap(),
             Some(ids[1].clone())
         );
+    }
+
+    /// Controller ruling R36 (specs/0061 W4 task 3 review) — a consolidated speaker
+    /// group's TRUE earliest line can belong to a NON-primary member key (two raw
+    /// diarization keys mapped to the same Person). A primary-key-only lookup can only
+    /// ever see the primary's own rows and picks the wrong line — confirmed by running
+    /// this exact scenario against the old single-key `first_segment_id_inner(&pool, &m,
+    /// "spk_0")` before this fix: it returned `ids[1]` (start=1), not the group's true
+    /// earliest `ids[0]` (start=0, owned by non-primary key `spk_1`). The widened,
+    /// multi-key SQL lookup below orders by `audio_start_time` across every member key.
+    #[tokio::test]
+    async fn first_segment_id_spans_every_member_key_ordered_by_audio_start() {
+        let pool = pool_with_schema().await;
+        let m = insert_meeting(&pool).await;
+        let ids = insert_lines(&pool, &m, 3).await; // audio_start_time 0, 1, 2 respectively
+        sqlx::query("UPDATE transcripts SET speaker = 'spk_1' WHERE id = ?")
+            .bind(&ids[0]) // start=0 — the group's TRUE earliest line, non-primary key
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query("UPDATE transcripts SET speaker = 'spk_0' WHERE id = ?")
+            .bind(&ids[1]) // start=1 — primary key's own earliest
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query("UPDATE transcripts SET speaker = 'spk_0' WHERE id = ?")
+            .bind(&ids[2])
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        let result = first_segment_id_inner(&pool, &m, &["spk_0".to_string(), "spk_1".to_string()])
+            .await
+            .unwrap();
+        assert_eq!(result, Some(ids[0].clone()));
+    }
+
+    #[tokio::test]
+    async fn first_segment_id_returns_none_for_an_empty_key_list() {
+        let pool = pool_with_schema().await;
+        let m = insert_meeting(&pool).await;
+        insert_lines(&pool, &m, 1).await;
+        assert_eq!(first_segment_id_inner(&pool, &m, &[]).await.unwrap(), None);
     }
 
     /// Controller ruling R34 (specs/0061 W4 review): the post-reassignment prune is

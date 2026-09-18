@@ -10,6 +10,10 @@ export interface ChannelRow {
   colorClass: string; // bg-chart-n
   seconds: number;
   share: number; // 0..1
+  /** The speaker's display name (specs/0061 W4 task 3) — used only to name the
+   *  selection button ("Filter transcript to <name>"); falls back to `speakerKey`
+   *  when omitted. The visible name cell itself still comes from `renderName`. */
+  displayName?: string;
 }
 
 const GRID = 'grid grid-cols-[36px_1fr_64px_minmax(120px,220px)_40px] items-center gap-x-3';
@@ -32,8 +36,9 @@ export function ChannelStrip({
   /** The currently filtered speaker (specs/0061 W4 task 3), or null/undefined
    *  when nothing is selected. Only meaningful when `onSelect` is passed. */
   selectedKey?: string | null;
-  /** Click (or Enter/Space while focused) a row to select it — the caller owns
-   *  toggle-to-clear semantics; this just reports the key that was activated. */
+  /** Click a row (mouse convenience) or activate the channel cell's own toggle
+   *  button (keyboard/VoiceOver) to select it — the caller owns toggle-to-clear
+   *  semantics; this just reports the key that was activated. */
   onSelect?: (key: string) => void;
 }) {
   // Whole percentages allocated by largest remainder so the column adds to 100.
@@ -66,78 +71,87 @@ export function ChannelStrip({
       <div className="h-px bg-border" aria-hidden />
       {rows.map((r, i) => {
         const selected = onSelect ? r.speakerKey === selectedKey : false;
-        // specs/0061 W4 task 3, ruling R4 — `aria-selected` only has option
-        // semantics; a row wired for selection is exposed as a real toggle
-        // button (`role="button"` + `aria-pressed`) instead. Rows with no
-        // `onSelect` are left exactly as `role="row"` (unchanged).
-        const interactiveProps = onSelect
-          ? {
-              role: 'button' as const,
-              tabIndex: 0,
-              'aria-pressed': selected,
-              onClick: (e: React.MouseEvent<HTMLDivElement>) => {
-                // A nested interactive control (rename button, merge menu
-                // trigger, …) inside the "Speaker" cell owns its own click —
-                // don't also fire the row's onSelect for it.
-                const target = e.target as HTMLElement;
-                const nestedInteractive = target.closest('button, a, input, [role="menuitem"]');
-                if (nestedInteractive && nestedInteractive !== e.currentTarget) return;
-                onSelect(r.speakerKey);
-              },
-              onKeyDown: (e: React.KeyboardEvent<HTMLDivElement>) => {
-                // Only when the row itself (not a focused descendant control)
-                // received the key — a nested button handles its own Enter/Space.
-                if (e.target !== e.currentTarget) return;
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  onSelect(r.speakerKey);
-                }
-              },
-            }
-          : { role: 'row' as const };
         return (
-        <div
-          key={r.speakerKey}
-          data-testid="channel-row"
-          className={cn(GRID, 'min-h-[26px]', onSelect && 'cursor-pointer', selected && 'bg-muted')}
-          {...interactiveProps}
-        >
-          <span
-            role="cell"
-            className="flex items-center gap-2 text-[11px] font-semibold text-engrave"
+          <div
+            key={r.speakerKey}
+            role="row"
+            className={cn(GRID, 'min-h-[26px]', onSelect && 'cursor-pointer', selected && 'bg-muted')}
+            onClick={
+              onSelect
+                ? (e: React.MouseEvent<HTMLDivElement>) => {
+                    // Mouse convenience — click anywhere in the row selects it,
+                    // EXCEPT a nested interactive control (rename button, merge
+                    // menu trigger, this row's own select button, …), which owns
+                    // its own click (specs/0061 W4 task 3).
+                    const target = e.target as HTMLElement;
+                    const nestedInteractive = target.closest(
+                      'button, a, input, [role="menuitem"]',
+                    );
+                    if (nestedInteractive && nestedInteractive !== e.currentTarget) return;
+                    onSelect(r.speakerKey);
+                  }
+                : undefined
+            }
           >
-            <i className={cn('block h-3.5 w-[3px]', r.colorClass)} aria-hidden />
-            {r.channel}
-          </span>
-          <span
-            role="cell"
-            className="min-w-0 overflow-hidden text-[13px] text-foreground"
-          >
-            {renderName(r)}
-          </span>
-          <span
-            role="cell"
-            className="text-right text-xs tabular-nums text-muted-foreground"
-          >
-            {formatTalkTime(r.seconds)}
-          </span>
-          <span
-            role="cell"
-            className="relative h-1.5 bg-well shadow-[inset_0_1px_1px_rgba(0,0,0,0.5)]"
-          >
-            <i
-              className={cn('absolute inset-y-0 left-0', r.colorClass)}
-              style={{ width: `${percents[i]}%` }}
-              aria-hidden
-            />
-          </span>
-          <span
-            role="cell"
-            className="text-right text-[11px] tabular-nums text-muted-foreground"
-          >
-            {percents[i]}%
-          </span>
-        </div>
+            <span
+              role="cell"
+              className="flex items-center gap-2 text-[11px] font-semibold text-engrave"
+            >
+              {/* specs/0061 W4 task 3, ruling R37 — the row stays `role="row"`
+                  with its `role="cell"` children intact (a bare `role="button"`
+                  row would orphan them and nest real buttons inside a widget
+                  role); the selection affordance is instead a genuine `<button>`
+                  here, giving keyboard/VoiceOver users a real focusable path. */}
+              {onSelect ? (
+                <button
+                  type="button"
+                  aria-pressed={selected}
+                  aria-label={`Filter transcript to ${r.displayName ?? r.speakerKey}`}
+                  onClick={() => onSelect(r.speakerKey)}
+                  className={cn(
+                    'flex items-center gap-2 rounded-[2px] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
+                    selected && 'bg-muted',
+                  )}
+                >
+                  <i className={cn('block h-3.5 w-[3px]', r.colorClass)} aria-hidden />
+                  {r.channel}
+                </button>
+              ) : (
+                <>
+                  <i className={cn('block h-3.5 w-[3px]', r.colorClass)} aria-hidden />
+                  {r.channel}
+                </>
+              )}
+            </span>
+            <span
+              role="cell"
+              className="min-w-0 overflow-hidden text-[13px] text-foreground"
+            >
+              {renderName(r)}
+            </span>
+            <span
+              role="cell"
+              className="text-right text-xs tabular-nums text-muted-foreground"
+            >
+              {formatTalkTime(r.seconds)}
+            </span>
+            <span
+              role="cell"
+              className="relative h-1.5 bg-well shadow-[inset_0_1px_1px_rgba(0,0,0,0.5)]"
+            >
+              <i
+                className={cn('absolute inset-y-0 left-0', r.colorClass)}
+                style={{ width: `${percents[i]}%` }}
+                aria-hidden
+              />
+            </span>
+            <span
+              role="cell"
+              className="text-right text-[11px] tabular-nums text-muted-foreground"
+            >
+              {percents[i]}%
+            </span>
+          </div>
         );
       })}
     </div>

@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { invoke } from '@tauri-apps/api/core';
@@ -109,35 +109,10 @@ export default function PageContent({
   // specs/0061 W4 (task 3) — click a speaker in the channel strip to filter the
   // transcript to just their lines and jump to the first one. Owned here (not the
   // legend or the panel) because it drives BOTH: the legend's row highlight and
-  // the transcript tab's filter + tab switch + scroll.
+  // the transcript tab's filter + tab switch + scroll. The lookup/filter logic
+  // itself lives further down, once `speakersController` (needed to resolve a
+  // consolidated group's member keys — ruling R36) is available.
   const [speakerFilter, setSpeakerFilter] = useState<string | null>(null);
-
-  const onSelectSpeaker = useCallback(
-    (key: string | null) => {
-      if (!key || key === speakerFilter) {
-        // Re-clicking the already-selected row (or an explicit clear) clears it.
-        setSpeakerFilter(null);
-        return;
-      }
-      setSpeakerFilter(key);
-      setActiveTab('transcript');
-      void (async () => {
-        try {
-          const segmentId = await invoke<string | null>('api_first_segment_for_speaker', {
-            meetingId: meeting.id,
-            speakerKey: key,
-          });
-          if (segmentId) requestSegmentScroll?.(segmentId);
-        } catch (error) {
-          // Best-effort jump — the filter itself already applied above.
-          console.error('Failed to locate the speaker\'s first line:', error);
-        }
-      })();
-    },
-    [speakerFilter, meeting.id, setActiveTab, requestSegmentScroll],
-  );
-
-  const onClearSpeakerFilter = useCallback(() => setSpeakerFilter(null), []);
 
   // Model-settings modal registration + save-config IPC.
   const { handleRegisterModalOpen, handleOpenModelSettings, handleSaveModelConfig } =
@@ -190,13 +165,83 @@ export default function PageContent({
     onMutated: onRefetchTranscripts,
   });
 
-  // VOICES on the reel label must match the channels the strip actually draws, so count
-  // CONSOLIDATED groups (specs/0019 WS2.4): two speaker keys assigned to one person are
-  // one channel, not two. `|| undefined` keeps the row blank (not "0") before diarization.
-  const voices = useMemo(
-    () => consolidateSpeakers(speakersController.speakers).length || undefined,
+  // Consolidated speaker groups (specs/0019 WS2.4) — two raw diarization keys assigned
+  // to the same Person collapse into one channel. Shared by the VOICES count below and
+  // by the speaker-filter group resolution (ruling R36).
+  const speakerGroups = useMemo(
+    () => consolidateSpeakers(speakersController.speakers),
     [speakersController.speakers],
   );
+
+  // VOICES on the reel label must match the channels the strip actually draws.
+  // `|| undefined` keeps the row blank (not "0") before diarization.
+  const voices = useMemo(() => speakerGroups.length || undefined, [speakerGroups]);
+
+  // specs/0061 W4 (task 3), controller ruling R36 — a channel-strip row represents a
+  // CONSOLIDATED group, identified by its primary key, but the group can span several
+  // raw diarization keys (two speakers assigned to the same Person). Both the transcript
+  // filter and the first-line lookup must cover every member key, not just the primary
+  // one — the group's true earliest line, or a mid-conversation line, can belong to a
+  // non-primary key. `api_first_segment_for_speaker` was widened (Task 1's Rust side,
+  // this task's Rust side) to take the whole key list and order by `audio_start_time`
+  // in SQL, since the id alone carries no timestamp for a frontend-side comparison.
+  const resolveMemberKeys = useCallback(
+    (primaryKey: string): string[] =>
+      speakerGroups.find((g) => g.primary.speakerKey === primaryKey)?.keys ?? [primaryKey],
+    [speakerGroups],
+  );
+
+  // The current filter's full member-key set, kept in sync with `speakerFilter` (and
+  // with `speakersController.speakers`, e.g. after a merge/rename) — passed to
+  // TranscriptPanel so it can match ANY member key, not just the primary.
+  const speakerFilterKeys = useMemo(
+    () => (speakerFilter ? resolveMemberKeys(speakerFilter) : null),
+    [speakerFilter, resolveMemberKeys],
+  );
+
+  // A monotonic token guards against a stale first-segment lookup (ruling R39): if the
+  // user clicks A then quickly clicks A again (clear) or B (a different speaker) before
+  // A's `invoke` resolves, A's answer must not seed a scroll for a filter that's no
+  // longer current.
+  const selectionTokenRef = useRef(0);
+
+  const onSelectSpeaker = useCallback(
+    (key: string | null) => {
+      if (!key || key === speakerFilter) {
+        // Re-clicking the already-selected row (or an explicit clear) clears it, and
+        // invalidates any lookup still in flight for the row just cleared.
+        selectionTokenRef.current += 1;
+        setSpeakerFilter(null);
+        return;
+      }
+      const token = ++selectionTokenRef.current;
+      setSpeakerFilter(key);
+      setActiveTab('transcript');
+      const memberKeys = resolveMemberKeys(key);
+      void (async () => {
+        try {
+          const segmentId = await invoke<string | null>('api_first_segment_for_speaker', {
+            meetingId: meeting.id,
+            speakerKeys: memberKeys,
+          });
+          // Drop a stale resolution: a newer click (same or a different speaker)
+          // already moved the token on.
+          if (segmentId && selectionTokenRef.current === token) {
+            requestSegmentScroll?.(segmentId);
+          }
+        } catch (error) {
+          // Best-effort jump — the filter itself already applied above.
+          console.error("Failed to locate the speaker's first line:", error);
+        }
+      })();
+    },
+    [speakerFilter, meeting.id, setActiveTab, requestSegmentScroll, resolveMemberKeys],
+  );
+
+  const onClearSpeakerFilter = useCallback(() => {
+    selectionTokenRef.current += 1;
+    setSpeakerFilter(null);
+  }, []);
 
   // Custom hooks
   const meetingData = useMeetingData({ meeting, summaryData, onMeetingUpdated });
@@ -377,6 +422,7 @@ export default function PageContent({
             onRefetchTranscripts={onRefetchTranscripts}
             speakersController={speakersController}
             speakerFilter={speakerFilter}
+            speakerFilterKeys={speakerFilterKeys}
             onClearSpeakerFilter={onClearSpeakerFilter}
           />
         </div>

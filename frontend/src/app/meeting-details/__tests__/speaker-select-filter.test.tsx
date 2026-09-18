@@ -47,14 +47,17 @@ vi.mock('@/contexts/RecordingStateContext', () => ({
 vi.mock('@/components/MeetingDetails/MeetingTabPanels', () => ({
   MeetingTabPanels: ({
     speakerFilter,
+    speakerFilterKeys,
     activeTab,
   }: {
     speakerFilter?: string | null;
+    speakerFilterKeys?: string[] | null;
     activeTab?: string;
   }) => (
     <div
       data-testid="tab-panels"
       data-speaker-filter={speakerFilter ?? ''}
+      data-speaker-filter-keys={(speakerFilterKeys ?? []).join(',')}
       data-active-tab={activeTab ?? ''}
     />
   ),
@@ -121,15 +124,13 @@ const speakers = [
   { speakerKey: 'spk_0', displayName: 'Alex', isLocal: false, segmentCount: 3 },
 ];
 
-// The row itself is `role="button"` (ruling R4) and ALSO contains the
-// SpeakerChip's own nested rename `<button>` with the same name — an accessible
-// name query is ambiguous. `data-testid="channel-row"` (ChannelStrip.tsx)
-// unambiguously identifies the whole row.
-async function findChannelRow(name: string): Promise<HTMLElement> {
-  const rows = await screen.findAllByTestId('channel-row');
-  const match = rows.find((r) => r.textContent?.includes(name));
-  if (!match) throw new Error(`No channel row found for "${name}"`);
-  return match;
+// Ruling R37 — each row's own "Filter transcript to <name>" button (inside the
+// channel cell) is the unambiguous way to select a speaker: the row itself stays
+// `role="row"` (not `role="button"`), and the SpeakerChip's OWN nested rename
+// `<button>` has just the bare name, not this fuller label, so there's no
+// accessible-name collision.
+async function findFilterButton(name: string): Promise<HTMLElement> {
+  return screen.findByRole('button', { name: `Filter transcript to ${name}` });
 }
 
 beforeEach(() => {
@@ -160,17 +161,20 @@ describe('page-content — speaker select/clear toggle (specs/0061 W4 task 3)', 
   it('selecting a speaker sets the filter, switches to Transcript, and looks up their first line', async () => {
     render(<PageContent meeting={meeting} summaryData={null} requestSegmentScroll={vi.fn()} />);
 
-    const row = await findChannelRow('Alex');
-    fireEvent.click(row);
+    const filterButton = await findFilterButton('Alex');
+    fireEvent.click(filterButton);
 
     await waitFor(() => {
       expect(screen.getByTestId('tab-panels')).toHaveAttribute('data-speaker-filter', 'spk_0');
     });
     expect(screen.getByTestId('tab-panels')).toHaveAttribute('data-active-tab', 'transcript');
+    // ruling R36 — the backend command takes the group's full member-key list, not a
+    // single `speakerKey`; for an ungrouped speaker that's just its own key.
     expect(invoke).toHaveBeenCalledWith(
       'api_first_segment_for_speaker',
-      expect.objectContaining({ meetingId: 'm-1', speakerKey: 'spk_0' }),
+      expect.objectContaining({ meetingId: 'm-1', speakerKeys: ['spk_0'] }),
     );
+    expect(screen.getByTestId('tab-panels')).toHaveAttribute('data-speaker-filter-keys', 'spk_0');
   });
 
   it('hands the resolved first-segment id to requestSegmentScroll', async () => {
@@ -179,8 +183,8 @@ describe('page-content — speaker select/clear toggle (specs/0061 W4 task 3)', 
       <PageContent meeting={meeting} summaryData={null} requestSegmentScroll={requestSegmentScroll} />,
     );
 
-    const row = await findChannelRow('Alex');
-    fireEvent.click(row);
+    const filterButton = await findFilterButton('Alex');
+    fireEvent.click(filterButton);
 
     await waitFor(() => {
       expect(requestSegmentScroll).toHaveBeenCalledWith('seg-99');
@@ -190,13 +194,13 @@ describe('page-content — speaker select/clear toggle (specs/0061 W4 task 3)', 
   it('clicking the same row again clears the filter', async () => {
     render(<PageContent meeting={meeting} summaryData={null} requestSegmentScroll={vi.fn()} />);
 
-    const row = await findChannelRow('Alex');
-    fireEvent.click(row);
+    const filterButton = await findFilterButton('Alex');
+    fireEvent.click(filterButton);
     await waitFor(() => {
       expect(screen.getByTestId('tab-panels')).toHaveAttribute('data-speaker-filter', 'spk_0');
     });
 
-    fireEvent.click(row);
+    fireEvent.click(filterButton);
     await waitFor(() => {
       expect(screen.getByTestId('tab-panels')).toHaveAttribute('data-speaker-filter', '');
     });
@@ -217,12 +221,106 @@ describe('page-content — speaker select/clear toggle (specs/0061 W4 task 3)', 
       <PageContent meeting={meeting} summaryData={null} requestSegmentScroll={requestSegmentScroll} />,
     );
 
-    const row = await findChannelRow('Alex');
-    fireEvent.click(row);
+    const filterButton = await findFilterButton('Alex');
+    fireEvent.click(filterButton);
 
     await waitFor(() => {
       expect(screen.getByTestId('tab-panels')).toHaveAttribute('data-speaker-filter', 'spk_0');
     });
     expect(requestSegmentScroll).not.toHaveBeenCalled();
+  });
+
+  it('looks up EVERY member key of a consolidated group, not just the primary (ruling R36)', async () => {
+    // spk_0 and spk_0b are consolidated into one channel (same personId) — clicking
+    // the row must resolve the group's true earliest line across BOTH raw keys.
+    invoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'api_get_meeting_speakers') {
+        return [
+          { speakerKey: 'local', displayName: 'You', isLocal: true },
+          { speakerKey: 'spk_0', displayName: 'Alex', isLocal: false, personId: 'p-alex' },
+          { speakerKey: 'spk_0b', displayName: 'Alex', isLocal: false, personId: 'p-alex' },
+        ];
+      }
+      if (cmd === 'api_get_meeting_attendees') return { attendees: [], suggestion: null };
+      if (cmd === 'api_list_people_ranked') return [];
+      if (cmd === 'api_get_meeting_transcripts') return { transcripts: [], total_count: 0, has_more: false };
+      if (cmd === 'api_get_meetings') return [{ id: 'm-1', durationSeconds: 50 }];
+      if (cmd === 'api_first_segment_for_speaker') return 'seg-99';
+      return null;
+    });
+
+    render(<PageContent meeting={meeting} summaryData={null} requestSegmentScroll={vi.fn()} />);
+
+    const filterButton = await findFilterButton('Alex');
+    fireEvent.click(filterButton);
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith(
+        'api_first_segment_for_speaker',
+        expect.objectContaining({ meetingId: 'm-1', speakerKeys: ['spk_0', 'spk_0b'] }),
+      );
+    });
+    expect(screen.getByTestId('tab-panels')).toHaveAttribute(
+      'data-speaker-filter-keys',
+      'spk_0,spk_0b',
+    );
+  });
+
+  it('drops a stale first-segment resolution when a second click lands before it resolves (ruling R39)', async () => {
+    // Two speakers, each with a controllable (not-yet-resolved) lookup promise.
+    let resolveAlex!: (id: string | null) => void;
+    let resolveJordan!: (id: string | null) => void;
+    const alexPromise = new Promise<string | null>((res) => {
+      resolveAlex = res;
+    });
+    const jordanPromise = new Promise<string | null>((res) => {
+      resolveJordan = res;
+    });
+    invoke.mockImplementation(async (cmd: string, args?: Record<string, unknown>) => {
+      if (cmd === 'api_get_meeting_speakers') {
+        return [
+          { speakerKey: 'local', displayName: 'You', isLocal: true },
+          { speakerKey: 'spk_0', displayName: 'Alex', isLocal: false },
+          { speakerKey: 'spk_1', displayName: 'Jordan', isLocal: false },
+        ];
+      }
+      if (cmd === 'api_get_meeting_attendees') return { attendees: [], suggestion: null };
+      if (cmd === 'api_list_people_ranked') return [];
+      if (cmd === 'api_get_meeting_transcripts') return { transcripts: [], total_count: 0, has_more: false };
+      if (cmd === 'api_get_meetings') return [{ id: 'm-1', durationSeconds: 50 }];
+      if (cmd === 'api_first_segment_for_speaker') {
+        const keys = (args?.speakerKeys as string[] | undefined) ?? [];
+        return keys.includes('spk_0') ? alexPromise : jordanPromise;
+      }
+      return null;
+    });
+
+    const requestSegmentScroll = vi.fn();
+    render(
+      <PageContent meeting={meeting} summaryData={null} requestSegmentScroll={requestSegmentScroll} />,
+    );
+
+    const alexButton = await findFilterButton('Alex');
+    fireEvent.click(alexButton); // kicks off Alex's (still-pending) lookup
+
+    const jordanButton = await findFilterButton('Jordan');
+    fireEvent.click(jordanButton); // switches the filter before Alex's lookup resolves
+
+    await waitFor(() => {
+      expect(screen.getByTestId('tab-panels')).toHaveAttribute('data-speaker-filter', 'spk_1');
+    });
+
+    // Alex's lookup finally resolves AFTER Jordan is already selected — must be dropped.
+    resolveAlex('seg-alex-first-line');
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(requestSegmentScroll).not.toHaveBeenCalledWith('seg-alex-first-line');
+
+    // Jordan's own (current) lookup still works normally.
+    resolveJordan('seg-jordan-first-line');
+    await waitFor(() => {
+      expect(requestSegmentScroll).toHaveBeenCalledWith('seg-jordan-first-line');
+    });
+    expect(requestSegmentScroll).toHaveBeenCalledTimes(1);
   });
 });
