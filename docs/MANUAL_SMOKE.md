@@ -224,6 +224,17 @@ the system-audio tap silently returns silence (see `CLAUDE.md` / ADR-0004).
 - [ ] Settings > General > "Download updates automatically" off → no row appears for a
       further release, but About's "Check for updates" still finds and downloads it.
 
+## 22. Speaker corrections and transcript editing (specs/0061 W4-W6)
+- [ ] With `./dev-nixon.sh --demo` running, open **Meeting 05** ("Vendor call — enclosure
+      supplier") — it's seeded with an "Unknown" speaker and no owner ("You") track at all.
+      Reassign its "Unknown" line to **You**: "You" appears as an option even though this
+      meeting never diarized an owner, and the reassignment sticks.
+- [ ] On any meeting, click a transcript line's pencil, change its text, and save — the
+      line shows an `edited` mark and the new wording is findable via search.
+- [ ] In that meeting's channel strip, click a speaker's row — the transcript filters to
+      that speaker and jumps to their first line. Click the same row again to clear the
+      filter.
+
 ## Release builds (WS8)
 - [ ] A production build (`./build-gpu.sh` / `./upgrade-nixon.sh`) launches as **Nixon** —
       window title, menu bar, tray and notifications all say Nixon, and the sidebar shows no

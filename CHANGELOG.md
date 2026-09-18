@@ -21,15 +21,46 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 - Screenshot pipeline: `pnpm shots` (headless, both themes), `pnpm shots:diff` (contact
   sheet), `pnpm shots:real` (real window via a debug-only control listener); README
   screenshots (specs/0060).
+- Editable transcript text: click a line's pencil to correct it inline. A saved edit is
+  marked `edited` and stays searchable (the correction re-indexes for full-text search); a
+  failed save keeps the editor open with what you typed instead of discarding it.
+  Re-transcribing now warns how many manually-edited lines it will replace (specs/0061 W5).
+- Click a speaker's row in a meeting's channel strip to filter the transcript to that
+  speaker and jump to their first line; click the row again to clear the filter. When
+  diarization over-splits one person into several speaker keys later assigned to the same
+  person, the legend shows them as one consolidated row — clicking it filters and jumps
+  across every one of those underlying keys, not just the row's primary key (specs/0061
+  W4).
+- A "Change…" folder picker next to "Open folder" in Recording settings, so where new
+  recordings are saved can be changed without leaving the app; existing meetings keep
+  their own already-saved folder (specs/0061 W6).
 
 ### Changed
 
 - The headless screenshot mock is generated from the fixture dataset (`pnpm shots:mock`).
+- Reassigning a transcript line to "You" now works even in a meeting that never diarized
+  an owner track — the owner's speaker row is created on demand, and "You" always appears
+  as a reassignment option. A non-owner speaker left with zero lines after a correction or
+  merge, and with no stored voiceprint, is pruned instead of lingering in the speaker panel
+  (specs/0061 W4).
+- The speaker legend's channel strip fits six rows before it needs to scroll (specs/0061
+  W4).
+- "Summarize automatically when a meeting ends" is now a single toggle, under Summary;
+  Recording settings previously duplicated it as a second switch and now just points to
+  the one under Summary. A few Recording settings rows also read more honestly about what
+  they do — e.g. live speaker labels are described as provisional numbered placeholders
+  that get real names once the recording ends, not live names (specs/0061 W6).
+- The Speakers section on a meeting page is boxed like Participants, with its title inside
+  the box (specs/0064 item 4).
 
 ### Removed
 
+- The dead "Test Mic" audio-level monitor and the "File format" row from Recording
+  settings — neither did anything a user could act on (specs/0061 W6).
 - The Psychiatric Session built-in summary template (specs/0061 W6). Meetings already
-  pinned to it fall back to the default template at generation time.
+  pinned to it fall back to the default template at generation time — the same fallback
+  now covers any other unresolvable stored template id, such as a user-deleted custom
+  template, not just this one.
 
 ## [0.3.1] - 2026-09-16
 
