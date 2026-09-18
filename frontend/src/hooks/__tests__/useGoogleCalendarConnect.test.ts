@@ -99,4 +99,63 @@ describe('useGoogleCalendarConnect', () => {
     });
     expect(toastMock.success).not.toHaveBeenCalled();
   });
+
+  // specs/0061 W1 Task 3 fix (controller ruling R14) — a "Cancel"/"Dismiss"
+  // button hides the pending UI, but the backend connect invoke keeps
+  // running underneath (it can't be aborted) for up to 5 minutes. Before
+  // this fix, its eventual resolution still toasted "Google Calendar
+  // connected" and refreshed status — minutes after the user gave up, and
+  // even if they'd navigated away (sonner renders at the app root). cancel()
+  // must make that resolution fully silent.
+  it('cancel() makes a later resolution of the cancelled connect() silent: no toast, no status refresh', async () => {
+    let resolveConnect: (value: { ok: true; email: string }) => void = () => {};
+    connectGoogleCalendar.mockReturnValue(
+      new Promise((resolve) => {
+        resolveConnect = resolve;
+      }),
+    );
+
+    const { result } = renderHook(() => useGoogleCalendarConnect());
+    await waitFor(() => expect(result.current.status).not.toBeNull());
+    getGoogleCalendarStatus.mockClear(); // drop the mount-time call
+
+    let connectPromise: ReturnType<typeof result.current.connect>;
+    act(() => {
+      connectPromise = result.current.connect();
+    });
+    await waitFor(() => expect(result.current.connecting).toBe(true));
+
+    act(() => {
+      result.current.cancel();
+    });
+    // The pending UI drops immediately, before the backend call resolves.
+    expect(result.current.connecting).toBe(false);
+
+    await act(async () => {
+      resolveConnect({ ok: true, email: 'user@halden.example' });
+      await connectPromise;
+    });
+
+    expect(toastMock.success).not.toHaveBeenCalled();
+    expect(toastMock.error).not.toHaveBeenCalled();
+    expect(getGoogleCalendarStatus).not.toHaveBeenCalled();
+    expect(result.current.connecting).toBe(false);
+  });
+
+  it('cancel() has no effect on toast/refresh for a connect() that resolves BEFORE it is cancelled', async () => {
+    // A cancel() that lands after a connect() already settled (fast success,
+    // slow click) must not retroactively silence it.
+    const { result } = renderHook(() => useGoogleCalendarConnect());
+    await waitFor(() => expect(result.current.status).not.toBeNull());
+
+    await act(async () => {
+      await result.current.connect();
+    });
+    expect(toastMock.success).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      result.current.cancel();
+    });
+    expect(toastMock.success).toHaveBeenCalledTimes(1);
+  });
 });
