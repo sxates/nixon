@@ -38,7 +38,7 @@ describe('DeveloperSettings', () => {
 
   it('shows flags, loads demo data, and reloads the page', async () => {
     invokeMock.mockImplementation(async (cmd) => {
-      if (cmd === 'dev_get_flags') return { fixtures: true, no_audio: false, fake_downloads: false, reset_onboarding: false };
+      if (cmd === 'dev_get_flags') return { fixtures: true, no_audio: false, fake_downloads: false, reset_onboarding: false, control: false };
       if (cmd === 'dev_load_fixtures') return { meetings: 5, people: 7, segments: 1100, failed: 0 };
       return undefined;
     });
@@ -56,7 +56,7 @@ describe('DeveloperSettings', () => {
   });
 
   it('resets onboarding', async () => {
-    invokeMock.mockImplementation(async (cmd) => (cmd === 'dev_get_flags' ? { fixtures: false, no_audio: false, fake_downloads: false, reset_onboarding: false } : undefined));
+    invokeMock.mockImplementation(async (cmd) => (cmd === 'dev_get_flags' ? { fixtures: false, no_audio: false, fake_downloads: false, reset_onboarding: false, control: false } : undefined));
     render(<DeveloperSettings />);
     await screen.findByText(/Developer/);
     fireEvent.click(screen.getByRole('button', { name: /reset onboarding/i }));

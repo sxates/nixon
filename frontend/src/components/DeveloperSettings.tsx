@@ -7,11 +7,11 @@ import { Button } from "./ui/button"
 import { Switch } from "./ui/switch"
 import { SettingsGroup, SettingsNote, SettingsRow, SettingsSection } from "./ui/settings"
 
-export interface DevFlags { fixtures: boolean; no_audio: boolean; fake_downloads: boolean; reset_onboarding: boolean }
+export interface DevFlags { fixtures: boolean; no_audio: boolean; fake_downloads: boolean; reset_onboarding: boolean; control: boolean }
 interface SeedReport { meetings: number; people: number; segments: number; failed: number }
 
 export function formatFlags(f: DevFlags): string {
-  const parts = [f.fixtures && "fixtures=demo", f.no_audio && "no-audio", f.fake_downloads && "fake-downloads", f.reset_onboarding && "reset-onboarding"].filter(Boolean)
+  const parts = [f.fixtures && "fixtures=demo", f.no_audio && "no-audio", f.fake_downloads && "fake-downloads", f.reset_onboarding && "reset-onboarding", f.control && "control"].filter(Boolean)
   return parts.length ? parts.join(" · ") : "none"
 }
 
@@ -73,7 +73,7 @@ export function DeveloperSettings() {
           control={<Button size="sm" variant="secondary" onClick={reset}>Reset onboarding</Button>}
         />
       </SettingsGroup>
-      <SettingsNote tone="muted">Launch flags: ./dev-nixon.sh --demo, --no-audio, --onboarding, --real-downloads</SettingsNote>
+      <SettingsNote tone="muted">Launch flags: ./dev-nixon.sh --demo, --no-audio, --onboarding, --real-downloads, --control</SettingsNote>
     </SettingsSection>
   )
 }

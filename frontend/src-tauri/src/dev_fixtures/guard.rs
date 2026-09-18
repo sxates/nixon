@@ -3,6 +3,7 @@ pub const ENV_FIXTURES: &str = "NIXON_FIXTURES";
 pub const ENV_NO_AUDIO: &str = "NIXON_FIXTURES_NO_AUDIO";
 pub const ENV_FAKE_DOWNLOADS: &str = "NIXON_FAKE_DOWNLOADS";
 pub const ENV_RESET_ONBOARDING: &str = "NIXON_RESET_ONBOARDING";
+pub const ENV_DEV_CONTROL: &str = "NIXON_DEV_CONTROL";
 
 /// Pure check backing [`is_debug_identifier`]: an identifier counts as a dev
 /// build only when present and suffixed with `.debug` (ADR-0004).
@@ -25,6 +26,7 @@ pub struct DevFlags {
     pub no_audio: bool,
     pub fake_downloads: bool,
     pub reset_onboarding: bool,
+    pub control: bool,
 }
 
 impl DevFlags {
@@ -37,6 +39,7 @@ impl DevFlags {
             no_audio: matches!(lookup(ENV_NO_AUDIO).as_deref(), Some("1")),
             fake_downloads: matches!(lookup(ENV_FAKE_DOWNLOADS).as_deref(), Some("1")),
             reset_onboarding: matches!(lookup(ENV_RESET_ONBOARDING).as_deref(), Some("1")),
+            control: lookup(ENV_DEV_CONTROL).as_deref() == Some("1"),
         }
     }
 
@@ -84,16 +87,19 @@ mod tests {
             (ENV_NO_AUDIO, "1"),
             (ENV_FAKE_DOWNLOADS, "1"),
             (ENV_RESET_ONBOARDING, "1"),
+            (ENV_DEV_CONTROL, "1"),
         ])));
         assert!(all_set.fixtures);
         assert!(all_set.no_audio);
         assert!(all_set.fake_downloads);
         assert!(all_set.reset_onboarding);
+        assert!(all_set.control);
         let none_set = DevFlags::from_lookup(lookup_from(HashMap::new()));
         assert!(!none_set.fixtures);
         assert!(!none_set.no_audio);
         assert!(!none_set.fake_downloads);
         assert!(!none_set.reset_onboarding);
+        assert!(!none_set.control);
     }
     #[test]
     fn identifier_is_debug_requires_the_debug_suffix() {

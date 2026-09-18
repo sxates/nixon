@@ -266,6 +266,8 @@ pub fn invoke_handler() -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Sen
         dev_fixtures::commands::dev_reset_onboarding,
         #[cfg(debug_assertions)]
         dev_fixtures::commands::dev_get_flags,
+        #[cfg(debug_assertions)]
+        dev_fixtures::commands::dev_shot_ping,
         // System settings commands
         #[cfg(target_os = "macos")]
         utils::open_system_settings,

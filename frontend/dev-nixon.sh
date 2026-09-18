@@ -49,17 +49,21 @@ fi
 
 # specs/0059 dev flags. dev-gpu.sh drops positional args, so flags become env vars here.
 #   --demo            seed the fictional dataset into the .debug profile at startup
+#                     (also enables --control, for the specs/0060 screenshot driver)
 #   --no-audio        with --demo: skip say/ffmpeg audio synthesis
 #   --onboarding      clear onboarding status and simulate model downloads
 #   --real-downloads  with --onboarding: keep the real downloads
+#   --control         (specs/0060) start the debug-only loopback control listener,
+#                     used by the screenshot driver to steer the running window
 REAL_DOWNLOADS=0; WANT_ONBOARDING=0
 for arg in "$@"; do
   case "$arg" in
-    --demo)           export NIXON_FIXTURES=demo ;;
+    --demo)           export NIXON_FIXTURES=demo; export NIXON_DEV_CONTROL=1 ;;
     --no-audio)       export NIXON_FIXTURES_NO_AUDIO=1 ;;
     --onboarding)     WANT_ONBOARDING=1 ;;
     --real-downloads) REAL_DOWNLOADS=1 ;;
-    -h|--help)        sed -n '/^# specs\/0059 dev flags/,/^#   --real-downloads/p' "$0" | sed 's/^#\{0,1\} \{0,1\}//' ; exit 0 ;;
+    --control)        export NIXON_DEV_CONTROL=1 ;;
+    -h|--help)        sed -n '/^# specs\/0059 dev flags/,/^#   --control/p' "$0" | sed 's/^#\{0,1\} \{0,1\}//' ; exit 0 ;;
     *) echo "dev-nixon.sh: unknown flag $arg" >&2; exit 2 ;;
   esac
 done
@@ -67,7 +71,7 @@ if [ "$WANT_ONBOARDING" = 1 ]; then
   export NIXON_RESET_ONBOARDING=1
   [ "$REAL_DOWNLOADS" = 1 ] || export NIXON_FAKE_DOWNLOADS=1
 fi
-[ -n "${NIXON_FIXTURES:-}${NIXON_RESET_ONBOARDING:-}" ] && echo "[nixon] dev flags: ${NIXON_FIXTURES:+fixtures=demo }${NIXON_FIXTURES_NO_AUDIO:+no-audio }${NIXON_RESET_ONBOARDING:+reset-onboarding }${NIXON_FAKE_DOWNLOADS:+fake-downloads}" || true
+[ -n "${NIXON_FIXTURES:-}${NIXON_RESET_ONBOARDING:-}${NIXON_DEV_CONTROL:-}" ] && echo "[nixon] dev flags: ${NIXON_FIXTURES:+fixtures=demo }${NIXON_FIXTURES_NO_AUDIO:+no-audio }${NIXON_RESET_ONBOARDING:+reset-onboarding }${NIXON_FAKE_DOWNLOADS:+fake-downloads }${NIXON_DEV_CONTROL:+control}" || true
 
 # specs/0058: dev builds never check for or install updates.
 export NIXON_DISABLE_UPDATER=1

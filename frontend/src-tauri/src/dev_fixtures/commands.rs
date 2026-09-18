@@ -28,3 +28,13 @@ pub async fn dev_reset_onboarding(app: AppHandle) -> Result<(), String> {
 pub async fn dev_get_flags() -> Result<guard::DevFlags, String> {
     Ok(guard::DevFlags::from_env())
 }
+
+/// specs/0060: the `ready` control command can't read anything back from a fire-and-forget
+/// `eval`, so it round-trips through this command instead — the injected JS invokes it with
+/// whether `document.documentElement.dataset.shotReady` is `"1"`, and the listener polls
+/// `control::SHOT_READY` until that's true.
+#[tauri::command]
+pub async fn dev_shot_ping(ready: bool) -> Result<(), String> {
+    super::control::SHOT_READY.store(ready, std::sync::atomic::Ordering::SeqCst);
+    Ok(())
+}

@@ -8,6 +8,17 @@ repository = "https://github.com/sxates/nixon"
 edition = "2021"
 rust-version = "1.88"
 
+# specs/0060: `objc` 0.2.x's `sel_impl!` macro (expanded from every `msg_send!` call,
+# used by dev_fixtures::control's window-number lookup) checks `cfg(feature =
+# "cargo-clippy")`, a legacy self-detection trick from before `cargo clippy` set
+# `CLIPPY_ARGS`. This crate's `--check-cfg` doesn't know that value, so rustc's
+# `unexpected_cfgs` lint fires at every call site; it can't be silenced with a local
+# `#[allow]` because the diagnostic is anchored to the macro's own expansion, not the
+# invocation. Declaring the value here (rather than blanket-allowing the lint) keeps
+# the lint live for any *other* unexpected cfg in this crate.
+[lints.rust]
+unexpected_cfgs = { level = "allow", check-cfg = ["cfg(feature, values(\"cargo-clippy\"))"] }
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [lib]

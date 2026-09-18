@@ -356,6 +356,9 @@ pub fn run() {
             tauri::async_runtime::block_on(crate::onboarding::reset_if_requested(_app.handle()));
             #[cfg(debug_assertions)]
             crate::dev_fixtures::seed_at_startup(_app.handle());
+            // specs/0060 — debug-only: loopback control listener for screenshot drivers.
+            #[cfg(debug_assertions)]
+            crate::dev_fixtures::control::spawn_if_requested(_app.handle().clone());
 
             // Audio retention sweep (specs/0029 WS7.1): background deletion of media
             // files for meetings older than the user's retention window. Spawned AFTER

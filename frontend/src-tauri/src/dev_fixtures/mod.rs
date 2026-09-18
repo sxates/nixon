@@ -4,6 +4,7 @@
 
 pub mod audio;
 pub mod commands;
+pub mod control;
 pub mod dataset;
 pub mod fake_downloads;
 pub mod folder;
