@@ -18,9 +18,16 @@ import {
 } from '@/lib/calendar';
 import { usePermissionsModal } from '@/contexts/PermissionsModalContext';
 import { useSidebar } from '@/components/Sidebar/SidebarProvider';
+import { SILENT_AUDIO_CAPTURE_COPY } from '@/components/onboarding/shared/PermissionRow';
+import type { ProbeResult } from '@/types/onboarding';
 
-/** Tri-state per permission row, mirroring the OS authorization state. */
-type RowState = 'unknown' | 'granted' | 'denied';
+/**
+ * Per permission row state, mirroring the OS authorization state. `silent`
+ * is Audio Capture-specific (specs/0061 W3): the tap opened but only heard
+ * silence, so permission is probably not granted yet — honest, but distinct
+ * from a hard OS denial.
+ */
+type RowState = 'unknown' | 'granted' | 'denied' | 'silent';
 
 /**
  * "Enable recording" permissions modal (design source: specs/0057 mockup).
@@ -111,8 +118,16 @@ export default function PermissionsModal() {
     }
     setPendingRow('sys');
     try {
-      const granted = await invoke<boolean>('trigger_system_audio_permission_command');
-      setSystemAudio(granted ? 'granted' : 'denied');
+      // Probes the tap with a real (quiet, brief) tone instead of assuming
+      // grant from tap construction alone (specs/0061 W3).
+      const probe = await invoke<ProbeResult>('trigger_system_audio_permission_command');
+      if (probe.state === 'granted') {
+        setSystemAudio('granted');
+      } else if (probe.state === 'silent') {
+        setSystemAudio('silent');
+      } else {
+        setSystemAudio('denied');
+      }
     } catch (err) {
       console.warn('[PermissionsModal] trigger_system_audio_permission_command failed:', err);
     } finally {
@@ -121,7 +136,9 @@ export default function PermissionsModal() {
   };
 
   // Recording is possible once mic + system audio are granted (calendar is
-  // optional — it only enriches titles/participants).
+  // optional — it only enriches titles/participants). `silent` counts as
+  // NOT granted: the tap opened but never heard real audio, so recording
+  // would silently produce no system audio.
   const recordReady = microphone === 'granted' && systemAudio === 'granted';
 
   const handleStartRecording = () => {
@@ -194,6 +211,7 @@ export default function PermissionsModal() {
           {rows.map((row) => {
             const isGranted = row.state === 'granted';
             const isDenied = row.state === 'denied';
+            const isSilent = row.state === 'silent';
             const isPending = pendingRow === row.key;
             return (
               <div
@@ -209,7 +227,11 @@ export default function PermissionsModal() {
                 <div className="min-w-0 flex-1">
                   <div className="text-[13.5px] font-semibold text-foreground">{row.label}</div>
                   <div className="text-xs text-muted-foreground">
-                    {isDenied ? 'Denied — open System Settings to allow' : row.sub}
+                    {isDenied
+                      ? 'Denied — open System Settings to allow'
+                      : isSilent
+                        ? SILENT_AUDIO_CAPTURE_COPY
+                        : row.sub}
                   </div>
                 </div>
                 {isGranted ? (

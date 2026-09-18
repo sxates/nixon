@@ -9,6 +9,7 @@ pub mod vad;
 pub mod capture;
 pub mod devices;
 pub mod permissions;
+pub mod probe_tone; // specs/0061 W3: sine-tone generator + playback for the honest Audio Capture probe
 
 // NEW: Device detection and diagnostics for adaptive buffering
 pub mod device_detection;
