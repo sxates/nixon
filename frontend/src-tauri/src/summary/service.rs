@@ -300,6 +300,34 @@ impl SummaryService {
         detection.language
     }
 
+    /// Resolves a **fixed** (non-Auto) template id for summary generation —
+    /// the `(None, id)` arm of [`process_transcript_background`]'s template
+    /// match. Falls back to the default fixed template
+    /// ([`templates::DEFAULT_TEMPLATE_ID`]) when `id` no longer resolves
+    /// (specs/0061 W6): a built-in removed in an app update (e.g. the retired
+    /// Psychiatric Session template) or a deleted custom override must not
+    /// fail generation for a meeting that persisted that choice — it should
+    /// degrade the same way a NULL `template_id` already does, not end the
+    /// run in `update_process_failed`.
+    ///
+    /// The returned [`Template`]'s own content, not `id`, is what downstream
+    /// fingerprinting ([`template_cache_fingerprint`]) and generation see, so
+    /// a substituted template is cached and generated under a fingerprint
+    /// that matches what was actually produced — never a mismatched one.
+    pub fn resolve_fixed_template(meeting_id: &str, id: &str) -> Template {
+        match templates::get_template(id) {
+            Ok(template) => template,
+            Err(e) => {
+                warn!(
+                    "Meeting {}: template '{}' no longer resolves ({}); falling back to the default template '{}'",
+                    meeting_id, id, e, templates::DEFAULT_TEMPLATE_ID
+                );
+                templates::get_template(templates::DEFAULT_TEMPLATE_ID)
+                    .expect("the shared default template must always resolve")
+            }
+        }
+    }
+
     /// Processes transcript in the background and generates summary
     ///
     /// This function is designed to be spawned as an async task and does not block
@@ -524,15 +552,10 @@ impl SummaryService {
             (None, id) if id == AUTO_TEMPLATE_ID => {
                 crate::summary::outline::to_template(&crate::summary::outline::fallback_outline())
             }
-            // Every fixed template: unchanged path.
-            (None, id) => match templates::get_template(id) {
-                Ok(template) => template,
-                Err(e) => {
-                    let err_msg = format!("Failed to load template '{}': {}", id, e);
-                    Self::update_process_failed(&pool, &meeting_id, &err_msg).await;
-                    return;
-                }
-            },
+            // Every fixed template: unchanged path, except a dangling id now
+            // degrades to the default (specs/0061 W6) — see
+            // `Self::resolve_fixed_template`.
+            (None, id) => Self::resolve_fixed_template(&meeting_id, id),
         };
 
         let will_derive = template_id == AUTO_TEMPLATE_ID && auto_template.is_none();
@@ -828,6 +851,30 @@ impl SummaryService {
 mod tests {
     use super::*;
     use crate::summary::templates::Template;
+
+    // specs/0061 W6 regression: a meeting pinned to a template id that no
+    // longer resolves (a built-in removed in an app update, or a deleted
+    // custom override) must still get a real template from the exact
+    // function `process_transcript_background`'s fixed-template match arm
+    // calls — never the old `update_process_failed` path. Calling
+    // `SummaryService::resolve_fixed_template` directly exercises that real
+    // production code, not a reimplementation of it.
+    #[test]
+    fn resolve_fixed_template_falls_back_to_default_when_id_does_not_resolve() {
+        let template =
+            SummaryService::resolve_fixed_template("meeting-under-test", "psychatric_session");
+        let default_template = templates::get_template(templates::DEFAULT_TEMPLATE_ID)
+            .expect("the default template must resolve");
+        assert_eq!(template.name, default_template.name);
+        assert_eq!(template.sections.len(), default_template.sections.len());
+    }
+
+    #[test]
+    fn resolve_fixed_template_uses_the_real_template_when_it_resolves() {
+        let template =
+            SummaryService::resolve_fixed_template("meeting-under-test", "daily_standup");
+        assert_eq!(template.name, "Daily Standup");
+    }
 
     fn sample_cache_source() -> SummaryCacheSource {
         let template_fingerprint = stable_text_fingerprint("standard template prompt");

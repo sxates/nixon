@@ -16,7 +16,8 @@ use sqlx::SqlitePool;
 
 use app_lib::database::repositories::meeting::MeetingsRepository;
 use app_lib::summary::outline::AUTO_TEMPLATE_ID;
-use app_lib::summary::templates::{DEFAULT_SUMMARY_TEMPLATE_ID, DEFAULT_TEMPLATE_ID};
+use app_lib::summary::service::SummaryService;
+use app_lib::summary::templates::{get_template, DEFAULT_SUMMARY_TEMPLATE_ID, DEFAULT_TEMPLATE_ID};
 
 async fn test_pool() -> SqlitePool {
     let pool = SqlitePoolOptions::new()
@@ -68,5 +69,43 @@ async fn a_meeting_with_no_persisted_template_resolves_to_auto() {
     assert_eq!(
         resolved, AUTO_TEMPLATE_ID,
         "NULL template_id must resolve to Auto, not the old fixed default"
+    );
+}
+
+/// specs/0061 W6 regression: a meeting whose persisted `template_id` no
+/// longer resolves to any template (a built-in retired in an app update —
+/// e.g. the removed Psychiatric Session template — or a deleted custom
+/// override) must still resolve to a real template for generation, not fail
+/// the run. The NULL-only fallback covered by the test above never fires
+/// here — the persisted value reads back `Some(..)`, not `None` — so this
+/// exercises the actual downstream resolution
+/// (`SummaryService::resolve_fixed_template`, the function
+/// `process_transcript_background`'s fixed-template match arm calls) that a
+/// non-null, unresolvable id hits.
+#[tokio::test]
+async fn a_meeting_pinned_to_a_removed_template_still_resolves_to_the_default() {
+    let pool = test_pool().await;
+    sqlx::query(
+        "INSERT INTO meetings (id, title, created_at, updated_at) VALUES ('m2','T','now','now')",
+    )
+    .execute(&pool)
+    .await
+    .expect("seed meeting");
+
+    MeetingsRepository::set_meeting_template(&pool, "m2", Some("psychatric_session"))
+        .await
+        .expect("persist the (now-removed) template choice");
+
+    let persisted = MeetingsRepository::get_meeting_template(&pool, "m2")
+        .await
+        .expect("query must succeed")
+        .expect("a meeting with an explicit choice must read back Some(..), not None");
+    assert_eq!(persisted, "psychatric_session");
+
+    let template = SummaryService::resolve_fixed_template("m2", &persisted);
+    let default_template = get_template(DEFAULT_TEMPLATE_ID).expect("default template resolves");
+    assert_eq!(
+        template.name, default_template.name,
+        "a dangling persisted template id must degrade to the default template, not fail generation"
     );
 }
