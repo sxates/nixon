@@ -11,6 +11,7 @@ use std::pin::Pin;
 #[cfg(target_os = "macos")]
 use std::time::{Duration, Instant};
 
+#[cfg(target_os = "macos")]
 use super::probe_tone;
 
 /// Check if the app has Audio Capture permission (required for Core Audio taps on macOS 14.4+)
@@ -216,16 +217,23 @@ fn probe_audio_capture_sync() -> PermissionProbe {
 /// not).
 ///
 /// The whole probe — tap creation, tone playback, sample collection,
-/// classification — runs under a 2s timeout so a stuck tap can never hang
-/// onboarding; a timeout is reported as `Failed`, same as a real probe
-/// error, since from the frontend's point of view both mean "couldn't
-/// verify audio capture right now."
+/// classification — runs under a 10s timeout so a stuck tap can never hang
+/// onboarding. The blocking work itself is only ~400ms of capture plus tap
+/// setup, so 10s only matters when something genuinely blocks — most notably
+/// the very first tap creation, which is exactly when macOS shows the TCC
+/// prompt. A timeout is classified as `Silent`, not `Failed`: unlike a real
+/// construction error, we have no evidence permission was denied, only that
+/// we didn't get an answer in time (plausibly because the user is still
+/// looking at the TCC dialog). `Silent` is retryable in the UI, so the user
+/// can just try again once they've clicked Allow, rather than being dropped
+/// into a terminal "denied" state that only offers "Open Settings" (specs/0061
+/// final review).
 #[tauri::command]
 pub async fn trigger_system_audio_permission_command() -> Result<PermissionProbe, String> {
     #[cfg(target_os = "macos")]
     {
         match tokio::time::timeout(
-            Duration::from_secs(2),
+            Duration::from_secs(10),
             tokio::task::spawn_blocking(probe_audio_capture_sync),
         )
         .await
@@ -235,10 +243,11 @@ pub async fn trigger_system_audio_permission_command() -> Result<PermissionProbe
                 message: format!("Audio Capture probe task failed: {join_err}"),
             }),
             Err(_) => {
-                warn!("Audio Capture probe timed out after 2s");
-                Ok(PermissionProbe::Failed {
-                    message: "Audio Capture probe timed out".to_string(),
-                })
+                warn!("Audio Capture probe timed out after 10s");
+                // See the comment above `trigger_system_audio_permission_command`:
+                // a timeout is not evidence of denial, so it must not classify as
+                // `Failed` (which is terminal in the onboarding UI).
+                Ok(PermissionProbe::Silent)
             }
         }
     }

@@ -60,7 +60,7 @@ if [ -n "$listing" ]; then
 fi
 
 # specs/0061 W2: sonner variables must be re-based on tokens (they live in node_modules otherwise).
-for v in normal-bg normal-border normal-text success-bg success-border success-text info-bg info-border info-text warning-bg warning-border warning-text error-bg error-border error-text; do
+for v in normal-bg normal-border normal-text normal-bg-hover normal-border-hover success-bg success-border success-text info-bg info-border info-text warning-bg warning-border warning-text error-bg error-border error-text; do
   if ! grep -q -- "--${v}: hsl(var(--" frontend/src/app/globals.css; then
     echo "check-off-token-colors: sonner token override missing: --${v}" >&2; exit 1
   fi

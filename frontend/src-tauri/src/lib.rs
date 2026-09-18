@@ -308,16 +308,6 @@ pub fn run() {
                 }
             });
 
-            // Trigger system audio permission request on startup (similar to microphone permission)
-            // #[cfg(target_os = "macos")]
-            // {
-            //     tauri::async_runtime::spawn(async {
-            //         if let Err(e) = audio::permissions::trigger_system_audio_permission() {
-            //             log::warn!("Failed to trigger system audio permission: {}", e);
-            //         }
-            //     });
-            // }
-
             // Initialize database (handles first launch detection and conditional setup).
             // specs/0028: do NOT `.expect()` here — a DB-init failure must not abort the
             // process before any window exists. Surface the error to the user (event the

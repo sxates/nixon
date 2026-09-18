@@ -57,6 +57,17 @@ const emitDownloadProgress = (payload: {
   });
 };
 
+// specs/0061 final review (Important 1): the legacy `diarization-progress`
+// compat event carries no meeting_id either, and — unlike the byte-progress
+// event above — it drives `stage` directly. It must be gated the same way.
+const emitCompatProgress = (payload: { stage: string; pct?: number }) => {
+  act(() => {
+    for (const handler of listeners.get('diarization-progress') ?? []) {
+      handler({ payload });
+    }
+  });
+};
+
 describe('useDiarization — model download progress + persistent toast', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -173,6 +184,20 @@ describe('useDiarization — model download progress + persistent toast', () => 
       total_bytes: 105_906_176,
     });
     expect(meetingB.result.current.downloadProgress).toBeNull();
+
+    // specs/0061 final review (Important 1): the compat `diarization-progress`
+    // event (no meeting_id) still reached every mounted hook and drove `stage`
+    // directly, so B's "Identify speakers" button rendered — and, with no
+    // per-meeting complete/error event to ever clear it, permanently stuck at
+    // — A's download stage text. Only A (running/downloading) may react.
+    emitCompatProgress({ stage: 'downloading embedding model · 12.0 MB / 101.0 MB' });
+    expect(meetingA.result.current.stage).toBe(
+      'downloading embedding model · 12.0 MB / 101.0 MB',
+    );
+    expect(meetingB.result.current.stage).toBeNull();
+
+    emitCompatProgress({ stage: 'downloading embedding model · 90.0 MB / 101.0 MB' });
+    expect(meetingB.result.current.stage).toBeNull();
   });
 
   // Important finding 2 (review round 2): a download failure must resolve the

@@ -195,10 +195,12 @@ export function TranscriptButtonGroup({
           >
             {isDiarizing && <Loader2 className="animate-spin" size={16} />}
             <span>
-              {downloadProgress?.label ??
-                (hasRealProgress
-                  ? `Identifying… ${diarizationPct}%`
-                  : (diarizationStage ?? 'Identify speakers'))}
+              {isDiarizing
+                ? (downloadProgress?.label ??
+                  (hasRealProgress
+                    ? `Identifying… ${diarizationPct}%`
+                    : (diarizationStage ?? 'Identifying…')))
+                : 'Identify speakers'}
             </span>
           </Button>
         )}
