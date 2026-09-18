@@ -12,6 +12,12 @@ import { useEffect, useRef, useState } from "react";
  * (blur) also saves, matching the other inline editors in this app. Escape and blur
  * must not fight each other — cancelling, then losing focus as the editor is torn
  * down, must not ALSO fire a save of the discarded text.
+ *
+ * A no-op edit (trimmed text unchanged from `initialText`) is treated as a cancel,
+ * not a save (specs/0061 review, I2): clicking the pencil and clicking away without
+ * changing anything is the natural "changed my mind" gesture, and a real save marks
+ * the line `edited` and discards its per-word timestamps server-side — a cost this
+ * gesture must not pay.
  */
 export interface SegmentTextEditorProps {
     /** The RAW segment text — never the stop-word-cleaned displayText. Editing must
@@ -43,7 +49,14 @@ export function SegmentTextEditor({ initialText, onSave, onCancel }: SegmentText
     const commitSave = () => {
         if (settledRef.current) return;
         settledRef.current = true;
-        void onSave(value.trim()).then((ok) => {
+        const trimmed = value.trim();
+        if (trimmed === initialText.trim()) {
+            // No-op edit: treat exactly like a cancel — nothing changed, so nothing
+            // is saved, and the line's `edited` mark / word timestamps stay intact.
+            onCancel();
+            return;
+        }
+        void onSave(trimmed).then((ok) => {
             // A successful save unmounts this editor (nothing left to guard). A
             // failed one keeps it mounted with the typed text still in it — un-guard
             // so the next Enter/blur can retry the same save.
