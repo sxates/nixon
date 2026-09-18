@@ -55,6 +55,7 @@ fi
 #   --real-downloads  with --onboarding: keep the real downloads
 #   --control         (specs/0060) start the debug-only loopback control listener,
 #                     used by the screenshot driver to steer the running window
+#   (end of dev flags)
 REAL_DOWNLOADS=0; WANT_ONBOARDING=0
 for arg in "$@"; do
   case "$arg" in
@@ -63,7 +64,7 @@ for arg in "$@"; do
     --onboarding)     WANT_ONBOARDING=1 ;;
     --real-downloads) REAL_DOWNLOADS=1 ;;
     --control)        export NIXON_DEV_CONTROL=1 ;;
-    -h|--help)        sed -n '/^# specs\/0059 dev flags/,/^#   --control/p' "$0" | sed 's/^#\{0,1\} \{0,1\}//' ; exit 0 ;;
+    -h|--help)        sed -n '/^# specs\/0059 dev flags/,/^#   (end of dev flags)/p' "$0" | sed 's/^#\{0,1\} \{0,1\}//' ; exit 0 ;;
     *) echo "dev-nixon.sh: unknown flag $arg" >&2; exit 2 ;;
   esac
 done
