@@ -1,4 +1,8 @@
 use super::*;
+use crate::summary::cache_key::{
+    build_summary_cache_source, stable_text_fingerprint, strip_title_if_present,
+    template_cache_fingerprint,
+};
 use crate::summary::templates::Template;
 
 // specs/0061 W6 regression: a meeting pinned to a template id that no
