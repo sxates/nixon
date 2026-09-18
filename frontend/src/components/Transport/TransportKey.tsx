@@ -37,10 +37,13 @@ const LIT_BAR: Record<TransportFn, string> = {
 // ever lit; the face stayed cream, which is the opposite. A fully lit key lights its face and
 // flips its ink. STOP is never lit, so it has no face of its own.
 const LIT_FACE: Record<TransportFn, string> = {
-  rec: 'bg-record',
+  rec: 'bg-lamp-red',
   hold: 'bg-lamp-amber',
   stop: '',
 };
+// --record-foreground is the cream that pairs with the red lamp: the ink token deliberately
+// stays in the `record` family because no `--lamp-*` cream exists (only `--lamp-ink`, which is
+// the dark ink that pairs with amber).
 const LIT_GLYPH: Record<TransportFn, string> = {
   rec: 'fill-record-foreground',
   hold: 'fill-lamp-ink',
@@ -79,7 +82,10 @@ export function TransportKey({ fn, legend, lit = false, dim = false, disabled, c
         'transition-transform [transition-duration:60ms] [transition-timing-function:cubic-bezier(.2,0,0,1)] active:translate-y-px',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-panel',
         lit && 'shadow-[inset_0_1px_0_hsl(var(--bevel-lo)),inset_0_-1px_0_hsl(var(--bevel-hi))]',
-        disabled && 'opacity-[0.45]',
+        // A lit key already communicates its state via its lit face, aria-pressed, and the
+        // disabled attribute itself — dimming it too (REC's `lit` strictly implies `disabled`)
+        // composited the lit red face at 45%, which defeated the point of lighting it.
+        disabled && !lit && 'opacity-[0.45]',
         className,
       )}
       {...rest}

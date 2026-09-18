@@ -21,7 +21,7 @@ describe('TransportKey', () => {
   it('a lit REC key lights its whole face with cream ink', () => {
     const { container } = render(<TransportKey fn="rec" lit legend="REC" aria-label="Recording" />);
     const btn = screen.getByRole('button', { name: 'Recording' });
-    expect(btn.className).toContain('bg-record');
+    expect(btn.className).toContain('bg-lamp-red');
     expect(btn.className).not.toContain('bg-key');
     expect(container.querySelector('svg')?.getAttribute('class')).toContain('fill-record-foreground');
     expect(screen.getByText('REC').className).toContain('text-record-foreground');
@@ -39,7 +39,19 @@ describe('TransportKey', () => {
     render(<TransportKey fn="rec" lit dim legend="REC" aria-label="Recording" />);
     const btn = screen.getByRole('button', { name: 'Recording' });
     expect(btn.className).toContain('bg-key');
-    expect(btn.className).not.toContain('bg-record');
+    expect(btn.className).not.toContain('bg-lamp-red');
+  });
+
+  it('a lit and disabled key is not dimmed — the lit face carries its own state', () => {
+    render(<TransportKey fn="rec" lit disabled legend="REC" aria-label="Recording" />);
+    const btn = screen.getByRole('button', { name: 'Recording' });
+    expect(btn.className).not.toContain('opacity-[0.45]');
+  });
+
+  it('a disabled key that is not lit is still dimmed', () => {
+    render(<TransportKey fn="hold" disabled legend="HOLD" aria-label="Pause recording" />);
+    const btn = screen.getByRole('button', { name: 'Pause recording' });
+    expect(btn.className).toContain('opacity-[0.45]');
   });
 
   it('STOP is never lit and keeps the engraved treatment', () => {

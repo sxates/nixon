@@ -89,6 +89,9 @@ the system-audio tap silently returns silence (see `CLAUDE.md` / ADR-0004).
 - [ ] No key glyph touches the lamp bar above it; the legend is centred under the glyph.
 - [ ] A lit **REC** key is a red key with cream ink in both themes; a lit **HOLD** is visibly
       amber on Faceplate (light), not brown. REC while on HOLD is dimmed, not red.
+- [ ] On the **Deck** (dark) theme, a lit **HOLD** key's glyph and "HOLD" legend are dark ink
+      on the amber face, not near-white — no headless screenshot catches this (`record-live`
+      is `real_only`), so it needs an eyes-on check.
 
 ## 4. Queue panel (deferred processing + background AI)
 - [ ] With queued work, the rail's **Queue** shows a non-zero count and its lamp lights.

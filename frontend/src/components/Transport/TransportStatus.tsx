@@ -66,7 +66,10 @@ export function TransportStatus({ phase, elapsedSeconds }: { phase: TransportPha
         <button
           type="button"
           onClick={() => router.push('/record')}
-          aria-label="Back to the recording"
+          // aria-label REPLACES the button's accessible name entirely, so it must carry both
+          // lines itself — otherwise a screen reader hears only the static label and loses the
+          // meeting title and state line the rail exists to convey.
+          aria-label={`Back to the recording: ${line1}, ${line2}`}
           className={cn(
             'flex min-w-0 flex-col items-start rounded-[3px] text-left leading-tight',
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-panel',

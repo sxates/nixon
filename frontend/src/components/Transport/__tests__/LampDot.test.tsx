@@ -15,7 +15,7 @@ describe('LampDot', () => {
     render(<LampDot tone="red" label="Recording" />);
     const red = screen.getByRole('img', { name: 'Recording' });
     expect(red.className).toContain('bg-lamp-red');
-    expect(red.className).not.toContain('bg-record ');
+    expect(red.className).not.toContain('bg-record');
   });
 
   it('an unlit lamp is named "<label> off" and carries no lamp token', () => {
