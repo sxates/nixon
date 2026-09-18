@@ -1,7 +1,7 @@
 'use client';
 
-import { memo } from "react";
-import { Check } from "lucide-react";
+import { memo, useState } from "react";
+import { Check, Pencil } from "lucide-react";
 import { ConfidenceIndicator } from "./ConfidenceIndicator";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import { MeetingAttendee, Person } from "@/types";
@@ -9,6 +9,7 @@ import { speakerColorClass, speakerBgClass } from "@/lib/speaker-colors";
 import { cn } from "@/lib/utils";
 import { InlineSpeakerAssign } from "./MeetingDetails/InlineSpeakerAssign";
 import { SegmentSpeakerMenu } from "./MeetingDetails/SegmentSpeakerMenu";
+import { SegmentTextEditor } from "./MeetingDetails/SegmentTextEditor";
 
 /** specs/0019 WS2.1 — wiring that lets a transcript line reassign its speaker inline.
  *  Provided by the meeting-details panel (not during live recording); absent => the
@@ -172,6 +173,8 @@ export const TranscriptSegment = memo(function TranscriptSegment({
     selected,
     selectionActive,
     onToggleSelect,
+    userEdited,
+    onEditText,
 }: {
     id: string;
     index: number;
@@ -190,8 +193,24 @@ export const TranscriptSegment = memo(function TranscriptSegment({
     selected?: boolean;
     selectionActive?: boolean;
     onToggleSelect?: (id: string, index: number, shiftKey: boolean) => void;
+    // specs/0061 W5 (task 5) — true once this line's text has been manually
+    // corrected (via onEditText below); shows the "edited" mark.
+    userEdited?: boolean;
+    /** specs/0061 W5 — save this line's RAW edited text. Absent (recording, or no
+     *  meetingId) => no pencil, no inline edit affordance. Same success/failure
+     *  contract as onReassignSegment; the optimistic overlay + revert is owned by
+     *  the parent view. */
+    onEditText?: (id: string, text: string) => Promise<boolean>;
 }) {
+    const [editing, setEditing] = useState(false);
     const displayText = cleanStopWords(text) || (text.trim() === '' ? '[Silence]' : text);
+
+    const handleSave = async (newText: string): Promise<boolean> => {
+        if (!onEditText) return false;
+        const ok = await onEditText(id, newText);
+        setEditing(false);
+        return ok;
+    };
 
     return (
         <div id={`segment-${id}`} className="group/segment mb-3 border-b border-border/60 pb-3">
@@ -248,8 +267,35 @@ export const TranscriptSegment = memo(function TranscriptSegment({
                                 onReassign={assignment.onReassignSegment}
                             />
                         )}
+                        {/* specs/0061 W5 — hover pencil next to the split icon: correct this
+                            line's text in place. Independent of speaker assignment. */}
+                        {onEditText && !editing && (
+                            <button
+                                type="button"
+                                onClick={() => setEditing(true)}
+                                className="ml-0.5 rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground focus:opacity-100 group-hover/segment:opacity-100"
+                                title="Edit this line's text"
+                                aria-label="Edit this line's text"
+                            >
+                                <Pencil size={12} />
+                            </button>
+                        )}
+                        {userEdited && (
+                            <span
+                                className="rounded-[2px] border border-border px-1 py-px text-[10px] font-medium text-engrave"
+                                title="Manually edited"
+                            >
+                                edited
+                            </span>
+                        )}
                     </div>
-                    {isStreaming ? (
+                    {editing ? (
+                        <SegmentTextEditor
+                            initialText={text}
+                            onSave={handleSave}
+                            onCancel={() => setEditing(false)}
+                        />
+                    ) : isStreaming ? (
                         <div className="bg-muted border border-border rounded-lg px-3 py-2">
                             <p className="u-typed">{displayText}</p>
                         </div>
