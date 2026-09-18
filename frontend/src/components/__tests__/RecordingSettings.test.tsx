@@ -57,7 +57,6 @@ function mockInvokeResponses() {
         return Promise.resolve({
           save_folder: '',
           auto_save: true,
-          file_format: 'mp4',
           preferred_mic_device: null,
           preferred_system_device: null,
           retention_days: null,
@@ -217,5 +216,150 @@ describe('RecordingSettings — start-time-only setting notices (spec 0051 WS3)'
     fireEvent.click(switchForLabel('Speaker diarization'));
     await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith('Preference saved'));
     expect(toastInfo).not.toHaveBeenCalled();
+  });
+});
+
+describe('RecordingSettings — settings hygiene (specs/0061 W6)', () => {
+  beforeEach(() => {
+    useSidebarMock.mockReturnValue({ activeRecordingMeetingId: null });
+  });
+
+  it('has no File format row (dead: format was never actually configurable)', async () => {
+    await renderSettings();
+    expect(screen.queryByText('File format')).not.toBeInTheDocument();
+  });
+
+  it('has no second auto-summary switch, and points to Summary instead', async () => {
+    await renderSettings();
+    // Only one control with this aria-label may exist app-wide; RecordingSettings no
+    // longer renders one of its own.
+    expect(screen.queryByLabelText('Summarize automatically when a meeting ends')).not.toBeInTheDocument();
+    expect(
+      screen.getByText('Automatic summaries are configured under Summary.'),
+    ).toBeInTheDocument();
+  });
+
+  it('describes live speaker labels with the corrected, honest copy', async () => {
+    await renderSettings();
+    expect(
+      screen.getByText(
+        'Shows provisional numbered labels while you record. Names are matched when the recording ends.',
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it('explains that storing other voiceprints is opt-in biometric data', async () => {
+    await renderSettings();
+    expect(
+      screen.getByText(
+        "Off by default. Storing other people's voiceprints is opt-in because it is biometric data. When on, Nixon remembers other people's voices to suggest names automatically in future meetings. When off, names still suggest within a single meeting, but no cross-meeting voice memory is kept for others. Voiceprints stay on this Mac either way.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it('shows both "Open folder" and "Change…" for the save location', async () => {
+    await renderSettings();
+    expect(screen.getByRole('button', { name: /Open folder/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Change…' })).toBeInTheDocument();
+  });
+
+  it('Change… picks a folder via select_recording_folder and persists it', async () => {
+    invokeMock.mockImplementation((cmd: string) => {
+      switch (cmd) {
+        case 'get_recording_preferences':
+          return Promise.resolve({
+            save_folder: '/tmp/original-folder',
+            auto_save: true,
+            preferred_mic_device: null,
+            preferred_system_device: null,
+            retention_days: null,
+            live_transcription_enabled: true,
+            low_power_on_battery: true,
+          });
+        case 'api_get_zoom_auto_detect':
+          return Promise.resolve(true);
+        case 'api_get_diarization_enabled':
+          return Promise.resolve(false);
+        case 'api_get_live_diarization_enabled':
+          return Promise.resolve(false);
+        case 'api_get_expected_speaker_count':
+          return Promise.resolve(null);
+        case 'api_get_voiceprint_settings':
+          return Promise.resolve({ storeOthersVoiceprints: false, selfEnrollVoiceprint: true });
+        case 'api_get_zoom_mute_gate':
+          return Promise.resolve(false);
+        case 'get_audio_devices':
+          return Promise.resolve([]);
+        case 'get_audio_backend_info':
+          return Promise.resolve([]);
+        case 'get_current_audio_backend':
+          return Promise.resolve('coreaudio');
+        case 'select_recording_folder':
+          return Promise.resolve('/tmp/chosen-folder');
+        case 'set_recording_preferences':
+          return Promise.resolve(undefined);
+        default:
+          return Promise.resolve(undefined);
+      }
+    });
+
+    render(<RecordingSettings />);
+    await screen.findByText('Transcribe in real time during recording');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Change…' }));
+
+    await waitFor(() => expect(invokeMock).toHaveBeenCalledWith('select_recording_folder'));
+    await waitFor(() =>
+      expect(invokeMock).toHaveBeenCalledWith('set_recording_preferences', {
+        preferences: expect.objectContaining({ save_folder: '/tmp/chosen-folder' }),
+      }),
+    );
+  });
+
+  it('Change… does nothing when the picker is cancelled (no path returned)', async () => {
+    invokeMock.mockImplementation((cmd: string) => {
+      switch (cmd) {
+        case 'get_recording_preferences':
+          return Promise.resolve({
+            save_folder: '/tmp/original-folder',
+            auto_save: true,
+            preferred_mic_device: null,
+            preferred_system_device: null,
+            retention_days: null,
+            live_transcription_enabled: true,
+            low_power_on_battery: true,
+          });
+        case 'api_get_zoom_auto_detect':
+          return Promise.resolve(true);
+        case 'api_get_diarization_enabled':
+          return Promise.resolve(false);
+        case 'api_get_live_diarization_enabled':
+          return Promise.resolve(false);
+        case 'api_get_expected_speaker_count':
+          return Promise.resolve(null);
+        case 'api_get_voiceprint_settings':
+          return Promise.resolve({ storeOthersVoiceprints: false, selfEnrollVoiceprint: true });
+        case 'api_get_zoom_mute_gate':
+          return Promise.resolve(false);
+        case 'get_audio_devices':
+          return Promise.resolve([]);
+        case 'get_audio_backend_info':
+          return Promise.resolve([]);
+        case 'get_current_audio_backend':
+          return Promise.resolve('coreaudio');
+        case 'select_recording_folder':
+          return Promise.resolve(null);
+        default:
+          return Promise.resolve(undefined);
+      }
+    });
+
+    render(<RecordingSettings />);
+    await screen.findByText('Transcribe in real time during recording');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Change…' }));
+
+    await waitFor(() => expect(invokeMock).toHaveBeenCalledWith('select_recording_folder'));
+    expect(invokeMock.mock.calls.some(([cmd]) => cmd === 'set_recording_preferences')).toBe(false);
   });
 });

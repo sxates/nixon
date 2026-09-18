@@ -128,11 +128,12 @@ export function SummaryModelSettings({ refetchTrigger }: SummaryModelSettingsPro
         description="Summaries can also be generated on demand from any meeting page."
       >
         <SettingsGroup>
-          {/* Same ConfigContext state as the toggle in Recording settings (specs/0029
-              WS7.3) — one source of truth, two surfaces. */}
+          {/* specs/0029 WS7.3. This used to be duplicated as a second switch in Recording
+              settings (same ConfigContext state, two surfaces to keep in sync); that copy
+              is gone now (specs/0061 W6) and Recording settings just points here. */}
           <SettingsRow
             label="Summarize automatically when a meeting ends"
-            description="Also available in Settings → Recordings."
+            description="Generate an AI summary as soon as a recording stops, using your configured summary model."
             control={
               <Switch
                 checked={isAutoSummary}

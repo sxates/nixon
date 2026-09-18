@@ -16,7 +16,6 @@ use crate::audio::capture::AudioCaptureBackend;
 pub struct RecordingPreferences {
     pub save_folder: PathBuf,
     pub auto_save: bool,
-    pub file_format: String,
     #[serde(default)]
     pub preferred_mic_device: Option<String>,
     #[serde(default)]
@@ -67,7 +66,6 @@ impl Default for RecordingPreferences {
         Self {
             save_folder: get_default_recordings_folder(),
             auto_save: true,
-            file_format: "mp4".to_string(),
             preferred_mic_device: None,
             preferred_system_device: None,
             #[cfg(target_os = "macos")]
@@ -199,13 +197,6 @@ pub fn ensure_recordings_directory(path: &PathBuf) -> Result<()> {
     Ok(())
 }
 
-/// Generate a unique filename for a recording
-pub fn generate_recording_filename(format: &str) -> String {
-    let now = chrono::Utc::now();
-    let timestamp = now.format("%Y%m%d_%H%M%S");
-    format!("recording_{}.{}", timestamp, format)
-}
-
 /// Load recording preferences from store
 pub async fn load_recording_preferences<R: Runtime>(
     app: &AppHandle<R>,
@@ -242,9 +233,13 @@ pub async fn load_recording_preferences<R: Runtime>(
         RecordingPreferences::default()
     };
 
-    info!("Loaded recording preferences: save_folder={:?}, auto_save={}, format={}, mic={:?}, system={:?}",
-          prefs.save_folder, prefs.auto_save, prefs.file_format,
-          prefs.preferred_mic_device, prefs.preferred_system_device);
+    info!(
+        "Loaded recording preferences: save_folder={:?}, auto_save={}, mic={:?}, system={:?}",
+        prefs.save_folder,
+        prefs.auto_save,
+        prefs.preferred_mic_device,
+        prefs.preferred_system_device
+    );
     Ok(prefs)
 }
 
@@ -253,9 +248,13 @@ pub async fn save_recording_preferences<R: Runtime>(
     app: &AppHandle<R>,
     preferences: &RecordingPreferences,
 ) -> Result<()> {
-    info!("Saving recording preferences: save_folder={:?}, auto_save={}, format={}, mic={:?}, system={:?}",
-          preferences.save_folder, preferences.auto_save, preferences.file_format,
-          preferences.preferred_mic_device, preferences.preferred_system_device);
+    info!(
+        "Saving recording preferences: save_folder={:?}, auto_save={}, mic={:?}, system={:?}",
+        preferences.save_folder,
+        preferences.auto_save,
+        preferences.preferred_mic_device,
+        preferences.preferred_system_device
+    );
 
     // Get or create store
     let store = app
@@ -363,13 +362,17 @@ pub async fn open_recordings_folder<R: Runtime>(app: AppHandle<R>) -> Result<(),
 
 #[tauri::command]
 pub async fn select_recording_folder<R: Runtime>(
-    _app: AppHandle<R>,
+    app: AppHandle<R>,
 ) -> Result<Option<String>, String> {
-    // Use Tauri's dialog to select folder
-    // For now, return None - this would need to be implemented with tauri-plugin-dialog
-    // when it's available in the Cargo.toml
-    warn!("Folder selection not yet implemented - using dialog plugin");
-    Ok(None)
+    use tauri_plugin_dialog::DialogExt;
+
+    // blocking_pick_folder opens a native, synchronous folder chooser — it must not run
+    // on the async executor thread, hence spawn_blocking (specs/0061 W6).
+    let picked = tokio::task::spawn_blocking(move || app.dialog().file().blocking_pick_folder())
+        .await
+        .map_err(|e| format!("Folder picker task panicked: {}", e))?;
+
+    Ok(picked.map(|p| p.to_string()))
 }
 
 // Backend selection commands
@@ -506,6 +509,21 @@ pub async fn get_audio_backend_info() -> Result<Vec<BackendInfo>, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// specs/0061 W6 — `file_format` was removed from [`RecordingPreferences`] (the
+    /// "File format" settings row was dead: nothing let a user change it, and the
+    /// value was never actually used to pick an encoding). Preferences saved to disk
+    /// by an older build still have the key. `RecordingPreferences` carries no
+    /// `#[serde(deny_unknown_fields)]`, so serde must silently ignore it rather than
+    /// fail to load a user's existing preferences file.
+    #[test]
+    fn unknown_saved_field_is_ignored_on_deserialize() {
+        let json = r#"{"save_folder":"/tmp/x","auto_save":true,"file_format":"mp4"}"#;
+        let prefs: RecordingPreferences =
+            serde_json::from_str(json).expect("unknown fields must not fail deserialization");
+        assert_eq!(prefs.save_folder, PathBuf::from("/tmp/x"));
+        assert!(prefs.auto_save);
+    }
 
     fn tempdir(tag: &str) -> PathBuf {
         let d = std::env::temp_dir().join(format!(
