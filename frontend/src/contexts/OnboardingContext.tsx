@@ -409,12 +409,13 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
     }
 
     // Determine the correct step based on verified status
-    // New simplified flow: Step 1: Welcome, Step 2: Setup Overview, Step 3: Download Progress, Step 4: Permissions (macOS)
+    // Flow: Step 1: Welcome, Step 2: Setup Overview, Step 3: Download Progress,
+    // Step 4: Permissions (macOS) / Calendar (non-macOS), Step 5: Calendar (macOS)
     let currentStep = savedStatus.current_step;
     const completed = savedStatus.completed;
 
-    // Clamp step to new max (4)
-    if (currentStep > 4) {
+    // Clamp step to new max (5)
+    if (currentStep > 5) {
       currentStep = 3; // Go to download progress step
     }
 
@@ -578,14 +579,14 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
   }, []);
 
   const goToStep = useCallback((step: number) => {
-    setCurrentStep(Math.max(1, Math.min(step, 4)));
+    setCurrentStep(Math.max(1, Math.min(step, 5)));
   }, []);
 
   const goNext = useCallback(() => {
     setCurrentStep((prev: number) => {
       const next = prev + 1;
-      // Don't go past step 4
-      return Math.min(next, 4);
+      // Don't go past step 5
+      return Math.min(next, 5);
     });
   }, []);
 
