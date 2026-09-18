@@ -79,6 +79,7 @@ function ThemedToaster({ offset }: { offset?: { bottom: string } }) {
       theme={resolved}
       offset={offset}
       mobileOffset={offset}
+      toastOptions={{ classNames: { toast: 'rounded-[3px] shadow-sm font-sans' } }}
     />
   )
 }

@@ -130,6 +130,16 @@
     --bevel-hi: 0 0% 100% / 0.06;
     --bevel-lo: 0 0% 0% / 0.45;
   }
+
+  /* specs/0061 W2: sonner's richColors ship cold web green/blue from node_modules; the
+     off-token gate cannot see them, so every toast variant is re-based on the lamps here. */
+  html [data-sonner-toaster][data-sonner-theme] {
+    --normal-bg: hsl(var(--card)); --normal-border: hsl(var(--border)); --normal-text: hsl(var(--foreground));
+    --success-bg: hsl(var(--card)); --success-border: hsl(var(--success) / 0.5); --success-text: hsl(var(--success));
+    --info-bg: hsl(var(--card)); --info-border: hsl(var(--brand) / 0.5); --info-text: hsl(var(--brand));
+    --warning-bg: hsl(var(--card)); --warning-border: hsl(var(--brand) / 0.6); --warning-text: hsl(var(--brand));
+    --error-bg: hsl(var(--card)); --error-border: hsl(var(--record) / 0.5); --error-text: hsl(var(--record));
+  }
 }
 
 @layer base {
