@@ -380,7 +380,7 @@ export default function PageContent({
             isRecording={isRecording}
             selectedSpeakerKey={speakerFilter}
             onSelectSpeaker={onSelectSpeaker}
-            className="mb-4"
+            className="mt-4 mb-4"
           />
 
           {/* Tabs — underlined active tab in brand, sticky to the top of the scroll
