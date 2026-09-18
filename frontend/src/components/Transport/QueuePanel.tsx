@@ -39,11 +39,14 @@ function Row({ row, onRetry, onDismiss }: { row: QueueRow; onRetry: () => void; 
       )}
       {/* `row.action` drives the button, not a source/stage/retryable spot-check (that gate
           used to only cover 'llm' rows, so a failed backlog row's Retry silently did nothing —
-          specs/0063 W3 Task 6). A 'retry' row dispatches for real. A 'dismiss' row (e.g. a
-          failed askAI task) still has no PER-ROW dismiss — `api_llm_activity_dismiss` takes no
-          id and clears the whole failure history — so its button is the same full-clear call
-          the header's "Dismiss failures" makes, just reachable at the row too; it is labelled
-          "Dismiss" (not "Dismiss failures") so it doesn't read as scoped to this one row. */}
+          specs/0063 W3 Task 6). A 'retry' row dispatches for real, by numeric task id. A
+          'dismiss' row (e.g. a failed askAI task) now has a REAL per-row dismiss too —
+          `api_llm_activity_dismiss_task` removes just that one registry record (fix-round 1:
+          the first version of this wired every row's Dismiss to the header's full-history
+          `api_llm_activity_dismiss`, so clicking one row's button silently cleared every
+          other failure too — a button reading its own row while acting on all of them, the
+          same class of bug as the original "Retry does nothing" report). The header's own
+          "Dismiss failures" is unchanged and still clears the lot on purpose. */}
       {row.action === 'retry' && (
         <div className="flex justify-end pl-[18px]">
           <button type="button" onClick={onRetry} className="text-[10px] text-muted-foreground hover:text-foreground">
@@ -86,7 +89,17 @@ export function QueuePanel({ view, className }: { view: QueueView; className?: s
       });
     }
   };
-  const handleDismiss = () => void llm?.dismiss();
+  // Per-row dismiss removes just that record (fix-round 1, specs/0063 W3 Task 6) — distinct
+  // from the header's `handleDismissAll`, which is the honestly-global
+  // `api_llm_activity_dismiss` and stays that way.
+  const handleDismiss = (row: QueueRow) => {
+    if (typeof row.taskId === 'number') {
+      void invoke('api_llm_activity_dismiss_task', { taskId: row.taskId }).catch(() => {
+        /* best-effort, like every other LLM-activity call (LlmActivityProvider.tsx) */
+      });
+    }
+  };
+  const handleDismissAll = () => void llm?.dismiss();
 
   return (
     <div className={cn('flex flex-col gap-1', className)}>
@@ -95,7 +108,7 @@ export function QueuePanel({ view, className }: { view: QueueView; className?: s
         {hasLlmFailure && view.failures > 0 && (
           <button
             type="button"
-            onClick={handleDismiss}
+            onClick={handleDismissAll}
             className="ml-auto text-[10px] text-muted-foreground hover:text-foreground"
           >
             Dismiss failures
@@ -116,7 +129,7 @@ export function QueuePanel({ view, className }: { view: QueueView; className?: s
           <li className="px-2 py-3 text-center text-xs text-muted-foreground">Nothing in the queue.</li>
         )}
         {view.rows.map((row) => (
-          <Row key={row.id} row={row} onRetry={() => handleRetry(row)} onDismiss={handleDismiss} />
+          <Row key={row.id} row={row} onRetry={() => handleRetry(row)} onDismiss={() => handleDismiss(row)} />
         ))}
       </ul>
       {hasFinished && (

@@ -28,11 +28,17 @@ pub fn is_retryable(kind: TaskKind) -> bool {
 
 /// Retry the task recorded at `task_id`, dispatched by its kind.
 ///
-/// Takes the record out of the registry BEFORE dispatching — the row must clear
-/// immediately, and if the retry itself fails it registers a fresh failure of its own,
-/// which is correct behaviour rather than mutating the old record. A double-clicked
-/// Retry finds nothing on the second call and returns a clean error, never panics or
-/// double-runs.
+/// Checks retryability BEFORE touching the registry, and only calls `take_record` once a
+/// dispatch below is actually going to run: a non-retryable kind (or an id already gone)
+/// must leave the history record exactly where it was, with a clean error back to the
+/// caller — not destroy it and THEN report the error, which would strand a "failed" row
+/// the user can no longer even see, let alone retry or dismiss (a reviewer flagged this
+/// ordering as latent before a real per-record dismiss existed; specs/0063 W3 Task 6 made
+/// it load-bearing). Once retry is confirmed possible, the record is taken out before
+/// dispatching — the row must clear immediately, and if the retry itself fails it
+/// registers a fresh failure of its own, which is correct behaviour rather than mutating
+/// the old record. A double-clicked Retry finds nothing on the second call and returns a
+/// clean error, never panics or double-runs.
 pub async fn retry_task<R: Runtime>(app: &AppHandle<R>, task_id: u64) -> Result<(), String> {
     let registry = app
         .try_state::<LlmActivityState>()
@@ -40,13 +46,17 @@ pub async fn retry_task<R: Runtime>(app: &AppHandle<R>, task_id: u64) -> Result<
         .0
         .clone();
 
+    let kind = registry
+        .peek_kind(task_id)
+        .ok_or_else(|| "That task is no longer in the queue.".to_string())?;
+
+    if !is_retryable(kind) {
+        return Err(format!("{:?} tasks can't be retried", kind));
+    }
+
     let record = registry
         .take_record(task_id)
         .ok_or_else(|| "That task is no longer in the queue.".to_string())?;
-
-    if !is_retryable(record.kind) {
-        return Err(format!("{:?} tasks can't be retried", record.kind));
-    }
 
     // Every dispatch below addresses a meeting; a record without one cannot be retried.
     let meeting_id = record
@@ -160,5 +170,39 @@ mod tests {
         assert_eq!(record.meeting_id.as_deref(), Some("m1"));
         assert!(reg.view().history.is_empty());
         assert!(!reg.view().has_failure);
+    }
+
+    /// The reorder's point (fix-round 1, specs/0063 W3 Task 6): `retry_task` must check
+    /// retryability BEFORE taking the record out, so a refused retry leaves the row exactly
+    /// where it was — retryable via a different path, or dismissable — instead of destroying
+    /// it and then reporting an error about a row the user can no longer even see.
+    #[tokio::test]
+    async fn retry_task_on_a_non_retryable_kind_leaves_the_record_and_errors() {
+        use crate::llm_activity::registry::{LlmTaskRegistry, Origin};
+        use crate::llm_activity::LlmActivityState;
+        use std::sync::Arc;
+
+        let reg = Arc::new(LlmTaskRegistry::new());
+        let t = Arc::clone(&reg).start_for(
+            TaskKind::AskAI,
+            Origin::Background,
+            "Ask AI",
+            Some("m1".into()),
+        );
+        t.finish(Err("boom".into()));
+        let id = reg.view().history[0].id;
+
+        let app = tauri::test::mock_app();
+        app.handle().manage(LlmActivityState(Arc::clone(&reg)));
+
+        let result = retry_task(app.handle(), id).await;
+
+        assert!(result.is_err());
+        assert_eq!(
+            reg.view().history.len(),
+            1,
+            "a refused retry must not destroy the record it refused to touch"
+        );
+        assert_eq!(reg.view().history[0].id, id);
     }
 }
