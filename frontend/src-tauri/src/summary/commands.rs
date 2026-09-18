@@ -3,6 +3,7 @@ use crate::database::repositories::{
     summary::SummaryProcessesRepository, transcript::TranscriptsRepository,
     transcript_chunk::TranscriptChunksRepository,
 };
+use crate::llm_activity::Origin;
 use crate::state::AppState;
 use crate::summary::language_detection::{detect_summary_language, SummaryLanguageDetection};
 use crate::summary::metadata::{
@@ -426,6 +427,12 @@ pub async fn api_process_transcript<R: Runtime>(
             final_prompt,
             final_template_id,
             summary_language,
+            // specs/0063 W3 fix round 1 (I1): this command is invoked from the
+            // Generate/Regenerate button the user is watching live
+            // (`useSummaryGeneration.ts`), which already renders its own
+            // `ChunkProgressDisplay` — Foreground keeps it out of the footer queue's
+            // running list so it is never shown twice.
+            Origin::Foreground,
         )
         .await;
     });
@@ -570,6 +577,10 @@ pub async fn start_summary_generation_for_meeting<R: Runtime>(
             String::new(), // no custom prompt
             template_id,   // persisted per-meeting choice, else DEFAULT_SUMMARY_TEMPLATE_ID
             None,          // auto-detect summary language
+            // specs/0063 W3 fix round 1 (I1): this path has no live viewer — it is
+            // the Day Agenda's one-click "Summarize" (never opens the meeting), so
+            // Background is correct here.
+            Origin::Background,
         )
         .await;
     });
