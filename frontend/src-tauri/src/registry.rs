@@ -11,8 +11,9 @@
 
 use crate::{
     action_items, aggregation, anthropic, audio, calendar, database, diarization, fs_guard, groq,
-    llm_activity, meetings, notifications, ollama, onboarding, openai, openrouter, parakeet_engine,
-    people, power, search, settings, summary, transcripts, updater, utils, whisper_engine, zoom,
+    llm_activity, meetings, notifications, ollama, onboarding, onboarding_disk, openai, openrouter,
+    parakeet_engine, people, power, search, settings, summary, transcripts, updater, utils,
+    whisper_engine, zoom,
 };
 // specs/0059: the whole `dev_fixtures` module is `#![cfg(debug_assertions)]`-gated, so
 // this import must be too — a release build has no `crate::dev_fixtures` to resolve.
@@ -259,6 +260,7 @@ pub fn invoke_handler() -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Sen
         onboarding::save_onboarding_status_cmd,
         onboarding::reset_onboarding_status_cmd,
         onboarding::complete_onboarding,
+        onboarding_disk::get_models_disk_check,
         // specs/0059 — debug builds only
         #[cfg(debug_assertions)]
         dev_fixtures::commands::dev_load_fixtures,

@@ -407,6 +407,18 @@
     // downloaded during the step-3 preview.
     builtin_ai_get_recommended_model: () => 'qwen3.5:2b',
 
+    // onboarding_disk.rs `get_models_disk_check` -> DiskCheck { free_bytes, required_bytes,
+    // ok, models_dir }. Args: { summaryModel }. SetupOverviewStep (specs/0061 W1 Task 1)
+    // calls this on mount to decide whether to show the "not enough free space" warning;
+    // answering with plenty of free space keeps the onboarding-2 screenshot on its
+    // happy path (no warning, "Let's Go" CTA) rather than the low-disk state.
+    get_models_disk_check: () => ({
+      free_bytes: 200 * 1024 * 1024 * 1024,
+      required_bytes: (670 + 1221) * 1024 * 1024,
+      ok: true,
+      models_dir: '/tmp/nixon-demo/models',
+    }),
+
     // parakeet_engine/commands.rs `parakeet_download_model` -> (). Args: { modelName }.
     // DownloadProgressStep starts this on mount whenever parakeetDownloaded is false
     // (i.e. during the onboardingStep 1-3 preview); answering it explicitly (rather
