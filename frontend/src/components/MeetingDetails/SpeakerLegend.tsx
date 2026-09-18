@@ -189,7 +189,7 @@ export function SpeakerLegend({
           off-screen; chip popovers/menus use Radix portals, so the overflow
           doesn't clip them. The name cell is the unchanged SpeakerChip. */}
       {showChips && (
-        <div className="max-h-32 overflow-y-auto pr-1">
+        <div className="max-h-[15rem] overflow-y-auto pr-1">
           <ChannelStrip
             rows={rows}
             renderName={(r) => (
