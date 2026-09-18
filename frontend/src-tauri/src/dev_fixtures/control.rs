@@ -276,10 +276,12 @@ fn window_info(_: &tauri::WebviewWindow) -> Reply {
 /// and no meeting to resume — every screenshot take is a fresh, throwaway recording.
 async fn start_recording(app: &AppHandle, title: String) -> Reply {
     *STARTED_TITLE.lock().unwrap() = Some(title.clone());
-    match crate::audio::recording_commands::start_recording_with_devices_and_meeting(
+    // The explicit-devices entry point treats `None` as "no device" and skips both
+    // stream-creation blocks, so it could only ever fail the "no audio streams" guard
+    // (audio/stream.rs). Device *defaults* (preference -> system default -> None) are
+    // resolved by the meeting-name entry point, which is what a UI-driven start uses.
+    match crate::audio::recording_commands::start_recording_with_meeting_name(
         app.clone(),
-        None,
-        None,
         Some(title),
         None,
         None,

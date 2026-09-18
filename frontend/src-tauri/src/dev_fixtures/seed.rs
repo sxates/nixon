@@ -28,7 +28,9 @@ pub struct SeedReport {
     pub failed: u32,
 }
 
-/// Tables the seeder owns. Settings, calendar, voiceprints, Keychain are untouched.
+/// Tables the seeder owns. Settings, voiceprints and the Keychain are untouched, and
+/// so is the connected Google account row — see [`REAL_DATA_CACHE_TABLES`] for what
+/// happens to the data that account cached.
 const WIPE_TABLES: &[&str] = &[
     "ask_ai_history",
     "action_item_extractions",
@@ -63,6 +65,26 @@ const MEETING_SCOPED_TABLES: &[&str] = &[
     "transcripts",
 ];
 
+/// Caches of the developer's *real* data, cleared alongside the seeder's own tables
+/// (specs/0060 follow-up).
+///
+/// A `--demo` profile is the profile README screenshots are captured from, so it has
+/// to be fully synthetic. The seeder used to leave these alone on the reasoning that
+/// the calendar is not its data to touch — but the first real capture run published
+/// 19 real contacts with names, work addresses and face photos, plus real meeting
+/// titles on the Today timeline, because these caches survived the wipe and rendered
+/// straight through it.
+///
+/// `google_calendar_account` is deliberately NOT in this list: dropping it would cost
+/// a re-authentication. Sync is suppressed at source while the demo dataset is active
+/// (`calendar::google::sync`), so an emptied cache stays empty.
+const REAL_DATA_CACHE_TABLES: &[&str] = &[
+    "google_calendar_events",
+    "attendee_photos",
+    "dismissed_calendar_events",
+    "meeting_briefs",
+];
+
 pub async fn wipe(pool: &SqlitePool) -> Result<()> {
     let mut tx = pool.begin().await?;
     for t in WIPE_TABLES {
@@ -71,6 +93,24 @@ pub async fn wipe(pool: &SqlitePool) -> Result<()> {
             .await
             .with_context(|| format!("wipe {t}"))?;
     }
+    for t in REAL_DATA_CACHE_TABLES {
+        sqlx::query(&format!("DELETE FROM {t}"))
+            .execute(&mut *tx)
+            .await
+            .with_context(|| format!("wipe {t}"))?;
+    }
+    // Clearing the events above without clearing the sync tokens would leave the
+    // account incrementally in sync against an empty cache: per the schema, a NULL
+    // `sync_token` is what forces a full (re)sync, and specs/0054 W5 measured that a
+    // full sync otherwise only comes around about every 53 days. Per-calendar
+    // `selected` toggles are preserved — the user's choice, not cached data.
+    sqlx::query(
+        "UPDATE google_calendar_sync
+            SET sync_token = NULL, last_synced_at = NULL, window_ends_at = NULL",
+    )
+    .execute(&mut *tx)
+    .await
+    .context("reset google_calendar_sync tokens")?;
     tx.commit().await?;
     Ok(())
 }

@@ -126,7 +126,7 @@ pub(crate) fn db_pool<R: Runtime>(app: &AppHandle<R>) -> Option<SqlitePool> {
 /// refresh; `invalid_grant` emits [`AUTH_REQUIRED_EVENT`] once, latches
 /// further passes off, and returns the user-actionable auth error.
 pub async fn sync_all<R: Runtime>(app: &AppHandle<R>) -> Result<()> {
-    if !super::is_configured() {
+    if !super::is_configured() || super::demo_guard::sync_suppressed() {
         return Ok(());
     }
     let Ok(_guard) = SYNC_LOCK.try_lock() else {
@@ -283,7 +283,7 @@ pub async fn sync_if_stale<R: Runtime>(app: &AppHandle<R>) {
 /// 2026-07-02). Called once from the app's setup hook. Each tick is a
 /// [`sync_if_stale`] — an instant no-op while no account is connected.
 pub fn spawn_background_sync<R: Runtime>(app: AppHandle<R>) {
-    if !super::is_configured() {
+    if !super::is_configured() || super::demo_guard::sync_suppressed() {
         return; // feature inert in no-Google builds (acceptance criterion 9)
     }
     tauri::async_runtime::spawn(async move {

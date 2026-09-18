@@ -57,6 +57,19 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 ### Fixed
 
+- A `--demo` profile is now fully synthetic. The fixture seeder re-seeded meetings and
+  people but left the Google Calendar cache alone, so a connected account's real events,
+  attendee names and attendee photos rendered straight through it — and into the first
+  real screenshot run. The demo seed now also clears the cached events, attendee photos,
+  dismissed events and briefs (and resets the sync tokens so the next non-demo launch
+  does a full re-sync), and calendar sync is suppressed at source while the demo dataset
+  is active. The connected account is kept, so no re-authentication is needed
+  (specs/0059, specs/0060).
+- `pnpm shots:real` can capture the live-recording screen again: the debug control
+  listener started recordings through the explicit-devices path with no devices, which
+  could only ever fail with "No audio streams could be created". It now uses the same
+  default-device resolution a recording started from the UI uses (specs/0060).
+
 - A meeting pinned to a summary template id that no longer resolves — a built-in removed in
   an app update, or a deleted custom template — now falls back to the default template
   (with a logged warning) instead of having its summary generation marked failed
