@@ -8,6 +8,8 @@ use tokio::net::TcpListener;
 
 use super::guard;
 
+// Process-wide, not per-connection: `ready` assumes a single driver talks to this
+// listener at a time, same as the rest of this debug-only protocol.
 pub static SHOT_READY: AtomicBool = AtomicBool::new(false);
 pub const PORT_FILE: &str = "dev-control.port";
 
@@ -274,21 +276,25 @@ async fn start_recording(app: &AppHandle, title: String) -> Reply {
     }
 }
 
-/// `stop_recording` command: stops via the same internal entry point
-/// `capture_commands::stop_recording` delegates to, then discards the throwaway
-/// recording — its meeting row (if the frontend's own stop handling already saved
-/// one) and its on-disk folder, when that folder lives under `recordings_root()`.
+/// `stop_recording` command: stops and discards whatever recording is in progress in the
+/// `.debug` profile (not necessarily one this listener's own `start_recording` began) via
+/// the same internal entry point `capture_commands::stop_recording` delegates to, then
+/// best-effort cleans up its meeting row (if one exists) and its on-disk folder, when that
+/// folder lives under `recordings_root()`.
 ///
-/// NOTE (specs/0060 review): this runs the exact `stop_recording` path the real command
-/// uses, which only unloads the STT engine and emits `recording-stopped` — it never
-/// touches the database itself. Persisting the meeting (and any downstream
-/// summary/diarization kick-off) is driven by the frontend's `useRecordingStop` hook
-/// reacting to that same event *in the live window this listener is driving* — so a
-/// `start_recording` + `stop_recording` round trip over this socket exercises the whole
-/// normal save pipeline, not a stub. The cleanup below is a best-effort compensating
-/// delete for whatever the frontend had persisted by the time this returns; a driver
-/// that stops immediately after should still poll/re-check rather than assume the
-/// frontend's save already landed.
+/// NOTE (specs/0060 review, corrected): `recording_commands::stop_recording` only stops
+/// audio capture, unloads the STT engine, and emits `recording-stopped` — it never touches
+/// the database, and it does NOT trigger the real save/summary/diarization pipeline. That
+/// pipeline lives in `handleRecordingStop` (`useRecordingStop.ts`), which only runs from a
+/// UI stop button or from the separate `recording-stop-complete` event — an event only
+/// `tray.rs` emits, never this code path. So the SQL cleanup below is normally a no-op
+/// (no `meetings` row is ever written for a control-driven stop). The actual residual is
+/// `TranscriptContext.tsx`'s `recording-stopped` listener: if a meeting is selected in the
+/// live window (`currentMeetingIdRef`), it overwrites *that* meeting's IndexedDB
+/// `folderPath` with this throwaway recording's folder — which the fs cleanup below then
+/// deletes out from under it, leaving that meeting's metadata pointing at a missing
+/// folder. Driver-side mitigation: `navigate` to `/` (no meeting selected) before
+/// `start_recording` so no real meeting's IndexedDB metadata can be clobbered.
 async fn stop_recording_and_discard(app: &AppHandle) -> Reply {
     let args = crate::audio::recording_commands::RecordingArgs {
         save_path: String::new(),
