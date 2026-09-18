@@ -14,6 +14,10 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 ## [Unreleased]
 
+_(nothing yet)_
+
+## [0.4.0] - 2026-09-18
+
 ### Added
 
 - Dev-only fixture seeding (`--demo`), onboarding harness (`--onboarding`) and a Developer
