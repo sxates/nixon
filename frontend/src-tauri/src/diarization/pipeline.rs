@@ -671,7 +671,26 @@ pub fn diarize_meeting<R: Runtime>(app: AppHandle<R>, meeting_id: String) -> boo
         return false;
     }
     tauri::async_runtime::spawn(async move {
-        if let Err(e) = run(app.clone(), meeting_id.clone()).await {
+        // specs/0063 W3 — the queue is where the user finds out what the machine is busy
+        // with, and a diarization pass is the most CPU-hungry thing it does. Registered
+        // inside the spawn so a refused duplicate run never creates a phantom row.
+        let task = app
+            .try_state::<crate::llm_activity::LlmActivityState>()
+            .map(|state| std::sync::Arc::clone(&state.0))
+            .map(|registry| {
+                registry.start_for(
+                    crate::llm_activity::registry::TaskKind::Diarization,
+                    crate::llm_activity::registry::Origin::Background,
+                    format!("Identifying speakers — {meeting_id}"),
+                    Some(meeting_id.clone()),
+                )
+            });
+
+        let outcome = run(app.clone(), meeting_id.clone()).await;
+        if let Some(t) = task {
+            t.finish(outcome.as_ref().map(|_| ()).map_err(|e| format!("{e:#}")));
+        }
+        if let Err(e) = outcome {
             log::warn!("diarization failed for {meeting_id}: {e:#}");
             // Release the run slot BEFORE emitting so a status query racing the
             // event never sees a stale "running". (The success path does the same
@@ -1622,5 +1641,27 @@ mod tests {
         assert_eq!(pct_from_fraction(1.7), 100);
         assert_eq!(pct_from_fraction(0.994), 99);
         assert_eq!(pct_from_fraction(0.996), 100);
+    }
+
+    #[test]
+    fn a_diarization_task_is_registered_as_background_work_for_the_meeting() {
+        let reg = crate::llm_activity::registry::LlmTaskRegistry::new();
+        let reg = std::sync::Arc::new(reg);
+        let handle = std::sync::Arc::clone(&reg).start_for(
+            crate::llm_activity::registry::TaskKind::Diarization,
+            crate::llm_activity::registry::Origin::Background,
+            "Identifying speakers — Pricing sync",
+            Some("m1".to_string()),
+        );
+        let view = reg.view();
+        assert_eq!(view.running.len(), 1);
+        assert_eq!(
+            view.running[0].kind,
+            crate::llm_activity::registry::TaskKind::Diarization
+        );
+        assert_eq!(view.running[0].meeting_id.as_deref(), Some("m1"));
+        handle.finish(Ok(()));
+        assert!(reg.view().running.is_empty());
+        assert!(!reg.view().has_failure);
     }
 }
