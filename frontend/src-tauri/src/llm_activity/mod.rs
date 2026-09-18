@@ -7,6 +7,7 @@
 
 pub mod commands;
 pub mod registry;
+pub mod retry;
 
 pub use registry::{
     LlmActivityState, LlmActivityView, LlmTaskRegistry, Origin, TaskHandle, TaskKind,

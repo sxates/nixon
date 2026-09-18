@@ -24,6 +24,7 @@
 //! extraction orchestration in [`super::run_extraction`].
 
 use serde::Deserialize;
+use sqlx::SqlitePool;
 use tauri::{AppHandle, Manager, Runtime};
 
 use crate::action_items::diff::{self, ResolvedCandidate};
@@ -35,9 +36,73 @@ use crate::database::repositories::setting::SettingsRepository;
 use crate::database::repositories::summary::SummaryProcessesRepository;
 use crate::state::AppState;
 use crate::summary::llm_gate::{with_priority, Priority};
-use crate::summary::provider_config::resolve_provider_config;
+use crate::summary::provider_config::{resolve_provider_config, ProviderConfig};
 
 const VALID_STATUSES: [&str; 3] = ["open", "completed", "dismissed"];
+
+/// The inputs `run_extraction` needs that a task id alone cannot carry (specs/0063 W3):
+/// the stored summary markdown, the meeting's user notes, and the resolved provider
+/// config. Shared by the manual "Scan again" command and the queue's per-task Retry
+/// (`llm_activity::retry`) so the stored-summary JSON shape (`result` → `markdown`) has
+/// exactly one reader — duplicating this reach-into-JSON would drift silently the first
+/// time that shape changes.
+pub struct ExtractionInputs {
+    pub summary_markdown: String,
+    pub user_notes: Option<String>,
+    pub provider_config: ProviderConfig,
+}
+
+/// Reload everything `run_extraction` needs for `meeting_id` from the DB. Errors are
+/// user-actionable strings — no summary yet, no model configured, etc. — since both call
+/// sites surface them straight to the user.
+pub async fn load_extraction_inputs(
+    pool: &SqlitePool,
+    meeting_id: &str,
+) -> Result<ExtractionInputs, String> {
+    // The stored summary markdown is the extraction source (specs/0034: extraction is
+    // event-driven off the artifact it extracts from).
+    let process = SummaryProcessesRepository::get_summary_data(pool, meeting_id)
+        .await
+        .map_err(|e| format!("Failed to load the meeting's summary: {e}"))?;
+    let summary_markdown = process
+        .and_then(|p| p.result)
+        .and_then(|raw| serde_json::from_str::<serde_json::Value>(&raw).ok())
+        .and_then(|v| {
+            v.get("markdown")
+                .and_then(|m| m.as_str())
+                .map(str::to_string)
+        })
+        .filter(|m| !m.trim().is_empty())
+        .ok_or_else(|| {
+            "Generate a summary first — action items are extracted from the summary".to_string()
+        })?;
+
+    let user_notes = MeetingNotesRepository::get_notes(pool, meeting_id)
+        .await
+        .map_err(|e| format!("Failed to load the meeting's notes: {e}"))?
+        .and_then(|note| note.notes_markdown)
+        .map(|m| m.trim().to_string())
+        .filter(|m| !m.is_empty());
+
+    // Same provider posture as the summary runs: the configured summary model, resolved
+    // through the SAME credential resolver the summary path uses (never drifts).
+    let config = SettingsRepository::get_model_config(pool)
+        .await
+        .map_err(|e| format!("Failed to load model configuration: {e}"))?
+        .ok_or_else(|| {
+            "No summary model is configured. Choose a provider and model in Settings first."
+                .to_string()
+        })?;
+    let provider_config = resolve_provider_config(pool, &config.provider, &config.model)
+        .await
+        .map_err(|e| format!("{e:#}"))?;
+
+    Ok(ExtractionInputs {
+        summary_markdown,
+        user_notes,
+        provider_config,
+    })
+}
 
 /// All action items for a meeting (any status/source), oldest first.
 #[tauri::command]
@@ -292,43 +357,11 @@ pub async fn api_extract_action_items<R: Runtime>(
     let state = app.state::<AppState>();
     let pool = state.db_manager.pool().clone();
 
-    // The stored summary markdown is the extraction source (specs/0034: extraction is
-    // event-driven off the artifact it extracts from).
-    let process = SummaryProcessesRepository::get_summary_data(&pool, &meeting_id)
-        .await
-        .map_err(|e| format!("Failed to load the meeting's summary: {e}"))?;
-    let summary_markdown = process
-        .and_then(|p| p.result)
-        .and_then(|raw| serde_json::from_str::<serde_json::Value>(&raw).ok())
-        .and_then(|v| {
-            v.get("markdown")
-                .and_then(|m| m.as_str())
-                .map(str::to_string)
-        })
-        .filter(|m| !m.trim().is_empty())
-        .ok_or_else(|| {
-            "Generate a summary first — action items are extracted from the summary".to_string()
-        })?;
-
-    let user_notes = MeetingNotesRepository::get_notes(&pool, &meeting_id)
-        .await
-        .map_err(|e| format!("Failed to load the meeting's notes: {e}"))?
-        .and_then(|note| note.notes_markdown)
-        .map(|m| m.trim().to_string())
-        .filter(|m| !m.is_empty());
-
-    // Same provider posture as the summary runs: the configured summary model, resolved
-    // through the SAME credential resolver the summary path uses (never drifts).
-    let config = SettingsRepository::get_model_config(&pool)
-        .await
-        .map_err(|e| format!("Failed to load model configuration: {e}"))?
-        .ok_or_else(|| {
-            "No summary model is configured. Choose a provider and model in Settings first."
-                .to_string()
-        })?;
-    let provider_config = resolve_provider_config(&pool, &config.provider, &config.model)
-        .await
-        .map_err(|e| format!("{e:#}"))?;
+    let ExtractionInputs {
+        summary_markdown,
+        user_notes,
+        provider_config,
+    } = load_extraction_inputs(&pool, &meeting_id).await?;
 
     // specs/0056 W2: "Scan again" is a click with a spinner — interactive priority, unlike the
     // post-summary background extraction that shares this code path.

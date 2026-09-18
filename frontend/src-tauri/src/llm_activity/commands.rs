@@ -56,6 +56,16 @@ pub async fn api_llm_activity_retry(app: AppHandle, meeting_id: String) -> Resul
     Ok(())
 }
 
+/// Retry one failed background task, addressed by its registry id (specs/0063 W3).
+///
+/// Distinct from [`api_llm_activity_retry`], which is prep-brief-only and addressed by
+/// meeting. The queue row knows its task id, not what kind of work produced it, so the
+/// dispatch happens in [`crate::llm_activity::retry`].
+#[tauri::command]
+pub async fn api_llm_activity_retry_task(app: AppHandle, task_id: u64) -> Result<(), String> {
+    crate::llm_activity::retry::retry_task(&app, task_id).await
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
