@@ -30,6 +30,7 @@ pub struct CustomOpenAIConfig {
     pub top_p: Option<f32>,
 }
 
+pub mod background;
 pub mod cache_key;
 pub mod commands;
 pub mod context_budget;
