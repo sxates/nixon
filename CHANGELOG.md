@@ -18,9 +18,9 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 - While a recording is running, the transport rail's title is a link back to it — click it
   from any screen to land on the recording (specs/0063 W1).
-- Diarization passes, background meeting summaries (from "Summarize" in the Day Agenda),
-  and post-stop transcription status now appear in the Queue panel while they run
-  (specs/0063 W3).
+- Diarization passes, automatic background summary runs (the post-diarization re-summarize,
+  or a summary retried from the Queue), and post-stop transcription status now appear in
+  the Queue panel while they run (specs/0063 W3).
 
 ### Changed
 
