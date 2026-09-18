@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 
-const { state, sidebar, backlog, llm, pauseMock, resumeMock, stopMock, toastErrorMock, transcripts } = vi.hoisted(() => ({
+const { state, sidebar, backlog, llm, pauseMock, resumeMock, stopMock, toastErrorMock, transcripts, invokeMock } = vi.hoisted(() => ({
   state: { isRecording: false, isPaused: false, isActive: false, status: 'idle', activeDuration: null as number | null, recordingDuration: null as number | null, isStopping: false, isProcessing: false, isSaving: false },
   sidebar: { isCollapsed: true, handleRecordingToggle: vi.fn(), activeRecordingMeetingId: null as string | null, currentMeeting: null as { id: string; title: string } | null },
   backlog: { view: { items: [], pendingCount: 0, processing: false, active: null, activeOrdinal: 0, total: 0 }, stop: vi.fn(), startNow: vi.fn(), dismissDone: vi.fn(), enqueueMeeting: vi.fn() },
@@ -10,18 +10,25 @@ const { state, sidebar, backlog, llm, pauseMock, resumeMock, stopMock, toastErro
   llm: { running: [] as unknown[], history: [] as unknown[], hasFailure: false, dismiss: vi.fn(), retry: vi.fn() },
   pauseMock: vi.fn(), resumeMock: vi.fn(), stopMock: vi.fn(), toastErrorMock: vi.fn(),
   transcripts: { meetingTitle: 'Pricing sync' },
+  invokeMock: vi.fn(),
 }));
 vi.mock('@/contexts/RecordingStateContext', () => ({ useRecordingState: () => state }));
 vi.mock('@/components/Sidebar/SidebarProvider', () => ({ useSidebar: () => sidebar }));
 vi.mock('@/contexts/DeferredBacklogProvider', () => ({ useBacklog: () => backlog }));
 vi.mock('@/contexts/LlmActivityProvider', () => ({ useOptionalLlmActivity: () => llm }));
+// A real (unmocked) useState, not a fixture: the popover's open/close is local UI state,
+// not something any test needs to seed or assert on directly — only the resulting DOM.
+vi.mock('@/contexts/QueueOpenContext', async () => {
+  const react = await import('react');
+  return { useQueueOpen: () => { const [open, setOpen] = react.useState(false); return { open, setOpen }; } };
+});
 vi.mock('@/services/recordingService', () => ({ recordingService: { pauseRecording: pauseMock, resumeRecording: resumeMock } }));
 vi.mock('@/lib/recording-stop', () => ({ requestFullRecordingStop: stopMock }));
 vi.mock('sonner', () => ({ toast: { error: toastErrorMock, success: vi.fn() } }));
 vi.mock('@/contexts/TranscriptContext', () => ({ useTranscripts: () => transcripts }));
 vi.mock('@/hooks/useRecordingLevel', () => ({ useRecordingLevel: () => ({ rms: 0.4, peak: 0.5, peakLatched: false }) }));
 vi.mock('@/hooks/useMicGate', () => ({ useMicGate: () => false }));
-vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn() }));
+vi.mock('@tauri-apps/api/core', () => ({ invoke: invokeMock }));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }), usePathname: () => '/' }));
 
 import { TransportRail } from '@/components/Transport/TransportRail';
@@ -37,6 +44,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   pauseMock.mockResolvedValue(undefined);
   resumeMock.mockResolvedValue(undefined);
+  invokeMock.mockResolvedValue(undefined);
 });
 
 // specs/0057 §3.1 state table + decision 7: one rail, one state vocabulary.
@@ -192,7 +200,7 @@ describe('TransportRail', () => {
   });
   // `api_llm_activity_dismiss` takes no id and clears the WHOLE history, so dismissing is a
   // header action named for that — never a per-row control (review round 1).
-  it('queue panel: per-row Retry, but dismissing failures is one header action', () => {
+  it('queue panel: per-row Retry dispatches by numeric task id, dismiss still clears the lot', () => {
     backlog.view = { items: [], pendingCount: 0, processing: false, active: null, activeOrdinal: 0, total: 0 } as typeof backlog.view;
     Object.assign(llm, {
       hasFailure: true,
@@ -200,9 +208,8 @@ describe('TransportRail', () => {
     });
     render(<TransportRail />);
     fireEvent.click(screen.getByRole('button', { name: /queue/i }));
-    expect(screen.queryByRole('button', { name: 'Dismiss' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
-    expect(llm.retry).toHaveBeenCalledWith('q3');
+    expect(invokeMock).toHaveBeenCalledWith('api_llm_activity_retry_task', { taskId: 7 });
     fireEvent.click(screen.getByRole('button', { name: 'Dismiss failures' }));
     expect(llm.dismiss).toHaveBeenCalledTimes(1);
   });

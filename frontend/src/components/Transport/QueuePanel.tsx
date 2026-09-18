@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { invoke } from '@tauri-apps/api/core';
 import { cn } from '@/lib/utils';
 import { useBacklog } from '@/contexts/DeferredBacklogProvider';
 import { useOptionalLlmActivity } from '@/contexts/LlmActivityProvider';
@@ -19,7 +20,7 @@ const ROW_LAMP: Record<QueueStage, LampTone> = {
 
 const ACTIVE_STAGES: QueueStage[] = ['transcribing', 'diarizing', 'summarizing', 'llm'];
 
-function Row({ row, onRetry }: { row: QueueRow; onRetry: () => void }) {
+function Row({ row, onRetry, onDismiss }: { row: QueueRow; onRetry: () => void; onDismiss: () => void }) {
   const active = ACTIVE_STAGES.includes(row.stage);
   return (
     <li className="flex flex-col gap-1 px-2 py-1.5">
@@ -36,13 +37,24 @@ function Row({ row, onRetry }: { row: QueueRow; onRetry: () => void }) {
           <span className="block h-full w-[60%] rounded-[1px] bg-brand" />
         </span>
       )}
-      {/* Retry only. There is no per-row dismiss: `api_llm_activity_dismiss` takes no id and
-          clears the WHOLE failure history, so a per-row control would quietly throw away the
-          other failures. Dismissing is a header action, named for what it actually does. */}
-      {row.source === 'llm' && row.stage === 'error' && row.retryable && (
+      {/* `row.action` drives the button, not a source/stage/retryable spot-check (that gate
+          used to only cover 'llm' rows, so a failed backlog row's Retry silently did nothing —
+          specs/0063 W3 Task 6). A 'retry' row dispatches for real. A 'dismiss' row (e.g. a
+          failed askAI task) still has no PER-ROW dismiss — `api_llm_activity_dismiss` takes no
+          id and clears the whole failure history — so its button is the same full-clear call
+          the header's "Dismiss failures" makes, just reachable at the row too; it is labelled
+          "Dismiss" (not "Dismiss failures") so it doesn't read as scoped to this one row. */}
+      {row.action === 'retry' && (
         <div className="flex justify-end pl-[18px]">
           <button type="button" onClick={onRetry} className="text-[10px] text-muted-foreground hover:text-foreground">
             Retry
+          </button>
+        </div>
+      )}
+      {row.action === 'dismiss' && (
+        <div className="flex justify-end pl-[18px]">
+          <button type="button" onClick={onDismiss} className="text-[10px] text-muted-foreground hover:text-foreground">
+            Dismiss
           </button>
         </div>
       )}
@@ -52,15 +64,29 @@ function Row({ row, onRetry }: { row: QueueRow; onRetry: () => void }) {
 
 /**
  * specs/0057 decision 8 — the ONE queue panel: deferred processing and background AI in a
- * single ordered list, with the same actions their two retired surfaces had
- * (the retired BacklogDetailPopover's Stop / Process all / Clear finished, and the
- * retired LLM row's Retry / Dismiss).
+ * single ordered list, with the same actions their two retired surfaces had (Today's own
+ * queue popover's Stop / Process all / Clear finished, and the sidebar LLM row's Retry /
+ * Dismiss — specs/0063 W3 Task 6 finished retiring the former).
  */
 export function QueuePanel({ view, className }: { view: QueueView; className?: string }) {
-  const { view: backlog, stop, startNow, dismissDone } = useBacklog();
+  const { view: backlog, stop, startNow, dismissDone, enqueueMeeting } = useBacklog();
   const llm = useOptionalLlmActivity();
   const hasFinished = backlog.items.some((i) => i.status === 'done' || i.status === 'error');
   const hasLlmFailure = view.rows.some((r) => r.source === 'llm' && r.stage === 'error');
+
+  // A backlog row retries by re-enqueuing that meeting (TranscriptPanel.tsx's "Process now"
+  // uses the same call shape); an LLM row retries by its numeric registry task id, never by
+  // string-slicing the `llm:` prefix off `row.id` (specs/0063 W3 Task 6).
+  const handleRetry = (row: QueueRow) => {
+    if (row.source === 'backlog' && row.meetingId) {
+      void enqueueMeeting(row.meetingId, { force: true });
+    } else if (row.source === 'llm' && typeof row.taskId === 'number') {
+      void invoke('api_llm_activity_retry_task', { taskId: row.taskId }).catch(() => {
+        /* best-effort, like every other LLM-activity call (LlmActivityProvider.tsx) */
+      });
+    }
+  };
+  const handleDismiss = () => void llm?.dismiss();
 
   return (
     <div className={cn('flex flex-col gap-1', className)}>
@@ -69,7 +95,7 @@ export function QueuePanel({ view, className }: { view: QueueView; className?: s
         {hasLlmFailure && view.failures > 0 && (
           <button
             type="button"
-            onClick={() => void llm?.dismiss()}
+            onClick={handleDismiss}
             className="ml-auto text-[10px] text-muted-foreground hover:text-foreground"
           >
             Dismiss failures
@@ -90,11 +116,7 @@ export function QueuePanel({ view, className }: { view: QueueView; className?: s
           <li className="px-2 py-3 text-center text-xs text-muted-foreground">Nothing in the queue.</li>
         )}
         {view.rows.map((row) => (
-          <Row
-            key={row.id}
-            row={row}
-            onRetry={() => void (row.meetingId && llm?.retry(row.meetingId))}
-          />
+          <Row key={row.id} row={row} onRetry={() => handleRetry(row)} onDismiss={handleDismiss} />
         ))}
       </ul>
       {hasFinished && (

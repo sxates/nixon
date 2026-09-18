@@ -15,6 +15,13 @@ export interface QueueRow {
   retryable?: boolean;
   /** Failed rows only: which control the row offers — a real Retry, or just Dismiss. */
   action?: 'retry' | 'dismiss' | null;
+  /**
+   * `llm` rows only: the registry's numeric task id, straight from `h.id`/`t.id`. `id` above
+   * is a prefixed string (`llm:${id}`) built for React keys and must never be string-sliced
+   * back into this — that silently breaks the moment the prefix changes. This is the value
+   * `api_llm_activity_retry_task` actually takes (specs/0063 W3 Task 6).
+   */
+  taskId?: number;
 }
 
 export interface QueueView {
@@ -90,6 +97,7 @@ export function buildQueueView(
     stageLabel: QUEUE_STAGE_LABEL.llm,
     source: 'llm',
     meetingId: t.meetingId,
+    taskId: t.id,
   }));
   const waiting = backlog.items.filter((i) => i.status === 'waiting').map(backlogRow);
   const backlogErrors = backlog.items.filter((i) => i.status === 'error').map(backlogRow);
@@ -108,6 +116,7 @@ export function buildQueueView(
         source: 'llm',
         error: h.outcome.type === 'failed' ? h.outcome.error : null,
         meetingId: h.meetingId,
+        taskId: h.id,
         retryable,
         action: retryable ? 'retry' : 'dismiss',
       };
