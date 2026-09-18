@@ -27,6 +27,14 @@ interface UseSegmentDeepLinkReturn {
     pendingSegmentId: string | null;
     /** Consume the intent: clear the pending state AND the `?segment=` URL param. */
     consume: () => void;
+    /**
+     * specs/0061 W4 (task 3) — seed the SAME pending-intent state machine from
+     * code (e.g. after `api_first_segment_for_speaker` resolves a speaker's
+     * first line), instead of from the `?segment=` URL param. Reuses the
+     * pagination pump below unchanged: if the segment isn't loaded yet it
+     * drives `loadMore` until it appears or `hasMore` goes false.
+     */
+    request: (id: string) => void;
 }
 
 /**
@@ -86,6 +94,13 @@ export function useSegmentDeepLink({
         onClearParam();
     }, [onClearParam]);
 
+    // specs/0061 W4 (task 3) — a code-driven request just seeds the intent;
+    // the pump effect below (keyed off `pendingSegmentId`, not `segmentParam`)
+    // takes it from there exactly as it does for a URL-seeded one.
+    const request = useCallback((id: string) => {
+        setPendingSegmentId(id);
+    }, []);
+
     // Pagination pump + stale-id abandonment. Re-runs as pages land (`segments`
     // changes) and as loading flags settle, so it works like a loop without one.
     useEffect(() => {
@@ -101,5 +116,5 @@ export function useSegmentDeepLink({
         consume();
     }, [pendingSegmentId, segments, hasMore, isLoading, isLoadingMore, loadMore, consume]);
 
-    return { pendingSegmentId, consume };
+    return { pendingSegmentId, consume, request };
 }

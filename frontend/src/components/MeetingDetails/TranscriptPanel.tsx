@@ -6,6 +6,7 @@ import {
   type InlineSpeakerAssignment,
 } from '@/components/VirtualizedTranscriptView';
 import { TranscriptButtonGroup } from './TranscriptButtonGroup';
+import { SpeakerFilterChip } from './SpeakerFilterChip';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { toast } from 'sonner';
@@ -51,6 +52,12 @@ interface TranscriptPanelProps {
   /** specs/0033 — the deep-link scroll ran (or was abandoned): consume the intent. */
   onScrollToSegmentDone?: () => void;
 
+  /** specs/0061 W4 (task 3) — a speaker key clicked in the channel strip; when set,
+   *  only that speaker's segments render, above a "Showing: <name>" chip. */
+  speakerFilter?: string | null;
+  /** Clear the filter (the chip's own "Clear speaker filter" button). */
+  onClearSpeakerFilter?: () => void;
+
   /**
    * Override the root container classes. Defaults to the standalone side-panel layout
    * (fixed width + right border). Pass e.g. `"flex w-full flex-col"` when embedding the panel
@@ -81,6 +88,8 @@ export function TranscriptPanel({
   scrollToSegmentId,
   isScrollTargetVisible = true,
   onScrollToSegmentDone,
+  speakerFilter,
+  onClearSpeakerFilter,
   className = 'hidden md:flex md:w-1/4 lg:w-1/3 min-w-0 border-r border-border bg-card flex-col relative shrink-0',
 }: TranscriptPanelProps) {
   // specs/0045 WS4 — mirrors the probes in TranscriptButtonGroup (same cheap IPC reads)
@@ -255,7 +264,7 @@ export function TranscriptPanel({
   ]);
 
   // Convert transcripts to segments if pagination is not used but we want virtualization
-  const convertedSegments = useMemo(() => {
+  const allSegments = useMemo(() => {
     if (usePagination && segments) {
       return segments;
     }
@@ -270,6 +279,25 @@ export function TranscriptPanel({
       speakerName: t.speaker_name,
     }));
   }, [transcripts, usePagination, segments]);
+
+  // specs/0061 W4 (task 3) — filter to just the clicked speaker's lines. Talk-time
+  // totals (useMeetingTalkTime, in SpeakerLegend) read the whole meeting separately
+  // and are unaffected by this view-local filter.
+  const convertedSegments = useMemo(() => {
+    if (!speakerFilter) return allSegments;
+    return allSegments.filter((s) => s.speaker === speakerFilter);
+  }, [allSegments, speakerFilter]);
+
+  // The filter chip's label — resolve the clicked key against the speaker
+  // directory so it reads a real name ("Tomas"); fall back to the raw key in the
+  // (should-not-happen) case nothing matches.
+  const speakerFilterName = useMemo(() => {
+    if (!speakerFilter) return null;
+    return (
+      speakersController.speakers.find((s) => s.speakerKey === speakerFilter)?.displayName ??
+      speakerFilter
+    );
+  }, [speakerFilter, speakersController.speakers]);
 
   // specs/0045 WS4 — a finished-but-unprocessed deferred recording: audio on disk,
   // still marked deferred, and no transcript segments loaded yet. Drives the
@@ -299,6 +327,13 @@ export function TranscriptPanel({
           onRefetchTranscripts={onRefetchTranscripts}
         />
       </div>
+
+      {/* specs/0061 W4 (task 3) — filter chip, above the list, only while filtered. */}
+      {speakerFilterName && (
+        <div className="pt-2">
+          <SpeakerFilterChip displayName={speakerFilterName} onClear={onClearSpeakerFilter} />
+        </div>
+      )}
 
       {/* Transcript content - use virtualized view for better performance */}
       <div className="flex-1 overflow-hidden pb-4">

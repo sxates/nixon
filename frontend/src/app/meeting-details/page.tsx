@@ -119,7 +119,13 @@ function MeetingDetailsContent() {
   // Deep-link lifecycle: holds the pending scroll target in state (so clearing the
   // URL param doesn't cancel an in-flight scroll), actively pages the transcript
   // until the target segment is loaded, and abandons stale ids (silent no-op).
-  const { pendingSegmentId, consume: consumeSegmentDeepLink } = useSegmentDeepLink({
+  const {
+    pendingSegmentId,
+    consume: consumeSegmentDeepLink,
+    // specs/0061 W4 (task 3) — code-driven scroll intent (a clicked speaker's
+    // first line), exposed to PageContent's onSelectSpeaker.
+    request: requestSegmentScroll,
+  } = useSegmentDeepLink({
     meetingId,
     segmentParam,
     segments,
@@ -528,6 +534,7 @@ function MeetingDetailsContent() {
     // which clears the pending state AND the `?segment=` URL param.
     deepLinkSegmentId={pendingSegmentId}
     onDeepLinkConsumed={consumeSegmentDeepLink}
+    requestSegmentScroll={requestSegmentScroll}
     // Pagination props for efficient transcript loading
     segments={segments}
     hasMore={hasMore}
