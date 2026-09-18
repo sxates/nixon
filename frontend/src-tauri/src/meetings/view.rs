@@ -99,6 +99,10 @@ pub struct MeetingTranscript {
     /// Resolved, renamable display name ("You","Speaker 1",…) joined from `speakers`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub speaker_name: Option<String>,
+    /// True once the user has manually corrected this segment's text (specs/0061
+    /// W5). Always serialized (never `skip_serializing_if`) so the frontend can
+    /// rely on its presence to render an "edited" indicator.
+    pub user_edited: bool,
 }
 
 impl From<crate::database::models::TranscriptWithSpeaker> for MeetingTranscript {
@@ -112,6 +116,7 @@ impl From<crate::database::models::TranscriptWithSpeaker> for MeetingTranscript 
             duration: t.duration,
             speaker: t.speaker,
             speaker_name: t.speaker_name,
+            user_edited: t.user_edited,
         }
     }
 }
