@@ -172,9 +172,12 @@ describe('meeting-details channel strip placement (specs/0057 Plan 3, Task 5)', 
     render(<PageContent meeting={meeting} summaryData={null} />);
 
     const strip = await screen.findByRole('table', { name: 'Channels' });
-    // 3 speaker rows -> 2 channels (spk_0 + spk_1 share a personId): header + 2 rows.
+    // 3 speaker rows -> 2 channels (spk_0 + spk_1 share a personId): 2 data rows.
+    // specs/0061 W4 task 3 — PageContent always wires a real onSelectSpeaker now,
+    // so ChannelStrip's data rows render as `role="button"` (ruling R4), not
+    // `role="row"`; `data-testid="channel-row"` is the role-agnostic row count.
     await waitFor(() => {
-      expect(within(strip).getAllByRole('row')).toHaveLength(3);
+      expect(within(strip).getAllByTestId('channel-row')).toHaveLength(2);
     });
     // The reel-label card is gone (0.1.0 canvas feedback); the identity line carries the
     // voice count now, still consolidated.

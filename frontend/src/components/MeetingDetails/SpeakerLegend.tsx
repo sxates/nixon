@@ -82,6 +82,12 @@ interface SpeakerLegendProps {
   transcripts?: Transcript[];
   /** Hidden while a recording is live — speakers only exist post-diarization. */
   isRecording?: boolean;
+  /** specs/0061 W4 (task 3) — the speaker currently filtering the transcript
+   *  (row highlight), or null/undefined when nothing is selected. */
+  selectedSpeakerKey?: string | null;
+  /** Click (or Enter/Space) a row: page-content owns select-vs-clear toggling
+   *  and the first-line lookup + tab switch. */
+  onSelectSpeaker?: (key: string | null) => void;
   className?: string;
 }
 
@@ -95,6 +101,8 @@ export function SpeakerLegend({
   onRefetchTranscripts,
   transcripts = [],
   isRecording = false,
+  selectedSpeakerKey,
+  onSelectSpeaker,
   className,
 }: SpeakerLegendProps) {
   // Only the fields the legend itself reads; the per-chip props come from
@@ -192,6 +200,8 @@ export function SpeakerLegend({
         <div className="max-h-[15rem] overflow-y-auto pr-1">
           <ChannelStrip
             rows={rows}
+            selectedKey={selectedSpeakerKey}
+            onSelect={onSelectSpeaker ? (key) => onSelectSpeaker(key) : undefined}
             renderName={(r) => (
               <SpeakerChip
                 {...speakerChipProps(groups[r.index ?? r.channel - 1], {

@@ -1,7 +1,8 @@
 "use client";
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { invoke } from '@tauri-apps/api/core';
 import { Summary } from '@/types';
 import { useSidebar } from '@/components/Sidebar/SidebarProvider';
 import { MeetingIdentityHeader } from '@/components/MeetingDetails/MeetingIdentityHeader';
@@ -46,6 +47,9 @@ export default function PageContent({
   // specs/0033 — search deep-link: open the Transcript tab and scroll to this segment.
   deepLinkSegmentId,
   onDeepLinkConsumed,
+  // specs/0061 W4 (task 3) — seed a scroll intent from code (a clicked speaker's
+  // first line), reusing the same deep-link machinery as the search hit above.
+  requestSegmentScroll,
   // Pagination props for efficient transcript loading
   segments,
   hasMore,
@@ -63,6 +67,8 @@ export default function PageContent({
   deepLinkSegmentId?: string | null;
   /** specs/0033 — consume the deep-link intent (scroll done or impossible). */
   onDeepLinkConsumed?: () => void;
+  /** specs/0061 W4 (task 3) — `useSegmentDeepLink().request`, exposed by page.tsx. */
+  requestSegmentScroll?: (id: string) => void;
   // Pagination props
   segments?: any[];
   hasMore?: boolean;
@@ -99,6 +105,39 @@ export default function PageContent({
   // lazy Prep mounting, and roving-focus keyboard handling (specs/0033, 0036, 0028).
   const { activeTab, setActiveTab, hasOpenedPrep, tabs, tabRefs, handleTabKeyDown } =
     useMeetingTabs({ isScheduled, isNotesOnly, wantsPrepTab, deepLinkSegmentId, onDeepLinkConsumed, requestedTab });
+
+  // specs/0061 W4 (task 3) — click a speaker in the channel strip to filter the
+  // transcript to just their lines and jump to the first one. Owned here (not the
+  // legend or the panel) because it drives BOTH: the legend's row highlight and
+  // the transcript tab's filter + tab switch + scroll.
+  const [speakerFilter, setSpeakerFilter] = useState<string | null>(null);
+
+  const onSelectSpeaker = useCallback(
+    (key: string | null) => {
+      if (!key || key === speakerFilter) {
+        // Re-clicking the already-selected row (or an explicit clear) clears it.
+        setSpeakerFilter(null);
+        return;
+      }
+      setSpeakerFilter(key);
+      setActiveTab('transcript');
+      void (async () => {
+        try {
+          const segmentId = await invoke<string | null>('api_first_segment_for_speaker', {
+            meetingId: meeting.id,
+            speakerKey: key,
+          });
+          if (segmentId) requestSegmentScroll?.(segmentId);
+        } catch (error) {
+          // Best-effort jump — the filter itself already applied above.
+          console.error('Failed to locate the speaker\'s first line:', error);
+        }
+      })();
+    },
+    [speakerFilter, meeting.id, setActiveTab, requestSegmentScroll],
+  );
+
+  const onClearSpeakerFilter = useCallback(() => setSpeakerFilter(null), []);
 
   // Model-settings modal registration + save-config IPC.
   const { handleRegisterModalOpen, handleOpenModelSettings, handleSaveModelConfig } =
@@ -294,6 +333,8 @@ export default function PageContent({
             onRefetchTranscripts={onRefetchTranscripts}
             transcripts={meetingData.transcripts}
             isRecording={isRecording}
+            selectedSpeakerKey={speakerFilter}
+            onSelectSpeaker={onSelectSpeaker}
             className="mb-4"
           />
 
@@ -335,6 +376,8 @@ export default function PageContent({
             onLoadMore={onLoadMore}
             onRefetchTranscripts={onRefetchTranscripts}
             speakersController={speakersController}
+            speakerFilter={speakerFilter}
+            onClearSpeakerFilter={onClearSpeakerFilter}
           />
         </div>
       </div>

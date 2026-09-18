@@ -61,6 +61,11 @@ interface MeetingTabPanelsProps {
    *  above the tabs now, so the page owns it and the transcript's inline assignment
    *  shares it. */
   speakersController: UseSpeakersReturn;
+  /** specs/0061 W4 (task 3) — a speaker clicked in the channel strip; filters the
+   *  Transcript tab to just their lines. */
+  speakerFilter?: string | null;
+  /** Clear the filter (the transcript's "Clear speaker filter" chip button). */
+  onClearSpeakerFilter?: () => void;
 }
 
 /**
@@ -97,6 +102,8 @@ export function MeetingTabPanels({
   onLoadMore,
   onRefetchTranscripts,
   speakersController,
+  speakerFilter,
+  onClearSpeakerFilter,
 }: MeetingTabPanelsProps) {
   return (
     <>
@@ -195,6 +202,8 @@ export function MeetingTabPanels({
           meetingFolderPath={meeting.folder_path}
           onRefetchTranscripts={onRefetchTranscripts}
           speakersController={speakersController}
+          speakerFilter={speakerFilter}
+          onClearSpeakerFilter={onClearSpeakerFilter}
         />
       </div>
       )}

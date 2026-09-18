@@ -23,10 +23,18 @@ export function ChannelStrip({
   rows,
   renderName,
   className,
+  selectedKey,
+  onSelect,
 }: {
   rows: ChannelRow[];
   renderName: (row: ChannelRow) => React.ReactNode;
   className?: string;
+  /** The currently filtered speaker (specs/0061 W4 task 3), or null/undefined
+   *  when nothing is selected. Only meaningful when `onSelect` is passed. */
+  selectedKey?: string | null;
+  /** Click (or Enter/Space while focused) a row to select it — the caller owns
+   *  toggle-to-clear semantics; this just reports the key that was activated. */
+  onSelect?: (key: string) => void;
 }) {
   // Whole percentages allocated by largest remainder so the column adds to 100.
   const percents = largestRemainderPercents(rows.map((r) => r.share));
@@ -56,8 +64,44 @@ export function ChannelStrip({
         <span aria-hidden />
       </div>
       <div className="h-px bg-border" aria-hidden />
-      {rows.map((r, i) => (
-        <div key={r.speakerKey} role="row" className={cn(GRID, 'min-h-[26px]')}>
+      {rows.map((r, i) => {
+        const selected = onSelect ? r.speakerKey === selectedKey : false;
+        // specs/0061 W4 task 3, ruling R4 — `aria-selected` only has option
+        // semantics; a row wired for selection is exposed as a real toggle
+        // button (`role="button"` + `aria-pressed`) instead. Rows with no
+        // `onSelect` are left exactly as `role="row"` (unchanged).
+        const interactiveProps = onSelect
+          ? {
+              role: 'button' as const,
+              tabIndex: 0,
+              'aria-pressed': selected,
+              onClick: (e: React.MouseEvent<HTMLDivElement>) => {
+                // A nested interactive control (rename button, merge menu
+                // trigger, …) inside the "Speaker" cell owns its own click —
+                // don't also fire the row's onSelect for it.
+                const target = e.target as HTMLElement;
+                const nestedInteractive = target.closest('button, a, input, [role="menuitem"]');
+                if (nestedInteractive && nestedInteractive !== e.currentTarget) return;
+                onSelect(r.speakerKey);
+              },
+              onKeyDown: (e: React.KeyboardEvent<HTMLDivElement>) => {
+                // Only when the row itself (not a focused descendant control)
+                // received the key — a nested button handles its own Enter/Space.
+                if (e.target !== e.currentTarget) return;
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  onSelect(r.speakerKey);
+                }
+              },
+            }
+          : { role: 'row' as const };
+        return (
+        <div
+          key={r.speakerKey}
+          data-testid="channel-row"
+          className={cn(GRID, 'min-h-[26px]', onSelect && 'cursor-pointer', selected && 'bg-muted')}
+          {...interactiveProps}
+        >
           <span
             role="cell"
             className="flex items-center gap-2 text-[11px] font-semibold text-engrave"
@@ -94,7 +138,8 @@ export function ChannelStrip({
             {percents[i]}%
           </span>
         </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
