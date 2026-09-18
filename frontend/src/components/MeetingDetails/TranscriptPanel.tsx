@@ -219,15 +219,24 @@ export function TranscriptPanel({
   // and the meeting has a speaker directory to pick from. Absent => names are static.
   const inlineAssignment: InlineSpeakerAssignment | undefined = useMemo(() => {
     if (isRecording || !meetingId) return undefined;
+    const speakerOptions = speakersController.speakers.map((s) => ({
+      speakerKey: s.speakerKey,
+      displayName: s.displayName,
+    }));
+    // specs/0061 W4 (task 2) — the owner's `local` speakers row may not exist yet
+    // (ensure_local_speaker only upserts it once something is actually reassigned to
+    // them), but reassigning TO them always works. Offer "You" as a menu target up
+    // front so the owner isn't stuck fighting a menu that doesn't list them; skip the
+    // injection when a real `local` row is already present, so it isn't listed twice.
+    const speakers = speakerOptions.some((s) => s.speakerKey === 'local')
+      ? speakerOptions
+      : [{ speakerKey: 'local', displayName: 'You' }, ...speakerOptions];
     return {
       attendees: speakersController.attendees,
       people: speakersController.people,
       onAssignAttendee: speakersController.assignAttendee,
       onAssignPerson: speakersController.assignPerson,
-      speakers: speakersController.speakers.map((s) => ({
-        speakerKey: s.speakerKey,
-        displayName: s.displayName,
-      })),
+      speakers,
       onReassignSegment: reassignSegment,
       onReassignSegments: reassignSegments,
       onCreateSpeaker: createSpeaker,
