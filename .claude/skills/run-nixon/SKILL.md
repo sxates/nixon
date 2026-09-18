@@ -15,7 +15,7 @@ There are two surfaces, and they're driven very differently:
   system Chrome). It injects a Tauri `invoke` shim so pages render and screenshots, and
   can type into the UI. **This is the agent path — start here.**
 - **The native Tauri window** (system-audio capture, diarization, real calendar). Needs
-  macOS mic + screen-recording permission, Metal, and downloaded models — **not
+  macOS mic + audio-capture permission, Metal, and downloaded models — **not
   automatable headless.** Human path only (`./dev-nixon.sh`), see below.
 
 ## Prerequisites
@@ -72,7 +72,7 @@ intended workflow.
 ```
 Opens a native window under identifier `ai.vinyl.app.debug` (isolated data). Needed for
 anything touching **real** system-audio capture, live diarization, or EventKit calendar —
-none of which the browser path exercises. Requires granting mic + screen-recording
+none of which the browser path exercises. Requires granting mic + audio-capture
 permission. Not usable headless and not scriptable from this harness; screenshot the
 window with macOS `screencapture` if you need native evidence.
 

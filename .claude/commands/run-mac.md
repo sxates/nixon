@@ -18,7 +18,7 @@ exist`. They only work *after* the sidecar has been built once (it lives in
 `frontend/src-tauri/binaries/llama-helper-<triple>`). `dev-gpu.sh` always rebuilds it.
 
 Reminders for the user (state them, don't try to do them yourself):
-- Grant **Microphone** and **Screen Recording** permissions when prompted (Screen Recording
+- Grant **Microphone** and **Audio Capture** permissions when prompted (Audio Capture
   is required for system/Zoom audio capture; no BlackHole needed).
 - First run compiles Rust + may download a Whisper model, so it can take a while.
 - Ensure `~/.cargo/env` is sourced if `cargo` isn't found.

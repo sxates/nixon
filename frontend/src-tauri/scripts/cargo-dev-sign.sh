@@ -4,7 +4,7 @@
 #
 # Why: the bare dev binary is ad-hoc signed by the linker, and that signature
 # changes on every rebuild. macOS keys Keychain item ACLs and TCC grants
-# (Screen Recording) to the code signature, so every rebuild used to orphan
+# (Audio Capture) to the code signature, so every rebuild used to orphan
 # them — a login-keychain password prompt on each Keychain read (ADR-0009
 # API keys) and silently-dead system-audio capture (ADR-0004). Re-signing each
 # debug build with a *stable* Apple Development identity gives every rebuild

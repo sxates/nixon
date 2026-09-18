@@ -3,7 +3,7 @@
 //! These tests exercise the REAL recording+transcription code paths *below* the
 //! hardware capture layer (Core Audio tap / mic) by feeding fixture audio
 //! buffers in at the mix / VAD / transcription interfaces. No microphone,
-//! screen-recording permission, or running app is required.
+//! audio-capture permission, or running app is required.
 //!
 //! Fixture audio is generated at test time with macOS `say` (deterministic,
 //! license-clean) and decoded with the app's own `decode_audio_file`. Synthetic

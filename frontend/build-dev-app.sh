@@ -1,7 +1,7 @@
 #!/bin/bash
 # Build + install "Dev Nixon.app" — a bundled, isolated DEV app.
 #
-# Why: the bare `./dev-nixon.sh` binary can't get macOS Screen Recording / Notifications /
+# Why: the bare `./dev-nixon.sh` binary can't get macOS Audio Capture / Notifications /
 # Calendar TCC grants (no Info.plist, ad-hoc signature churns every rebuild), so OS-integration
 # features (recording system audio, actionable notifications, calendar) can't be tested there.
 # This produces a real .app bundle under the DEV identifier `ai.vinyl.app.debug` ("Dev Nixon"),
@@ -32,7 +32,7 @@ NIXON_DEV_BUNDLE=1 ./build-gpu.sh
 # One-time legacy cleanup (specs/0057 rename): before 0057 the dev bundle installed as
 # /Applications/Dev Vinyl.app. Leaving it behind would put two bundles on disk sharing the SAME
 # bundle id ai.vinyl.app.debug — so the same dev SQLite DB, the same single-instance lock, and the
-# same TCC (mic/screen-recording/notification) grants. Dev data lives under the bundle IDENTIFIER,
+# same TCC (mic/audio-capture/notification) grants. Dev data lives under the bundle IDENTIFIER,
 # not the .app, so removing the old bundle loses nothing. Idempotent once it's gone.
 if [ -d "/Applications/Dev Vinyl.app" ]; then
   echo "🧹 Removing the pre-rename /Applications/Dev Vinyl.app (same bundle id; dev data is identifier-keyed and untouched)..."
@@ -54,6 +54,6 @@ rm -rf "/Applications/Dev Nixon.app"
 cp -R "$APP_SRC" "/Applications/"
 xattr -cr "/Applications/Dev Nixon.app" 2>/dev/null || true
 
-echo "✅ Built. Launching Dev Nixon — grant Screen Recording / Notifications / Calendar when prompted."
+echo "✅ Built. Launching Dev Nixon — grant Audio Capture / Notifications / Calendar when prompted."
 echo "   (Separate app + data from production Nixon.app; permissions are granted independently.)"
 open "/Applications/Dev Nixon.app"
