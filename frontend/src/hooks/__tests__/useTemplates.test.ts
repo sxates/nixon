@@ -370,7 +370,7 @@ describe('useTemplates — Auto default (specs/0053)', () => {
 describe('useTemplates — hidden templates filter', () => {
   const WITH_HIDDEN = [
     { id: 'standard_meeting', name: 'Standard Meeting', description: 'std', hidden: false },
-    { id: 'psychatric_session', name: 'Psychiatric Session', description: 'soap', hidden: true },
+    { id: 'retrospective', name: 'Retrospective', description: 'retro', hidden: true },
     { id: 'daily_standup', name: 'Daily Standup', description: 'standup', hidden: false },
   ];
 
@@ -393,15 +393,15 @@ describe('useTemplates — hidden templates filter', () => {
   it('keeps a hidden template visible while it is the persisted selection', async () => {
     invokeMock.mockImplementation((cmd: string) => {
       if (cmd === 'api_list_templates') return Promise.resolve(WITH_HIDDEN);
-      if (cmd === 'api_get_meeting_template') return Promise.resolve('psychatric_session');
+      if (cmd === 'api_get_meeting_template') return Promise.resolve('retrospective');
       return Promise.resolve(null);
     });
 
     const { result } = renderHook(() => useTemplates(REAL_ID));
 
-    await waitFor(() => expect(result.current.selectedTemplate).toBe('psychatric_session'));
+    await waitFor(() => expect(result.current.selectedTemplate).toBe('retrospective'));
     await waitFor(() =>
-      expect(result.current.availableTemplates.map((t) => t.id)).toContain('psychatric_session'),
+      expect(result.current.availableTemplates.map((t) => t.id)).toContain('retrospective'),
     );
   });
 });

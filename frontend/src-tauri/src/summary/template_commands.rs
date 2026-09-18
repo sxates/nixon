@@ -403,8 +403,8 @@ pub async fn api_delete_template<R: Runtime>(
 }
 
 /// Hides or restores a template in the user's list (specs/0020 follow-up:
-/// shipped templates the user will never use — e.g. Psychiatric Session — are
-/// removable, but as a restorable *hide*, never a delete). Hidden ids still
+/// shipped templates the user will never use are removable, but as a
+/// restorable *hide*, never a delete). Hidden ids still
 /// resolve at generation time, so meetings that persisted one keep working;
 /// they just stop appearing in pickers and the default settings list.
 #[tauri::command]

@@ -26,6 +26,11 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 - The headless screenshot mock is generated from the fixture dataset (`pnpm shots:mock`).
 
+### Removed
+
+- The Psychiatric Session built-in summary template (specs/0061 W6). Meetings already
+  pinned to it fall back to the default template at generation time.
+
 ## [0.3.1] - 2026-09-16
 
 ### Changed

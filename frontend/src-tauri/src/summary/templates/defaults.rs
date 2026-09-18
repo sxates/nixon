@@ -19,12 +19,6 @@ pub const RETROSPECTIVE: &str = include_str!("../../../templates/retrospective.j
 pub const SALES_MARKETING_CLIENT_CALL: &str =
     include_str!("../../../templates/sales_marketing_client_call.json");
 
-/// Psychiatric session (SOAP) template. NOTE: the id keeps the historical
-/// misspelling "psychatric_session" for back-compat with persisted
-/// `meetings.template_id` values; only the display name inside the JSON was
-/// fixed (specs/0020 task 2).
-pub const PSYCHATRIC_SESSION: &str = include_str!("../../../templates/psychatric_session.json");
-
 /// Registry of all built-in templates
 ///
 /// Maps template identifiers to their embedded JSON content
@@ -35,7 +29,6 @@ pub fn get_builtin_templates() -> Vec<(&'static str, &'static str)> {
         ("project_sync", PROJECT_SYNC),
         ("retrospective", RETROSPECTIVE),
         ("sales_marketing_client_call", SALES_MARKETING_CLIENT_CALL),
-        ("psychatric_session", PSYCHATRIC_SESSION),
     ]
 }
 
@@ -68,7 +61,7 @@ mod tests {
     #[test]
     fn test_builtin_templates_parse_and_validate() {
         let templates = get_builtin_templates();
-        assert_eq!(templates.len(), 6, "expected all six built-in templates");
+        assert_eq!(templates.len(), 5, "expected all five built-in templates");
 
         for (id, content) in templates {
             let template: super::super::types::Template = serde_json::from_str(content)
@@ -86,30 +79,21 @@ mod tests {
         assert!(get_builtin_template("project_sync").is_some());
         assert!(get_builtin_template("retrospective").is_some());
         assert!(get_builtin_template("sales_marketing_client_call").is_some());
-        assert!(get_builtin_template("psychatric_session").is_some());
         assert!(get_builtin_template("nonexistent").is_none());
     }
 
     #[test]
-    fn test_list_builtin_template_ids_contains_all_six() {
+    fn test_list_builtin_template_ids_contains_all_five() {
         let ids = list_builtin_template_ids();
-        assert_eq!(ids.len(), 6);
+        assert_eq!(ids.len(), 5);
         for id in [
             "daily_standup",
             "standard_meeting",
             "project_sync",
             "retrospective",
             "sales_marketing_client_call",
-            "psychatric_session",
         ] {
             assert!(ids.contains(&id), "missing built-in id '{}'", id);
         }
-    }
-
-    #[test]
-    fn test_psychiatric_display_name_fixed() {
-        let template: super::super::types::Template =
-            serde_json::from_str(PSYCHATRIC_SESSION).expect("psychatric_session parses");
-        assert_eq!(template.name, "Psychiatric Session");
     }
 }

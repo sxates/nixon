@@ -380,7 +380,7 @@ mod tests {
 
     #[test]
     fn test_builtin_ids_are_builtin_or_bundled() {
-        // All six embedded built-ins count as shipped even with no bundled dir set.
+        // All five embedded built-ins count as shipped even with no bundled dir set.
         for id in defaults::list_builtin_template_ids() {
             assert!(is_builtin_or_bundled(id), "'{}' should be shipped", id);
         }
@@ -396,19 +396,19 @@ mod tests {
         assert!(read_hidden_ids_from(dir).is_empty());
 
         // Hide two, restore one.
-        set_hidden_in_dir(dir, "psychatric_session", true).expect("hide");
-        set_hidden_in_dir(dir, "retrospective", true).expect("hide 2");
+        set_hidden_in_dir(dir, "retrospective", true).expect("hide");
+        set_hidden_in_dir(dir, "daily_standup", true).expect("hide 2");
         let ids = read_hidden_ids_from(dir);
-        assert!(ids.contains("psychatric_session") && ids.contains("retrospective"));
+        assert!(ids.contains("retrospective") && ids.contains("daily_standup"));
 
-        set_hidden_in_dir(dir, "retrospective", false).expect("restore");
+        set_hidden_in_dir(dir, "daily_standup", false).expect("restore");
         let ids = read_hidden_ids_from(dir);
-        assert!(ids.contains("psychatric_session"));
-        assert!(!ids.contains("retrospective"));
+        assert!(ids.contains("retrospective"));
+        assert!(!ids.contains("daily_standup"));
 
         // No-op writes (already hidden / already visible) succeed.
-        set_hidden_in_dir(dir, "psychatric_session", true).expect("re-hide no-op");
-        set_hidden_in_dir(dir, "retrospective", false).expect("re-restore no-op");
+        set_hidden_in_dir(dir, "retrospective", true).expect("re-hide no-op");
+        set_hidden_in_dir(dir, "daily_standup", false).expect("re-restore no-op");
     }
 
     #[test]
