@@ -24,6 +24,9 @@ pub enum TaskKind {
     NoteEnhancement,
     AskAI,
     Rollup,
+    /// specs/0063 W3 — an offline diarization pass. Not an LLM task, but the queue is the
+    /// one place the user looks to find out what the machine is busy with.
+    Diarization,
 }
 
 /// `Background` tasks surface in the sidebar indicator. `Foreground` tasks are recorded for
@@ -193,6 +196,23 @@ impl LlmTaskRegistry {
     pub fn dismiss(&self) {
         self.lock().has_failure = false;
         self.notify();
+    }
+
+    /// Remove a finished record and hand it back — used by Retry (specs/0063 W3), which must
+    /// clear the row and the lamp it is retrying, not leave them behind looking untouched.
+    /// `has_failure` is recomputed from what remains rather than simply cleared: retrying one
+    /// of two failures must not silently acknowledge the other.
+    pub fn take_record(&self, id: u64) -> Option<TaskRecord> {
+        let mut inner = self.lock();
+        let pos = inner.history.iter().position(|r| r.id == id)?;
+        let record = inner.history.remove(pos)?;
+        inner.has_failure = inner
+            .history
+            .iter()
+            .any(|r| matches!(r.outcome, TaskOutcome::Failed { .. }));
+        drop(inner);
+        self.notify();
+        Some(record)
     }
 
     fn set_note(&self, id: u64, note: String) {
@@ -452,5 +472,64 @@ mod tests {
         let view = r.view();
         assert!(matches!(view.history[0].outcome, TaskOutcome::Failed { .. }));
         assert!(matches!(view.history[1].outcome, TaskOutcome::Success));
+    }
+
+    #[test]
+    fn take_record_removes_it_from_history_and_returns_it() {
+        let reg = registry();
+        let t = Arc::clone(&reg).start_for(
+            TaskKind::PrepBrief,
+            Origin::Background,
+            "Prep — Pricing sync",
+            Some("m1".into()),
+        );
+        t.finish(Err("provider timed out".into()));
+        let id = reg.view().history[0].id;
+
+        let taken = reg.take_record(id).expect("record should exist");
+        assert_eq!(taken.kind, TaskKind::PrepBrief);
+        assert_eq!(taken.meeting_id.as_deref(), Some("m1"));
+        assert!(reg.view().history.is_empty(), "the record must leave history");
+    }
+
+    #[test]
+    fn taking_the_last_failure_clears_the_sticky_badge() {
+        let reg = registry();
+        let t = Arc::clone(&reg).start_for(TaskKind::ActionItems, Origin::Background, "x", Some("m1".into()));
+        t.finish(Err("boom".into()));
+        assert!(reg.view().has_failure);
+
+        let id = reg.view().history[0].id;
+        reg.take_record(id);
+        assert!(!reg.view().has_failure, "no failures left, so the badge must clear");
+    }
+
+    #[test]
+    fn taking_one_of_two_failures_keeps_the_badge_lit() {
+        let reg = registry();
+        for m in ["m1", "m2"] {
+            let t = Arc::clone(&reg).start_for(TaskKind::PrepBrief, Origin::Background, "x", Some(m.into()));
+            t.finish(Err("boom".into()));
+        }
+        let id = reg.view().history[0].id;
+        reg.take_record(id);
+        assert!(reg.view().has_failure, "one failure remains, so the badge stays");
+    }
+
+    #[test]
+    fn taking_an_unknown_id_is_a_no_op() {
+        let reg = registry();
+        assert!(reg.take_record(4242).is_none());
+    }
+
+    #[test]
+    fn a_skipped_record_never_raises_the_badge_and_can_still_be_taken() {
+        let reg = registry();
+        let t = Arc::clone(&reg).start_for(TaskKind::ActionItems, Origin::Background, "x", None);
+        t.finish_skipped("nothing to extract");
+        assert!(!reg.view().has_failure);
+        let id = reg.view().history[0].id;
+        assert!(reg.take_record(id).is_some());
+        assert!(!reg.view().has_failure);
     }
 }
