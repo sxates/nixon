@@ -200,4 +200,29 @@ mod tests {
             Some(ids[1].clone())
         );
     }
+
+    /// Controller ruling R34 (specs/0061 W4 review): the post-reassignment prune is
+    /// best-effort — a cleanup failure must never turn an already-committed correction
+    /// into a reported error. Drops the `speakers` table (which `prune_empty_speakers_inner`
+    /// reads/writes but the override write path never touches) so the reassignment itself
+    /// still succeeds while the prune step that follows it fails; the whole call must still
+    /// return `Ok`.
+    #[tokio::test]
+    async fn prune_failure_after_reassignment_does_not_fail_the_correction() {
+        let pool = pool_with_schema().await;
+        let m = insert_meeting(&pool).await;
+        let ids = insert_lines(&pool, &m, 1).await;
+        sqlx::query("DROP TABLE speakers")
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        let result =
+            crate::diarization::corrections::set_segment_speaker_inner(&pool, &m, &ids[0], "spk_0")
+                .await;
+        assert!(
+            result.is_ok(),
+            "a prune failure must not fail an already-committed correction: {result:?}"
+        );
+    }
 }
