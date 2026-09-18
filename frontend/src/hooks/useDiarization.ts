@@ -14,9 +14,12 @@
  *     - complete  → re-fetch the transcript so labels appear + success toast
  *     - error     → error toast
  *
- * The button is disabled while a pass is running (`isRunning`). Events without a
- * `meeting_id`, or for a different meeting, are ignored so two open meetings don't
- * cross-talk (model-download progress has no meeting_id, so we accept those too).
+ * The button is disabled while a pass is running (`isRunning`). Events for a
+ * different meeting are ignored so two open meetings don't cross-talk.
+ * Meeting-less events (model-download progress, and the legacy
+ * `diarization-progress` compat broadcast) carry no `meeting_id` at all, so
+ * they're accepted only by whichever hook instance is actually running or
+ * downloading right now — never by an idle, unrelated meeting.
  *
  * WS3.1 (specs/0029): the backend keeps a per-meeting run registry, so this hook's
  * state is a VIEW of it, not the source of truth:
@@ -121,6 +124,14 @@ export function useDiarization({
   // to reset a hook that never started the download in the first place).
   const isDownloadingRef = useRef(false);
 
+  // Mirrors `isRunning` for the progress listener below, which is set up once
+  // per `meetingId` (not re-subscribed on every `isRunning` change) and would
+  // otherwise close over a stale value.
+  const isRunningRef = useRef(false);
+  useEffect(() => {
+    isRunningRef.current = isRunning;
+  }, [isRunning]);
+
   // Keep the latest onComplete without re-subscribing the event listeners.
   const onCompleteRef = useRef(onComplete);
   useEffect(() => {
@@ -178,8 +189,17 @@ export function useDiarization({
         // A progress event explicitly for this meeting means a pass is live —
         // reflect that even if the run was started elsewhere (another surface,
         // or before a remount). Meeting-less (model-download) events don't
-        // prove a run, so they only update the stage text.
-        if (event.payload.meeting_id === meetingId) setIsRunning(true);
+        // prove a run, so they only update the stage text — and even then,
+        // only for the hook instance that is actually running or downloading
+        // (specs/0061 final review: the compat `diarization-progress` event
+        // still carries no meeting_id, so every mounted hook received it and
+        // an idle meeting's button would show — and then get stuck on — the
+        // downloading meeting's stage text).
+        if (event.payload.meeting_id === meetingId) {
+          setIsRunning(true);
+        } else if (!isRunningRef.current && !isDownloadingRef.current) {
+          return;
+        }
         setStage(nextStage);
         setProgressPct(pct);
       },

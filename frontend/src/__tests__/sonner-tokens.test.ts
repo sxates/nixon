@@ -6,6 +6,6 @@ describe('sonner toast tokens', () => {
     expect(start).toBeGreaterThan(-1);
     const block = css.slice(start, css.indexOf('}', start));
     for (const kind of ['success', 'info', 'warning', 'error']) for (const part of ['bg', 'border', 'text']) expect(block).toMatch(new RegExp(`--${kind}-${part}:\\s*hsl\\(var\\(--`));
-    for (const part of ['bg', 'border', 'text']) expect(block).toMatch(new RegExp(`--normal-${part}:\\s*hsl\\(var\\(--`));
+    for (const part of ['bg', 'border', 'text', 'bg-hover', 'border-hover']) expect(block).toMatch(new RegExp(`--normal-${part}:\\s*hsl\\(var\\(--`));
   });
 });

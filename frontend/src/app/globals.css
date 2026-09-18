@@ -135,6 +135,10 @@
      off-token gate cannot see them, so every toast variant is re-based on the lamps here. */
   html [data-sonner-toaster][data-sonner-theme] {
     --normal-bg: hsl(var(--card)); --normal-border: hsl(var(--border)); --normal-text: hsl(var(--foreground));
+    /* specs/0061 final review: the close button's hover state otherwise falls
+       back to sonner's own raw hsl(0,0%,12%)/hsl(0,0%,20%) from
+       node_modules/sonner/dist/styles.css — off-token in both themes. */
+    --normal-bg-hover: hsl(var(--muted)); --normal-border-hover: hsl(var(--border));
     --success-bg: hsl(var(--card)); --success-border: hsl(var(--success) / 0.5); --success-text: hsl(var(--success));
     --info-bg: hsl(var(--card)); --info-border: hsl(var(--brand) / 0.5); --info-text: hsl(var(--brand));
     --warning-bg: hsl(var(--card)); --warning-border: hsl(var(--brand) / 0.6); --warning-text: hsl(var(--brand));

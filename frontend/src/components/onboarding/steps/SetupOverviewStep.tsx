@@ -105,7 +105,7 @@ export function SetupOverviewStep() {
         <div className="w-full max-w-xs space-y-4">
           {needsMoreSpace && disk && (
             <div className="flex items-center gap-2 rounded-[3px] border border-border bg-card p-3">
-              <span className="h-2 w-2 flex-shrink-0 rounded-full bg-record" />
+              <span className="h-2 w-2 flex-shrink-0 rounded-full bg-record" aria-hidden="true" />
               <span className="text-sm text-foreground">
                 Not enough free space: {formatBytes(disk.free_bytes)} available, about{' '}
                 {formatBytes(disk.required_bytes)} needed. Free some space or download anyway.

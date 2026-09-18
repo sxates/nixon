@@ -33,7 +33,12 @@ export function CalendarStep() {
   const { completeOnboarding } = useOnboarding();
   const { connecting, connect, status } = useGoogleCalendarConnect();
 
-  const [isMac, setIsMac] = useState(false);
+  // `null` = platform detection still in flight. Unlike `OnboardingFlow`'s gate
+  // (which controls whether this step renders at all), this only controls the
+  // step's OWN "N of N" counter — the counter must not flash a wrong total
+  // (e.g. "4 of 4" on a Mac, which is really "5 of 5") while detection resolves
+  // (specs/0061 final review).
+  const [isMac, setIsMac] = useState<boolean | null>(null);
   const [eventKitStatus, setEventKitStatus] = useState<CalendarAccessStatus | null>(null);
   const [eventKitPending, setEventKitPending] = useState(false);
 
@@ -92,7 +97,9 @@ export function CalendarStep() {
   // baked in (`status.configured === false`) — not while status is still
   // loading (`null`), so the row doesn't flash in after the first fetch.
   const showGoogleRow = status?.configured !== false;
-  const totalSteps = isMac ? 5 : 4;
+  // Hide the counter entirely until platform detection resolves, rather than
+  // guessing and flashing the wrong total.
+  const totalSteps = isMac === null ? undefined : isMac ? 5 : 4;
 
   return (
     <OnboardingContainer
