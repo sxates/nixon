@@ -9,12 +9,18 @@ interface OnboardingSummaryModelStatus {
   summaryModelDownloaded: boolean;
 }
 
-const SUMMARY_MODEL_SIZES_MB: Record<string, number> = {
+export const SUMMARY_MODEL_SIZES_MB: Record<string, number> = {
   'qwen3.5:2b': 1221,
   'qwen3.5:4b': 2614,
   'gemma3:1b': 1019,
   'gemma3:4b': 2374,
 };
+
+// specs/0061 W1 — Parakeet (transcription) model size, shown next to the
+// summarization model size on the Setup Overview onboarding step.
+export const PARAKEET_MODEL_SIZE_MB = 670;
+
+export const getParakeetSizeLabel = (): string => '~670 MB';
 
 export function resolveOnboardingSummaryModelStatus({
   selectedModel,

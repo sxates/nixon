@@ -45,6 +45,7 @@ pub mod meetings;
 pub mod notifications;
 pub mod ollama;
 pub mod onboarding;
+pub mod onboarding_disk;
 pub mod openai;
 pub mod openrouter;
 pub mod parakeet_engine;
