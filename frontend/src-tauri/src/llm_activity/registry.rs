@@ -532,4 +532,39 @@ mod tests {
         assert!(reg.take_record(id).is_some());
         assert!(!reg.view().has_failure);
     }
+
+    /// A `Skipped` record left behind in history must never keep the badge lit — only
+    /// `TaskOutcome::Failed` counts. This is the case the predicate could get wrong: an
+    /// empty history recomputes `has_failure` to `false` under any reasonable predicate,
+    /// so this test seeds a `Skipped` record that SURVIVES the take, alongside the
+    /// `Failed` one that gets taken, so a predicate that (incorrectly) also counted
+    /// `Skipped` would leave the badge lit and fail this test.
+    #[test]
+    fn a_remaining_skipped_record_does_not_keep_the_badge_lit() {
+        let reg = registry();
+        let skipped =
+            Arc::clone(&reg).start_for(TaskKind::ActionItems, Origin::Background, "skip", None);
+        skipped.finish_skipped("nothing to extract");
+        let failed = Arc::clone(&reg).start_for(
+            TaskKind::PrepBrief,
+            Origin::Background,
+            "prep",
+            Some("m1".into()),
+        );
+        failed.finish(Err("timed out".into()));
+        assert!(reg.view().has_failure);
+
+        let failed_id = reg
+            .view()
+            .history
+            .iter()
+            .find(|r| matches!(r.outcome, TaskOutcome::Failed { .. }))
+            .expect("the failed record")
+            .id;
+        reg.take_record(failed_id);
+
+        let v = reg.view();
+        assert_eq!(v.history.len(), 1, "the skipped record stays in history");
+        assert!(!v.has_failure, "a skipped record must never keep the badge lit");
+    }
 }
