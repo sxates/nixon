@@ -58,9 +58,14 @@ pub(crate) async fn set_segment_speaker_inner(
         ));
     }
 
-    prune_empty_speakers_inner(pool, meeting_id)
-        .await
-        .map_err(|e| format!("Failed to prune empty speakers: {e}"))?;
+    // specs/0061 W4: the reassignment above already committed — a cleanup failure here
+    // must never turn an already-successful correction into a reported error. Best-effort,
+    // matching `api_merge_speakers`'s prune-after-merge.
+    if let Err(e) = prune_empty_speakers_inner(pool, meeting_id).await {
+        log::warn!(
+            "set_segment_speaker_inner: prune-after-reassign failed for meeting {meeting_id} (continuing): {e}"
+        );
+    }
 
     Ok(())
 }
@@ -150,9 +155,16 @@ pub(crate) async fn set_segment_speakers_inner(
         return Err("None of the selected lines belong to this meeting".to_string());
     }
 
-    prune_empty_speakers_inner(pool, meeting_id)
-        .await
-        .map_err(|e| format!("Failed to prune empty speakers: {e}"))?;
+    // specs/0061 W4: the reassignment above already committed — a cleanup failure here
+    // must never turn an already-successful correction into a reported error, and must
+    // never short-circuit the caller before it reaches `retract_and_notify` (which is
+    // itself documented as never allowed to fail the reassignment). Best-effort, matching
+    // `api_merge_speakers`'s prune-after-merge.
+    if let Err(e) = prune_empty_speakers_inner(pool, meeting_id).await {
+        log::warn!(
+            "set_segment_speakers_inner: prune-after-reassign failed for meeting {meeting_id} (continuing): {e}"
+        );
+    }
 
     Ok((applied, retraction_targets))
 }
