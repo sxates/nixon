@@ -13,7 +13,7 @@
 978 frontend/src-tauri/src/diarization/commands.rs
 1398 frontend/src/components/ModelSettingsModal.tsx
 1276 frontend/src-tauri/src/audio/import.rs
-1236 frontend/src-tauri/src/summary/service.rs
+1189 frontend/src-tauri/src/summary/service.rs
 1274 frontend/src-tauri/src/whisper_engine/whisper_engine.rs
 1157 frontend/src-tauri/src/action_items/extractor.rs
 1183 frontend/src-tauri/src/parakeet_engine/parakeet_engine.rs
