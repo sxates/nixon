@@ -77,6 +77,13 @@ pub struct TaskRecord {
     /// Carried over from [`RunningTask`] so a failed prep brief stays retryable.
     pub meeting_id: Option<String>,
     pub outcome: TaskOutcome,
+    /// Carried over from the running task's origin, but NOT serialized to the frontend
+    /// (`view()` deliberately still returns only what it already did — a wider change
+    /// than this fix needs). Used only by [`LlmTaskRegistry::take_record`]'s `has_failure`
+    /// recompute, so a foreground failure (already shown inline; specs/0052) can never
+    /// re-light the badge when a background failure elsewhere is taken.
+    #[serde(skip)]
+    pub origin: Origin,
 }
 
 /// What the frontend renders. Only background work is included.
@@ -206,6 +213,19 @@ impl LlmTaskRegistry {
         self.lock().history.iter().find(|r| r.id == id).map(|r| r.kind)
     }
 
+    /// The meeting id of the history record at `id`, without removing it — same
+    /// `peek`-before-`take_record` shape as [`peek_kind`](Self::peek_kind), so a caller
+    /// can validate every precondition (retryable kind AND a meeting id present) before
+    /// destroying the record (specs/0063 W3 fix round, M4). The outer `Option` is
+    /// "record found at all"; the inner one is the record's own optional `meeting_id`.
+    pub fn peek_meeting_id(&self, id: u64) -> Option<Option<String>> {
+        self.lock()
+            .history
+            .iter()
+            .find(|r| r.id == id)
+            .map(|r| r.meeting_id.clone())
+    }
+
     /// Remove a finished record and hand it back — used by Retry (specs/0063 W3), which must
     /// clear the row and the lamp it is retrying, not leave them behind looking untouched.
     /// `has_failure` is recomputed from what remains rather than simply cleared: retrying one
@@ -214,10 +234,13 @@ impl LlmTaskRegistry {
         let mut inner = self.lock();
         let pos = inner.history.iter().position(|r| r.id == id)?;
         let record = inner.history.remove(pos)?;
-        inner.has_failure = inner
-            .history
-            .iter()
-            .any(|r| matches!(r.outcome, TaskOutcome::Failed { .. }));
+        // specs/0063 W3 fix round (I3): only a BACKGROUND failure may re-light the badge.
+        // A `Foreground` failure (e.g. Ask AI) already has its own inline error UI — see
+        // the `Origin` doc comment above — so it must never resurrect `has_failure` when
+        // an unrelated background record is taken out from under it.
+        inner.has_failure = inner.history.iter().any(|r| {
+            r.origin == Origin::Background && matches!(r.outcome, TaskOutcome::Failed { .. })
+        });
         drop(inner);
         self.notify();
         Some(record)
@@ -270,6 +293,7 @@ impl LlmTaskRegistry {
             error,
             meeting_id: task.meeting_id,
             outcome,
+            origin,
         });
         while inner.history.len() > HISTORY_CAP {
             inner.history.pop_back();
@@ -602,5 +626,51 @@ mod tests {
         let v = reg.view();
         assert_eq!(v.history.len(), 1, "the skipped record stays in history");
         assert!(!v.has_failure, "a skipped record must never keep the badge lit");
+    }
+
+    /// specs/0063 W3 fix round (I3): a FOREGROUND failure (e.g. Ask AI, already shown
+    /// inline) must never re-light the badge when it is the only `Failed` record left
+    /// after a background failure is taken. Before this fix, `take_record`'s recompute
+    /// counted any `Failed` record regardless of origin, so retrying or dismissing the
+    /// background failure below would leave `has_failure` incorrectly `true`.
+    #[test]
+    fn taking_the_only_background_failure_ignores_a_remaining_foreground_failure() {
+        let reg = registry();
+        Arc::clone(&reg)
+            .start_for(TaskKind::AskAI, Origin::Foreground, "Ask AI", Some("m1".into()))
+            .finish(Err("boom".into()));
+        assert!(
+            !reg.view().has_failure,
+            "a foreground failure alone must not raise the badge"
+        );
+
+        let background = Arc::clone(&reg).start_for(
+            TaskKind::MeetingSummary,
+            Origin::Background,
+            "Summary — Weekly 1:1",
+            Some("m2".into()),
+        );
+        background.finish(Err("save failed".into()));
+        assert!(reg.view().has_failure);
+
+        let background_id = reg
+            .view()
+            .history
+            .iter()
+            .find(|r| r.kind == TaskKind::MeetingSummary)
+            .expect("the background record")
+            .id;
+        reg.take_record(background_id);
+
+        let v = reg.view();
+        assert_eq!(
+            v.history.len(),
+            1,
+            "the untouched foreground failure stays in history"
+        );
+        assert!(
+            !v.has_failure,
+            "the remaining record is foreground-only, so the badge must clear"
+        );
     }
 }

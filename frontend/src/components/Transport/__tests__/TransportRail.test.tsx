@@ -198,8 +198,10 @@ describe('TransportRail', () => {
     expect(screen.getByRole('dialog', { name: /queue/i })).toBeTruthy();
     expect(screen.getByText('Hiring loop debrief')).toBeTruthy();
   });
-  // `api_llm_activity_dismiss` takes no id and clears the WHOLE history, so dismissing is a
-  // header action named for that — never a per-row control (review round 1).
+  // The header's "Dismiss failures" clears the WHOLE history via `api_llm_activity_dismiss`
+  // (no id); per-row Dismiss (specs/0063 W3 Task 6) uses `api_llm_activity_dismiss_task`
+  // to remove only that one record. This test covers both: per-row Retry by numeric task
+  // id, and the header dismiss clearing everything.
   it('queue panel: per-row Retry dispatches by numeric task id, dismiss still clears the lot', () => {
     backlog.view = { items: [], pendingCount: 0, processing: false, active: null, activeOrdinal: 0, total: 0 } as typeof backlog.view;
     Object.assign(llm, {

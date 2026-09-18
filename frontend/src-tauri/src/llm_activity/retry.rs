@@ -54,15 +54,19 @@ pub async fn retry_task<R: Runtime>(app: &AppHandle<R>, task_id: u64) -> Result<
         return Err(format!("{:?} tasks can't be retried", kind));
     }
 
+    // specs/0063 W3 fix round (M4): every dispatch below addresses a meeting, so this must
+    // be checked BEFORE `take_record` — same reasoning as the retryable-kind check above.
+    // Checking it after would destroy the record for a kind that (today, unreachably from
+    // the UI) has no meeting id, then report an error for a row the user can no longer see,
+    // retry, or dismiss.
+    let meeting_id = registry
+        .peek_meeting_id(task_id)
+        .ok_or_else(|| "That task is no longer in the queue.".to_string())?
+        .ok_or_else(|| "That task has no meeting to retry against.".to_string())?;
+
     let record = registry
         .take_record(task_id)
         .ok_or_else(|| "That task is no longer in the queue.".to_string())?;
-
-    // Every dispatch below addresses a meeting; a record without one cannot be retried.
-    let meeting_id = record
-        .meeting_id
-        .clone()
-        .ok_or_else(|| "That task has no meeting to retry against.".to_string())?;
 
     match record.kind {
         TaskKind::PrepBrief => {
@@ -189,6 +193,34 @@ mod tests {
             "Ask AI",
             Some("m1".into()),
         );
+        t.finish(Err("boom".into()));
+        let id = reg.view().history[0].id;
+
+        let app = tauri::test::mock_app();
+        app.handle().manage(LlmActivityState(Arc::clone(&reg)));
+
+        let result = retry_task(app.handle(), id).await;
+
+        assert!(result.is_err());
+        assert_eq!(
+            reg.view().history.len(),
+            1,
+            "a refused retry must not destroy the record it refused to touch"
+        );
+        assert_eq!(reg.view().history[0].id, id);
+    }
+
+    /// specs/0063 W3 fix round (M4): a retryable KIND with no meeting id (unreachable from
+    /// the UI today, but not impossible) must also be checked before `take_record` — same
+    /// guarantee as the non-retryable-kind case above, for the other precondition.
+    #[tokio::test]
+    async fn retry_task_on_a_retryable_kind_with_no_meeting_id_leaves_the_record_and_errors() {
+        use crate::llm_activity::registry::{LlmTaskRegistry, Origin};
+        use crate::llm_activity::LlmActivityState;
+        use std::sync::Arc;
+
+        let reg = Arc::new(LlmTaskRegistry::new());
+        let t = Arc::clone(&reg).start_for(TaskKind::PrepBrief, Origin::Background, "Prep", None);
         t.finish(Err("boom".into()));
         let id = reg.view().history[0].id;
 
