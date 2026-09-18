@@ -31,18 +31,19 @@ Headless capture of every non-`real_only` manifest entry, in both themes, to
 `docs/screenshots/headless/` by default.
 
 ```
-node scripts/shots/run.mjs [--out DIR] [--only a,b] [--theme deck|faceplate] [--no-build] [--worktree-build]
+node scripts/shots/run.mjs [--out DIR] [--only a,b] [--theme deck|faceplate] [--no-build] [--isolated-build]
 ```
 - `--out DIR` — output directory (default `docs/screenshots/headless`).
 - `--only a,b` — comma-separated entry names to capture (matches `name`, not the output file).
 - `--theme deck|faceplate` — capture just one theme.
 - `--no-build` — reuse the existing `frontend/out/` export instead of rebuilding it.
-- `--worktree-build` — build the export in an isolated git worktree (see below) instead of
-  in place. `run.mjs` also does this automatically when it detects a dev server already
-  listening on `:3118`.
+- `--isolated-build` — build the export in an isolated copy of the working tree (see below)
+  instead of in place. `--worktree-build` still works as an alias. `run.mjs` also does this
+  automatically when it detects a dev server already listening on `:3118`.
 
-Writes `manifest-run.json` alongside the PNGs (git SHA, timestamp, per-shot status) and
-exits non-zero if any capture errored.
+Writes `manifest-run.json` alongside the PNGs (git SHA + per-shot status; no timestamp, so a
+no-change run produces a byte-identical file and `git status` stays clean) and exits
+non-zero if any capture errored.
 
 ### `pnpm shots:diff` → `diff.mjs`
 Pixelmatches the current `docs/screenshots/headless/*.png` against a git ref and writes a
@@ -76,7 +77,9 @@ node scripts/shots/real.mjs [--out DIR] [--only a,b] [--theme deck|faceplate] [-
   exists — i.e. the `--demo` profile's own seeded audio).
 - `--port N` — control listener port (default: read from
   `~/Library/Application Support/ai.vinyl.app.debug/dev-control.port`, written by the app on
-  startup when the listener is enabled).
+  startup when the listener is enabled). If that file is stale (the dev app was killed
+  without a clean exit) or no dev app is running with `--demo`/`--control`, the connection
+  fails with `dev-control.port is stale or Dev Nixon is not running with --demo/--control`.
 
 Requires `./dev-nixon.sh --demo` (or `--control`) already running — see "Control protocol"
 below — plus Screen Recording permission for the terminal process running this script, and
@@ -125,18 +128,23 @@ and on-disk folder afterwards — `control.rs` documents a known residual (a rea
 selected in the live window when a take starts could have its cached folder path clobbered),
 which is why `real.mjs` navigates to `/` before every `start_recording`.
 
-## The isolated worktree build
+## The isolated build
 `next build` and `next dev` both write to `.next`; running them at the same time corrupts
-chunks. `run.mjs --worktree-build` (auto-enabled when it detects a dev server listening on
-`:3118`) builds in a throwaway git worktree with `node_modules` symlinked in (no reinstall),
-serves that worktree's `out/`, and removes the worktree on exit:
+chunks. `run.mjs --isolated-build` (`--worktree-build` still works as an alias; auto-enabled
+when it detects a dev server listening on `:3118`) builds in an isolated copy of the
+*working tree* — deliberately not `git worktree add`, which checks out `HEAD` and would
+silently render whatever was last committed instead of any uncommitted changes being
+screenshotted. It rsyncs `frontend/` into a scratch directory (excluding `.git`,
+`node_modules`, `.next`, `out`, `target`), symlinks `node_modules` in (no reinstall), builds
+there, serves that copy's `out/`, and removes the scratch directory on exit (including on
+`SIGINT`):
 
 ```bash
-WT=$(mktemp -d)/wt
-git worktree add --detach "$WT" HEAD
-ln -s "$PWD/node_modules" "$WT/frontend/node_modules"
-( cd "$WT/frontend" && ./node_modules/.bin/next build )
-# ...serve $WT/frontend/out and screenshot as usual, then: git worktree remove --force "$WT"
+TMP=$(mktemp -d)
+rsync -a --exclude .git --exclude node_modules --exclude .next --exclude out --exclude target "$PWD/" "$TMP/frontend/"
+ln -s "$PWD/node_modules" "$TMP/frontend/node_modules"
+( cd "$TMP/frontend" && ./node_modules/.bin/next build )
+# ...serve $TMP/frontend/out and screenshot as usual, then: rm -rf "$TMP"
 ```
 
 ## Files

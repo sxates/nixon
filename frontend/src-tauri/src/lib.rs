@@ -436,6 +436,10 @@ pub fn run() {
                 }
                 tauri::RunEvent::Exit => {
                     log::info!("Application exiting, cleaning up resources...");
+                    // specs/0060: best-effort so a stale dev-control.port never survives
+                    // a killed/crashed dev session into the next one.
+                    #[cfg(debug_assertions)]
+                    crate::dev_fixtures::control::cleanup_port_file();
                     tauri::async_runtime::block_on(async {
                         // Clean up database connection and checkpoint WAL
                         if let Some(app_state) = _app_handle.try_state::<state::AppState>() {

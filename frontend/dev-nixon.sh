@@ -21,7 +21,11 @@ if ! command -v cargo >/dev/null 2>&1; then
   exit 1
 fi
 
-cd "$(dirname "$0")"
+# Resolve $0 to an absolute path before cd'ing — otherwise a relative invocation (e.g.
+# `bash frontend/dev-nixon.sh --help` from the repo root) leaves $0 pointing nowhere once
+# the cwd changes below, breaking the --help sed later in this script.
+SCRIPT_PATH="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
+cd "$(dirname "$SCRIPT_PATH")"
 
 # Google Calendar OAuth client (specs/0032). Optional: without it the feature is
 # inert and Settings shows "not configured". Values bake in via option_env! at
@@ -64,7 +68,7 @@ for arg in "$@"; do
     --onboarding)     WANT_ONBOARDING=1 ;;
     --real-downloads) REAL_DOWNLOADS=1 ;;
     --control)        export NIXON_DEV_CONTROL=1 ;;
-    -h|--help)        sed -n '/^# specs\/0059 dev flags/,/^#   (end of dev flags)/p' "$0" | sed 's/^#\{0,1\} \{0,1\}//' ; exit 0 ;;
+    -h|--help)        sed -n '/^# specs\/0059 dev flags/,/^#   (end of dev flags)/p' "$SCRIPT_PATH" | sed 's/^#\{0,1\} \{0,1\}//' ; exit 0 ;;
     *) echo "dev-nixon.sh: unknown flag $arg" >&2; exit 2 ;;
   esac
 done

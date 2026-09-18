@@ -37,9 +37,16 @@ async function main() {
   await c.send({ cmd: 'ping' });
   mkdirSync(opt.out, { recursive: true });
   let shots = expand(loadManifest());
+  // `expand()` is entry-major (each entry's faceplate shot immediately followed by its
+  // own deck shot), so the naive iteration order flips `theme` on almost every shot —
+  // and the loop below reloads the whole app on every theme change. Stable-sort by theme
+  // first so the reload happens (at most) twice for the whole run, not once per shot.
+  const themeOrder = { faceplate: 0, deck: 1 };
+  shots = [...shots].sort((a, b) => themeOrder[a.theme] - themeOrder[b.theme]);
   if (opt.only) shots = shots.filter((s) => opt.only.includes(s.name));
   if (opt.theme) shots = shots.filter((s) => s.theme === opt.theme);
   let currentTheme = null;
+  let inOnboarding = false;
   let failures = 0;
   // Tracked so SIGINT/SIGTERM can clean up a take that's actually in progress.
   let currentPlayer = null;
@@ -66,8 +73,20 @@ async function main() {
           await c.send({ cmd: 'ready' });
           currentTheme = shot.theme;
         }
-        if (shot.entry.onboardingStep) await c.send({ cmd: 'onboarding_step', value: shot.entry.onboardingStep });
-        else await c.send({ cmd: 'navigate', route: shot.entry.route });
+        if (inOnboarding && !shot.entry.onboardingStep) {
+          // Leaving the onboarding wizard for a normal route: without an explicit
+          // onboarding_complete, the app is still mid-wizard server-side and a plain
+          // `navigate` can land back in onboarding instead of the requested route.
+          await c.send({ cmd: 'onboarding_complete' });
+          await c.send({ cmd: 'ready' });
+          inOnboarding = false;
+        }
+        if (shot.entry.onboardingStep) {
+          await c.send({ cmd: 'onboarding_step', value: shot.entry.onboardingStep });
+          inOnboarding = true;
+        } else {
+          await c.send({ cmd: 'navigate', route: shot.entry.route });
+        }
         await c.send({ cmd: 'ready' });
         await c.send({ cmd: 'hide_dev_badge', value: true });
         if (shot.entry.state === 'recording') {

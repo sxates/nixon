@@ -2,7 +2,7 @@
 // diff.mjs — compare the headless set against a git ref and write a contact sheet (specs/0060).
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { PNG } from 'pngjs';
 import pixelmatch from 'pixelmatch';
@@ -37,11 +37,19 @@ function main() {
   const ref = get('--base') ?? 'HEAD';
   const out = resolve(repo, get('--out') ?? 'docs/screenshots/diff');
   const strict = a.includes('--strict');
+  let entries;
+  try {
+    entries = readdirSync(dir);
+  } catch (e) {
+    if (e.code === 'ENOENT') { console.error(`${dir} does not exist — run pnpm shots first`); process.exit(1); }
+    throw e;
+  }
+  const dirRel = relative(repo, dir).replaceAll('\\', '/');
   const ignoreByName = Object.fromEntries(loadManifest().map((e) => [e.name, toRects(e.ignore)]));
   mkdirSync(out, { recursive: true });
   const rows = []; let changed = 0, same = 0, fresh = 0;
-  for (const f of readdirSync(dir).filter((f) => f.endsWith('.png')).sort()) {
-    const rel = join('docs/screenshots/headless', f).replaceAll('\\', '/');
+  for (const f of entries.filter((f) => f.endsWith('.png')).sort()) {
+    const rel = join(dirRel, f).replaceAll('\\', '/');
     const cur = readFileSync(join(dir, f)); const base = fromGit(ref, rel);
     const name = f.replace(/\.(faceplate|deck)\.png$/, '');
     if (!base) { fresh++; rows.push({ f, status: 'new' }); continue; }

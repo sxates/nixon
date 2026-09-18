@@ -42,4 +42,30 @@ describe('control protocol', () => {
     await expect(c.send({ cmd: 'ping' })).rejects.toThrow(/control socket closed/);
     expect(fakeSocket.write).not.toHaveBeenCalled();
   });
+
+  it('drops a late reply to a timed-out request instead of resolving the next one onto it', async () => {
+    vi.useFakeTimers();
+    try {
+      fakeSocket = new FakeSocket();
+      const c = connect(1234);
+
+      // Request A times out client-side after 10ms — nobody ever writes a reply line
+      // for it, simulating a command the server never answered.
+      const a = c.send({ cmd: 'a' }, 10);
+      const aRejected = expect(a).rejects.toThrow(/timeout a/);
+      await vi.advanceTimersByTimeAsync(10);
+      await aRejected;
+
+      // Request B is sent after A already timed out — it's the new queue head.
+      const b = c.send({ cmd: 'b' });
+
+      // The server replies with two lines: A's late (now-orphaned) reply, then B's.
+      // Without the `dead` guard, A's line would resolve B's promise instead.
+      fakeSocket.emit('data', Buffer.from('{"ok":true,"for":"a"}\n{"ok":true,"for":"b"}\n'));
+
+      await expect(b).resolves.toEqual({ ok: true, for: 'b' });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
