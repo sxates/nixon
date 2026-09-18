@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Switch } from '@/components/ui/switch';
 import ZoomMuteGateToggle from '@/components/ZoomMuteGateToggle';
-import { FolderOpen } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import { DeviceSelection, SelectedDevices } from '@/components/DeviceSelection';
 import { LanguageSelection } from '@/components/LanguageSelection';
+import { SaveLocationRow } from '@/components/SaveLocationRow';
 import { Button } from '@/components/ui/button';
 import { ClearVoiceprintsDialog } from '@/components/ClearVoiceprintsDialog';
 import {
@@ -388,45 +388,6 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
     await savePreferences(newPreferences);
   };
 
-  const handleOpenFolder = async () => {
-    try {
-      await invoke('open_recordings_folder');
-    } catch (error) {
-      console.error('Failed to open recordings folder:', error);
-    }
-  };
-
-  // Change where NEW recordings are saved (specs/0061 W6). Existing meetings keep their
-  // own folder_path — only new recordings land in the newly chosen folder. Persists
-  // through the same set_recording_preferences path the app reads at startup
-  // (recording_preferences.rs's RECORDINGS_ROOT cache is re-seeded on every save).
-  const handleChangeFolder = async () => {
-    let picked: string | null;
-    try {
-      picked = await invoke<string | null>('select_recording_folder');
-    } catch (error) {
-      console.error('Failed to open folder picker:', error);
-      toast.error('Failed to open folder picker');
-      return;
-    }
-    if (!picked) return; // user cancelled
-
-    const previous = preferences;
-    const newPreferences = { ...preferences, save_folder: picked };
-    setPreferences(newPreferences);
-    try {
-      await invoke('set_recording_preferences', { preferences: newPreferences });
-      onSave?.(newPreferences);
-      toast.success('Preference saved', {
-        description: 'New recordings will be saved to the selected folder.',
-      });
-    } catch (error) {
-      console.error('Failed to save recording folder preference:', error);
-      setPreferences(previous); // revert on failure
-      toast.error('Failed to save preference');
-    }
-  };
-
   const handleNotificationToggle = async (enabled: boolean) => {
     try {
       setShowRecordingNotification(enabled);
@@ -755,24 +716,10 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
           />
 
           {preferences.auto_save && (
-            <SettingsRow
-              label="Save location"
-              description={
-                <span className="break-all">
-                  {preferences.save_folder || 'Default folder'}
-                </span>
-              }
-              control={
-                <div className="flex items-center gap-2">
-                  <Button variant="outline" size="sm" onClick={handleOpenFolder}>
-                    <FolderOpen className="h-4 w-4" />
-                    Open folder
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={handleChangeFolder}>
-                    Change…
-                  </Button>
-                </div>
-              }
+            <SaveLocationRow
+              preferences={preferences}
+              setPreferences={setPreferences}
+              onSave={onSave}
             />
           )}
         </SettingsGroup>
