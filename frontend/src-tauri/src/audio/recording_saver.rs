@@ -455,7 +455,13 @@ impl RecordingSaver {
     /// cleanly-completed meeting keeps `status: "completed"` + canonical
     /// `audio.mp4`/`system.wav`/`mic.wav` (no phantom "Unfinished recording" offer,
     /// diarization/retranscription resolution intact), while a genuinely crashed
-    /// meeting stays offerable for the next resume. Best-effort; never fails.
+    /// meeting stays offerable for the next resume. For a FRESH (non-resume) session
+    /// there is no journal — `initialize_resume_folder` is the only path that arms one
+    /// — so a failed fresh start instead removes the whole folder `initialize_fresh_folder`
+    /// just created: it holds nothing worth keeping (no prior segments, nothing to
+    /// resume into), and leaving it behind orphans a meeting-less folder on disk
+    /// (specs/0060 review finding — hit in practice by a screenshot-driver take whose
+    /// `start_recording` failed after folder init). Best-effort; never fails.
     pub async fn rollback_failed_start(&mut self) {
         if let Ok(mut is_saving) = self.is_saving.lock() {
             *is_saving = false;
@@ -478,6 +484,19 @@ impl RecordingSaver {
             self.segment_started_at = None;
             self.prior_audio_duration = 0.0;
             self.segment_index = 0;
+        } else if let Some(folder) = self.meeting_folder.take() {
+            warn!(
+                "Recording start failed after fresh folder init — removing {}",
+                folder.display()
+            );
+            if let Err(e) = std::fs::remove_dir_all(&folder) {
+                warn!(
+                    "Failed to remove folder {} after failed start: {}",
+                    folder.display(),
+                    e
+                );
+            }
+            self.metadata = None;
         }
     }
 
@@ -2224,5 +2243,43 @@ mod tests {
         );
         assert!(folder.join(".checkpoints").is_dir());
         assert!(checkpoints.join("audio_chunk_000.mp4").exists());
+    }
+
+    /// specs/0060 review finding: a FRESH (non-resume) start has no journal to replay —
+    /// `initialize_resume_folder` is the only path that arms one — so `rollback_failed_start`
+    /// must instead remove the whole folder `initialize_fresh_folder` just created, or a
+    /// `start_recording` that fails after folder init (e.g. no audio streams available, as
+    /// hit by the specs/0060 screenshot driver in a sandboxed environment) orphans a
+    /// meeting-less folder on disk forever. `initialize_fresh_folder` itself resolves its
+    /// base folder from the process-wide `recordings_root()` cache, which this crate's own
+    /// tests deliberately never touch (see `recording_preferences::tests`, which build a
+    /// throwaway `RecordingsRootCache` instead) to keep tests order-independent — so this
+    /// test reproduces the exact state a fresh init leaves behind (`meeting_folder`/`metadata`
+    /// set, no resume journal armed) against a temp dir instead of calling
+    /// `initialize_fresh_folder` through the global.
+    #[tokio::test]
+    async fn rollback_failed_start_removes_a_fresh_folder_with_no_journal() {
+        let dir = tempfile::tempdir().unwrap();
+        let folder = dir.path().join("Screenshot take_2026-01-01_00-00");
+        std::fs::create_dir_all(folder.join(".checkpoints")).unwrap();
+        std::fs::write(
+            folder.join("metadata.json"),
+            serde_json::to_string_pretty(&sample_metadata(vec![])).unwrap(),
+        )
+        .unwrap();
+
+        let mut saver = RecordingSaver::new();
+        saver.meeting_folder = Some(folder.clone());
+        saver.metadata = Some(sample_metadata(vec![]));
+        assert!(saver.resume_init_journal.is_none());
+
+        saver.rollback_failed_start().await;
+
+        assert!(
+            !folder.exists(),
+            "fresh folder must be removed on a failed start"
+        );
+        assert!(saver.meeting_folder.is_none());
+        assert!(saver.metadata.is_none());
     }
 }
