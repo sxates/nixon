@@ -19,24 +19,18 @@ use crate::diarization::LOCAL_SPEAKER_KEY;
 use crate::state::AppState;
 
 /// Ensure the owner's `local`/"You" speaker row exists for a meeting (specs/0061 W4).
-/// Idempotent: `SpeakersRepository::upsert` is `INSERT ... ON CONFLICT DO UPDATE`, so
-/// calling this twice for the same meeting never fails or duplicates a row — the second
-/// call just refreshes `display_name`/`is_local`/`updated_at` on the existing row.
+/// Idempotent AND non-destructive (specs/0061 R-fix I1): `SpeakersRepository::
+/// insert_if_absent` is `INSERT ... ON CONFLICT DO NOTHING`, so calling this twice for
+/// the same meeting never fails or duplicates a row, and — unlike `upsert` — never
+/// resets an already-present row's `display_name`. The owner row is renamable from the
+/// legend, and the diarization pipeline deliberately preserves that rename across
+/// re-runs (WS3.2); using `upsert` here would silently revert a renamed owner back to
+/// "You" on every reassignment of a line to `local`.
 pub(crate) async fn ensure_local_speaker(
     pool: &SqlitePool,
     meeting_id: &str,
 ) -> Result<(), SqlxError> {
-    SpeakersRepository::upsert(
-        pool,
-        meeting_id,
-        LOCAL_SPEAKER_KEY,
-        "You",
-        true,
-        None,
-        None,
-        None,
-    )
-    .await
+    SpeakersRepository::insert_if_absent(pool, meeting_id, LOCAL_SPEAKER_KEY, "You", true).await
 }
 
 /// Delete every `speakers` row for a meeting that is genuinely empty: zero transcript
@@ -147,6 +141,56 @@ mod tests {
         assert_eq!(is_local, 1);
     }
 
+    /// specs/0061 R-fix I1: reassigning a line to "You" must not revert a renamed owner.
+    /// The owner row is renamable from the legend and the diarization pipeline
+    /// deliberately preserves such renames across re-runs (WS3.2) — `ensure_local_speaker`
+    /// upserting over that rename would contradict that invariant.
+    #[tokio::test]
+    async fn reassigning_to_local_preserves_a_renamed_owner() {
+        let pool = pool_with_schema().await;
+        let m = insert_meeting(&pool).await;
+        let ids = insert_lines(&pool, &m, 2).await;
+        insert_speaker(&pool, &m, "local", "You").await;
+        assert!(SpeakersRepository::rename(&pool, &m, "local", "Priya")
+            .await
+            .unwrap());
+
+        crate::diarization::corrections::set_segment_speakers_inner(&pool, &m, ids, "local")
+            .await
+            .unwrap();
+
+        let (name,): (String,) = sqlx::query_as(
+            "SELECT display_name FROM speakers WHERE meeting_id = ? AND speaker_key = 'local'",
+        )
+        .bind(&m)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(
+            name, "Priya",
+            "reassigning to 'local' must not revert the rename"
+        );
+    }
+
+    /// specs/0061 R-fix I1: calling `ensure_local_speaker` twice must not duplicate the row.
+    #[tokio::test]
+    async fn ensure_local_speaker_twice_does_not_duplicate_a_row() {
+        let pool = pool_with_schema().await;
+        let m = insert_meeting(&pool).await;
+
+        ensure_local_speaker(&pool, &m).await.unwrap();
+        ensure_local_speaker(&pool, &m).await.unwrap();
+
+        let (n,): (i64,) = sqlx::query_as(
+            "SELECT COUNT(*) FROM speakers WHERE meeting_id = ? AND speaker_key = 'local'",
+        )
+        .bind(&m)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(n, 1);
+    }
+
     #[tokio::test]
     async fn prune_removes_only_empty_non_local_speakers_without_voiceprints() {
         let pool = pool_with_schema().await;
@@ -242,6 +286,38 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(result, Some(ids[0].clone()));
+    }
+
+    /// specs/0061 R-fix M2: SQLite sorts NULL first in `ASC` order, so an untimed row
+    /// must not be picked as "first" over a row that actually has a timestamp.
+    #[tokio::test]
+    async fn first_segment_id_does_not_pick_a_null_audio_start_time_first() {
+        let pool = pool_with_schema().await;
+        let m = insert_meeting(&pool).await;
+        let ids = insert_lines(&pool, &m, 2).await;
+        // ids[0] gets a NULL audio_start_time; ids[1] has a real, later timestamp.
+        sqlx::query(
+            "UPDATE transcripts SET speaker = 'spk_0', audio_start_time = NULL WHERE id = ?",
+        )
+        .bind(&ids[0])
+        .execute(&pool)
+        .await
+        .unwrap();
+        sqlx::query(
+            "UPDATE transcripts SET speaker = 'spk_0', audio_start_time = 5.0 WHERE id = ?",
+        )
+        .bind(&ids[1])
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        assert_eq!(
+            first_segment_id_inner(&pool, &m, &["spk_0".to_string()])
+                .await
+                .unwrap(),
+            Some(ids[1].clone()),
+            "a timed row must be chosen over an untimed one"
+        );
     }
 
     #[tokio::test]

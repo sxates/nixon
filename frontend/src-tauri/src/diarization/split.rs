@@ -18,6 +18,10 @@
 //! - Rows with a manual span correction (`transcript_speaker_overrides`) never
 //!   split — override rows are keyed by stable `transcripts.id` (specs/0019) and
 //!   a split would change what the id refers to.
+//! - Hand-edited rows (`user_edited = 1`) never split either (specs/0061 review,
+//!   M1) — the edit already cleared `word_timestamps`, so re-splitting one would
+//!   fall back to char-proportional apportioning and machine-cut text a user fixed
+//!   by hand, silently degrading its `edited` mark and count.
 //! - The first part keeps the original row id (UPDATE), so FTS stays coherent via
 //!   the existing `AFTER UPDATE OF transcript` trigger; later parts are new rows.
 //! - Re-runs are idempotent: an already-split part overlaps a single speaker run
@@ -311,8 +315,8 @@ pub async fn split_straddling_rows(
         return Ok(0);
     }
 
-    let rows = sqlx::query_as::<_, (String, String, String, f64, f64, Option<String>, Option<String>)>(
-        "SELECT id, transcript, timestamp, audio_start_time, audio_end_time, channel, word_timestamps
+    let rows = sqlx::query_as::<_, (String, String, String, f64, f64, Option<String>, Option<String>, i64)>(
+        "SELECT id, transcript, timestamp, audio_start_time, audio_end_time, channel, word_timestamps, user_edited
          FROM transcripts
          WHERE meeting_id = ?
            AND audio_start_time IS NOT NULL AND audio_end_time IS NOT NULL
@@ -340,9 +344,18 @@ pub async fn split_straddling_rows(
         .any(|t| t.speaker == crate::diarization::align::LOCAL_SPEAKER_KEY);
 
     let mut planned: Vec<(String, String, Vec<SplitPart>)> = Vec::new();
-    for (id, text, timestamp, start, end, channel, word_timestamps_json) in rows {
+    for (id, text, timestamp, start, end, channel, word_timestamps_json, user_edited) in rows {
         // Overridden rows must keep their id ↔ span meaning stable (specs/0019).
         if overridden.contains(&id) {
+            continue;
+        }
+        // specs/0061 review, M1 — a hand-edited row (`user_edited = 1`) must be left
+        // whole exactly like an overridden row: its `word_timestamps` is already
+        // NULL (the edit save cleared them), so re-splitting it here would fall back
+        // to char-proportional apportioning, silently machine-cut text the user
+        // fixed by hand, and re-insert the remainder as a fresh `user_edited = 0`
+        // row — degrading both the `edited` mark and its count with no words lost.
+        if user_edited != 0 {
             continue;
         }
         let is_mic_row = channel.as_deref() == Some("microphone");
@@ -373,7 +386,9 @@ pub async fn split_straddling_rows(
         let words: Option<Vec<WordStamp>> = word_timestamps_json
             .as_deref()
             .and_then(|json| serde_json::from_str(json).ok());
-        if let Some(parts) = plan_split(start as f32, end as f32, &text, row_turns, words.as_deref()) {
+        if let Some(parts) =
+            plan_split(start as f32, end as f32, &text, row_turns, words.as_deref())
+        {
             // A mic-tagged row must retain the owner: only split it if the plan
             // yields at least one owner ("microphone") part; otherwise a bad RMS
             // tag could re-attribute the owner's words to a remote speaker.

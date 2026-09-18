@@ -117,6 +117,46 @@ impl SpeakersRepository {
         Ok(())
     }
 
+    /// Insert a speaker row for `(meeting_id, speaker_key)` ONLY when one doesn't already
+    /// exist (specs/0061 R-fix I1). Unlike [`upsert`](Self::upsert), an existing row's
+    /// `display_name`/`is_local` are left completely untouched on conflict.
+    ///
+    /// Exists for the owner's `local`/"You" row specifically: that row is renamable from
+    /// the legend (`api_rename_speaker` has no `local` guard) and the diarization pipeline
+    /// deliberately preserves renames across re-runs (WS3.2, [`restore_identity`]). If
+    /// reassigning a line to "You" used `upsert`, its `ON CONFLICT ... display_name =
+    /// excluded.display_name` would silently revert a renamed owner back to "You" on every
+    /// such reassignment. `upsert`'s conflict semantics stay unchanged for its other
+    /// callers (the diarization pipeline needs the refresh-on-conflict behavior there).
+    ///
+    /// [`restore_identity`]: Self::restore_identity
+    pub async fn insert_if_absent(
+        pool: &SqlitePool,
+        meeting_id: &str,
+        speaker_key: &str,
+        display_name: &str,
+        is_local: bool,
+    ) -> Result<(), SqlxError> {
+        let id = format!("speaker-{}", Uuid::new_v4());
+        let now = Utc::now();
+        sqlx::query(
+            "INSERT INTO speakers
+                (id, meeting_id, speaker_key, display_name, is_local, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?)
+             ON CONFLICT(meeting_id, speaker_key) DO NOTHING",
+        )
+        .bind(&id)
+        .bind(meeting_id)
+        .bind(speaker_key)
+        .bind(display_name)
+        .bind(is_local as i64)
+        .bind(now)
+        .bind(now)
+        .execute(pool)
+        .await?;
+        Ok(())
+    }
+
     /// Mint a brand-new MANUAL speaker for a meeting (specs/0039 WS2): a `manual_<uuid>`
     /// key + a `speakers` row with the given display name and a **NULL embedding**.
     /// Returns the new key.
@@ -506,7 +546,7 @@ impl SpeakersRepository {
         let sql = format!(
             "SELECT id FROM transcripts
              WHERE meeting_id = ? AND speaker IN ({placeholders})
-             ORDER BY audio_start_time ASC LIMIT 1"
+             ORDER BY audio_start_time IS NULL, audio_start_time, timestamp LIMIT 1"
         );
         let mut query = sqlx::query_scalar(&sql).bind(meeting_id);
         for key in speaker_keys {
