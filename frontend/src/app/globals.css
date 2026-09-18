@@ -47,6 +47,13 @@
     --brand-foreground: 40 39% 97%;
     --record: 4 82% 50%;               /* #E8281A REC lamp — hot; 0.1.0 feedback: the old brick read as unlit */
     --record-ink: 3 75% 42%;           /* #BB2A1F red as TEXT (4.7:1 on background); lamps use --record */
+    /* specs/0063 W2 — LAMP colours, split from the text tokens above. --brand is copy
+       colour (31 84% 30%, a dark brown) and filling a lamp with it reads dead; these are
+       emissive and are never used as text on the page background. --lamp-ink is the ink
+       that sits ON a lit lamp face. */
+    --lamp-amber: 38 90% 50%;
+    --lamp-red: 4 82% 50%;
+    --lamp-ink: 24 30% 12%;
     --record-foreground: 40 39% 97%;
     --success: 131 39% 30%;            /* #2F6B3A READY */
     --success-foreground: 40 39% 97%;
@@ -106,6 +113,9 @@
     --brand-foreground: 30 10% 8%;
     --record: 5 88% 58%;               /* #F24638 */
     --record-ink: 5 88% 58%;           /* 4.9:1 on background — one shade serves both */
+    --lamp-amber: 38 87% 55%;
+    --lamp-red: 5 88% 58%;
+    --lamp-ink: 40 30% 96%;
     --record-foreground: 40 30% 96%;
     --success: 127 29% 50%;            /* #5AA362 */
     --success-foreground: 30 10% 8%;

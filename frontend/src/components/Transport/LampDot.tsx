@@ -15,8 +15,8 @@ const TONE: Record<LampTone, string> = {
   off: 'bg-border shadow-[inset_0_1px_1px_rgba(0,0,0,0.5)] [transition-duration:400ms]',
   // Lit lamps carry a bright core highlight and a two-ring halo (0.1.0 feedback: the
   // recording lamp looked dull). Still no blur filters — box-shadow only.
-  amber: 'bg-brand [background-image:radial-gradient(circle_at_35%_30%,rgba(255,255,255,0.55),rgba(255,255,255,0)_60%)] shadow-[0_0_0_1px_hsl(var(--brand)/0.35),0_0_8px_1px_hsl(var(--brand)/0.8),0_0_16px_3px_hsl(var(--brand)/0.35)] [transition-duration:120ms]',
-  red: 'bg-record [background-image:radial-gradient(circle_at_35%_30%,rgba(255,255,255,0.55),rgba(255,255,255,0)_60%)] shadow-[0_0_0_1px_hsl(var(--record)/0.35),0_0_8px_1px_hsl(var(--record)/0.8),0_0_16px_3px_hsl(var(--record)/0.35)] [transition-duration:120ms]',
+  amber: 'bg-lamp-amber [background-image:radial-gradient(circle_at_35%_30%,rgba(255,255,255,0.55),rgba(255,255,255,0)_60%)] shadow-[0_0_0_1px_hsl(var(--lamp-amber)/0.35),0_0_8px_1px_hsl(var(--lamp-amber)/0.8),0_0_16px_3px_hsl(var(--lamp-amber)/0.35)] [transition-duration:120ms]',
+  red: 'bg-lamp-red [background-image:radial-gradient(circle_at_35%_30%,rgba(255,255,255,0.55),rgba(255,255,255,0)_60%)] shadow-[0_0_0_1px_hsl(var(--lamp-red)/0.35),0_0_8px_1px_hsl(var(--lamp-red)/0.8),0_0_16px_3px_hsl(var(--lamp-red)/0.35)] [transition-duration:120ms]',
   green: 'bg-success [background-image:radial-gradient(circle_at_35%_30%,rgba(255,255,255,0.55),rgba(255,255,255,0)_60%)] shadow-[0_0_0_1px_hsl(var(--success)/0.35),0_0_8px_1px_hsl(var(--success)/0.8),0_0_16px_3px_hsl(var(--success)/0.35)] [transition-duration:120ms]',
 };
 
