@@ -18,6 +18,14 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 - While a recording is running, the transport rail's title is a link back to it — click it
   from any screen to land on the recording (specs/0063 W1).
+- Diarization passes, background meeting summaries (from "Summarize" in the Day Agenda),
+  and post-stop transcription status now appear in the Queue panel while they run
+  (specs/0063 W3).
+
+### Changed
+
+- The duplicate queue popover on Today is removed. Its "Processing…" button now opens the
+  transport rail's Queue panel instead (specs/0063 W3).
 
 ### Fixed
 
@@ -28,6 +36,15 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
   and a lit key now lights its whole face — REC is cream on red, HOLD is dark on amber — so
   "armed" is unmistakable in both themes. Previously only a 4px bar lit, and on the light
   theme it lit in a brown dark enough to read as unlit (specs/0063 W2).
+- The Queue's "Retry" stage label was misleading — it was plain text, not a button. The label
+  now reads "Failed", and every failed row shows a real Retry button (or Dismiss for
+  non-retryable tasks) that works. Failed deferred backlog meetings and failed background AI
+  work (summaries, extractions, prep briefs, diarization) can now be retried from the Queue
+  (specs/0063 W3).
+- A summary that generates successfully but then fails to save now shows as "Failed" in the
+  Queue instead of being silently logged (specs/0063 W3).
+- A summary you cancel now records as skipped in the Queue rather than as a success
+  (specs/0063 W3).
 
 ## [0.4.0] - 2026-09-18
 
