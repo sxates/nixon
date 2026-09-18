@@ -78,4 +78,30 @@ describe('RetranscribeDialog — edited-lines warning (specs/0061 W5)', () => {
             screen.getByText('Re-process the audio with different language settings'),
         ).toBeInTheDocument();
     });
+
+    // specs/0061 W5 review (promoted Minor, R41) — an unreadable count must fail
+    // safe. Silently leaving the count at 0 would show the NORMAL, reassuring
+    // description — exactly the "user re-transcribes over their edits believing
+    // nothing is at risk" failure this feature exists to prevent.
+    it('fails safe with a generic notice when the edited-lines count cannot be checked', async () => {
+        invoke.mockImplementation((cmd: string) => {
+            if (cmd === 'api_count_user_edited') return Promise.reject(new Error('db locked'));
+            return Promise.resolve(undefined);
+        });
+
+        renderDialog();
+
+        await waitFor(() =>
+            expect(invoke).toHaveBeenCalledWith('api_count_user_edited', { meetingId: 'meeting-1' }),
+        );
+        // Not the reassuring normal copy — and not the specific "N edits" copy either
+        // (we don't actually know N).
+        expect(
+            screen.queryByText('Re-process the audio with different language settings'),
+        ).not.toBeInTheDocument();
+        expect(screen.queryByText(/text edits will be replaced by the new transcription/)).not.toBeInTheDocument();
+        expect(
+            await screen.findByText(/could not check for existing text edits/i),
+        ).toBeInTheDocument();
+    });
 });

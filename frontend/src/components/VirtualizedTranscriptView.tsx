@@ -84,10 +84,10 @@ export interface VirtualizedTranscriptViewProps {
     onProcessNow?: () => void;
 
     /** specs/0061 W5 (task 5) — save a line's manually corrected RAW text. Resolves
-     *  `true` on success, `false` on failure (the caller — TranscriptPanel — surfaces
-     *  the toast); the optimistic overlay + revert is owned by this view, same as
-     *  onReassignSegment. Absent => no pencil/edit affordance on any row (e.g. while
-     *  recording, or with no meetingId). */
+     *  `true` on success (the row's edit sticks) or `false` on failure — the row
+     *  itself keeps its editor open with the typed text on failure (R40), and the
+     *  caller (TranscriptPanel) also surfaces a toast. Absent => no pencil/edit
+     *  affordance on any row (e.g. while recording, or with no meetingId). */
     onEditText?: (id: string, text: string) => Promise<boolean>;
 }
 
@@ -335,21 +335,19 @@ export const VirtualizedTranscriptView: React.FC<VirtualizedTranscriptViewProps>
         [assignment],
     );
 
-    // specs/0061 W5 (task 5) — save one line's corrected text, with the same
-    // optimistic-then-revert treatment as reassignSegmentOptimistic above: the row
-    // shows the new text immediately, the write is dispatched, and on failure the
-    // overlay entry is reverted (the caller — TranscriptPanel — surfaces the toast).
-    const editSegmentTextOptimistic = useCallback(
+    // specs/0061 W5 (task 5) — save one line's corrected text. Unlike
+    // reassignSegmentOptimistic above, the overlay is applied only AFTER a
+    // confirmed success (specs/0061 W5 review, R40 — a failed save must not show
+    // an "optimistic lie"; the row itself keeps its editor open with the typed
+    // text on failure, so there is nothing here to revert). On failure the caller
+    // — TranscriptPanel — surfaces a toast; the row's own inline message is the
+    // primary signal.
+    const handleEditText = useCallback(
         async (transcriptId: string, text: string): Promise<boolean> => {
             if (!onEditText) return false;
-            setTextOverlay((prev) => new Map(prev).set(transcriptId, text));
             const ok = await onEditText(transcriptId, text);
-            if (!ok) {
-                setTextOverlay((prev) => {
-                    const next = new Map(prev);
-                    next.delete(transcriptId);
-                    return next;
-                });
+            if (ok) {
+                setTextOverlay((prev) => new Map(prev).set(transcriptId, text));
             }
             return ok;
         },
@@ -601,7 +599,7 @@ export const VirtualizedTranscriptView: React.FC<VirtualizedTranscriptViewProps>
                                         selectionActive={selectionActive}
                                         onToggleSelect={handleToggleSelect}
                                         userEdited={segment.userEdited}
-                                        onEditText={onEditText ? editSegmentTextOptimistic : undefined}
+                                        onEditText={onEditText ? handleEditText : undefined}
                                     />
                                 </div>
                             );
@@ -668,7 +666,7 @@ export const VirtualizedTranscriptView: React.FC<VirtualizedTranscriptViewProps>
                                         selectionActive={selectionActive}
                                         onToggleSelect={handleToggleSelect}
                                         userEdited={segment.userEdited}
-                                        onEditText={onEditText ? editSegmentTextOptimistic : undefined}
+                                        onEditText={onEditText ? handleEditText : undefined}
                                     />
                                 </motion.div>
                             );

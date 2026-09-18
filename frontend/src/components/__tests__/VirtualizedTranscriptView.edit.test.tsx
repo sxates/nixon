@@ -59,7 +59,12 @@ describe('VirtualizedTranscriptView — inline segment text editing (specs/0061 
         expect(screen.getByText('edited')).toBeInTheDocument();
     });
 
-    it('reverts to the original text when the save fails', async () => {
+    // specs/0061 W5 review (Important 1, R40) — a failed save must not throw away a
+    // hand-typed correction: the editor stays open with the typed text still in it
+    // (not reverted to the original, and not silently applied), with an inline
+    // failure message as the primary signal (not just a toast the row can't assert
+    // on — the toast itself is TranscriptPanel's job, covered separately).
+    it('keeps the editor open with the typed text when the save fails', async () => {
         const onEditText = vi.fn().mockResolvedValue(false);
         render(view(onEditText));
 
@@ -69,8 +74,15 @@ describe('VirtualizedTranscriptView — inline segment text editing (specs/0061 
         fireEvent.keyDown(textarea, { key: 'Enter' });
 
         await waitFor(() => expect(onEditText).toHaveBeenCalled());
-        expect(await screen.findByText('the anodised and closure lead time')).toBeInTheDocument();
-        expect(screen.queryByText('a rejected edit')).not.toBeInTheDocument();
+
+        // Still editing, still showing exactly what the user typed…
+        expect(await screen.findByRole('textbox', { name: /edit transcript line/i })).toHaveValue(
+            'a rejected edit',
+        );
+        // …not reverted to the original text, and not applied as if it succeeded.
+        expect(screen.queryByText('the anodised and closure lead time')).not.toBeInTheDocument();
         expect(screen.queryByText('edited')).not.toBeInTheDocument();
+        // An inline failure message is visible next to the editor.
+        expect(screen.getByText(/could not save this edit/i)).toBeInTheDocument();
     });
 });

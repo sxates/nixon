@@ -66,6 +66,11 @@ export function RetranscribeDialog({
   // specs/0061 W5 (task 5) — how many lines the owner has manually corrected in this
   // meeting; > 0 warns before a re-transcribe would silently discard those edits.
   const [userEditedCount, setUserEditedCount] = useState(0);
+  // specs/0061 W5 review (R41) — the count fetch itself failed, so `userEditedCount`
+  // is NOT trustworthy (it's stuck at 0, which would otherwise read as "no edits" —
+  // exactly the reassuring-but-wrong message this feature exists to prevent). Fails
+  // safe: shows a generic "can't tell" notice instead of silently saying "safe".
+  const [countCheckFailed, setCountCheckFailed] = useState(false);
 
   // Use centralized model fetching hook
   const {
@@ -122,10 +127,13 @@ export function RetranscribeDialog({
       // specs/0061 W5 — count manually-corrected lines so the warning below can
       // show before this re-transcribe would silently discard them.
       setUserEditedCount(0);
+      setCountCheckFailed(false);
       invoke<number>('api_count_user_edited', { meetingId })
         .then(setUserEditedCount)
         .catch((err) => {
           console.error('Failed to count user-edited transcripts:', err);
+          // R41: fail safe — don't let an unreadable count look like "zero edits".
+          setCountCheckFailed(true);
         });
     }
   }, [open, selectedLanguage, transcriptModelConfig, fetchModels, meetingId]);
@@ -291,9 +299,11 @@ export function RetranscribeDialog({
               ? progress?.message || 'Processing audio...'
               : error
                 ? 'An error occurred during retranscription'
-                : userEditedCount > 0
-                  ? `Your ${userEditedCount} text edits will be replaced by the new transcription.`
-                  : 'Re-process the audio with different language settings'}
+                : countCheckFailed
+                  ? 'Could not check for existing text edits — if you\'ve corrected any lines, they may be replaced.'
+                  : userEditedCount > 0
+                    ? `Your ${userEditedCount} text edits will be replaced by the new transcription.`
+                    : 'Re-process the audio with different language settings'}
           </DialogDescription>
         </DialogHeader>
 
