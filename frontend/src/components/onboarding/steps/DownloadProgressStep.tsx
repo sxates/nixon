@@ -7,7 +7,12 @@ import { OnboardingContainer } from '../OnboardingContainer';
 import { useOnboarding } from '@/contexts/OnboardingContext';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
-import { getSummaryModelSizeLabel, getSummaryModelSizeMb } from '@/lib/onboarding-summary-model';
+import {
+  getSummaryModelSizeLabel,
+  getSummaryModelSizeMb,
+  getParakeetSizeLabel,
+  PARAKEET_MODEL_SIZE_MB,
+} from '@/lib/onboarding-summary-model';
 
 const PARAKEET_MODEL = 'parakeet-tdt-0.6b-v3-int8';
 
@@ -41,7 +46,7 @@ export function DownloadProgressStep() {
     status: parakeetDownloaded ? 'completed' : 'waiting',
     progress: parakeetDownloaded ? 100 : 0,
     downloadedMb: 0,
-    totalMb: 670,
+    totalMb: PARAKEET_MODEL_SIZE_MB,
     speedMbps: 0,
   });
 
@@ -348,18 +353,6 @@ export function DownloadProgressStep() {
       console.warn('[DownloadProgressStep] Failed to verify model:', error);
     }
 
-    // Check if downloads are complete for toast notification
-    const downloadsComplete = parakeetState.status === 'completed' &&
-      summaryState.status === 'completed';
-
-    // Show toast if downloads still in progress
-    if (!downloadsComplete) {
-      toast.info('Downloads will continue in the background', {
-        description: 'You can start using the app. Recording will be available once speech recognition is ready.',
-        duration: 5000,
-      });
-    }
-
     if (isMac) {
       // macOS: Go to Permissions step (will complete after permissions granted)
       goNext();
@@ -481,7 +474,7 @@ export function DownloadProgressStep() {
             'Transcription Engine',
             <Mic className="w-5 h-5 text-muted-foreground" />,
             parakeetState,
-            '~670 MB'
+            getParakeetSizeLabel()
           )}
 
           {renderDownloadCard(

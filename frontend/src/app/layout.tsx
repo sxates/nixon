@@ -2,9 +2,7 @@
 
 import './globals.css'
 import { Archivo, Archivo_Narrow, IBM_Plex_Sans, IBM_Plex_Mono, Courier_Prime } from 'next/font/google'
-import Sidebar from '@/components/Sidebar'
 import { SidebarProvider } from '@/components/Sidebar/SidebarProvider'
-import MainContent from '@/components/MainContent'
 import { Toaster, toast } from 'sonner'
 import "sonner/dist/styles.css"
 import { useState, useEffect, useCallback } from 'react'
@@ -19,24 +17,14 @@ import { OllamaDownloadProvider } from '@/contexts/OllamaDownloadContext'
 import { TranscriptProvider } from '@/contexts/TranscriptContext'
 import { ConfigProvider, useConfig } from '@/contexts/ConfigContext'
 import { OnboardingProvider } from '@/contexts/OnboardingContext'
-import { OnboardingFlow } from '@/components/onboarding'
 import { loadBetaFeatures } from '@/types/betaFeatures'
-import { DownloadProgressToastProvider } from '@/components/shared/DownloadProgressToast'
 import { RecordingPostProcessingProvider } from '@/contexts/RecordingPostProcessingProvider'
 import { ImportAudioDialog, ImportDropOverlay } from '@/components/ImportAudio'
-import CommandPalette from '@/components/CommandPalette'
 import { DeferredBacklogProvider } from '@/contexts/DeferredBacklogProvider'
-import { LlmActivityProvider } from '@/contexts/LlmActivityProvider'
-import { TransportRail } from '@/components/Transport/TransportRail'
-import ResumeRecordingPrompt from '@/components/ResumeRecordingPrompt'
-import ZoomAutoDetect from '@/components/ZoomAutoDetect'
-import NotificationPermissionBootstrap from '@/components/NotificationPermissionBootstrap'
-import CalendarAlerts from '@/components/Calendar/CalendarAlerts'
-import VoiceprintRetractionListener from '@/components/People/VoiceprintRetractionListener'
 import { ImportDialogProvider } from '@/contexts/ImportDialogContext'
 import { PermissionsModalProvider } from '@/contexts/PermissionsModalContext'
-import PermissionsModal from '@/components/PermissionsModal'
 import { isAudioExtension, getAudioFormatsDisplayList } from '@/constants/audioFormats'
+import { AppShell } from './_components/AppShell'
 
 
 // specs/0057 — deck typography. Archivo is the panel/UI face (tabular figures for
@@ -329,48 +317,14 @@ export default function RootLayout({
                             <RecordingPostProcessingProvider>
                               <PermissionsModalProvider>
                               <ImportDialogProvider onOpen={handleOpenImportDialog}>
-                                {/* Download progress toast provider - listens for background downloads */}
-                                <DownloadProgressToastProvider />
-  
-                                {/* Show onboarding or main app */}
-                                {showOnboarding ? (
-                                  <OnboardingFlow onComplete={handleOnboardingComplete} />
-                                ) : (
-                                  <div className="flex">
-                                    {/* Scoped to the Sidebar and the transport rail deliberately
-                                        (specs/0052 + 0057): they are the only two consumers — the rail's
-                                        queue is the second (decision 8) — and every llm-activity-changed
-                                        event sets state here. Hoisting it above MainContent would
-                                        re-render the whole page tree on each background task transition
-                                        — a prep pass emits a burst of them. */}
-                                    <LlmActivityProvider>
-                                      <Sidebar />
-                                      {/* specs/0057 decision 7 — THE transport: fixed bottom rail on
-                                          every post-onboarding route, with the deck status, the REC/HOLD/
-                                          STOP keys and the one global queue. Replaces GlobalRecordingBar
-                                          and the deferred-backlog pill. */}
-                                      <TransportRail />
-                                    </LlmActivityProvider>
-                                    <MainContent>{children}</MainContent>
-                                    {/* ⌘K command palette — global, every route (post-onboarding) */}
-                                    <CommandPalette />
-                                    {/* Request OS notification permission up front (post-onboarding) */}
-                                    <NotificationPermissionBootstrap />
-                                    {/* Zoom auto-detection — global listeners for record/stop (post-onboarding) */}
-                                    <ZoomAutoDetect />
-                                    {/* Calendar "time to join" alerts — app-wide, fires before meetings (spec 0008) */}
-                                    <CalendarAlerts />
-                                    {/* Voiceprint retraction feedback — app-wide undo toast when a span
-                                        correction quarantines a person's polluted voice samples (spec 0039 WS3) */}
-                                    <VoiceprintRetractionListener />
-                                    {/* "Enable recording" permissions modal — opened from the sidebar
-                                        Permissions nav item (spec 0014) */}
-                                    <PermissionsModal />
-                                    {/* Relaunch recovery — prompt to resume a crash-interrupted
-                                        recording, one at a time (spec 0037) */}
-                                    <ResumeRecordingPrompt />
-                                  </div>
-                                )}
+                                {/* specs/0061 W1 Task 2 — AppShell owns the showOnboarding ternary
+                                    and mounts DownloadProgressToastProvider (top-right download
+                                    toasts) only in the post-onboarding branch: during onboarding,
+                                    DownloadProgressStep's own in-page cards already show progress,
+                                    so the toast provider used to duplicate that feedback. */}
+                                <AppShell showOnboarding={showOnboarding} onOnboardingComplete={handleOnboardingComplete}>
+                                  {children}
+                                </AppShell>
                                 {/* Import audio overlay and dialog */}
                                 <ImportDropOverlay visible={showDropOverlay} />
                                 <ConditionalImportDialog
