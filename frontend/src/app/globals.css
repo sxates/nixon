@@ -115,7 +115,8 @@
     --record-ink: 5 88% 58%;           /* 4.9:1 on background — one shade serves both */
     --lamp-amber: 38 87% 55%;
     --lamp-red: 5 88% 58%;
-    --lamp-ink: 40 30% 96%;
+    --lamp-ink: 30 10% 8%;             /* specs/0063 W1-W2 review: same ink as --brand-foreground —
+                                           the near-white default was ~1.85:1 on the amber HOLD face */
     --record-foreground: 40 30% 96%;
     --success: 127 29% 50%;            /* #5AA362 */
     --success-foreground: 30 10% 8%;

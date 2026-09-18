@@ -27,8 +27,12 @@ describe('TransportStatus title block', () => {
     Object.assign(sidebar, { activeRecordingMeetingId: 'm1' });
     Object.assign(transcripts, { meetingTitle: 'Pricing sync' });
     render(<TransportStatus phase="recording" elapsedSeconds={12} />);
-    const btn = screen.getByRole('button', { name: 'Back to the recording' });
+    const btn = screen.getByRole('button', { name: /^Back to the recording/ });
     expect(btn.textContent).toContain('Pricing sync');
+    // aria-label replaces a button's accessible name, so it must itself carry the meeting
+    // title and the state line — otherwise a screen-reader user loses both.
+    expect(btn.getAttribute('aria-label')).toContain('Pricing sync');
+    expect(btn.getAttribute('aria-label')).toContain('On the reel');
     fireEvent.click(btn);
     expect(pushMock).toHaveBeenCalledWith('/record');
   });
@@ -38,13 +42,13 @@ describe('TransportStatus title block', () => {
     Object.assign(sidebar, { activeRecordingMeetingId: 'm1' });
     Object.assign(transcripts, { meetingTitle: 'Pricing sync' });
     render(<TransportStatus phase="recording" elapsedSeconds={12} />);
-    expect(screen.queryByRole('button', { name: 'Back to the recording' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Back to the recording/ })).toBeNull();
     expect(screen.getByText('Pricing sync')).toBeTruthy();
   });
 
   it('is inert when idle — nothing to navigate back to', () => {
     render(<TransportStatus phase="idle" elapsedSeconds={0} />);
-    expect(screen.queryByRole('button', { name: 'Back to the recording' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Back to the recording/ })).toBeNull();
     expect(screen.getByText('Deck ready')).toBeTruthy();
   });
 
@@ -53,18 +57,18 @@ describe('TransportStatus title block', () => {
     Object.assign(sidebar, { activeRecordingMeetingId: 'm1', currentMeeting: { id: 'm1', title: 'Old name' } });
     Object.assign(transcripts, { meetingTitle: 'New name' });
     render(<TransportStatus phase="recording" elapsedSeconds={12} />);
-    expect(screen.getByRole('button', { name: 'Back to the recording' }).textContent).toContain('New name');
+    expect(screen.getByRole('button', { name: /^Back to the recording/ }).textContent).toContain('New name');
   });
 
   it('falls back to the sidebar title, then to the literal', () => {
     Object.assign(sidebar, { activeRecordingMeetingId: 'm1', currentMeeting: { id: 'm1', title: 'Only name' } });
     Object.assign(transcripts, { meetingTitle: '+ New Call' }); // the unnamed-session placeholder
     const { unmount } = render(<TransportStatus phase="recording" elapsedSeconds={1} />);
-    expect(screen.getByRole('button', { name: 'Back to the recording' }).textContent).toContain('Only name');
+    expect(screen.getByRole('button', { name: /^Back to the recording/ }).textContent).toContain('Only name');
     unmount();
 
     Object.assign(sidebar, { activeRecordingMeetingId: 'm1', currentMeeting: null });
     render(<TransportStatus phase="recording" elapsedSeconds={1} />);
-    expect(screen.getByRole('button', { name: 'Back to the recording' }).textContent).toContain('Recording');
+    expect(screen.getByRole('button', { name: /^Back to the recording/ }).textContent).toContain('Recording');
   });
 });
