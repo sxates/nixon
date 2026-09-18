@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import { SegmentTextEditor } from '../SegmentTextEditor';
 
@@ -77,6 +77,24 @@ describe('SegmentTextEditor (specs/0061 W5)', () => {
 
     fireEvent.blur(textarea);
     expect(onSave).toHaveBeenCalledTimes(1);
+  });
+
+  it('a failed save keeps the typed text and allows a retry (specs/0061 W5 review, R40)', async () => {
+    const onSave = vi.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+    render(<SegmentTextEditor initialText="original" onSave={onSave} onCancel={vi.fn()} />);
+
+    const textarea = screen.getByRole('textbox');
+    fireEvent.change(textarea, { target: { value: 'first attempt' } });
+    fireEvent.keyDown(textarea, { key: 'Enter' });
+    await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
+
+    // Nothing reset the field back to the original text on failure.
+    expect(textarea).toHaveValue('first attempt');
+
+    // The guard that stops a duplicate save released, so a retry goes through.
+    fireEvent.keyDown(textarea, { key: 'Enter' });
+    await waitFor(() => expect(onSave).toHaveBeenCalledTimes(2));
+    expect(onSave).toHaveBeenLastCalledWith('first attempt');
   });
 
   it('uses the transcript text class (u-typed)', () => {

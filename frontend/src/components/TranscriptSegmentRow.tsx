@@ -197,19 +197,37 @@ export const TranscriptSegment = memo(function TranscriptSegment({
     // corrected (via onEditText below); shows the "edited" mark.
     userEdited?: boolean;
     /** specs/0061 W5 — save this line's RAW edited text. Absent (recording, or no
-     *  meetingId) => no pencil, no inline edit affordance. Same success/failure
-     *  contract as onReassignSegment; the optimistic overlay + revert is owned by
-     *  the parent view. */
+     *  meetingId) => no pencil, no inline edit affordance. Resolves `true` on success
+     *  (the editor closes and the row shows the new text) or `false` on failure — on
+     *  failure the editor STAYS OPEN with what the user typed (specs/0061 W5 review,
+     *  R40: a failed save must not throw away a hand-typed correction); the caller
+     *  (TranscriptPanel) also surfaces a toast, but this row's own inline message is
+     *  the primary signal. */
     onEditText?: (id: string, text: string) => Promise<boolean>;
 }) {
     const [editing, setEditing] = useState(false);
+    // specs/0061 W5 review (Important 1, R40) — a failed save must not throw away
+    // what the user typed: the editor stays OPEN (SegmentTextEditor keeps its own
+    // `value` because it isn't unmounted) and this inline message is the primary
+    // failure signal, not the transient toast alone.
+    const [saveError, setSaveError] = useState<string | null>(null);
     const displayText = cleanStopWords(text) || (text.trim() === '' ? '[Silence]' : text);
 
     const handleSave = async (newText: string): Promise<boolean> => {
         if (!onEditText) return false;
+        setSaveError(null);
         const ok = await onEditText(id, newText);
-        setEditing(false);
+        if (ok) {
+            setEditing(false);
+        } else {
+            setSaveError("Could not save this edit — try again.");
+        }
         return ok;
+    };
+
+    const handleCancel = () => {
+        setSaveError(null);
+        setEditing(false);
     };
 
     return (
@@ -272,8 +290,11 @@ export const TranscriptSegment = memo(function TranscriptSegment({
                         {onEditText && !editing && (
                             <button
                                 type="button"
-                                onClick={() => setEditing(true)}
-                                className="ml-0.5 rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground focus:opacity-100 group-hover/segment:opacity-100"
+                                onClick={() => {
+                                    setSaveError(null);
+                                    setEditing(true);
+                                }}
+                                className="ml-0.5 rounded-[2px] p-0.5 text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground focus:opacity-100 group-hover/segment:opacity-100"
                                 title="Edit this line's text"
                                 aria-label="Edit this line's text"
                             >
@@ -290,11 +311,16 @@ export const TranscriptSegment = memo(function TranscriptSegment({
                         )}
                     </div>
                     {editing ? (
-                        <SegmentTextEditor
-                            initialText={text}
-                            onSave={handleSave}
-                            onCancel={() => setEditing(false)}
-                        />
+                        <>
+                            <SegmentTextEditor
+                                initialText={text}
+                                onSave={handleSave}
+                                onCancel={handleCancel}
+                            />
+                            {saveError && (
+                                <p className="mt-1 text-[11px] text-destructive">{saveError}</p>
+                            )}
+                        </>
                     ) : isStreaming ? (
                         <div className="bg-muted border border-border rounded-lg px-3 py-2">
                             <p className="u-typed">{displayText}</p>

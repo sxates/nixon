@@ -17,9 +17,10 @@ export interface SegmentTextEditorProps {
     /** The RAW segment text — never the stop-word-cleaned displayText. Editing must
      *  not silently persist the cleaned form. */
     initialText: string;
-    /** Resolves true on a successful save, false on failure. The caller (the
-     *  transcript row/view) owns the optimistic update and its revert; this editor
-     *  doesn't need to know which happened. */
+    /** Resolves true on a successful save, false on failure. On failure the caller
+     *  (the transcript row) keeps this editor mounted — with the text the user
+     *  typed still in it — rather than discarding it (specs/0061 W5 review, R40);
+     *  this editor un-guards itself so the next Enter/blur can retry the same save. */
     onSave: (text: string) => Promise<boolean>;
     onCancel: () => void;
 }
@@ -42,7 +43,12 @@ export function SegmentTextEditor({ initialText, onSave, onCancel }: SegmentText
     const commitSave = () => {
         if (settledRef.current) return;
         settledRef.current = true;
-        void onSave(value.trim());
+        void onSave(value.trim()).then((ok) => {
+            // A successful save unmounts this editor (nothing left to guard). A
+            // failed one keeps it mounted with the typed text still in it — un-guard
+            // so the next Enter/blur can retry the same save.
+            if (!ok) settledRef.current = false;
+        });
     };
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
