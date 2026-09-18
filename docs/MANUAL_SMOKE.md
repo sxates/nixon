@@ -1,7 +1,7 @@
 # Manual smoke checklist
 
 The parts of Nixon that CI **cannot** cover — real microphone + system-audio capture
-(Core Audio tap), screen-recording permission, and live Zoom/Meet/Teams behavior. Run this
+(Core Audio tap), audio-capture permission, and live Zoom/Meet/Teams behavior. Run this
 before a release (`./release.sh`) and after any change to the recording lifecycle, audio
 pipeline, or calendar/Zoom integration.
 
@@ -10,14 +10,14 @@ Automated layers (run first; they gate PRs via `.github/workflows/ci-checks.yml`
 - `cd frontend && pnpm lint && pnpm test` (frontend unit/hook tests)
 
 Test against the **bundled `Nixon.app`** (or `Dev Nixon` from `./dev-nixon.sh`), not the bare
-`cargo run` binary — the ad-hoc-signed dev binary keeps losing its Screen-Recording grant, so
+`cargo run` binary — the ad-hoc-signed dev binary keeps losing its Audio-Capture grant, so
 the system-audio tap silently returns silence (see `CLAUDE.md` / ADR-0004).
 
 ---
 
 ## 0. Permissions (first launch on a clean identifier)
 - [ ] Microphone permission prompt appears and, once granted, the mic level meter moves.
-- [ ] Screen-recording permission prompt appears; after granting + relaunch, **system audio**
+- [ ] Audio-capture permission prompt appears; after granting + relaunch, **system audio**
       is captured (not just mic).
 
 ## 0a. Demo profile (specs/0059)

@@ -100,7 +100,7 @@ function SettingsPageContent() {
             {/* Appearance (specs/0057 decision 1) — Faceplate / Deck / System. */}
             <AppearanceSettings />
             <PreferenceSettings />
-            {/* Recording permissions (spec 0038 WS7.a) — mic + screen-recording
+            {/* Recording permissions (spec 0038 WS7.a) — mic + audio-capture
                 status with an action that opens the same first-run permissions
                 modal. Replaces the former top-level "Permissions" sidebar entry. */}
             <RecordingPermissionsSettings />

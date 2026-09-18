@@ -243,7 +243,7 @@ describe('useRecordingStart — orphan cleanup on failed start (specs/0037 FIX #
   });
 
   it('deletes the just-created row when the backend start throws on a fresh start', async () => {
-    startRecordingWithDevices.mockRejectedValueOnce(new Error('screen-recording permission denied'));
+    startRecordingWithDevices.mockRejectedValueOnce(new Error('audio-capture permission denied'));
 
     const { result } = renderHook(() => useRecordingStart(false, vi.fn()));
 

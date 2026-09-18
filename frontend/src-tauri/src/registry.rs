@@ -237,9 +237,9 @@ pub fn invoke_handler() -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Sen
         audio::system_audio_commands::start_system_audio_monitoring,
         audio::system_audio_commands::stop_system_audio_monitoring,
         audio::system_audio_commands::get_system_audio_monitoring_status,
-        // Screen Recording permission commands
-        audio::permissions::check_screen_recording_permission_command,
-        audio::permissions::request_screen_recording_permission_command,
+        // Audio Capture permission commands
+        audio::permissions::check_audio_capture_permission_command,
+        audio::permissions::request_audio_capture_permission_command,
         audio::permissions::trigger_system_audio_permission_command,
         // Database import commands
         database::commands::check_first_launch,

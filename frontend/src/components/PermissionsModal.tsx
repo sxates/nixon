@@ -155,7 +155,7 @@ export default function PermissionsModal() {
     },
     {
       key: 'sys' as const,
-      label: 'System audio recording',
+      label: 'Audio capture',
       sub: 'Record other participants on the call',
       icon: <Volume2 className="h-4 w-4 text-muted-foreground" aria-hidden="true" />,
       state: systemAudio,

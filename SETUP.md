@@ -67,11 +67,11 @@ For a production build / install:
   They're upstream `#!/bin/bash` scripts that don't source rustup. Use `./dev-nixon.sh`,
   which sources `~/.cargo/env` first.
 - **Permissions reset per machine.** First launch prompts fresh for **microphone** and
-  **screen recording**. Grant both — screen recording is what enables the Core Audio tap to
+  **audio capture**. Grant both — audio capture is what enables the Core Audio tap to
   capture system/Zoom audio. (System audio does NOT need BlackHole.)
 - **Use the bundled `Nixon.app` for reliable system-audio capture.** The bare dev binary
   (`target/debug/nixon`) is ad-hoc signed; its signature changes every rebuild, so macOS
-  keeps orphaning its screen-recording grant and the tap silently returns silence (mic still
+  keeps orphaning its audio-capture grant and the tap silently returns silence (mic still
   works). See ADR-0004.
 - **First `pnpm install` leaves a native build unapproved.** pnpm 11 ignores
   `unrs-resolver`'s build script and writes an untracked `frontend/pnpm-workspace.yaml`
@@ -155,7 +155,7 @@ xattr -dr com.apple.quarantine /Applications/Nixon.app
 
 **Notes**
 - Builds are **Apple Silicon (`aarch64`)** only — an Intel Mac would need a separate build.
-- First launch prompts fresh for microphone + screen-recording (see the gotchas above).
+- First launch prompts fresh for microphone + audio-capture (see the gotchas above).
 - Your meetings/recordings do **not** travel with the app — see §6 to migrate data.
 
 ### Cutting a release (on the build Mac)

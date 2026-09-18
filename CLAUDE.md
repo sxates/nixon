@@ -51,7 +51,7 @@ The app lives under `frontend/` (Tauri 2 + Next.js 14 + React 18). ~44k LOC of R
 |---|---|---|
 | Tauri entry / commands | `frontend/src-tauri/src/lib.rs` + `registry.rs` | `lib.rs` = stable setup only; **new commands register in `registry.rs`** (specs/0042) |
 | Meetings / settings commands | `frontend/src-tauri/src/meetings/`, `settings/`, `search.rs`, `transcripts.rs` | former `api/api.rs`, dispersed by domain (specs/0042) |
-| Audio capture (macOS) | `frontend/src-tauri/src/audio/capture/core_audio.rs`, `capture/system.rs` | **Core Audio process tap — no BlackHole required**; needs screen-recording permission |
+| Audio capture (macOS) | `frontend/src-tauri/src/audio/capture/core_audio.rs`, `capture/system.rs` | **Core Audio process tap — no BlackHole required**; needs audio-capture permission |
 | Audio mixing + VAD | `frontend/src-tauri/src/audio/pipeline.rs`, `audio/vad.rs` | RMS ducking; Silero VAD drops silence |
 | Transcription (STT) | `frontend/src-tauri/src/whisper_engine/`, `parakeet_engine/`, `audio/transcription/` | Whisper.cpp (whisper-rs) + Nvidia Parakeet; real-time/streaming |
 | Summarization | `frontend/src-tauri/src/summary/processor.rs`, `service.rs`, `llm_client.rs`, `templates/` | chunking + template-fill report |
@@ -126,15 +126,15 @@ sidecar uses the `metal` feature on Apple Silicon.
 SQLite DB, settings, single-instance lock, and TCC permissions, so any combination can run at
 once without touching each other's data. (The former hardcoded `.../Meetily/templates/` leak is
 fixed — all storage now derives from the identifier dir via `src/app_paths.rs`.) Each new
-identifier prompts fresh for mic + screen-recording on first run. **Dev signing:** `tauri dev`
+identifier prompts fresh for mic + audio-capture on first run. **Dev signing:** `tauri dev`
 builds through `src-tauri/scripts/cargo-dev-sign.sh` (the `build.runner` in `tauri.dev.conf.json`),
 which re-signs the debug binary (`target/debug/nixon`) with a stable Apple Development identity so
-Keychain ACLs (ADR-0009 API keys) and the Screen-Recording grant survive rebuilds — previously the
+Keychain ACLs (ADR-0009 API keys) and the Audio-Capture grant survive rebuilds — previously the
 per-rebuild ad-hoc signature orphaned both (password prompts; system-audio tap silently returning
 silence). On a machine with no Apple Development cert it no-ops back to ad-hoc, where those two
 gotchas still apply. See ADR-0004 §Dev-build gotchas.
 
-Requires microphone **and** screen-recording permission (the latter is what lets the Core
+Requires microphone **and** audio-capture permission (the latter is what lets the Core
 Audio tap capture system/Zoom audio). System audio capture does **not** need BlackHole.
 
 For a Rust-only compile check (no GUI), `cd frontend/src-tauri && cargo build --features metal`

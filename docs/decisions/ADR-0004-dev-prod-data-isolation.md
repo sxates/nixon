@@ -19,7 +19,7 @@ sharing `com.vinyl.dev`, running the dev build read/wrote the user's real `meeti
 
 Separately, the dev build is the wrong tool for reliable capture: it runs as a bare, ad-hoc-signed
 binary (`target/debug/meetily`) whose signature changes every rebuild, so macOS keeps orphaning its
-Screen Recording grant (no `.app`/bundle id for macOS to register or for `tccutil` to reset). The
+Audio Capture grant (no `.app`/bundle id for macOS to register or for `tccutil` to reset). The
 Core Audio system-audio tap silently returns silence without that permission.
 
 ## Decision
@@ -43,7 +43,7 @@ Core Audio system-audio tap silently returns silence without that permission.
 - Dev testing can no longer touch production meeting data; both apps can run simultaneously.
 - The dev build gets its own (initially empty) DB and models dir — it re-onboards and
   re-downloads models on first launch (one-time, isolated).
-- Production Screen Recording is granted once to `Vinyl.app` and persists across launches; an
+- Production Audio Capture is granted once to `Vinyl.app` and persists across launches; an
   in-place upgrade (new ad-hoc signature) may require a one-click re-grant. A real signing
   identity would remove even that — deferred until wider distribution.
 - `tauri.dev.conf.json` carries the full window block (not just `title`) because Tauri's
@@ -60,7 +60,7 @@ Core Audio system-audio tap silently returns silence without that permission.
   build with a stable **Apple Development** identity (`$NIXON_DEV_SIGNING_IDENTITY` override, renamed in specs/0057;
   auto-detected from the keychain; silently no-ops back to ad-hoc when no identity exists,
   e.g. CI or a contributor without an Apple cert). Same designated requirement on every
-  rebuild ⇒ one "Always Allow" (Keychain) and one Screen Recording grant now persist. The
+  rebuild ⇒ one "Always Allow" (Keychain) and one Audio Capture grant now persist. The
   binary is signed with `get-task-allow` (`scripts/dev-entitlements.plist`) so lldb attach
   still works. Expect **one final** password/permission round the first time a newly-signed
   build touches items created under an old ad-hoc signature. Release builds are untouched
