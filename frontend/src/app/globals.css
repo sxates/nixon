@@ -80,7 +80,7 @@
     --bevel-hi: 0 0% 100% / 0.85;
     --bevel-lo: 0 0% 0% / 0.14;
 
-    --rail-h: 3.25rem; /* transport rail height (specs/0057 Plan 2; 52px after 0.1.0 feedback — 44px clipped the keys) */
+    --rail-h: 3.5rem; /* transport rail height (specs/0057 Plan 2; 56px after specs/0063 W2 grew the keys to 44px so the glyph clears the lamp bar) */
   }
 
   /* specs/0060: a screenshot driver sets data-shot="1" to hide dev-only chrome. */

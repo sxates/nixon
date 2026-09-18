@@ -3,11 +3,11 @@
 import React from 'react';
 import { cn } from '@/lib/utils';
 
-// specs/0057 §3.1 — an illuminated transport key: 48×40 (spec said 44×34; at that height the
-// glyph collided with the lamp bar and the keys read as clipped — 0.1.0 owner feedback),
+// specs/0057 §3.1, geometry revised by specs/0063 W2 — an illuminated transport key: 48×44,
 // 2px radius, 1px bevel, engraved 9px caps legend, and a 4px lamp bar across the top that
-// lights in the key's own color with a real glow.
-// REC lamp = record, HOLD lamp = brand, STOP is never lit.
+// lights in the key's own color with a real glow. Contents are centred below the bar.
+// A lit key lights its whole face: REC red with cream ink, HOLD amber with dark ink.
+// STOP is never lit.
 //
 // `[transition-duration:120ms]` rather than the usual duration utility with an arbitrary
 // value — see the note in LampDot.tsx: `tailwindcss-animate` makes those ambiguous and
@@ -28,11 +28,29 @@ const GLYPH: Record<TransportFn, React.ReactNode> = {
 const LIT_BAR: Record<TransportFn, string> = {
   // Lit bars: a bright core (white highlight over the token) plus a two-ring halo. The
   // original single 8px halo read as a dull dot in the panel — owner feedback for 0.1.0.
-  rec: 'bg-record [background-image:linear-gradient(rgba(255,255,255,0.45),rgba(255,255,255,0)_70%)] shadow-[0_0_0_1px_hsl(var(--record)/0.35),0_0_10px_1px_hsl(var(--record)/0.85),0_0_22px_4px_hsl(var(--record)/0.4)]',
-  hold: 'bg-brand [background-image:linear-gradient(rgba(255,255,255,0.45),rgba(255,255,255,0)_70%)] shadow-[0_0_0_1px_hsl(var(--brand)/0.35),0_0_10px_1px_hsl(var(--brand)/0.85),0_0_22px_4px_hsl(var(--brand)/0.4)]',
+  rec: 'bg-lamp-red [background-image:linear-gradient(rgba(255,255,255,0.45),rgba(255,255,255,0)_70%)] shadow-[0_0_0_1px_hsl(var(--lamp-red)/0.35),0_0_10px_1px_hsl(var(--lamp-red)/0.85),0_0_22px_4px_hsl(var(--lamp-red)/0.4)]',
+  hold: 'bg-lamp-amber [background-image:linear-gradient(rgba(255,255,255,0.45),rgba(255,255,255,0)_70%)] shadow-[0_0_0_1px_hsl(var(--lamp-amber)/0.35),0_0_10px_1px_hsl(var(--lamp-amber)/0.85),0_0_22px_4px_hsl(var(--lamp-amber)/0.4)]',
   stop: '',
 };
-const LIT_GLYPH: Record<TransportFn, string> = { rec: 'fill-record', hold: 'fill-brand', stop: 'fill-engrave' };
+
+// specs/0063 W2 — 0057's rule is "REC is cream text on a lit red key", but only the 4px bar
+// ever lit; the face stayed cream, which is the opposite. A fully lit key lights its face and
+// flips its ink. STOP is never lit, so it has no face of its own.
+const LIT_FACE: Record<TransportFn, string> = {
+  rec: 'bg-record',
+  hold: 'bg-lamp-amber',
+  stop: '',
+};
+const LIT_GLYPH: Record<TransportFn, string> = {
+  rec: 'fill-record-foreground',
+  hold: 'fill-lamp-ink',
+  stop: 'fill-engrave',
+};
+const LIT_LEGEND: Record<TransportFn, string> = {
+  rec: 'text-record-foreground',
+  hold: 'text-lamp-ink',
+  stop: 'text-engrave',
+};
 
 export interface TransportKeyProps extends Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, 'children'> {
   fn: TransportFn;
@@ -43,6 +61,9 @@ export interface TransportKeyProps extends Omit<React.ButtonHTMLAttributes<HTMLB
 }
 
 export function TransportKey({ fn, legend, lit = false, dim = false, disabled, className, ...rest }: TransportKeyProps) {
+  // REC while on HOLD is `lit && dim`: lighting the face and then dropping it to 55% reads as
+  // neither state, so a dimmed key keeps the unlit face and only the bar/glyph dim, as before.
+  const faceLit = lit && !dim && LIT_FACE[fn] !== '';
   return (
     <button
       type="button"
@@ -50,8 +71,11 @@ export function TransportKey({ fn, legend, lit = false, dim = false, disabled, c
       aria-pressed={fn === 'stop' ? undefined : lit}
       disabled={disabled}
       className={cn(
-        'relative flex h-10 w-12 flex-none flex-col items-center justify-end gap-1 rounded-[2px] pb-1.5',
-        'bg-key shadow-[inset_0_1px_0_hsl(var(--bevel-hi)),inset_0_-1px_0_hsl(var(--bevel-lo)),0_1px_0_rgba(0,0,0,0.4)]',
+        // h-11 (44px) with the contents centred BELOW the lamp bar: at h-10/justify-end the
+        // 12px glyph's top landed at ~7px, flush with the bar at y 3-7 (owner feedback, 0.3.1).
+        'relative flex h-11 w-12 flex-none flex-col items-center justify-center gap-0.5 rounded-[2px] pt-2',
+        faceLit ? LIT_FACE[fn] : 'bg-key',
+        'shadow-[inset_0_1px_0_hsl(var(--bevel-hi)),inset_0_-1px_0_hsl(var(--bevel-lo)),0_1px_0_rgba(0,0,0,0.4)]',
         'transition-transform [transition-duration:60ms] [transition-timing-function:cubic-bezier(.2,0,0,1)] active:translate-y-px',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-panel',
         lit && 'shadow-[inset_0_1px_0_hsl(var(--bevel-lo)),inset_0_-1px_0_hsl(var(--bevel-hi))]',
@@ -75,7 +99,13 @@ export function TransportKey({ fn, legend, lit = false, dim = false, disabled, c
       >
         {GLYPH[fn]}
       </svg>
-      <span className={cn('text-[9px] font-semibold tracking-[0.12em]', lit ? 'text-foreground' : 'text-engrave')}>
+      <span
+        className={cn(
+          'text-[9px] font-semibold tracking-[0.12em]',
+          lit ? LIT_LEGEND[fn] : 'text-engrave',
+          lit && dim && 'opacity-[0.55]',
+        )}
+      >
         {legend}
       </span>
     </button>
