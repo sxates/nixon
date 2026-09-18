@@ -5,6 +5,7 @@ import {
   PermissionsStep,
   DownloadProgressStep,
   SetupOverviewStep,
+  CalendarStep,
 } from './steps';
 
 interface OnboardingFlowProps {
@@ -31,11 +32,9 @@ export function OnboardingFlow({ onComplete: _onComplete }: OnboardingFlowProps)
     checkPlatform();
   }, []);
 
-  // 4-Step Onboarding Flow (System-Recommended Models):
-  // Step 1: Welcome - Introduce Nixon features
-  // Step 2: Setup Overview - Database initialization + show recommended downloads
-  // Step 3: Download Progress - Download Parakeet + Summary Model (auto-selected based on platform/RAM)
-  // Step 4: Permissions - Request mic + system audio (macOS only)
+  // Onboarding Flow (System-Recommended Models):
+  // macOS:     1 Welcome, 2 Setup Overview, 3 Download Progress, 4 Permissions, 5 Calendar
+  // Non-macOS: 1 Welcome, 2 Setup Overview, 3 Download Progress, 4 Calendar (no Permissions step)
 
   return (
     <div className="onboarding-flow">
@@ -43,6 +42,8 @@ export function OnboardingFlow({ onComplete: _onComplete }: OnboardingFlowProps)
       {currentStep === 2 && <SetupOverviewStep />}
       {currentStep === 3 && <DownloadProgressStep />}
       {currentStep === 4 && isMac && <PermissionsStep />}
+      {currentStep === 5 && isMac && <CalendarStep />}
+      {currentStep === 4 && !isMac && <CalendarStep />}
     </div>
   );
 }

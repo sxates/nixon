@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import { toast } from 'sonner';
 import { Loader2, RefreshCw } from 'lucide-react';
@@ -24,15 +24,14 @@ import {
   type GoogleCapabilities,
   capabilitiesPending,
   capabilityState,
-  connectGoogleCalendar,
   disconnectGoogleCalendar,
   formatLastSynced,
-  getGoogleCalendarStatus,
   getGoogleCapabilities,
   setGoogleCalendarSelected,
   setGoogleCalendarsSelected,
   syncGoogleCalendarNow,
 } from '@/lib/googleCalendar';
+import { useGoogleCalendarConnect } from '@/hooks/useGoogleCalendarConnect';
 import { SettingsNote, SettingsSection } from '@/components/ui/settings';
 
 /** Human-readable label for each EventKit access status. */
@@ -126,34 +125,45 @@ export function CalendarSettings() {
   const [calendarStatus, setCalendarStatus] = useState<CalendarAccessStatus | null>(null);
   const [connectingCalendar, setConnectingCalendar] = useState(false);
 
-  // --- Google Calendar (specs/0032) ---
+  // --- Google Calendar (specs/0032) — status/connect/sequence-guard/toasts
+  // now live in the shared `useGoogleCalendarConnect` hook (specs/0061 W1
+  // Task 3), which the onboarding Calendar step also uses.
+  const {
+    connecting: hookConnecting,
+    connect: hookConnect,
+    status: hookGoogleStatus,
+    refresh: refreshGoogleStatus,
+  } = useGoogleCalendarConnect();
+  /**
+   * Local shadow of the hook's status, kept in sync via the effect below.
+   * Needed (rather than using `hookGoogleStatus` directly) so the per-calendar
+   * toggle / bulk-toggle handlers can apply an OPTIMISTIC update and revert it
+   * on failure, same as before the hook extraction — the hook itself only
+   * owns connect/refresh, not arbitrary local mutations.
+   */
   const [googleStatus, setGoogleStatus] = useState<GoogleCalendarStatus | null>(null);
-  const [googleConnecting, setGoogleConnecting] = useState(false);
+  useEffect(() => {
+    setGoogleStatus(hookGoogleStatus);
+  }, [hookGoogleStatus]);
+  /**
+   * "Dismiss" hides the pending state locally without cancelling the
+   * in-flight hook connect call (the backend invoke itself times out after 5
+   * minutes) — a late success still refreshes status and toasts.
+   */
+  const [dismissed, setDismissed] = useState(false);
+  const googleConnecting = hookConnecting && !dismissed;
   const [googleSyncing, setGoogleSyncing] = useState(false);
   const [authRequired, setAuthRequired] = useState(false);
   const [disconnectOpen, setDisconnectOpen] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
   // Probed best-effort enrichment capabilities (specs/0038 WS3); null until fetched.
   const [capabilities, setCapabilities] = useState<GoogleCapabilities | null>(null);
-  /**
-   * Monotonic id for the connect attempt in flight. "Dismiss" bumps it so a
-   * late resolution of the (up to 5-minute) connect invoke doesn't toast over
-   * whatever the user is doing now — the status refresh still happens, so a
-   * late success is reflected quietly.
-   */
-  const connectSeq = useRef(0);
 
-  const refreshGoogleStatus = useCallback(async () => {
-    setGoogleStatus(await getGoogleCalendarStatus());
-  }, []);
-
-  // Load both providers' status on mount (EventKit part: spec 0008 behavior).
+  // Load EventKit status on mount (spec 0008 behavior); Google status load is
+  // handled inside useGoogleCalendarConnect.
   useEffect(() => {
     void getCalendarAccessStatus().then(setCalendarStatus);
   }, []);
-  useEffect(() => {
-    void refreshGoogleStatus();
-  }, [refreshGoogleStatus]);
 
   // Reconnect prompt (specs/0032): backend emits this when a token refresh fails
   // with invalid_grant (access revoked / expired). Toast + persistent banner.
@@ -231,30 +241,21 @@ export function CalendarSettings() {
   }, []);
 
   // Google connect / reconnect: long-running (browser consent, ≤5 min).
+  // Status/sequence-guard/toasts live in useGoogleCalendarConnect; this just
+  // clears the local "dismissed" override and reacts to a successful result.
   const handleGoogleConnect = useCallback(async () => {
-    const seq = ++connectSeq.current;
-    setGoogleConnecting(true);
-    const result = await connectGoogleCalendar();
-    const isCurrent = connectSeq.current === seq;
-    if (isCurrent) setGoogleConnecting(false);
+    setDismissed(false);
+    const result = await hookConnect();
     if (result.ok) {
       setAuthRequired(false);
-      if (isCurrent) {
-        toast.success('Google Calendar connected', {
-          description: result.email || undefined,
-        });
-      }
-      await refreshGoogleStatus();
-    } else if (isCurrent) {
-      toast.error('Could not connect Google Calendar', { description: result.error });
     }
-  }, [refreshGoogleStatus]);
+  }, [hookConnect]);
 
   // Dismiss the pending state. The backend command itself times out after 5
-  // minutes; this just stops waiting on it in the UI.
+  // minutes; this just stops waiting on it in the UI — the hook's connect
+  // call keeps running and still refreshes status / toasts if it succeeds.
   const handleGoogleConnectDismiss = useCallback(() => {
-    connectSeq.current += 1;
-    setGoogleConnecting(false);
+    setDismissed(true);
   }, []);
 
   // Per-calendar sync toggle — optimistic, revert on failure (house pattern).
