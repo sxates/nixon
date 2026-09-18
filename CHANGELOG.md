@@ -14,7 +14,20 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 ## [Unreleased]
 
-_(nothing yet)_
+### Added
+
+- While a recording is running, the transport rail's title is a link back to it — click it
+  from any screen to land on the recording (specs/0063 W1).
+
+### Fixed
+
+- Renaming a meeting from the record header now updates the transport rail and the meetings
+  list immediately, instead of leaving the old name in the footer for the rest of the session
+  (specs/0063 W1).
+- The REC/HOLD/STOP keys no longer sit so tight that the glyph touches the lamp bar above it,
+  and a lit key now lights its whole face — REC is cream on red, HOLD is dark on amber — so
+  "armed" is unmistakable in both themes. Previously only a 4px bar lit, and on the light
+  theme it lit in a brown dark enough to read as unlit (specs/0063 W2).
 
 ## [0.4.0] - 2026-09-18
 

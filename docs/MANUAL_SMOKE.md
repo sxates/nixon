@@ -68,6 +68,10 @@ the system-audio tap silently returns silence (see `CLAUDE.md` / ADR-0004).
       returns to idle.
 - [ ] Toasts/alerts stack **above** the rail, never underneath it.
 - [ ] Everything above still reads correctly in **both themes** (Faceplate light / Deck dark).
+- [ ] While recording, navigate to **Meetings**, then click the rail's meeting title — it
+      returns to /record. On /record the title is not clickable.
+- [ ] Rename the meeting in the record header; the rail's title updates immediately, and so
+      does the meetings list in the sidebar.
 
 ## 3. VU meters and lamps on /record (specs/0057 §3.2)
 - [ ] Two needle meters, **CH1 MIC** and **CH2 SYS**. Speak into the mic with nothing
@@ -82,6 +86,9 @@ the system-audio tap silently returns silence (see `CLAUDE.md` / ADR-0004).
       unmute (this is the specs/0049 mute gate, now visible).
 - [ ] There is no spectrometer strip and no separate recording-controls block; the Record
       header is the control panel.
+- [ ] No key glyph touches the lamp bar above it; the legend is centred under the glyph.
+- [ ] A lit **REC** key is a red key with cream ink in both themes; a lit **HOLD** is visibly
+      amber on Faceplate (light), not brown. REC while on HOLD is dimmed, not red.
 
 ## 4. Queue panel (deferred processing + background AI)
 - [ ] With queued work, the rail's **Queue** shows a non-zero count and its lamp lights.
