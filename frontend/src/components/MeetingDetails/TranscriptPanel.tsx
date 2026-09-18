@@ -233,6 +233,29 @@ export function TranscriptPanel({
     [meetingId, speakersController],
   );
 
+  // specs/0061 W5 (task 5) — save a manually corrected line's text. Sticky via
+  // api_set_segment_text (trims, rejects empty, flags user_edited so the Enhance
+  // dialog can warn before a re-transcribe would discard it). Returns success so the
+  // view can keep/revert its optimistic overlay (same contract as reassignSegment);
+  // reconciliation is background-only (specs/0041 WS7.2 — no scroll reset).
+  const editSegmentText = useCallback(
+    async (transcriptId: string, text: string): Promise<boolean> => {
+      if (!meetingId) return false;
+      try {
+        await invoke('api_set_segment_text', { meetingId, transcriptId, text });
+        reconcileInBackground();
+        return true;
+      } catch (error) {
+        console.error('Failed to save edited segment text:', error);
+        toast.error('Could not save this edit', {
+          description: error instanceof Error ? error.message : String(error),
+        });
+        return false;
+      }
+    },
+    [meetingId, reconcileInBackground],
+  );
+
   // Inline assignment wiring for the transcript — only when viewing (not recording)
   // and the meeting has a speaker directory to pick from. Absent => names are static.
   const inlineAssignment: InlineSpeakerAssignment | undefined = useMemo(() => {
@@ -286,6 +309,7 @@ export function TranscriptPanel({
       confidence: t.confidence,
       speaker: t.speaker,
       speakerName: t.speaker_name,
+      userEdited: t.user_edited,
     }));
   }, [transcripts, usePagination, segments]);
 
@@ -372,6 +396,7 @@ export function TranscriptPanel({
           onScrollToSegmentDone={onScrollToSegmentDone}
           unprocessed={!isRecording && unprocessed}
           onProcessNow={meetingId ? handleProcessNow : undefined}
+          onEditText={!isRecording && meetingId ? editSegmentText : undefined}
         />
       </div>
 

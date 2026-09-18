@@ -82,6 +82,13 @@ export interface VirtualizedTranscriptViewProps {
     /** specs/0045 WS4 — "Process now" action for the unprocessed empty state. When
      *  absent, the button is omitted (e.g. no meetingId to enqueue). */
     onProcessNow?: () => void;
+
+    /** specs/0061 W5 (task 5) — save a line's manually corrected RAW text. Resolves
+     *  `true` on success, `false` on failure (the caller — TranscriptPanel — surfaces
+     *  the toast); the optimistic overlay + revert is owned by this view, same as
+     *  onReassignSegment. Absent => no pencil/edit affordance on any row (e.g. while
+     *  recording, or with no meetingId). */
+    onEditText?: (id: string, text: string) => Promise<boolean>;
 }
 
 // Threshold for enabling virtualization (below this, use simple rendering)
@@ -107,6 +114,7 @@ export const VirtualizedTranscriptView: React.FC<VirtualizedTranscriptViewProps>
     onScrollToSegmentDone,
     unprocessed = false,
     onProcessNow,
+    onEditText,
 }) => {
     // Create scroll ref first - shared between virtualizer and auto-scroll hook
     const scrollRef = useRef<HTMLDivElement>(null);
@@ -213,14 +221,43 @@ export const VirtualizedTranscriptView: React.FC<VirtualizedTranscriptViewProps>
         [],
     );
 
-    // Apply the optimistic overlay for rendering only. Length/order/ids are unchanged.
+    // specs/0061 W5 (task 5) — inline text-edit overlay, same shape/reason as the
+    // speaker overlay above: keyed by transcript id so an edit survives the windowed
+    // list unmounting/re-mounting the row on scroll, applied only at render time.
+    const [textOverlay, setTextOverlay] = useState<Map<string, string>>(new Map());
+
+    // Apply the optimistic overlays for rendering only. Length/order/ids are unchanged.
     const displaySegments = useMemo(() => {
-        if (overlay.size === 0) return segments;
+        if (overlay.size === 0 && textOverlay.size === 0) return segments;
         return segments.map((s) => {
             const o = overlay.get(s.id);
-            return o ? { ...s, speaker: o.speaker, speakerName: o.speakerName } : s;
+            const t = textOverlay.get(s.id);
+            if (!o && !t) return s;
+            return {
+                ...s,
+                ...(o ? { speaker: o.speaker, speakerName: o.speakerName } : {}),
+                ...(t ? { text: t, userEdited: true } : {}),
+            };
         });
-    }, [segments, overlay]);
+    }, [segments, overlay, textOverlay]);
+
+    // Drop a text-overlay entry once the re-fetched segments actually carry the
+    // edited text (the background reconcile in TranscriptPanel lands it) — same
+    // reconciliation shape as the speaker overlay's effect below.
+    useEffect(() => {
+        setTextOverlay((prev) => {
+            if (prev.size === 0) return prev;
+            let next: Map<string, string> | null = null;
+            for (const s of segments) {
+                const t = (next ?? prev).get(s.id);
+                if (t && s.text === t) {
+                    if (!next) next = new Map(prev);
+                    next.delete(s.id);
+                }
+            }
+            return next ?? prev;
+        });
+    }, [segments]);
 
     // specs/0041 WS7.2 — overlay reconciliation. Corrections no longer await the parent's
     // refetch (it runs in the background so the viewport never moves), so a successful
@@ -296,6 +333,27 @@ export const VirtualizedTranscriptView: React.FC<VirtualizedTranscriptViewProps>
             return ok;
         },
         [assignment],
+    );
+
+    // specs/0061 W5 (task 5) — save one line's corrected text, with the same
+    // optimistic-then-revert treatment as reassignSegmentOptimistic above: the row
+    // shows the new text immediately, the write is dispatched, and on failure the
+    // overlay entry is reverted (the caller — TranscriptPanel — surfaces the toast).
+    const editSegmentTextOptimistic = useCallback(
+        async (transcriptId: string, text: string): Promise<boolean> => {
+            if (!onEditText) return false;
+            setTextOverlay((prev) => new Map(prev).set(transcriptId, text));
+            const ok = await onEditText(transcriptId, text);
+            if (!ok) {
+                setTextOverlay((prev) => {
+                    const next = new Map(prev);
+                    next.delete(transcriptId);
+                    return next;
+                });
+            }
+            return ok;
+        },
+        [onEditText],
     );
 
     // The assignment the rows see: identical wiring, with the single-line reassign
@@ -542,6 +600,8 @@ export const VirtualizedTranscriptView: React.FC<VirtualizedTranscriptViewProps>
                                         selected={selectedIds.has(segment.id)}
                                         selectionActive={selectionActive}
                                         onToggleSelect={handleToggleSelect}
+                                        userEdited={segment.userEdited}
+                                        onEditText={onEditText ? editSegmentTextOptimistic : undefined}
                                     />
                                 </div>
                             );
@@ -607,6 +667,8 @@ export const VirtualizedTranscriptView: React.FC<VirtualizedTranscriptViewProps>
                                         selected={selectedIds.has(segment.id)}
                                         selectionActive={selectionActive}
                                         onToggleSelect={handleToggleSelect}
+                                        userEdited={segment.userEdited}
+                                        onEditText={onEditText ? editSegmentTextOptimistic : undefined}
                                     />
                                 </motion.div>
                             );

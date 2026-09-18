@@ -177,8 +177,13 @@ export interface TranscriptSegmentData {
   // present, `speakerName` is the label shown above the segment text.
   speaker?: string | null;       // stable per-meeting key ("local","spk_0",…)
   speakerName?: string | null;   // resolved display name ("You","Speaker 1",…)
-  // specs/0061 W5: true once the user has manually corrected this segment's text.
-  user_edited?: boolean;
+  // specs/0061 W5 (task 5): true once the user has manually corrected this segment's
+  // text — camelCase here (unlike `Transcript.user_edited` above, which mirrors the
+  // backend DTO verbatim) to match this interface's own convention (speakerName,
+  // endTime, …). Mapped from `Transcript.user_edited` at both conversion sites
+  // (usePaginatedTranscripts.convertTranscriptsToSegments, TranscriptPanel's
+  // allSegments).
+  userEdited?: boolean;
 }
 
 /** A diarized speaker for a meeting (specs/0010, P1-C/P2). Mirrors `SpeakerDto`

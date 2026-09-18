@@ -63,6 +63,9 @@ export function RetranscribeDialog({
   const [progress, setProgress] = useState<RetranscriptionProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedLang, setSelectedLang] = useState(selectedLanguage || 'auto');
+  // specs/0061 W5 (task 5) — how many lines the owner has manually corrected in this
+  // meeting; > 0 warns before a re-transcribe would silently discard those edits.
+  const [userEditedCount, setUserEditedCount] = useState(0);
 
   // Use centralized model fetching hook
   const {
@@ -115,8 +118,17 @@ export function RetranscribeDialog({
 
       // Fetch available models using centralized hook
       fetchModels();
+
+      // specs/0061 W5 — count manually-corrected lines so the warning below can
+      // show before this re-transcribe would silently discard them.
+      setUserEditedCount(0);
+      invoke<number>('api_count_user_edited', { meetingId })
+        .then(setUserEditedCount)
+        .catch((err) => {
+          console.error('Failed to count user-edited transcripts:', err);
+        });
     }
-  }, [open, selectedLanguage, transcriptModelConfig, fetchModels]);
+  }, [open, selectedLanguage, transcriptModelConfig, fetchModels, meetingId]);
 
   // Listen for retranscription events
   useEffect(() => {
@@ -279,7 +291,9 @@ export function RetranscribeDialog({
               ? progress?.message || 'Processing audio...'
               : error
                 ? 'An error occurred during retranscription'
-                : 'Re-process the audio with different language settings'}
+                : userEditedCount > 0
+                  ? `Your ${userEditedCount} text edits will be replaced by the new transcription.`
+                  : 'Re-process the audio with different language settings'}
           </DialogDescription>
         </DialogHeader>
 
