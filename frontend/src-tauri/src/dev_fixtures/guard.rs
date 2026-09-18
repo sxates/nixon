@@ -20,6 +20,17 @@ pub fn env_flag(name: &str) -> bool {
     matches!(std::env::var(name).as_deref(), Ok("1"))
 }
 
+/// True only when the fictional demo dataset is the active dataset on a `.debug`
+/// build (specs/0059 `--demo`, specs/0060 screenshots).
+///
+/// Every path that ingests the *developer's own* data checks this: a demo profile
+/// is the profile the README screenshots are captured from, so it must contain
+/// nothing but fixtures. Fails closed on a non-debug bundle, like the rest of this
+/// module, so production can never take a dev branch.
+pub fn demo_dataset_active() -> bool {
+    is_debug_identifier() && DevFlags::from_env().fixtures
+}
+
 #[derive(Debug, Clone, Copy, Default, serde::Serialize)]
 pub struct DevFlags {
     pub fixtures: bool,
@@ -107,6 +118,14 @@ mod tests {
         assert!(!identifier_is_debug(Some("ai.vinyl.app")));
         assert!(identifier_is_debug(Some("ai.vinyl.app.debug")));
         assert!(!identifier_is_debug(Some("debug")));
+    }
+    #[test]
+    fn demo_dataset_is_false_without_a_debug_bundle() {
+        // Same reasoning as `debug_identifier_is_false_when_uninitialised`: the
+        // identifier OnceLock is never populated under `cargo test --lib`, so this
+        // exercises the fail-closed arm regardless of how NIXON_FIXTURES is set in
+        // the environment the test runs under.
+        assert!(!demo_dataset_active());
     }
     #[test]
     fn debug_identifier_is_false_when_uninitialised() {
