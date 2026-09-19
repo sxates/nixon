@@ -237,4 +237,105 @@ describe('PrepPanel (specs/0036)', () => {
       }),
     );
   });
+
+  // ── specs/0063 W4: the Prep tab reshaped after owner feedback on 0.3.1 ──────
+
+  describe('specs/0063 W4', () => {
+    it('puts the prep-notes editor above the brief, not below it', async () => {
+      // The whole point of the reorder: the notes are the only part of this tab the user
+      // writes, and under a brief plus a long carried-over list they were being missed.
+      stubInvoke({
+        api_get_prep: () => makeView({ briefMarkdown: 'Where we left off.' }),
+      });
+      const { container } = render(<PrepPanel meetingId="m1" />);
+
+      await screen.findByTestId('prep-notes-editor');
+      const notes = screen.getByTestId('prep-notes-editor');
+      const brief = container.querySelector('section[aria-label="Pre-call brief"]');
+      expect(brief).not.toBeNull();
+      // DOCUMENT_POSITION_FOLLOWING === the brief comes AFTER the notes.
+      expect(notes.compareDocumentPosition(brief!) & Node.DOCUMENT_POSITION_FOLLOWING)
+        .toBeTruthy();
+    });
+
+    it('renders the brief flat — no card border or shadow around it', async () => {
+      stubInvoke({
+        api_get_prep: () => makeView({ briefMarkdown: 'Where we left off.' }),
+      });
+      const { container } = render(<PrepPanel meetingId="m1" />);
+
+      await screen.findByText('Where we left off.');
+      const brief = container.querySelector('section[aria-label="Pre-call brief"]')!;
+      const boxed = Array.from(brief.querySelectorAll('div')).filter(
+        (el) => el.className.includes('border-border') && el.className.includes('shadow-sm'),
+      );
+      expect(boxed).toHaveLength(0);
+    });
+
+    it('exposes the header actions as icon buttons that keep their full names', async () => {
+      // Icon-only on screen, but the accessible name must still carry the whole label —
+      // that is the tooltip text and the only thing a screen reader gets.
+      stubInvoke({
+        api_get_prep: () => makeView({ briefMarkdown: 'Where we left off.' }),
+      });
+      render(<PrepPanel meetingId="m1" />);
+
+      const link = await screen.findByRole('button', { name: 'Link previous meeting…' });
+      const regen = screen.getByRole('button', { name: 'Regenerate the brief' });
+      // Icon-only: no visible text of its own.
+      expect(link.textContent).toBe('');
+      expect(regen.textContent).toBe('');
+    });
+
+    it('checks a carried-over item off, and the row stays visible struck through', async () => {
+      const item = makeItem({ id: 'ai-9', assigneeIsSelf: true, description: 'Draft the roadmap' });
+      const onOpenItemsChanged = vi.fn();
+      stubInvoke({
+        api_get_prep: () => makeView({ openItems: [item] }),
+        api_set_action_item_status: () => ({ ...item, status: 'completed' }),
+      });
+      render(<PrepPanel meetingId="m1" onOpenItemsChanged={onOpenItemsChanged} />);
+
+      expect(await screen.findByText('Draft the roadmap')).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('checkbox', { name: /mark .*as completed/i }));
+
+      await waitFor(() =>
+        expect(invokeMock).toHaveBeenCalledWith('api_set_action_item_status', {
+          id: 'ai-9',
+          status: 'completed',
+        }),
+      );
+      // It must NOT vanish: api_get_prep returns open items only, so a reload here would
+      // make the row disappear mid-click and leave the user unsure it registered. It stays,
+      // now ticked, until the panel is remounted.
+      expect(screen.getByText('Draft the roadmap')).toBeInTheDocument();
+      await waitFor(() =>
+        expect(screen.getByRole('checkbox', { name: /mark .*as open/i })).toHaveAttribute(
+          'aria-checked',
+          'true',
+        ),
+      );
+      // And the count badge owner is told, because the status command emits no event.
+      await waitFor(() => expect(onOpenItemsChanged).toHaveBeenCalled());
+    });
+
+    it('does not offer an assignee picker on carried-over rows', async () => {
+      // The grouping already names the assignee, and these items belong to a different
+      // meeting whose roster this panel never loads.
+      stubInvoke({
+        api_get_prep: () =>
+          makeView({
+            openItems: [
+              makeItem({ id: 'o1', assigneeIsSelf: false, assigneePersonId: 'p1', description: 'Send the budget' }),
+            ],
+          }),
+        api_list_people: () => [person('p1', 'Alice')],
+      });
+      render(<PrepPanel meetingId="m1" />);
+
+      expect(await screen.findByText('Send the budget')).toBeInTheDocument();
+      // "Alice" appears exactly once — as the group heading, not also as a row chip.
+      expect(screen.getAllByText('Alice')).toHaveLength(1);
+    });
+  });
 });

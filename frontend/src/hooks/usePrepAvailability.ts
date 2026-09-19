@@ -19,6 +19,12 @@ import type { PrepView } from '@/lib/prep';
 export function usePrepAvailability(meetingId: string | null | undefined): {
   hasPrep: boolean;
   openItemCount: number;
+  /**
+   * Re-read the view now. `api_set_action_item_status` emits no event, so checking a
+   * carried-over item off in the Prep panel is otherwise invisible to this hook and the
+   * count badge would keep showing the old number (specs/0063 W4).
+   */
+  refresh: () => void;
 } {
   const [hasPrep, setHasPrep] = useState(false);
   const [openItemCount, setOpenItemCount] = useState(0);
@@ -56,5 +62,7 @@ export function usePrepAvailability(meetingId: string | null | undefined): {
 
   useEffect(() => safeListen('prep-briefs-updated', () => void load()), [load]);
 
-  return { hasPrep, openItemCount };
+  const refresh = useCallback(() => void load(), [load]);
+
+  return { hasPrep, openItemCount, refresh };
 }

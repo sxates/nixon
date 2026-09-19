@@ -24,6 +24,14 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 ### Changed
 
+- The Prep tab is reordered and simplified (specs/0063 W4): your prep notes are now at the
+  **top**, above the brief and the carried-over items, so the one part of the tab you write
+  is the first thing you reach. The brief renders flat — no card around it — with its
+  sources on a single muted "From" line, and "Link previous meeting…" / "Regenerate" are now
+  icon buttons with tooltips instead of two labelled buttons crowding the heading.
+- Carried-over open items in the Prep tab can be **checked off in place**, instead of being
+  read-only. A checked item stays visible, struck through, until you leave the tab, and the
+  Prep count badge updates as you go (specs/0063 W4).
 - The duplicate queue popover on Today is removed. Its "Processing…" button now opens the
   transport rail's Queue panel instead (specs/0063 W3).
 - Developer-facing: the file-size gate (`scripts/check-file-size.sh`) no longer freezes each

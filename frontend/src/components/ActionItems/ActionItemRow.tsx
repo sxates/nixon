@@ -54,6 +54,13 @@ interface ActionItemRowProps {
    * (WS1.b hub flat views). The per-meeting section leaves this false.
    */
   compact?: boolean;
+  /**
+   * Hide the assignee chip (specs/0063 W4). For a surface whose own grouping already
+   * names the assignee — the Prep tab lists carried-over items under "Your open items"
+   * and an "Owed by others → <name>" heading — the chip repeats that name on every row.
+   * Reassignment there belongs on the meeting that owns the item, not in a prep view.
+   */
+  hideAssignee?: boolean;
 }
 
 /**
@@ -103,6 +110,7 @@ export function ActionItemRow({
   meetingChip,
   dragHandle,
   compact = false,
+  hideAssignee = false,
 }: ActionItemRowProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [draft, setDraft] = useState(item.description);
@@ -202,11 +210,13 @@ export function ActionItemRow({
               : 'flex',
           )}
         >
-          <AssigneePicker
-            label={assigneeName}
-            candidates={candidates}
-            onSelect={(selection) => void onAssign(item, selection)}
-          />
+          {!hideAssignee && (
+            <AssigneePicker
+              label={assigneeName}
+              candidates={candidates}
+              onSelect={(selection) => void onAssign(item, selection)}
+            />
+          )}
           {onSetDueDate ? (
             <DueDateControl item={item} onSetDueDate={onSetDueDate} />
           ) : (
