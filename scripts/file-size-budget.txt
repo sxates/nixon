@@ -1,0 +1,13 @@
+# specs/0065 — maximum total excess over the 800-line cap, summed across every
+# path in scripts/file-size-tracked.txt: sum(max(0, lines - 800)).
+#
+# It is the measured excess rounded UP to the next 500 lines, so ordinary edits
+# have room and the gate does not become a zero-headroom wall the moment it is
+# seeded. 500 is roughly p90 of this repo's production file sizes: the budget
+# steps down when you have extracted a typical module's worth, not when you have
+# deleted a stray comment.
+#
+# This number may only go DOWN. `check-file-size.sh --update` lowers it after a
+# decomposition and never raises it. It reaches 0 exactly when every tracked
+# file is under the cap, at which point this gate has done its job.
+11500

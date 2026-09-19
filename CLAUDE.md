@@ -145,8 +145,15 @@ works **once the sidecar binary exists**.
 A change is done when:
 1. `cargo check`, `cargo clippy`, and `cargo test` are clean (in `frontend/src-tauri`).
 2. `pnpm lint` and `pnpm test` are clean (in `frontend`).
-2b. `scripts/check-file-size.sh` passes (specs/0042 ratchet: no production source file
-   over 800 lines unless allowlisted; allowlisted files may only shrink).
+2b. `scripts/check-file-size.sh` passes (specs/0065): no production source file over 800
+   lines unless it is in `scripts/file-size-tracked.txt`, **and** the total excess across
+   those grandfathered files — `sum(lines - 800)` — stays within
+   `scripts/file-size-budget.txt`. The budget is shared, so a small addition to a large
+   legacy file is fine when there is headroom; pay it down anywhere in the tracked set, not
+   necessarily in the file you touched. `--update` drops files that fell under the cap and
+   lowers the budget; it never raises either. `--self-test` runs the gate's own checks.
+   (This replaces the specs/0042 per-file ratchet, which froze each allowlisted file at its
+   exact size and ended up blocking one-line `use` statements.)
 2c. `scripts/check-off-token-colors.sh` passes (specs/0057: no raw Tailwind palette classes —
    everything goes through the semantic tokens so Deck/Faceplate stay in parity).
 2d. For UI changes, run `pnpm shots` then `pnpm shots:diff` from `frontend/` and look at the
