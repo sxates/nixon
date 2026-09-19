@@ -14,6 +14,10 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 ## [Unreleased]
 
+_(nothing yet)_
+
+## [0.5.0] - 2026-09-18
+
 ### Added
 
 - While a recording is running, the transport rail's title is a link back to it — click it
