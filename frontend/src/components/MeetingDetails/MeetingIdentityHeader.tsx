@@ -225,10 +225,11 @@ export function MeetingIdentityHeader({
   );
 
   // Single-column document layout: back button + editable title + the engraved identity
-  // line. 0.1.0 canvas feedback: once the column is at its max width (`lg:` — the 840px
-  // column plus the sidebar leaves a gutter from 1024px up) the back button hangs in that
-  // gutter so the title's left edge lines up with the participants row, channel strip and
-  // tabs below it. Narrower than that there is no gutter, and it stays inline.
+  // line. The back button used to hang in the gutter left of the reading column
+  // (`lg:absolute lg:-left-9`) so the title lined up with the participants row and tabs
+  // below. specs/0064 W4 moved this header out of that column and across the full width,
+  // which left the hang pulling the button 36px into the page's own padding — hard against
+  // the sidebar (owner feedback 2026-09-19). It is inline again, inside that padding.
   return (
     <div className="relative flex items-start gap-1.5">
       {onBack && (
@@ -237,7 +238,7 @@ export function MeetingIdentityHeader({
           onClick={onBack}
           aria-label="Back to meetings"
           title="Back to meetings"
-          className="-ml-1 mt-1 inline-flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:absolute lg:-left-9 lg:top-0 lg:ml-0"
+          className="-ml-1 mt-1 inline-flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <ArrowLeft className="h-[18px] w-[18px]" />
         </button>
