@@ -562,7 +562,9 @@ mod tests {
         // Single-meeting lookup agrees with the list for every row.
         for (id, expected) in [(&first, 1), (&second, 2), (&third, 3)] {
             assert_eq!(
-                MeetingsRepository::get_reel_number(&pool, id).await.unwrap(),
+                MeetingsRepository::get_reel_number(&pool, id)
+                    .await
+                    .unwrap(),
                 Some(expected),
                 "single-meeting reel number must match the list"
             );

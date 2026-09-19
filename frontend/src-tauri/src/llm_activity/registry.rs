@@ -58,10 +58,14 @@ pub struct RunningTask {
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum TaskOutcome {
     Success,
-    Failed { error: String },
+    Failed {
+        error: String,
+    },
     /// specs/0053 W3: work deliberately not done, with the reason — e.g. the Auto
     /// outline found no commitments, so action-item extraction was skipped.
-    Skipped { reason: String },
+    Skipped {
+        reason: String,
+    },
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -210,7 +214,11 @@ impl LlmTaskRegistry {
     /// paying the cost of `take_record`, so a decision to refuse never destroys the record
     /// it refused to touch (specs/0063 W3 Task 6).
     pub fn peek_kind(&self, id: u64) -> Option<TaskKind> {
-        self.lock().history.iter().find(|r| r.id == id).map(|r| r.kind)
+        self.lock()
+            .history
+            .iter()
+            .find(|r| r.id == id)
+            .map(|r| r.kind)
     }
 
     /// The meeting id of the history record at `id`, without removing it — same
@@ -479,10 +487,7 @@ mod tests {
             !view.has_failure,
             "a deliberate skip must not raise the sticky badge"
         );
-        assert!(
-            view.history[0].error.is_none(),
-            "a skip is not an error"
-        );
+        assert!(view.history[0].error.is_none(), "a skip is not an error");
         match &view.history[0].outcome {
             TaskOutcome::Skipped { reason } => {
                 assert_eq!(reason, "No commitments found in this meeting")
@@ -502,7 +507,10 @@ mod tests {
         r.start(TaskKind::PrepBrief, Origin::Background, "bad")
             .finish(Err("boom".into()));
         let view = r.view();
-        assert!(matches!(view.history[0].outcome, TaskOutcome::Failed { .. }));
+        assert!(matches!(
+            view.history[0].outcome,
+            TaskOutcome::Failed { .. }
+        ));
         assert!(matches!(view.history[1].outcome, TaskOutcome::Success));
     }
 
@@ -521,31 +529,50 @@ mod tests {
         let taken = reg.take_record(id).expect("record should exist");
         assert_eq!(taken.kind, TaskKind::PrepBrief);
         assert_eq!(taken.meeting_id.as_deref(), Some("m1"));
-        assert!(reg.view().history.is_empty(), "the record must leave history");
+        assert!(
+            reg.view().history.is_empty(),
+            "the record must leave history"
+        );
     }
 
     #[test]
     fn taking_the_last_failure_clears_the_sticky_badge() {
         let reg = registry();
-        let t = Arc::clone(&reg).start_for(TaskKind::ActionItems, Origin::Background, "x", Some("m1".into()));
+        let t = Arc::clone(&reg).start_for(
+            TaskKind::ActionItems,
+            Origin::Background,
+            "x",
+            Some("m1".into()),
+        );
         t.finish(Err("boom".into()));
         assert!(reg.view().has_failure);
 
         let id = reg.view().history[0].id;
         reg.take_record(id);
-        assert!(!reg.view().has_failure, "no failures left, so the badge must clear");
+        assert!(
+            !reg.view().has_failure,
+            "no failures left, so the badge must clear"
+        );
     }
 
     #[test]
     fn taking_one_of_two_failures_keeps_the_badge_lit() {
         let reg = registry();
         for m in ["m1", "m2"] {
-            let t = Arc::clone(&reg).start_for(TaskKind::PrepBrief, Origin::Background, "x", Some(m.into()));
+            let t = Arc::clone(&reg).start_for(
+                TaskKind::PrepBrief,
+                Origin::Background,
+                "x",
+                Some(m.into()),
+            );
             t.finish(Err("boom".into()));
         }
         let id = reg.view().history[0].id;
         reg.take_record(id);
-        assert!(reg.view().has_failure, "one failure remains, so the badge stays");
+        assert!(
+            reg.view().has_failure,
+            "one failure remains, so the badge stays"
+        );
     }
 
     /// The per-record dismiss path (`api_llm_activity_dismiss_task`, fix-round 1 on
@@ -555,9 +582,19 @@ mod tests {
     #[test]
     fn taking_a_non_retryable_kinds_record_leaves_another_failure_lit() {
         let reg = registry();
-        let ask_ai = Arc::clone(&reg).start_for(TaskKind::AskAI, Origin::Background, "Ask AI", Some("m1".into()));
+        let ask_ai = Arc::clone(&reg).start_for(
+            TaskKind::AskAI,
+            Origin::Background,
+            "Ask AI",
+            Some("m1".into()),
+        );
         ask_ai.finish(Err("boom".into()));
-        let prep = Arc::clone(&reg).start_for(TaskKind::PrepBrief, Origin::Background, "Prep", Some("m2".into()));
+        let prep = Arc::clone(&reg).start_for(
+            TaskKind::PrepBrief,
+            Origin::Background,
+            "Prep",
+            Some("m2".into()),
+        );
         prep.finish(Err("boom".into()));
 
         let ask_ai_id = reg
@@ -573,7 +610,10 @@ mod tests {
         let remaining = reg.view();
         assert_eq!(remaining.history.len(), 1);
         assert_eq!(remaining.history[0].kind, TaskKind::PrepBrief);
-        assert!(remaining.has_failure, "the other failure's badge must stay lit");
+        assert!(
+            remaining.has_failure,
+            "the other failure's badge must stay lit"
+        );
     }
 
     #[test]
@@ -625,7 +665,10 @@ mod tests {
 
         let v = reg.view();
         assert_eq!(v.history.len(), 1, "the skipped record stays in history");
-        assert!(!v.has_failure, "a skipped record must never keep the badge lit");
+        assert!(
+            !v.has_failure,
+            "a skipped record must never keep the badge lit"
+        );
     }
 
     /// specs/0063 W3 fix round (I3): a FOREGROUND failure (e.g. Ask AI, already shown
@@ -637,7 +680,12 @@ mod tests {
     fn taking_the_only_background_failure_ignores_a_remaining_foreground_failure() {
         let reg = registry();
         Arc::clone(&reg)
-            .start_for(TaskKind::AskAI, Origin::Foreground, "Ask AI", Some("m1".into()))
+            .start_for(
+                TaskKind::AskAI,
+                Origin::Foreground,
+                "Ask AI",
+                Some("m1".into()),
+            )
             .finish(Err("boom".into()));
         assert!(
             !reg.view().has_failure,

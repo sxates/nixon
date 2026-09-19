@@ -27,7 +27,8 @@ fn folder_has_audio(folder: &Path) -> bool {
                 p.is_file()
                     && p.extension()
                         .map(|ext| {
-                            AUDIO_EXTENSIONS.contains(&ext.to_string_lossy().to_lowercase().as_str())
+                            AUDIO_EXTENSIONS
+                                .contains(&ext.to_string_lossy().to_lowercase().as_str())
                         })
                         .unwrap_or(false)
             })

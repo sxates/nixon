@@ -87,7 +87,10 @@ async fn successful_retranscription_clears_the_defer_marker() {
     let mode = MeetingsRepository::get_processing_mode(pool, &meeting_id)
         .await
         .expect("read processing mode");
-    assert_eq!(mode, None, "defer marker must be cleared after transcription");
+    assert_eq!(
+        mode, None,
+        "defer marker must be cleared after transcription"
+    );
 }
 
 #[tokio::test]

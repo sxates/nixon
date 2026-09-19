@@ -128,9 +128,7 @@ pub fn validate(outline: &Outline) -> Result<(), String> {
         ));
     }
     if !outline.has_commitments && commitment_sections > 0 {
-        return Err(
-            "outline claims no commitments but declares a commitments section".to_string(),
-        );
+        return Err("outline claims no commitments but declares a commitments section".to_string());
     }
 
     if outline.sections.len() < MIN_SECTIONS {
@@ -217,14 +215,17 @@ pub fn fallback_outline() -> Outline {
         sections: vec![
             OutlineSection {
                 title: "Summary".to_string(),
-                instruction: "Provide a brief, one-paragraph executive summary of the entire meeting".to_string(),
+                instruction:
+                    "Provide a brief, one-paragraph executive summary of the entire meeting"
+                        .to_string(),
                 format: "paragraph".to_string(),
                 item_format: None,
                 role: Some(SectionRole::Overview),
             },
             OutlineSection {
                 title: "Key Decisions".to_string(),
-                instruction: "List the most important decisions made during the meeting".to_string(),
+                instruction: "List the most important decisions made during the meeting"
+                    .to_string(),
                 format: "list".to_string(),
                 item_format: None,
                 role: None,
@@ -238,7 +239,9 @@ pub fn fallback_outline() -> Outline {
             },
             OutlineSection {
                 title: "Discussion Highlights".to_string(),
-                instruction: "Summarize the main topics of discussion, key arguments, and important insights".to_string(),
+                instruction:
+                    "Summarize the main topics of discussion, key arguments, and important insights"
+                        .to_string(),
                 format: "paragraph".to_string(),
                 item_format: None,
                 role: None,
@@ -287,9 +290,7 @@ fn outline_from_reply(reply: &str) -> Outline {
     if let Err(e) = validate(&outline) {
         // `e` is a content-free discriminant (section index + rule name) by
         // construction — see `validate`'s doc.
-        warn!(
-            "Auto outline failed validation ({e}); falling back to {FALLBACK_TEMPLATE_ID}"
-        );
+        warn!("Auto outline failed validation ({e}); falling back to {FALLBACK_TEMPLATE_ID}");
         return fallback_outline();
     }
 
@@ -417,7 +418,8 @@ mod tests {
     #[test]
     fn commitments_section_is_required_when_the_meeting_has_commitments() {
         let mut o = valid_outline();
-        o.sections.retain(|s| s.role != Some(SectionRole::Commitments));
+        o.sections
+            .retain(|s| s.role != Some(SectionRole::Commitments));
         let err = validate(&o).expect_err("must reject");
         assert!(err.contains("commitments"), "unexpected error: {err}");
     }
@@ -427,7 +429,8 @@ mod tests {
     fn commitments_section_is_optional_when_there_are_no_commitments() {
         let mut o = valid_outline();
         o.has_commitments = false;
-        o.sections.retain(|s| s.role != Some(SectionRole::Commitments));
+        o.sections
+            .retain(|s| s.role != Some(SectionRole::Commitments));
         o.sections.push(section("Open Questions", "list", None));
         assert_eq!(validate(&o), Ok(()));
     }
@@ -479,7 +482,10 @@ mod tests {
         assert_eq!(template.sections[0].title, "Overview");
         assert_eq!(template.sections[2].title, "Who's Doing What");
         assert_eq!(template.sections[1].format, "list");
-        assert!(template.validate().is_ok(), "must satisfy Template's own rules");
+        assert!(
+            template.validate().is_ok(),
+            "must satisfy Template's own rules"
+        );
     }
 
     /// An outline the model emits must survive a JSON round-trip into the

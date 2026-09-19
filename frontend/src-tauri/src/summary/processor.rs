@@ -319,7 +319,6 @@ pub(crate) fn language_name_from_code(code: &str) -> Option<&'static str> {
 // here so existing `processor::rough_token_count` callers keep their path.
 pub use crate::summary::length::{length_guidance, rough_token_count};
 
-
 /// Builds the participant-role preamble prepended to the speaker-attributed transcript
 /// when at least one speaker has a role (specs/0012 Task 5). Returns `None` for an empty
 /// list so the caller takes the byte-identical no-role path.
@@ -1012,7 +1011,12 @@ pub async fn generate_meeting_summary(
             accounting.processed, accounting.total, accounting.failed
         );
     }
-    Ok((final_markdown, english_markdown, accounting, derived_outline))
+    Ok((
+        final_markdown,
+        english_markdown,
+        accounting,
+        derived_outline,
+    ))
 }
 
 /// Hierarchical (recursive) reduce of chunk summaries into a single combined summary.
@@ -1555,8 +1559,6 @@ mod tests {
     }
 
     // Script-aware token estimate (spec 0028) ---------------------------------
-
-
 
     #[test]
     fn chunk_text_dense_script_produces_more_chunks_than_latin_bug() {

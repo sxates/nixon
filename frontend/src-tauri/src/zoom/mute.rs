@@ -101,7 +101,9 @@ mod macos_ax {
     pub(crate) fn read_zoom_mute_state(pid: i32) -> Option<bool> {
         let app = AXUIElement::application(pid);
         let menu_bar = app
-            .attribute(&AXAttribute::new(&CFString::from_static_string("AXMenuBar")))
+            .attribute(&AXAttribute::new(&CFString::from_static_string(
+                "AXMenuBar",
+            )))
             .ok()?
             .downcast::<AXUIElement>()?;
         // The "Meeting" menu bar item… (bind each CFArray so the `ItemRef`s that

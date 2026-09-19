@@ -119,7 +119,11 @@ mod tests {
 
     #[test]
     fn never_skips_when_no_outline_is_stored() {
-        assert!(!should_skip_background_extraction(AUTO_TEMPLATE_ID, None, false));
+        assert!(!should_skip_background_extraction(
+            AUTO_TEMPLATE_ID,
+            None,
+            false
+        ));
     }
 
     /// Flag and sections disagreeing means we do not trust the flag.

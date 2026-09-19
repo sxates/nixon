@@ -12,7 +12,9 @@ use std::sync::{
 };
 use tauri::{AppHandle, Emitter, Manager, Runtime};
 
-use super::{device_resolution, parse_audio_device, DeviceEvent, DeviceMonitorType, RecordingManager};
+use super::{
+    device_resolution, parse_audio_device, DeviceEvent, DeviceMonitorType, RecordingManager,
+};
 
 // Import transcription modules
 use super::transcription::{self, reset_speech_detected_flag};
