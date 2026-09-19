@@ -24,7 +24,7 @@ interface TodayHeaderProps {
   onRecord: () => void;
 }
 
-/** Home header — greeting + day summary, ⌘K search, Ask AI, New note, Record. */
+/** Today header — greeting + day summary, ⌘K search, Ask AI, New note, Record. */
 export function TodayHeader({ now, daySummary, isRecording, onNewNote, onRecord }: TodayHeaderProps) {
   const router = useRouter();
   return (
