@@ -31,6 +31,7 @@ use crate::database::repositories::meeting_participant::{
 };
 use crate::database::repositories::people::PeopleRepository;
 use crate::database::repositories::speaker::SpeakersRepository;
+use crate::diarization::launch;
 use crate::diarization::pipeline;
 use crate::diarization::settings;
 use crate::state::AppState;
@@ -72,7 +73,7 @@ pub async fn api_diarize_meeting<R: Runtime>(
     if meeting_id.trim().is_empty() {
         return Err("meeting_id cannot be empty".to_string());
     }
-    let started = crate::diarization::launch::diarize_meeting(app, meeting_id);
+    let started = launch::diarize_meeting(app, meeting_id);
     Ok(DiarizeStartDto {
         started,
         already_running: !started,
