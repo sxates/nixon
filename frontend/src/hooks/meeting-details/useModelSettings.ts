@@ -4,13 +4,13 @@ import { toast } from 'sonner';
 import { ModelConfig } from '@/components/ModelSettingsModal';
 
 /**
- * Model-settings plumbing for meeting-details: SummaryGeneratorButtonGroup registers its
+ * Model-settings plumbing for meeting-details: the summary toolbar registers its
  * modal-open function here (via `handleRegisterModalOpen`), error handlers trigger it
  * (via `handleOpenModelSettings`), and `handleSaveModelConfig` persists a config to the
  * backend + broadcasts `model-config-updated` so ConfigContext stays in sync.
  */
 export function useModelSettings() {
-  // Ref to store the modal open function from SummaryGeneratorButtonGroup
+  // Ref to store the modal open function from the summary toolbar
   const openModelSettingsRef = useRef<(() => void) | null>(null);
 
   // Callback to register the modal open function

@@ -16,17 +16,22 @@ async fn test_pool() -> SqlitePool {
         .run(&pool)
         .await
         .expect("migrations");
-    sqlx::query("INSERT INTO meetings (id, title, created_at, updated_at) VALUES ('m1','T','now','now')")
-        .execute(&pool)
-        .await
-        .expect("seed meeting");
+    sqlx::query(
+        "INSERT INTO meetings (id, title, created_at, updated_at) VALUES ('m1','T','now','now')",
+    )
+    .execute(&pool)
+    .await
+    .expect("seed meeting");
     pool
 }
 
 #[tokio::test]
 async fn absent_outline_reads_as_none() {
     let pool = test_pool().await;
-    assert!(SummaryOutlineRepository::get(&pool, "m1").await.unwrap().is_none());
+    assert!(SummaryOutlineRepository::get(&pool, "m1")
+        .await
+        .unwrap()
+        .is_none());
 }
 
 #[tokio::test]
@@ -36,7 +41,10 @@ async fn upsert_then_get_round_trips() {
         .await
         .unwrap();
 
-    let stored = SummaryOutlineRepository::get(&pool, "m1").await.unwrap().unwrap();
+    let stored = SummaryOutlineRepository::get(&pool, "m1")
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(stored.outline_json, r#"{"sections":[]}"#);
     assert!(stored.has_commitments);
     assert!(!stored.derived_at.is_empty());
@@ -46,10 +54,17 @@ async fn upsert_then_get_round_trips() {
 #[tokio::test]
 async fn upsert_replaces_an_existing_outline() {
     let pool = test_pool().await;
-    SummaryOutlineRepository::upsert(&pool, "m1", r#"{"v":1}"#, true).await.unwrap();
-    SummaryOutlineRepository::upsert(&pool, "m1", r#"{"v":2}"#, false).await.unwrap();
+    SummaryOutlineRepository::upsert(&pool, "m1", r#"{"v":1}"#, true)
+        .await
+        .unwrap();
+    SummaryOutlineRepository::upsert(&pool, "m1", r#"{"v":2}"#, false)
+        .await
+        .unwrap();
 
-    let stored = SummaryOutlineRepository::get(&pool, "m1").await.unwrap().unwrap();
+    let stored = SummaryOutlineRepository::get(&pool, "m1")
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(stored.outline_json, r#"{"v":2}"#);
     assert!(!stored.has_commitments);
 }
@@ -58,17 +73,33 @@ async fn upsert_replaces_an_existing_outline() {
 #[tokio::test]
 async fn delete_removes_the_outline() {
     let pool = test_pool().await;
-    SummaryOutlineRepository::upsert(&pool, "m1", "{}", false).await.unwrap();
+    SummaryOutlineRepository::upsert(&pool, "m1", "{}", false)
+        .await
+        .unwrap();
     SummaryOutlineRepository::delete(&pool, "m1").await.unwrap();
-    assert!(SummaryOutlineRepository::get(&pool, "m1").await.unwrap().is_none());
+    assert!(SummaryOutlineRepository::get(&pool, "m1")
+        .await
+        .unwrap()
+        .is_none());
 }
 
 /// Deleting a meeting must not strand its outline.
 #[tokio::test]
 async fn outline_is_cascade_deleted_with_its_meeting() {
     let pool = test_pool().await;
-    sqlx::query("PRAGMA foreign_keys = ON").execute(&pool).await.unwrap();
-    SummaryOutlineRepository::upsert(&pool, "m1", "{}", false).await.unwrap();
-    sqlx::query("DELETE FROM meetings WHERE id = 'm1'").execute(&pool).await.unwrap();
-    assert!(SummaryOutlineRepository::get(&pool, "m1").await.unwrap().is_none());
+    sqlx::query("PRAGMA foreign_keys = ON")
+        .execute(&pool)
+        .await
+        .unwrap();
+    SummaryOutlineRepository::upsert(&pool, "m1", "{}", false)
+        .await
+        .unwrap();
+    sqlx::query("DELETE FROM meetings WHERE id = 'm1'")
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert!(SummaryOutlineRepository::get(&pool, "m1")
+        .await
+        .unwrap()
+        .is_none());
 }

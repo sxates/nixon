@@ -244,8 +244,16 @@ export interface SpeakerSuggestion {
   speakerKey: string;
   suggestedName: string;
   suggestedEmail: string | null;
+  /** The durable Person this resolves to (specs/0016 1b), when the match came from a
+   *  linked `people` row. `null` for email/name-only matches. */
+  suggestedPersonId: string | null;
   confidence: number;
   basis: string;
+  /** specs/0064 W2 — the backend has ALREADY applied this name (a well-trained voiceprint,
+   *  a calendar-corroborated gallery match, or a voice recognized across enough prior
+   *  meetings). It is never offered as a chip; the speakers are reloaded instead so the
+   *  applied name shows. Auto-named speakers are renamed like any other. */
+  autoLabel: boolean;
 }
 
 /** The durable, editable participant roster for a meeting (specs/0017). Distinct from

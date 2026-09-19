@@ -775,32 +775,13 @@ pub(super) async fn run<R: Runtime>(app: AppHandle<R>, meeting_id: String) -> Re
             Vec::new()
         });
 
-    // specs/0016 1c: apply auto-labels (the high-confidence gallery + email-corroborated
-    // matches) directly — persist them like a normal assignment so the user sees the name
-    // immediately and the speaker is linked to the durable person. Everything else stays a
-    // suggestion (confirm-first). Best-effort per row.
-    for s in suggestions.iter().filter(|s| s.auto_label) {
-        if let Some(person_id) = s.suggested_person_id.as_deref() {
-            match crate::database::repositories::people::PeopleRepository::assign_speaker_to_person(
-                pool, &meeting_id, &s.speaker_key, person_id,
-            )
-            .await
-            {
-                Ok(true) => log::info!(
-                    "diarization: auto-labeled {} as {} (person {person_id}) in meeting {meeting_id}",
-                    s.speaker_key, s.suggested_name
-                ),
-                Ok(false) => log::warn!(
-                    "diarization: auto-label of {} found no speaker/person row to link",
-                    s.speaker_key
-                ),
-                Err(e) => log::warn!(
-                    "diarization: auto-label of {} failed (continuing): {e}",
-                    s.speaker_key
-                ),
-            }
-        }
-    }
+    // Apply the matches confident enough to need no confirmation (specs/0016 1c,
+    // specs/0044 WS4, specs/0064 W2) — persisted like a normal assignment so the user sees
+    // the name immediately and the speaker is linked to the durable person. Everything else
+    // stays a confirm-first chip. Shared with the on-demand refetch path, which must apply
+    // them too: the gallery grows after the meetings that taught it, so a pass run before a
+    // person was well-trained can only be corrected later (specs/0064 W2).
+    crate::diarization::auto_label::apply(pool, &meeting_id, &suggestions).await;
 
     // specs/0041 WS2: a summary generated before this pass finished carries no speaker
     // names (and its action-item owners come back unresolved). If this pass assigned
@@ -880,6 +861,10 @@ pub(super) async fn run<R: Runtime>(app: AppHandle<R>, meeting_id: String) -> Re
 /// matcher's auto-label gate — only a high-confidence GALLERY match whose person's email
 /// is among them is marked `auto_label`. The DB-only inputs are gathered here; the ranking
 /// itself stays pure.
+/// With NO corroborating emails, so the email-corroborated auto-label route cannot fire —
+/// the voice-only routes still can. Both real callers (the offline pass and
+/// `api_get_speaker_suggestions`) supply the meeting's attendee emails via
+/// [`compute_suggestions_with_emails`]; this wrapper is the email-free case used by tests.
 pub async fn compute_suggestions(
     pool: &sqlx::SqlitePool,
     meeting_id: &str,
@@ -888,9 +873,9 @@ pub async fn compute_suggestions(
 }
 
 /// As [`compute_suggestions`], but with an explicit corroborating-email set for the
-/// auto-label gate. The offline pass passes the meeting's calendar attendee emails here;
-/// the on-demand command passes none (no auto-label on a manual re-fetch — it only
-/// surfaces suggestions, which the user confirms).
+/// auto-label gate. Both the offline pass and the on-demand command pass the meeting's
+/// calendar attendee emails (specs/0064 W2 — the refetch APPLIES auto-labels too, so it
+/// needs the same inputs the pass had; before that it deliberately passed none).
 pub async fn compute_suggestions_with_emails(
     pool: &sqlx::SqlitePool,
     meeting_id: &str,
@@ -927,6 +912,9 @@ pub async fn compute_suggestions_with_emails(
             embedding_model: c.embedding_model,
             from_gallery: false,
             gallery_sample_count: 0,
+            // The meeting this prior speaker row belongs to — the matcher counts DISTINCT
+            // meetings for the repetition tier (specs/0064 W2 review).
+            meeting_id: Some(c.meeting_id),
         })
         .collect();
 
@@ -958,6 +946,8 @@ pub async fn compute_suggestions_with_emails(
                     // specs/0044 WS4: enrollment count gates the trusted (voice-only)
                     // auto-label tier in the matcher.
                     gallery_sample_count: sample_count,
+                    // A centroid belongs to no single meeting.
+                    meeting_id: None,
                 });
             }
         }
@@ -1107,7 +1097,7 @@ fn roster_speaker_cap(remote_count: usize, total_count: i64) -> Option<u32> {
 /// returns an empty `Vec` on any failure (no meeting row, EventKit denied/error, no
 /// matching event) and logs at info/warn — never propagates an error, so the caller
 /// can always fall through to Auto.
-async fn lookup_calendar_attendees<R: Runtime>(
+pub(crate) async fn lookup_calendar_attendees<R: Runtime>(
     app: &AppHandle<R>,
     meeting_id: &str,
 ) -> Vec<crate::calendar::eventkit::Attendee> {

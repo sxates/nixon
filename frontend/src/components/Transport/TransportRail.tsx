@@ -10,13 +10,13 @@ import { recordingService } from '@/services/recordingService';
 import { requestFullRecordingStop } from '@/lib/recording-stop';
 import { TransportKey } from './TransportKey';
 import { TransportStatus, type TransportPhase } from './TransportStatus';
-import { QueueIndicator } from './QueueIndicator';
 
 /**
  * specs/0057 decision 7 — THE recording control surface. Fixed to the bottom edge, from the
  * sidebar's right edge to the window edge, on every screen. Replaces GlobalRecordingBar,
  * the /record floating pill and the RecordingHeader button pair (one state vocabulary,
- * spec §3.1 table), and hosts the one global queue (decision 8).
+ * spec §3.1 table). The queue it used to host on its right moved to the sidebar in
+ * specs/0064 W5 — the rail is the recording surface, the queue is app state.
  *
  * Stop deliberately goes through `requestFullRecordingStop`, not a raw `stop_recording`: the
  * complete stop is the command PLUS the post-stop save flow that only /record mounts.
@@ -104,14 +104,16 @@ export function TransportRail() {
         isCollapsed ? 'left-16' : 'left-64',
       )}
     >
+      {/* Instruments first, keys last (specs/0064 W6) — the status zone takes the slack, so
+          the keys sit against the right edge whatever the meeting is called. */}
       <TransportStatus phase={phase} elapsedSeconds={elapsed} />
       <div className="w-px self-stretch bg-border" />
-      <div className="flex items-center gap-1.5 px-5">
+      <div className="flex flex-none items-center gap-1.5 px-5">
         <TransportKey
           fn="rec"
           legend="REC"
           lit={inFlight && phase !== 'finalizing'}
-          dim={phase === 'paused'}
+          holding={phase === 'paused'}
           disabled={phase !== 'idle'}
           aria-label={phase === 'idle' ? 'Start recording' : 'Recording'}
           onClick={onRec}
@@ -132,8 +134,6 @@ export function TransportRail() {
           onClick={onStop}
         />
       </div>
-      <div className="w-px self-stretch bg-border" />
-      <QueueIndicator />
     </div>
   );
 }

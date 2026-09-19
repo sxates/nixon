@@ -3,8 +3,7 @@
 
 use app_lib::summary::cache_key::template_cache_fingerprint;
 use app_lib::summary::outline::{
-    fallback_outline, to_template, validate, Outline, OutlineSection, SectionRole,
-    AUTO_TEMPLATE_ID,
+    fallback_outline, to_template, validate, Outline, OutlineSection, SectionRole, AUTO_TEMPLATE_ID,
 };
 use app_lib::summary::templates;
 

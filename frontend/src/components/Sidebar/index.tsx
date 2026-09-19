@@ -9,17 +9,17 @@ import {
   Menu,
   MessageSquare,
   Settings,
-  SquarePen,
   Users,
   type LucideIcon,
 } from 'lucide-react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useSidebar } from './SidebarProvider';
-import { useRecordingState } from '@/contexts/RecordingStateContext';
 import { useImportDialog } from '@/contexts/ImportDialogContext';
 import { useConfig } from '@/contexts/ConfigContext';
 import { DeckIcon } from '@/components/ui/deck-icon';
 import { cn } from '@/lib/utils';
+import { QueueRow } from './QueueRow';
+import { SIDEBAR_ICON_SLOT, SIDEBAR_ROW } from './row';
 import { UpdateRow } from './UpdateRow';
 
 import DevBadge from '../DevBadge';
@@ -36,7 +36,7 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   {
-    label: 'Home',
+    label: 'Today',
     path: '/',
     icon: Home,
     isActive: (p) => p === '/',
@@ -81,10 +81,8 @@ const INDEX_BAR_ON = 'bg-brand shadow-[0_0_6px_-1px_hsl(var(--brand)/0.6)]';
 const Sidebar: React.FC = () => {
   const router = useRouter();
   const pathname = usePathname();
-  const { isCollapsed, toggleCollapse, handleRecordingToggle, handleNewNote } = useSidebar();
+  const { isCollapsed, toggleCollapse } = useSidebar();
 
-  // Recording state from the single source of truth.
-  const { isRecording } = useRecordingState();
   const { openImportDialog } = useImportDialog();
   const { betaFeatures } = useConfig();
 
@@ -147,10 +145,13 @@ const Sidebar: React.FC = () => {
             onClick={() => router.push('/settings')}
             aria-label="Settings"
             title="Settings"
-            className="mb-2 flex h-10 w-full items-center justify-center text-engrave transition-colors hover:bg-key hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="flex h-10 w-full items-center justify-center text-engrave transition-colors hover:bg-key hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <DeckIcon icon={Settings} size={16} />
           </button>
+
+          {/* Background work (specs/0064 W5) — below Settings, the lamp alone when collapsed. */}
+          <QueueRow collapsed />
 
           <div className="mb-3">
             <DevBadge isCollapsed />
@@ -171,8 +172,10 @@ const Sidebar: React.FC = () => {
       >
         <WalnutCheek />
 
-        {/* Top bar: hamburger toggle + engraved wordmark + DEV badge */}
-        <div className="flex flex-shrink-0 items-center gap-2 px-3 pb-3 pt-4">
+        {/* Top bar: hamburger toggle + engraved wordmark + DEV badge. Shares the row
+            geometry so the hamburger sits in the same icon column as every glyph below it
+            and NIXON starts where the nav labels do. */}
+        <div className={cn(SIDEBAR_ROW, 'flex-shrink-0 pb-3 pt-4')}>
           <HamburgerButton expanded onToggle={toggleCollapse} />
           <span className="u-section-label text-[13px] tracking-[0.18em] text-foreground">
             NIXON
@@ -180,42 +183,6 @@ const Sidebar: React.FC = () => {
           <div className="ml-auto">
             <DevBadge />
           </div>
-        </div>
-
-        {/* New recording — reuses the existing recording-start handler */}
-        <div className="flex-shrink-0 px-3">
-          <button
-            onClick={handleRecordingToggle}
-            disabled={isRecording}
-            className={cn(
-              'flex w-full items-center gap-2.5 rounded-[3px] border border-border bg-key px-3 py-2 text-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-              'shadow-[inset_0_1px_0_hsl(var(--bevel-hi)),0_1px_0_hsl(var(--bevel-lo))]',
-              isRecording ? 'cursor-not-allowed' : 'hover:bg-well',
-            )}
-          >
-            <span
-              className={cn(
-                'h-2 w-2 flex-shrink-0 rounded-full bg-record',
-                isRecording && 'animate-pulse',
-              )}
-              aria-hidden="true"
-            />
-            <span className="font-semibold text-foreground">
-              {isRecording ? 'Recording…' : 'New recording'}
-            </span>
-            {!isRecording && (
-              <kbd className="ml-auto font-mono text-[11px] text-muted-foreground">⌘N</kbd>
-            )}
-          </button>
-
-          {/* New note — creates a notes-only meeting (no recording) and opens it. */}
-          <button
-            onClick={() => void handleNewNote()}
-            className="mt-1.5 flex w-full items-center gap-2.5 rounded-[3px] px-3 py-2 text-sm text-engrave transition-colors hover:bg-key hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <DeckIcon icon={SquarePen} className="flex-shrink-0" />
-            <span>New note</span>
-          </button>
         </div>
 
         {/* Primary navigation — index bar + glyph + engraved label. */}
@@ -228,13 +195,15 @@ const Sidebar: React.FC = () => {
                   key={item.label}
                   onClick={() => router.push(item.path)}
                   aria-current={active ? 'page' : undefined}
-                  className="relative flex h-8 items-center gap-2.5 pl-5 pr-3.5 transition-colors hover:bg-key focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className={cn(SIDEBAR_ROW, 'relative h-8 transition-colors hover:bg-key focus:outline-none focus-visible:ring-2 focus-visible:ring-ring')}
                 >
                   <IndexBar active={active} className="left-2" />
-                  <DeckIcon
-                    icon={item.icon}
-                    className={active ? 'text-foreground' : 'text-engrave'}
-                  />
+                  <span className={SIDEBAR_ICON_SLOT}>
+                    <DeckIcon
+                      icon={item.icon}
+                      className={active ? 'text-foreground' : 'text-engrave'}
+                    />
+                  </span>
                   <span
                     className={cn('u-section-label', active ? 'text-foreground' : 'text-engrave')}
                   >
@@ -249,27 +218,37 @@ const Sidebar: React.FC = () => {
           {importEnabled && (
             <button
               onClick={() => openImportDialog()}
-              className="relative mt-2 flex h-8 w-full items-center gap-2.5 pl-5 pr-3.5 text-brand transition-colors hover:bg-key focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className={cn(SIDEBAR_ROW, 'relative mt-2 h-8 w-full text-brand transition-colors hover:bg-key focus:outline-none focus-visible:ring-2 focus-visible:ring-ring')}
             >
-              <DeckIcon icon={FileAudio} className="flex-shrink-0" />
+              <span className={SIDEBAR_ICON_SLOT}>
+                <DeckIcon icon={FileAudio} />
+              </span>
               <span className="u-section-label text-brand">Import audio</span>
               <span className="u-section-label ml-auto text-[9px] text-muted-foreground">Beta</span>
             </button>
           )}
         </nav>
 
-        {/* Footer — settings entry (the avatar puck is gone, specs/0057 Plan 3) */}
-        <div className="flex-shrink-0 border-t border-border p-2">
+        {/* Footer — settings, updates, queue (the avatar puck is gone, specs/0057 Plan 3).
+            Vertical padding only: a horizontal inset here would push these rows 8px right of
+            the nav rows above, which is exactly the misalignment SIDEBAR_ROW exists to stop. */}
+        <div className="flex-shrink-0 border-t border-border py-2">
           <UpdateRow />
 
           <button
             onClick={() => router.push('/settings')}
-            className="relative flex h-8 w-full items-center gap-2.5 pl-3 pr-3.5 text-left text-engrave transition-colors hover:bg-key hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className={cn(SIDEBAR_ROW, 'relative h-8 w-full text-left text-engrave transition-colors hover:bg-key hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring')}
             aria-label="Settings"
           >
-            <DeckIcon icon={Settings} className="flex-shrink-0" />
+            <span className={SIDEBAR_ICON_SLOT}>
+              <DeckIcon icon={Settings} />
+            </span>
             <span className="u-section-label">Settings</span>
           </button>
+
+          {/* Background work (specs/0064 W5) — the queue moved off the transport rail, which
+              is the recording surface; this is where app state lives. */}
+          <QueueRow />
         </div>
       </div>
     </div>
@@ -332,11 +311,22 @@ function HamburgerButton({
       aria-expanded={expanded}
       title={expanded ? 'Collapse sidebar' : 'Expand sidebar'}
       className={cn(
-        'flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-[3px] text-engrave transition-colors hover:bg-key hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        // -m-2/p-2: the glyph stays in the shared icon column while the clickable area
+        // grows back to a comfortable size around it (owner feedback 2026-09-19).
+        'flex flex-shrink-0 items-center justify-center rounded-[3px] text-engrave transition-colors hover:bg-key hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        expanded ? '-m-2 p-2' : 'h-9 w-9',
         className,
       )}
     >
-      <DeckIcon icon={Menu} size={18} />
+      {/* Expanded: the glyph sits in the shared 14px icon column so it lines up with every
+          row below. Collapsed: the rail centres a slightly larger mark, as before. */}
+      {expanded ? (
+        <span className={SIDEBAR_ICON_SLOT}>
+          <DeckIcon icon={Menu} />
+        </span>
+      ) : (
+        <DeckIcon icon={Menu} size={18} />
+      )}
     </button>
   );
 }

@@ -159,7 +159,8 @@ async fn ensure_brief_for_event<R: Runtime>(
         &ev.title,
         occurrence_start,
     )
-    .await?;
+    .await?
+    .into_id();
 
     generate_brief_for_target(app, pool, &target_id, false, cancel, |_| {}).await
 }

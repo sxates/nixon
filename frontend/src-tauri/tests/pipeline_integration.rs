@@ -290,8 +290,18 @@ async fn spectrum_events_emitted_for_silence_independent_of_vad() {
     assert_eq!(level.get("peak").and_then(|v| v.as_f64()), Some(0.0));
     // specs/0057 §3.2: the two record-page needles read the CLEAN pre-mix channels.
     for ch in ["mic", "sys"] {
-        assert_eq!(level.pointer(&format!("/{ch}/rms")).and_then(|v| v.as_f64()), Some(0.0));
-        assert_eq!(level.pointer(&format!("/{ch}/peak")).and_then(|v| v.as_f64()), Some(0.0));
+        assert_eq!(
+            level
+                .pointer(&format!("/{ch}/rms"))
+                .and_then(|v| v.as_f64()),
+            Some(0.0)
+        );
+        assert_eq!(
+            level
+                .pointer(&format!("/{ch}/peak"))
+                .and_then(|v| v.as_f64()),
+            Some(0.0)
+        );
     }
 }
 
@@ -539,7 +549,10 @@ async fn live_defer_live_keeps_timestamps_monotonic() {
         phase3.push(chunk);
     }
 
-    assert!(!phase3.is_empty(), "re-attached stage must produce chunks again");
+    assert!(
+        !phase3.is_empty(),
+        "re-attached stage must produce chunks again"
+    );
 
     // `phase1_max` alone is not a reliable floor: when phase 1 emits nothing directly
     // (its segment stayed open until the phase-2 detach flush), `phase1_max` collapses
@@ -625,22 +638,55 @@ async fn live_defer_live_preserves_channel_attribution() {
     let chunk_len = (CAPTURE_RATE as usize / 50).max(1);
 
     // Phase 1: live, MICROPHONE only.
-    common::feed_device(&audio_tx, &speech_48k, chunk_len, CAPTURE_RATE, DeviceType::Microphone)
-        .await;
-    common::feed_device(&audio_tx, &pad_48k, chunk_len, CAPTURE_RATE, DeviceType::Microphone).await;
+    common::feed_device(
+        &audio_tx,
+        &speech_48k,
+        chunk_len,
+        CAPTURE_RATE,
+        DeviceType::Microphone,
+    )
+    .await;
+    common::feed_device(
+        &audio_tx,
+        &pad_48k,
+        chunk_len,
+        CAPTURE_RATE,
+        DeviceType::Microphone,
+    )
+    .await;
     let phase1 = common::drain_settled(&mut trans_rx).await;
 
     // Phase 2: deferred, MICROPHONE only (nothing new out; the detach flushes phase 1's
     // still-open tail, which is still mic audio).
     live_stt.store(false, Ordering::SeqCst);
-    common::feed_device(&audio_tx, &speech_48k, chunk_len, CAPTURE_RATE, DeviceType::Microphone)
-        .await;
-    common::feed_device(&audio_tx, &pad_48k, chunk_len, CAPTURE_RATE, DeviceType::Microphone).await;
+    common::feed_device(
+        &audio_tx,
+        &speech_48k,
+        chunk_len,
+        CAPTURE_RATE,
+        DeviceType::Microphone,
+    )
+    .await;
+    common::feed_device(
+        &audio_tx,
+        &pad_48k,
+        chunk_len,
+        CAPTURE_RATE,
+        DeviceType::Microphone,
+    )
+    .await;
     let phase2_tail = common::drain_settled(&mut trans_rx).await;
 
     // Phase 3: live again, SYSTEM only — a channel the resumed stage has never seen.
     live_stt.store(true, Ordering::SeqCst);
-    common::feed_device(&audio_tx, &speech_48k, chunk_len, CAPTURE_RATE, DeviceType::System).await;
+    common::feed_device(
+        &audio_tx,
+        &speech_48k,
+        chunk_len,
+        CAPTURE_RATE,
+        DeviceType::System,
+    )
+    .await;
     let mut phase3 = common::drain_settled(&mut trans_rx).await;
 
     drop(audio_tx);
@@ -673,9 +719,7 @@ async fn live_defer_live_preserves_channel_attribution() {
         "the re-attached stage must produce chunks again"
     );
     assert!(
-        phase3
-            .iter()
-            .any(|c| c.channel == Some(ChannelTag::System)),
+        phase3.iter().any(|c| c.channel == Some(ChannelTag::System)),
         "resumed-tail segments lost their SYSTEM attribution: {:?} — the channel-window \
          clock and the segment clock must share the session audio base (spec 0051 WS1)",
         phase3.iter().map(|c| c.channel).collect::<Vec<_>>()

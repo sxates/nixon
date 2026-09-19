@@ -57,9 +57,7 @@ pub async fn api_get_meetings_in_range<R: Runtime>(
     let start_utc = parse_bound("start", &start)?;
     let end_utc = parse_bound("end", &end)?;
     if end_utc <= start_utc {
-        return Err(format!(
-            "Range end '{end}' must be after start '{start}'"
-        ));
+        return Err(format!("Range end '{end}' must be after start '{start}'"));
     }
 
     let pool = state.db_manager.pool();
@@ -97,7 +95,10 @@ mod tests {
         assert_eq!(offset.to_rfc3339(), "2026-08-01T07:00:00+00:00");
 
         let err = parse_bound("end", "not-a-date").unwrap_err();
-        assert!(err.contains("end"), "the error must name which bound: {err}");
+        assert!(
+            err.contains("end"),
+            "the error must name which bound: {err}"
+        );
         assert!(err.contains("not-a-date"));
     }
 

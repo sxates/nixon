@@ -48,8 +48,8 @@ use std::time::Instant;
 use app_lib::audio::decoder::decode_audio_file;
 use app_lib::diarization::seed::{estimate_speakers_by_duration, N_AUDIO_MIN_SECS};
 use app_lib::diarization::sherpa::{
-    consolidate_clusters, merge_clusters_to_at_most, ConsolidateOpts, DiarizeTuning, SherpaDiarizer,
-    SpeakerCount, CONSOLIDATE_FLOOR, DEFAULT_AUTO_THRESHOLD,
+    consolidate_clusters, merge_clusters_to_at_most, ConsolidateOpts, DiarizeTuning,
+    SherpaDiarizer, SpeakerCount, CONSOLIDATE_FLOOR, DEFAULT_AUTO_THRESHOLD,
 };
 use app_lib::diarization::Diarizer;
 
@@ -1463,7 +1463,10 @@ fn eval_seed_simulation() {
 
         eprintln!("\n=== {} (true {true_n}) ===", sample.name);
         show("Auto (no seed)", &cons_turns);
-        show(&format!("AtMost(true n={true_n}) [oracle]"), &cap(true_n as u32));
+        show(
+            &format!("AtMost(true n={true_n}) [oracle]"),
+            &cap(true_n as u32),
+        );
         if let Some((k, desc)) = simulated_invite(&sample.name) {
             show(&format!("AtMost(invite={k}) [{desc}]"), &cap(k));
         }
@@ -1474,7 +1477,10 @@ fn eval_seed_simulation() {
             } else {
                 ""
             };
-            show(&format!("n_audio(>={t:>4.0}s)={n} -> AtMost({n}){tag}"), &cap(n as u32));
+            show(
+                &format!("n_audio(>={t:>4.0}s)={n} -> AtMost({n}){tag}"),
+                &cap(n as u32),
+            );
         }
     }
 }

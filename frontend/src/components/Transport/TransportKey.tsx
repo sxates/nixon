@@ -55,18 +55,39 @@ const LIT_LEGEND: Record<TransportFn, string> = {
   stop: 'text-engrave',
 };
 
+// specs/0064 W6 — the on-HOLD treatment: standard face, lamp-coloured ink. Readable in both
+// themes because the lamp tokens are the same colours the lit faces use, just as ink.
+const HOLDING_GLYPH: Record<TransportFn, string> = {
+  rec: 'fill-lamp-red',
+  hold: 'fill-lamp-amber',
+  stop: 'fill-engrave',
+};
+const HOLDING_LEGEND: Record<TransportFn, string> = {
+  rec: 'text-lamp-red',
+  hold: 'text-lamp-amber',
+  stop: 'text-engrave',
+};
+
 export interface TransportKeyProps extends Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, 'children'> {
   fn: TransportFn;
   legend: string;
   lit?: boolean;
-  /** lit but dimmed to 55% (REC while on HOLD) */
-  dim?: boolean;
+  /**
+   * Lit, but the recording is on HOLD (specs/0064 W6). The key keeps the standard face and
+   * takes RED ink with a slowly blinking lamp — "still recording, paused", as opposed to
+   * the solid red face of a running recording or the plain engraved face of an idle deck.
+   *
+   * It replaces the old `dim`, which kept the unlit face while leaving the ink cream at
+   * 55%: cream on an unlit key, which the owner read as unreadable rather than as a state.
+   */
+  holding?: boolean;
 }
 
-export function TransportKey({ fn, legend, lit = false, dim = false, disabled, className, ...rest }: TransportKeyProps) {
-  // REC while on HOLD is `lit && dim`: lighting the face and then dropping it to 55% reads as
-  // neither state, so a dimmed key keeps the unlit face and only the bar/glyph dim, as before.
-  const faceLit = lit && !dim && LIT_FACE[fn] !== '';
+export function TransportKey({ fn, legend, lit = false, holding = false, disabled, className, ...rest }: TransportKeyProps) {
+  // Lighting the whole face and then dimming it reads as neither state, so HOLD keeps the
+  // unlit face and changes the INK instead.
+  const faceLit = lit && !holding && LIT_FACE[fn] !== '';
+  const holdingInk = lit && holding;
   return (
     <button
       type="button"
@@ -95,21 +116,25 @@ export function TransportKey({ fn, legend, lit = false, dim = false, disabled, c
         className={cn(
           'absolute left-2 right-2 top-[3px] h-1 rounded-[1px] transition-[background-color,box-shadow] ease-out',
           lit ? cn(LIT_BAR[fn], '[transition-duration:120ms]') : 'bg-border [transition-duration:400ms]',
-          lit && dim && 'opacity-[0.55]',
+          // A named keyframe, never an arbitrary `duration-[…]`: tailwindcss-animate makes
+          // those ambiguous and Tailwind emits nothing for them (same trap as the reels).
+          holdingInk && 'animate-hold-blink motion-reduce:animate-none',
         )}
       />
       <svg
         aria-hidden
         viewBox="0 0 12 12"
-        className={cn('h-3 w-3', lit ? LIT_GLYPH[fn] : 'fill-engrave', lit && dim && 'opacity-[0.55]')}
+        className={cn(
+          'h-3 w-3',
+          holdingInk ? HOLDING_GLYPH[fn] : lit ? LIT_GLYPH[fn] : 'fill-engrave',
+        )}
       >
         {GLYPH[fn]}
       </svg>
       <span
         className={cn(
           'text-[9px] font-semibold tracking-[0.12em]',
-          lit ? LIT_LEGEND[fn] : 'text-engrave',
-          lit && dim && 'opacity-[0.55]',
+          holdingInk ? HOLDING_LEGEND[fn] : lit ? LIT_LEGEND[fn] : 'text-engrave',
         )}
       >
         {legend}

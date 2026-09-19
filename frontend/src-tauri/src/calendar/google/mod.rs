@@ -24,9 +24,9 @@
 //! renders a "not configured in this build" state instead of a Connect button.
 
 pub mod capabilities;
-mod demo_guard;
 pub mod cloud_identity;
 pub mod commands;
+mod demo_guard;
 /// `events.list` wire types + event→row mapping, split out of `sync.rs` (specs/0054 W5).
 pub(crate) mod events_map;
 pub mod oauth;

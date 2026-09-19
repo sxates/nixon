@@ -178,7 +178,9 @@ pub async fn owner_turns_for_meeting<R: Runtime>(
             &mic_samples,
             crate::audio::retranscription::VAD_REDEMPTION_TIME_MS,
         )
-        .map(|segs| filter_bleed_owner_segments(segs, &mic_samples, &sys_samples, OWNER_VAD_SAMPLE_RATE))
+        .map(|segs| {
+            filter_bleed_owner_segments(segs, &mic_samples, &sys_samples, OWNER_VAD_SAMPLE_RATE)
+        })
     })
     .await;
     match segments {

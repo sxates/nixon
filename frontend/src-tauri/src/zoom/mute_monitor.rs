@@ -73,7 +73,10 @@ pub fn spawn_zoom_mute_monitor<R: Runtime>(app: AppHandle<R>) {
             let muted = muted.unwrap_or(false);
             if mute_gate::is_muted() != muted {
                 mute_gate::set_muted(muted);
-                log::info!("Zoom mute-gate: owner mic {}", if muted { "MUTED (dropped)" } else { "unmuted" });
+                log::info!(
+                    "Zoom mute-gate: owner mic {}",
+                    if muted { "MUTED (dropped)" } else { "unmuted" }
+                );
             }
             if last_emitted != Some(muted) {
                 last_emitted = Some(muted);

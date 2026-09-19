@@ -480,6 +480,23 @@ pub async fn api_create_meeting<R: Runtime>(
         let occurrence = started_at.unwrap_or_else(chrono::Utc::now);
         match MeetingsRepository::find_scheduled_for_occurrence(pool, event_id, occurrence).await {
             Ok(Some(prep_id)) => {
+                // specs/0064 W1 — a per-occurrence (Google) id now matches regardless of day,
+                // so the adopted row may still be dated to the slot the meeting was moved
+                // FROM. `promote_scheduled_to_recorded` deliberately preserves `created_at`,
+                // which would file the recording under the old date. Re-date it to the
+                // occurrence actually being recorded first; best-effort, since a failure here
+                // must not block starting a recording.
+                if let Err(e) = MeetingsRepository::redate_scheduled_meeting(
+                    pool, &prep_id, occurrence, None, None,
+                )
+                .await
+                {
+                    log_error!(
+                        "api_create_meeting: could not re-date adopted prep row {} (continuing): {}",
+                        prep_id,
+                        e
+                    );
+                }
                 match MeetingsRepository::promote_scheduled_to_recorded(pool, &prep_id).await {
                     Ok(true) => {
                         log_info!(

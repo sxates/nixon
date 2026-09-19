@@ -3,6 +3,7 @@
 import React from 'react';
 import { cn } from '@/lib/utils';
 import { LampDot } from '@/components/Transport/LampDot';
+import { SIDEBAR_ICON_SLOT, SIDEBAR_ROW } from './row';
 import { useOptionalUpdateStatus } from '@/contexts/UpdateStatusContext';
 import { useRecordingState } from '@/contexts/RecordingStateContext';
 
@@ -47,8 +48,10 @@ export function UpdateRow({ collapsed = false }: { collapsed?: boolean }) {
 
   return (
     <div>
-      <div className="flex h-8 items-center gap-2.5 pl-3 pr-2">
-        <LampDot tone="amber" label={line} decorative pulse={!ready} />
+      <div className={cn(SIDEBAR_ROW, 'h-8')}>
+        <span className={SIDEBAR_ICON_SLOT}>
+          <LampDot tone="amber" label={line} decorative pulse={!ready} />
+        </span>
         <span className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground">{line}</span>
         {ready && (
           <button

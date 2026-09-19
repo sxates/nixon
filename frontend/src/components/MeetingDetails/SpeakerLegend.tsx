@@ -136,18 +136,34 @@ export function SpeakerLegend({
     // `transcripts` is only the very-first-paint placeholder so the strip is never blank.
     const seconds = fullSeconds.size > 0 ? fullSeconds : talkTimeBySpeaker(transcripts);
     const shares = shareOfTalk(seconds);
-    return groups.map((g, i) => ({
-      channel: i + 1,
-      index: i,
-      speakerKey: g.primary.speakerKey,
-      colorClass: speakerBgClass(g.primary.isLocal ? 'local' : g.primary.speakerKey),
-      seconds: groupSeconds(seconds, g.keys),
-      share: groupSeconds(shares, g.keys),
-      // specs/0061 W4 task 3, ruling R37 — names the row's select button
-      // ("Filter transcript to <name>"); the visible name cell is unaffected
-      // (still `renderName`/`SpeakerChip`).
-      displayName: g.primary.displayName,
-    }));
+    return (
+      groups
+        .map((g, i) => ({
+          // `index` stays the position in `groups` — it is how a row maps back to its
+          // source group for the name cell — while `channel` is assigned after the sort.
+          index: i,
+          speakerKey: g.primary.speakerKey,
+          colorClass: speakerBgClass(g.primary.isLocal ? 'local' : g.primary.speakerKey),
+          seconds: groupSeconds(seconds, g.keys),
+          share: groupSeconds(shares, g.keys),
+          // specs/0061 W4 task 3, ruling R37 — names the row's select button
+          // ("Filter transcript to <name>"); the visible name cell is unaffected
+          // (still `renderName`/`SpeakerChip`).
+          displayName: g.primary.displayName,
+        }))
+        // specs/0064 W4 — biggest talker first. Share is derived from seconds, so the
+        // seconds tie-break only matters when both are zero-ish; the name keeps the order
+        // deterministic for speakers who said nothing measurable.
+        .sort(
+          (a, b) =>
+            b.share - a.share ||
+            b.seconds - a.seconds ||
+            a.displayName.localeCompare(b.displayName),
+        )
+        // CH is a rank, not an identity: numbering AFTER the sort keeps the column reading
+        // 1..n down the page instead of 3, 1, 2.
+        .map((row, i) => ({ ...row, channel: i + 1 }))
+    );
   }, [groups, transcripts, fullSeconds]);
 
   // Default to expanded — the strip is height-capped + scrollable, so it can't push the

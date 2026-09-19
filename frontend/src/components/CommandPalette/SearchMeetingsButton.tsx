@@ -23,7 +23,7 @@ export function SearchMeetingsButton({ className }: { className?: string }) {
       aria-keyshortcuts="Meta+K"
       title="Search meetings (⌘K)"
       className={cn(
-        'inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-[9px] border border-border bg-card text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        'inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-[3px] border border-border bg-card text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
         className,
       )}
     >

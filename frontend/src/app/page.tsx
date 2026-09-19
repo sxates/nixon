@@ -196,7 +196,7 @@ function HomeView() {
       transition={{ duration: 0.25, ease: 'easeOut' }}
       className="flex h-page flex-col bg-background"
     >
-      {/* Header — greeting + day summary, ⌘K search, New note, Record. */}
+      {/* Header — greeting + day summary, ⌘K search, Ask AI, New note, Record. */}
       <TodayHeader
         now={now}
         daySummary={daySummary}

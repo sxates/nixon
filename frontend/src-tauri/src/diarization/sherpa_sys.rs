@@ -305,7 +305,10 @@ mod tests {
         let config = ThreadedDiarizeConfig::with_defaults(0, 0.8, 0.3, 0.5, "cpu".to_string());
         assert!(
             config.num_threads > 1
-                || std::thread::available_parallelism().map(|p| p.get()).unwrap_or(1) == 1,
+                || std::thread::available_parallelism()
+                    .map(|p| p.get())
+                    .unwrap_or(1)
+                    == 1,
             "diarizer must not be pinned to one thread; got {}",
             config.num_threads
         );

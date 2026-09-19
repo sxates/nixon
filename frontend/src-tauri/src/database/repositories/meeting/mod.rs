@@ -1,5 +1,6 @@
 //! The meetings repository, split by concern (specs/0042 WS4):
-//! - [`crud`]: single-row create/read/update/delete + the scheduled-placeholder lifecycle.
+//! - [`crud`]: single-row create/read/update/delete.
+//! - [`scheduled`]: the `scheduled`-origin prep-placeholder lifecycle (specs/0036, 0064 W1).
 //! - [`query`]: list shaping, enriched/status rows, pagination, title-based suggestion.
 //! - [`series`]: recurring-series keys, manual links, and prior-occurrence matching.
 //!
@@ -8,9 +9,11 @@
 
 mod crud;
 mod query;
+mod scheduled;
 mod series;
 
 pub use query::{normalize_title, RecentPersonMeeting};
+pub use scheduled::{is_per_occurrence_event_id, ScheduledResolution};
 pub use series::SeriesLinkedMeeting;
 
 pub struct MeetingsRepository;

@@ -148,7 +148,11 @@ pub struct MeetingMetadata {
     /// carries, for the detail page's reel label. `None` for 'scheduled' placeholders,
     /// which sit outside the numbering. (This DTO is NOT `rename_all = "camelCase"`, so
     /// the wire name is spelled out explicitly.)
-    #[serde(rename = "reelNumber", default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "reelNumber",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
     pub reel_number: Option<i64>,
 }
 

@@ -22,7 +22,9 @@ use crate::audio::vad::get_speech_chunks;
 use crate::diarization::align::{
     align_turns_to_segments, pad_trimmed, AlignableSegment, Channel, LOCAL_SPEAKER_KEY,
 };
-use crate::diarization::owner_turns::{filter_bleed_owner_segments, speech_segments_to_owner_turns};
+use crate::diarization::owner_turns::{
+    filter_bleed_owner_segments, speech_segments_to_owner_turns,
+};
 use crate::diarization::segments::channel_from_db;
 use crate::diarization::sherpa::SherpaDiarizer;
 use crate::diarization::{Diarizer, SpeakerCount, SpeakerTurn};
@@ -45,7 +47,12 @@ fn resolve_model_dir() -> Option<PathBuf> {
         }
     }
     let data = dirs::data_dir()?;
-    for id in ["ai.vinyl.app", "ai.vinyl.app.debug", "com.meetily.ai", "Nixon"] {
+    for id in [
+        "ai.vinyl.app",
+        "ai.vinyl.app.debug",
+        "com.meetily.ai",
+        "Nixon",
+    ] {
         let d = data.join(id).join("models").join("diarization");
         if d.join("segmentation.onnx").exists() && d.join("nemo_en_titanet_large.onnx").exists() {
             return Some(d);
@@ -218,9 +225,7 @@ fn eval_you_attribution_old_vs_new() {
 
     eprintln!("\n=========== specs/0047 real-meeting attribution eval ===========");
     eprintln!("folder: {}", folder.display());
-    eprintln!(
-        "segments: {total}  (microphone {mic_tagged} / mixed {mixed} / system {system})"
-    );
+    eprintln!("segments: {total}  (microphone {mic_tagged} / mixed {mixed} / system {system})");
     eprintln!(
         "owner mic-VAD intervals: {raw_count} raw -> {} kept after bleed guard ({} dropped as bleed)",
         guarded_owner.len(),
@@ -236,9 +241,7 @@ fn eval_you_attribution_old_vs_new() {
         ),
     }
     eprintln!("--------------------------------------------------------------");
-    eprintln!(
-        "segments labeled \"You\":  OLD (pre-0047) = {old_you}  ->  NEW (0047) = {new_you}",
-    );
+    eprintln!("segments labeled \"You\":  OLD (pre-0047) = {old_you}  ->  NEW (0047) = {new_you}",);
     let rescued = old_you.saturating_sub(new_you);
     eprintln!(
         "rescued from a wrong \"You\": {rescued}  ({:.1}% of all segments)",

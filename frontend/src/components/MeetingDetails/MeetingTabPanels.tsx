@@ -41,7 +41,7 @@ interface MeetingTabPanelsProps {
   modelConfig: ModelConfig;
   setModelConfig: (config: ModelConfig | ((prev: ModelConfig) => ModelConfig)) => void;
   onSaveModelConfig: (config?: ModelConfig) => Promise<void>;
-  /** Registers SummaryGeneratorButtonGroup's modal-open function with the page. */
+  /** Registers the summary toolbar's model-settings opener with the page. */
   onRegisterModalOpen: (openFn: () => void) => void;
   customPrompt: string;
   onPromptChange: (value: string) => void;
@@ -136,7 +136,6 @@ export function MeetingTabPanels({
           isSaving={meetingData.isSaving}
           onSaveAll={meetingData.saveAllChanges}
           onCopySummary={copyOperations.handleCopySummary}
-          onOpenFolder={meetingOperations.handleOpenMeetingFolder}
           aiSummary={meetingData.aiSummary}
           summaryStatus={summaryGeneration.summaryStatus}
           transcripts={meetingData.transcripts}

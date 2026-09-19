@@ -14,7 +14,8 @@ import { LevelLadder } from './LevelLadder';
 export type TransportPhase = 'idle' | 'starting' | 'recording' | 'paused' | 'finalizing';
 
 /**
- * Left zone of the rail: reels · title/state · counter · ladder (specs/0057 §3.1 state table).
+ * Left zone of the rail: reels · counter-over-ladder · title/state (specs/0057 §3.1 state
+ * table, reordered by specs/0064 W6 so the instruments hold still while titles change).
  *
  * The second line is the state vocabulary the whole app now shares — "Nothing on the reel" /
  * "On the reel" / "On hold" / "Finishing the reel" — so the rail never disagrees with itself
@@ -62,6 +63,17 @@ export function TransportStatus({ phase, elapsedSeconds }: { phase: TransportPha
     <div className="flex min-w-0 flex-1 items-center gap-3.5 px-5">
       {/* Nothing is on the reel yet while the tap is arming, so the hubs stay still. */}
       <Reels state={phase === 'starting' ? 'idle' : phase} />
+      {/* specs/0064 W6 — the instruments live in one fixed-width block, counter above
+          ladder, BEFORE the title. They used to sit after it, where the title was the
+          flex-1 element, so every rename or navigation shifted the counter and the meter
+          sideways. A fixed width also keeps the two aligned with each other. */}
+      <div className="flex w-fit flex-none flex-col gap-1">
+        {/* `w-fit` on the stack and `fill` on the ladder: the block is exactly as wide as the
+            counter's digit wells, and the ladder spans that same width — so the meter can
+            never be wider than the timer above it (owner feedback 2026-09-19). */}
+        <TapeCounter seconds={elapsedSeconds} size="sm" tone={tone} />
+        <LevelLadder level={level.rms} active={phase === 'recording' && !micMuted} fill />
+      </div>
       {canNavigate ? (
         <button
           type="button"
@@ -71,7 +83,9 @@ export function TransportStatus({ phase, elapsedSeconds }: { phase: TransportPha
           // meeting title and state line the rail exists to convey.
           aria-label={`Back to the recording: ${line1}, ${line2}`}
           className={cn(
-            'flex min-w-0 flex-col items-start rounded-[3px] text-left leading-tight',
+            // flex-1 so the title takes the slack and truncates predictably; the
+            // instruments sit before it and cannot be moved by its length (specs/0064 W6).
+            'flex min-w-0 flex-1 flex-col items-start rounded-[3px] text-left leading-tight',
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-panel',
             'hover:[&>span:first-child]:text-brand',
           )}
@@ -82,13 +96,11 @@ export function TransportStatus({ phase, elapsedSeconds }: { phase: TransportPha
           <span className="u-section-label text-[9px]">{line2}</span>
         </button>
       ) : (
-        <div className="flex min-w-0 flex-col leading-tight">
+        <div className="flex min-w-0 flex-1 flex-col leading-tight">
           <span className="truncate text-xs font-semibold text-foreground">{line1}</span>
           <span className="u-section-label text-[9px]">{line2}</span>
         </div>
       )}
-      <TapeCounter seconds={elapsedSeconds} size="sm" tone={tone} />
-      <LevelLadder level={level.rms} active={phase === 'recording' && !micMuted} />
     </div>
   );
 }

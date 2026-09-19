@@ -4,7 +4,9 @@
 //! directly). Extracted as a ratchet offset for the low-power-mode changes;
 //! behavior unchanged.
 
-use super::devices::{default_input_device, default_output_device, parse_audio_device, AudioDevice};
+use super::devices::{
+    default_input_device, default_output_device, parse_audio_device, AudioDevice,
+};
 use log::{error, info, warn};
 use std::sync::Arc;
 

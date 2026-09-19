@@ -173,7 +173,11 @@ mod tests {
         std::env::remove_var("NIXON_DIARIZATION_THREADS");
         let n = diarizer_threads();
         assert!((MIN_THREADS..=MAX_EMBED_THREADS).contains(&n), "got {n}");
-        if std::thread::available_parallelism().map(|p| p.get()).unwrap_or(1) > 1 {
+        if std::thread::available_parallelism()
+            .map(|p| p.get())
+            .unwrap_or(1)
+            > 1
+        {
             assert!(n > 1, "expected >1 thread on a multicore host, got {n}");
         }
     }

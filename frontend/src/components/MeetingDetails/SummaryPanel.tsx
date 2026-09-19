@@ -4,11 +4,10 @@ import { Summary, SummaryChunkStatus, Transcript } from '@/types';
 import { BlockNoteSummaryView, BlockNoteSummaryViewRef } from '@/components/AISummary/BlockNoteSummaryView';
 import { EmptyStateSummary } from '@/components/EmptyStateSummary';
 import { ModelConfig } from '@/components/ModelSettingsModal';
-import { SummaryGeneratorButtonGroup } from './SummaryGeneratorButtonGroup';
-import { SummaryUpdaterButtonGroup } from './SummaryUpdaterButtonGroup';
+import { SummaryToolbar } from './SummaryToolbar';
 import { useEffect, useRef, useState, RefObject } from 'react';
 import { toast } from 'sonner';
-import { AlertTriangle, ChevronDown } from 'lucide-react';
+import { AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -18,9 +17,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { shouldConfirmTemplateChange } from '@/hooks/meeting-details/useTemplates';
 import { LanguagePickerPopover } from '@/components/LanguagePickerPopover';
+import { VisuallyHidden } from '@/components/ui/visually-hidden';
 import { useRecentLanguages } from '@/hooks/useRecentLanguages';
 import { labelForCode } from '@/lib/summary-languages';
 import {
@@ -45,7 +44,6 @@ interface SummaryPanelProps {
   isSaving: boolean;
   onSaveAll: () => Promise<void>;
   onCopySummary: () => Promise<void>;
-  onOpenFolder: () => Promise<void>;
   aiSummary: Summary | null;
   summaryStatus: 'idle' | 'processing' | 'summarizing' | 'regenerating' | 'speaker_refresh' | 'completed' | 'error';
   transcripts: Transcript[];
@@ -89,7 +87,6 @@ export function SummaryPanel({
   isSaving,
   onSaveAll,
   onCopySummary,
-  onOpenFolder,
   aiSummary,
   summaryStatus,
   transcripts,
@@ -289,31 +286,28 @@ export function SummaryPanel({
   const chunkStatus = (aiSummary as { summary_status?: SummaryChunkStatus } | null)?.summary_status;
   const partialSummary = chunkStatus && chunkStatus.complete === false ? chunkStatus : null;
 
-  const languageSlot = (
-    <Popover open={langPickerOpen} onOpenChange={setLangPickerOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          variant="outline"
-          size="xs"
-          title={`Summary language: ${effectiveLangLabel}${isLocalFallbackLanguage ? ' (saved on this device)' : ''}`}
-          aria-label="Set summary language"
-        >
-          <span>{effectiveLangLabel}</span>
-          <ChevronDown size={14} className="text-muted-foreground" />
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent
-        align="end"
-        className="w-auto p-0 border-0 shadow-none bg-transparent"
+  // specs/0064 W3 — the language picker used to be a button in the toolbar. It is now opened
+  // from the toolbar's "…" flyout, so it needs an anchor of its own: a dialog, which (unlike a
+  // popover nested in menu content) survives the menu closing behind it.
+  const languageDialog = (
+    <Dialog open={langPickerOpen} onOpenChange={setLangPickerOpen}>
+      <DialogContent
+        aria-describedby={undefined}
+        className="w-auto max-w-[min(92vw,26rem)] border-0 bg-transparent p-0 shadow-none"
       >
+        <VisuallyHidden>
+          <DialogTitle>
+            {`Summary language: ${effectiveLangLabel}${isLocalFallbackLanguage ? ' (saved on this device)' : ''}`}
+          </DialogTitle>
+        </VisuallyHidden>
         <LanguagePickerPopover
           value={summaryLang}
           onChange={handleLangChange}
           onClose={() => setLangPickerOpen(false)}
           autoSubtitle={autoSubtitle}
         />
-      </PopoverContent>
-    </Popover>
+      </DialogContent>
+    </Dialog>
   );
 
   return (
@@ -335,9 +329,8 @@ export function SummaryPanel({
                 : 'flex items-center justify-center w-full pt-0 gap-2'
             }
           >
-            {/* Left-aligned: Summary Generator Button Group */}
             <div className="flex-shrink-0">
-              <SummaryGeneratorButtonGroup
+              <SummaryToolbar
                 modelConfig={modelConfig}
                 setModelConfig={setModelConfig}
                 onSaveModelConfig={onSaveModelConfig}
@@ -352,21 +345,14 @@ export function SummaryPanel({
                 hasSummary={!!aiSummary}
                 isModelConfigLoading={isModelConfigLoading}
                 onOpenModelSettings={onOpenModelSettings}
-                languageSlot={languageSlot}
-                meetingId={meeting.id}
-                onRegenerate={onRegenerateSummary}
-              />
-            </div>
-
-            {/* Right-aligned: Summary Updater Button Group */}
-            <div className="flex-shrink-0">
-              <SummaryUpdaterButtonGroup
+                summaryLanguageLabel={effectiveLangLabel}
+                onOpenLanguagePicker={() => setLangPickerOpen(true)}
                 isSaving={isSaving}
                 isDirty={isTitleDirty || (summaryRef.current?.isDirty || false)}
                 onSave={onSaveAll}
                 onCopy={onCopySummary}
-                onOpenFolder={onOpenFolder}
-                hasSummary={!!aiSummary}
+                meetingId={meeting.id}
+                onRegenerate={onRegenerateSummary}
               />
             </div>
           </div>
@@ -377,7 +363,7 @@ export function SummaryPanel({
         <div className={isDoc ? 'flex flex-col min-h-[40vh]' : 'flex flex-col h-full'}>
           {/* Show button group during generation */}
           <div className={isDoc ? 'flex items-center justify-start pb-6' : 'flex items-center justify-center pt-8 pb-4'}>
-            <SummaryGeneratorButtonGroup
+            <SummaryToolbar
               modelConfig={modelConfig}
               setModelConfig={setModelConfig}
               onSaveModelConfig={onSaveModelConfig}
@@ -389,8 +375,15 @@ export function SummaryPanel({
               selectedTemplate={selectedTemplate}
               onTemplateSelect={handleTemplateSelect}
               hasTranscripts={transcripts.length > 0}
+              hasSummary={!!aiSummary}
               isModelConfigLoading={isModelConfigLoading}
               onOpenModelSettings={onOpenModelSettings}
+              summaryLanguageLabel={effectiveLangLabel}
+              onOpenLanguagePicker={() => setLangPickerOpen(true)}
+              isSaving={isSaving}
+              isDirty={isTitleDirty || (summaryRef.current?.isDirty || false)}
+              onSave={onSaveAll}
+              onCopy={onCopySummary}
             />
           </div>
           {/* Loading spinner */}
@@ -405,7 +398,7 @@ export function SummaryPanel({
         <div className={isDoc ? 'flex flex-col min-h-[40vh]' : 'flex flex-col h-full'}>
           {/* Centered Summary Generator Button Group when no summary */}
           <div className={isDoc ? 'flex items-center justify-start gap-2 pb-4' : 'flex items-center justify-center gap-2 pt-8 pb-4'}>
-            <SummaryGeneratorButtonGroup
+            <SummaryToolbar
               modelConfig={modelConfig}
               setModelConfig={setModelConfig}
               onSaveModelConfig={onSaveModelConfig}
@@ -420,7 +413,12 @@ export function SummaryPanel({
               hasSummary={false}
               isModelConfigLoading={isModelConfigLoading}
               onOpenModelSettings={onOpenModelSettings}
-              languageSlot={transcripts.length > 0 ? languageSlot : undefined}
+              summaryLanguageLabel={effectiveLangLabel}
+              onOpenLanguagePicker={() => setLangPickerOpen(true)}
+              isSaving={isSaving}
+              isDirty={isTitleDirty || (summaryRef.current?.isDirty || false)}
+              onSave={onSaveAll}
+              onCopy={onCopySummary}
             />
           </div>
           {/* Empty state message */}
@@ -505,6 +503,12 @@ export function SummaryPanel({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* One instance for the whole panel: the toolbar renders in three different states
+          (summary present, generating, none yet) and its "…" flyout can open the language
+          picker from any of them. Mounting it per-branch left the generating state opening
+          nothing at all. */}
+      {languageDialog}
     </div>
   );
 }

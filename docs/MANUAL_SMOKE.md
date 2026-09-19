@@ -68,6 +68,16 @@ the system-audio tap silently returns silence (see `CLAUDE.md` / ADR-0004).
       returns to idle.
 - [ ] Toasts/alerts stack **above** the rail, never underneath it.
 - [ ] Everything above still reads correctly in **both themes** (Faceplate light / Deck dark).
+- [ ] **Order (specs/0064 W6):** left to right the rail reads reels → timer above the level
+      meter, both the same width → meeting title; REC/HOLD/STOP sit at the far right. Rename
+      the meeting mid-recording: the timer and meter do not move.
+- [ ] **On hold (specs/0064 W6):** press HOLD while recording. REC keeps the standard key
+      face with a **red** dot and a **red** REC legend, and its lamp blinks slowly — legible
+      in both themes. Resume: REC goes back to the solid lit red face.
+- [ ] **Queue in the sidebar (specs/0064 W5):** the rail no longer carries a Queue; it is
+      below Settings in the sidebar. Expanded shows lamp + count + one line; collapsed shows
+      the lamp alone. Both open the same panel, and Today's "Processing…" button opens it too.
+- [ ] The sidebar reads **Today** (not Home) and has no New recording / New note buttons.
 - [ ] While recording, navigate to **Meetings**, then click the rail's meeting title — it
       returns to /record. On /record the title is not clickable.
 - [ ] Rename the meeting in the record header; the rail's title updates immediately, and so
@@ -145,9 +155,31 @@ the system-audio tap silently returns silence (see `CLAUDE.md` / ADR-0004).
 - [ ] Do the same while RECORDING, from the record screen's Prep tab: the count badge on the
       tab drops by one as soon as you tick the item.
 
-## 5. Channel strip on a meeting (specs/0057 §3.5)
-- [ ] Open a meeting → **Transcript** tab. The speaker list is a channel strip: **CH 1** is
-      always you, then CH 2, CH 3, … with talk time and share of talk per channel.
+## 4b. Prep survives a reschedule (specs/0064 W1)
+- [ ] Write prep notes on an upcoming **Google** calendar meeting, move it to another day in
+      Google Calendar, let the sync catch up, then open it at its new time — the prep notes
+      are there, the brief regenerates, and no duplicate meeting appeared.
+- [ ] Move that meeting again and rename it in the same edit — the prep still follows and the
+      new name shows. If you had renamed the meeting inside Nixon first, **your** name wins.
+- [ ] Repeat with a **macOS Calendar** meeting: the notes carry when the old time is now
+      empty. For a recurring series where the other occurrences are still on the calendar,
+      the notes deliberately stay put rather than being taken from a sibling occurrence.
+
+## 4c. Speakers are named, not offered (specs/0064 W2)
+- [ ] Open a meeting with a speaker you have confirmed in at least three previous meetings
+      (or whose voiceprint is well trained): the name is already there and there is **no**
+      "Looks like …" button to click.
+- [ ] A speaker the app is unsure about still shows the chip — auto-naming has not swallowed
+      the confirm path.
+- [ ] Rename an auto-named speaker from the chip menu: it behaves exactly like one you named
+      by hand, and reopening the meeting does not put the automatic name back.
+
+## 5. Channel strip on a meeting (specs/0057 §3.5, ordering revised by specs/0064 W4)
+- [ ] Open a meeting → **Transcript** tab. The speaker list is a channel strip with talk time
+      and share of talk per channel, ordered by **share of talk, highest first** — so CH 1 is
+      whoever spoke most, which is often but not always you.
+- [ ] The Speakers card is a single box: the channel table inside it has no border or card of
+      its own (specs/0064 W4).
 - [ ] The shares are computed over the **full** meeting (not just the first page of
       transcripts) and sum to ~100%.
 - [ ] From a channel's name cell: **rename** a speaker, **merge** two speakers, and **assign**

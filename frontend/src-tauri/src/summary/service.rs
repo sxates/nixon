@@ -337,7 +337,11 @@ impl SummaryService {
     /// * `pool` - SQLx connection pool
     /// * `meeting_id` - Meeting identifier
     /// * `error_msg` - Error message to store
-    pub(super) async fn update_process_failed(pool: &SqlitePool, meeting_id: &str, error_msg: &str) {
+    pub(super) async fn update_process_failed(
+        pool: &SqlitePool,
+        meeting_id: &str,
+        error_msg: &str,
+    ) {
         error!(
             "Processing failed for meeting_id {}: {}",
             meeting_id, error_msg

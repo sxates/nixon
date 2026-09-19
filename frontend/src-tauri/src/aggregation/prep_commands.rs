@@ -9,7 +9,9 @@
 use crate::aggregation::engine::{SourceMeeting, Stage};
 use crate::aggregation::prep_jobs::generate_brief_for_target;
 use crate::database::repositories::action_item::{ActionItem, ActionItemsRepository};
-use crate::database::repositories::meeting::{MeetingsRepository, SeriesLinkedMeeting};
+use crate::database::repositories::meeting::{
+    is_per_occurrence_event_id, MeetingsRepository, ScheduledResolution, SeriesLinkedMeeting,
+};
 use crate::database::repositories::meeting_brief::MeetingBriefsRepository;
 use crate::database::repositories::meeting_note::MeetingNotesRepository;
 use crate::state::AppState;
@@ -399,6 +401,139 @@ pub async fn api_unlink_meeting_from_series<R: Runtime>(
     Ok(())
 }
 
+/// Has EventKit stopped holding an event with this id anywhere on `day`? (specs/0064 W1)
+///
+/// This is the third condition of the EventKit carry-forward guard: proof that the
+/// occurrence the stranded prep was written for is actually gone, rather than still sitting
+/// there as a sibling of the one being opened. Calendar access must be granted for an empty
+/// read to mean anything — `meetings_between` returns an empty vec on a denied or failed
+/// read too, and treating that as "vacant" would carry prep off a live occurrence. Any doubt
+/// answers false: stranding prep is recoverable, moving another occurrence's prep is not.
+///
+/// EventKit reads touch the Objective-C runtime, so the read runs on a blocking thread.
+async fn old_slot_is_vacant(calendar_event_id: &str, day: chrono::DateTime<chrono::Utc>) -> bool {
+    if crate::calendar::eventkit::access_status() != "authorized" {
+        return false;
+    }
+    let Some(start) = day.date_naive().and_hms_opt(0, 0, 0).map(|d| d.and_utc()) else {
+        return false;
+    };
+    let end = start + chrono::Duration::days(1);
+    let id = calendar_event_id.to_string();
+    match tokio::task::spawn_blocking(move || {
+        crate::calendar::eventkit::meetings_between(start, end)
+            .into_iter()
+            .any(|e| e.id == id)
+    })
+    .await
+    {
+        Ok(still_there) => !still_there,
+        Err(e) => {
+            log::warn!("prep: vacancy probe failed, not carrying prep forward: {e}");
+            false
+        }
+    }
+}
+
+/// The EventKit half of the reschedule carry-forward (specs/0064 W1). Returns the re-dated
+/// meeting id when all three conditions hold: exactly one unrecorded `scheduled` row for this
+/// event id that actually carries prep, its stored day is not the day being opened, and the
+/// old slot is provably vacant. `None` otherwise — the caller mints a fresh row as before.
+///
+/// Google ids never come through here: they name one occurrence, so
+/// `upsert_scheduled_meeting` re-dates them directly without needing any of this.
+async fn carry_prep_forward(
+    pool: &sqlx::SqlitePool,
+    calendar_event_id: &str,
+    occurrence: chrono::DateTime<chrono::Utc>,
+    title: &str,
+    series_key: Option<&str>,
+) -> Option<String> {
+    if is_per_occurrence_event_id(calendar_event_id) {
+        return None;
+    }
+    let (stranded_id, stored_day) =
+        MeetingsRepository::scheduled_day_with_prep(pool, calendar_event_id)
+            .await
+            .ok()
+            .flatten()?;
+    if stored_day.date_naive() == occurrence.date_naive() {
+        return None;
+    }
+    if !old_slot_is_vacant(calendar_event_id, stored_day).await {
+        log::debug!(
+            "prep: {calendar_event_id} still has an occurrence on {stored_day}; leaving its prep where it is"
+        );
+        return None;
+    }
+
+    // A row may already exist for the new slot: the background prep pass mints one for every
+    // upcoming occurrence of a recurring series, on a 30-minute timer, so by the time the
+    // user opens Prep the new day usually has a bare placeholder. Re-dating the stranded row
+    // would then collide with it, so the NOTES move instead — which is what the user cares
+    // about; the placeholder already has the brief for its own date.
+    if let Ok(Some(target_id)) =
+        MeetingsRepository::find_scheduled_for_occurrence(pool, calendar_event_id, occurrence).await
+    {
+        // Never overwrite prep already written against the new slot.
+        let target_has_notes = MeetingNotesRepository::get_notes(pool, &target_id)
+            .await
+            .ok()
+            .flatten()
+            .and_then(|n| n.prep_markdown)
+            .map(|m| !m.trim().is_empty())
+            .unwrap_or(false);
+        if target_has_notes {
+            return None;
+        }
+        let stranded = MeetingNotesRepository::get_notes(pool, &stranded_id)
+            .await
+            .ok()
+            .flatten()?;
+        match MeetingNotesRepository::upsert_prep_notes(
+            pool,
+            &target_id,
+            stranded.prep_markdown.as_deref(),
+            stranded.prep_json.as_deref(),
+        )
+        .await
+        {
+            Ok(_) => {
+                log::info!(
+                    "prep: copied prep notes from the vacated slot {stored_day} onto the existing row for {occurrence} (event {calendar_event_id}, specs/0064 W1)"
+                );
+                Some(target_id)
+            }
+            Err(e) => {
+                log::warn!("prep: could not copy prep notes forward (continuing): {e}");
+                None
+            }
+        }
+    } else {
+        match MeetingsRepository::redate_scheduled_meeting(
+            pool,
+            &stranded_id,
+            occurrence,
+            Some(title),
+            series_key,
+        )
+        .await
+        {
+            Ok(true) => {
+                log::info!(
+                    "prep: carried prep from the vacated slot {stored_day} to {occurrence} for event {calendar_event_id} (specs/0064 W1)"
+                );
+                Some(stranded_id)
+            }
+            Ok(false) => None,
+            Err(e) => {
+                log::warn!("prep: re-date failed, minting a fresh row instead: {e}");
+                None
+            }
+        }
+    }
+}
+
 /// Mint (or return) the `scheduled` prep meeting for one upcoming calendar occurrence, and
 /// warm its brief. Called when the user opens an upcoming event's prep from the Today view.
 #[tauri::command]
@@ -415,15 +550,46 @@ pub async fn api_ensure_scheduled_meeting<R: Runtime>(
         .map_err(|e| format!("Invalid occurrence start: {e}"))?
         .with_timezone(&chrono::Utc);
 
-    let meeting_id = MeetingsRepository::upsert_scheduled_meeting(
+    // specs/0064 W1 — EventKit's event id is shared across a recurring series, so a moved
+    // occurrence cannot be recognised by id alone; the guarded carry-forward takes over.
+    let carried = carry_prep_forward(
         pool,
         &calendar_event_id,
-        series_key.as_deref(),
-        &title,
         occurrence,
+        &title,
+        series_key.as_deref(),
     )
-    .await
-    .map_err(|e| format!("{e}"))?;
+    .await;
+
+    let resolution = match carried {
+        Some(id) => ScheduledResolution::Redated(id),
+        None => MeetingsRepository::upsert_scheduled_meeting(
+            pool,
+            &calendar_event_id,
+            series_key.as_deref(),
+            &title,
+            occurrence,
+        )
+        .await
+        .map_err(|e| format!("{e}"))?,
+    };
+
+    // specs/0064 W1 — the row followed a rescheduled meeting onto a new slot, so the brief
+    // cached against its old date is stale (its prior-occurrence set can have changed). Drop
+    // it so the warm below regenerates instead of serving the old one. Best-effort: a failed
+    // delete must not fail opening the Prep tab, it only means a stale brief lingers.
+    if resolution.was_redated() {
+        // Says what happened, not what we hoped happened: the row followed the meeting,
+        // whether or not anything was written on it.
+        log::info!(
+            "prep: scheduled row {} moved with its rescheduled meeting to {occurrence} (specs/0064 W1)",
+            resolution.id()
+        );
+        if let Err(e) = MeetingBriefsRepository::delete_for_meeting(pool, resolution.id()).await {
+            log::warn!("prep: could not invalidate the re-dated brief (continuing): {e}");
+        }
+    }
+    let meeting_id = resolution.into_id();
 
     // Warm the brief in the background (no-op if one is already cached/generating).
     if MeetingBriefsRepository::get(pool, &meeting_id)

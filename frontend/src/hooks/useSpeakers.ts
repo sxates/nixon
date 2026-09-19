@@ -18,7 +18,7 @@
  * is the common case and is NOT an error; callers fall back to free-text rename.
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { toast } from 'sonner';
 import { safeListen } from '@/lib/safe-listen';
@@ -95,10 +95,15 @@ export function useSpeakers({
     Map<string, SpeakerSuggestion>
   >(new Map());
   const [dismissedKeys, setDismissedKeys] = useState<Set<string>>(new Set());
+  // specs/0064 W2 — speakerKeys whose auto-label we have already reloaded the legend for.
+  // The matcher re-derives the same auto-label every time a meeting is opened, so without
+  // this the reload would re-trigger itself forever; a key is only acted on once.
+  const appliedKeys = useRef<Set<string>>(new Set());
 
   // Seed dismissals from sessionStorage when the meeting changes (sticky per
   // meeting for the session). Best-effort: sessionStorage may be unavailable.
   useEffect(() => {
+    appliedKeys.current = new Set();
     if (!meetingId) {
       setDismissedKeys(new Set());
       return;
@@ -118,30 +123,63 @@ export function useSpeakers({
     setDismissedKeys(next);
   }, [meetingId]);
 
+  // The legend's own rows. Extracted from `refresh` so the suggestion path can reload just
+  // the speakers after an auto-label lands, without re-running the whole fetch (which would
+  // re-enter this and loop).
+  const loadSpeakers = useCallback(async (id: string) => {
+    try {
+      const fetchedSpeakers = await invoke<MeetingSpeaker[]>(
+        'api_get_meeting_speakers',
+        { meetingId: id },
+      );
+      setSpeakers(fetchedSpeakers ?? []);
+    } catch (error) {
+      console.error('Failed to fetch meeting speakers:', error);
+      setSpeakers([]);
+    }
+  }, []);
+
   // Merge a fresh batch of suggestions (from fetch or the diarization-complete
   // event), keyed by speakerKey. A new batch replaces the prior set entirely so
   // a re-diarization can retract stale suggestions.
   const applySuggestions = useCallback((list: SpeakerSuggestion[]) => {
     const map = new Map<string, SpeakerSuggestion>();
-    for (const s of list) map.set(s.speakerKey, s);
+    // specs/0064 W2: an auto-labeled match has already been applied by the backend — the
+    // name is on the speaker. Offering it as a chip would ask the user to confirm something
+    // that is already done, which is the exact complaint this wave fixes.
+    for (const s of list) if (!s.autoLabel) map.set(s.speakerKey, s);
     setRawSuggestions(map);
   }, []);
 
   // Best-effort fetch; a failure must never break the legend.
-  const fetchSuggestions = useCallback(async (id: string) => {
-    try {
-      const list = await invoke<SpeakerSuggestion[]>(
-        'api_get_speaker_suggestions',
-        { meetingId: id },
-      );
-      const map = new Map<string, SpeakerSuggestion>();
-      for (const s of list ?? []) map.set(s.speakerKey, s);
-      setRawSuggestions(map);
-    } catch (error) {
-      console.error('Failed to fetch speaker suggestions:', error);
-      // Leave any existing suggestions in place; do not surface to the user.
-    }
-  }, []);
+  //
+  // The command applies the matches confident enough to need no confirmation before it
+  // returns (specs/0064 W2), so a freshly auto-labeled speaker's name is in the database but
+  // not yet in `speakers` — reload it, once per newly-applied key.
+  const fetchSuggestions = useCallback(
+    async (id: string) => {
+      try {
+        const list =
+          (await invoke<SpeakerSuggestion[]>('api_get_speaker_suggestions', {
+            meetingId: id,
+          })) ?? [];
+        applySuggestions(list);
+
+        const fresh = list
+          .filter((s) => s.autoLabel)
+          .map((s) => s.speakerKey)
+          .filter((key) => !appliedKeys.current.has(key));
+        if (fresh.length > 0) {
+          for (const key of fresh) appliedKeys.current.add(key);
+          await loadSpeakers(id);
+        }
+      } catch (error) {
+        console.error('Failed to fetch speaker suggestions:', error);
+        // Leave any existing suggestions in place; do not surface to the user.
+      }
+    },
+    [applySuggestions, loadSpeakers],
+  );
 
   const refresh = useCallback(async () => {
     if (!meetingId) {
@@ -171,16 +209,7 @@ export function useSpeakers({
         setPeople([]);
       }
     })();
-    try {
-      const fetchedSpeakers = await invoke<MeetingSpeaker[]>(
-        'api_get_meeting_speakers',
-        { meetingId },
-      );
-      setSpeakers(fetchedSpeakers ?? []);
-    } catch (error) {
-      console.error('Failed to fetch meeting speakers:', error);
-      setSpeakers([]);
-    }
+    await loadSpeakers(meetingId);
 
     // Attendees are best-effort: a meeting may have no linked calendar event, in
     // which case the roster is empty. Never surface that as an error.
@@ -201,7 +230,7 @@ export function useSpeakers({
     } finally {
       setIsLoading(false);
     }
-  }, [meetingId, fetchSuggestions]);
+  }, [meetingId, fetchSuggestions, loadSpeakers]);
 
   useEffect(() => {
     void refresh();

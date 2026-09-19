@@ -27,11 +27,13 @@ impl SummaryOutlineRepository {
         .await
         .context("Failed to read the summary outline")?;
 
-        Ok(row.map(|(outline_json, has_commitments, derived_at)| StoredOutline {
-            outline_json,
-            has_commitments: has_commitments != 0,
-            derived_at,
-        }))
+        Ok(row.map(
+            |(outline_json, has_commitments, derived_at)| StoredOutline {
+                outline_json,
+                has_commitments: has_commitments != 0,
+                derived_at,
+            },
+        ))
     }
 
     pub async fn upsert(

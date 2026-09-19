@@ -24,7 +24,7 @@ interface TodayHeaderProps {
   onRecord: () => void;
 }
 
-/** Home header — greeting + day summary, ⌘K search, Ask AI, New note, Record. */
+/** Today header — greeting + day summary, ⌘K search, Ask AI, New note, Record. */
 export function TodayHeader({ now, daySummary, isRecording, onNewNote, onRecord }: TodayHeaderProps) {
   const router = useRouter();
   return (
@@ -38,7 +38,7 @@ export function TodayHeader({ now, daySummary, isRecording, onNewNote, onRecord 
             type="button"
             onClick={() => router.push('/ask')}
             aria-label="Ask AI about your meetings"
-            className="hidden items-center gap-[7px] rounded-[9px] border border-border bg-card px-[11px] py-[7px] text-[13px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:flex"
+            className="hidden items-center gap-[7px] rounded-[3px] border border-border bg-card px-[11px] py-[7px] text-[13px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:flex"
           >
             <Sparkles className="h-[13px] w-[13px]" aria-hidden="true" />
             <span>Ask AI</span>

@@ -159,6 +159,18 @@ impl MeetingBriefsRepository {
         .await?;
         Ok(result.rows_affected())
     }
+
+    /// Drop the cached brief for ONE meeting (specs/0064 W1). A prep row that followed a
+    /// rescheduled meeting onto a new slot may have a different set of previous occurrences
+    /// behind it, so its cached brief is stale; deleting the row is what lets `api_get_prep`
+    /// generate again (it only generates when no row exists). Returns how many rows went.
+    pub async fn delete_for_meeting(pool: &SqlitePool, meeting_id: &str) -> Result<u64, SqlxError> {
+        let result = sqlx::query("DELETE FROM meeting_briefs WHERE meeting_id = ?1")
+            .bind(meeting_id)
+            .execute(pool)
+            .await?;
+        Ok(result.rows_affected())
+    }
 }
 
 #[cfg(test)]

@@ -170,7 +170,7 @@ impl RecordingState {
         self.is_recording.store(false, Ordering::SeqCst);
         self.is_paused.store(false, Ordering::SeqCst);
         super::mute_gate::set_muted(false); // clear the Zoom-mute gate (specs/0049)
-        // Clear pause tracking when stopping
+                                            // Clear pause tracking when stopping
         *self.pause_start.lock().unwrap() = None;
         // CRITICAL: Clear audio sender to close the pipeline channel
         // This ensures the pipeline loop exits properly after processing all chunks

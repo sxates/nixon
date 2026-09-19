@@ -617,7 +617,10 @@ mod tests {
         assert_eq!(centroids.len(), 2);
         let ids: Vec<&str> = centroids.iter().map(|(p, _, _)| p.as_str()).collect();
         assert!(ids.contains(&"p1") && ids.contains(&"p2"));
-        assert!(centroids.iter().all(|(_, _, n)| *n == 1), "0044: count rides along");
+        assert!(
+            centroids.iter().all(|(_, _, n)| *n == 1),
+            "0044: count rides along"
+        );
     }
 
     #[tokio::test]
