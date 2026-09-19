@@ -355,7 +355,6 @@ export function SummaryPanel({
                 onRegenerate={onRegenerateSummary}
               />
             </div>
-            {languageDialog}
           </div>
         </div>
       )}
@@ -421,7 +420,6 @@ export function SummaryPanel({
               onSave={onSaveAll}
               onCopy={onCopySummary}
             />
-            {languageDialog}
           </div>
           {/* Empty state message */}
           <EmptyStateSummary
@@ -505,6 +503,12 @@ export function SummaryPanel({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* One instance for the whole panel: the toolbar renders in three different states
+          (summary present, generating, none yet) and its "…" flyout can open the language
+          picker from any of them. Mounting it per-branch left the generating state opening
+          nothing at all. */}
+      {languageDialog}
     </div>
   );
 }
