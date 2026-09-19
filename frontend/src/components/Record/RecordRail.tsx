@@ -42,7 +42,7 @@ interface RecordTab {
 
 export function RecordRail({ meetingId }: { meetingId: string | null }) {
   const [activeTab, setActiveTab] = useState<RecordTabKey>('notes');
-  const { openItemCount } = usePrepAvailability(meetingId);
+  const { openItemCount, refresh: refreshPrepCount } = usePrepAvailability(meetingId);
 
   const tabs: RecordTab[] = meetingId
     ? [
@@ -143,7 +143,11 @@ export function RecordRail({ meetingId }: { meetingId: string | null }) {
           className={effectiveTab === 'prep' ? 'min-h-0 flex flex-1 flex-col overflow-hidden' : 'hidden'}
         >
           <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
-            <PrepPanel key={meetingId} meetingId={meetingId} />
+            <PrepPanel
+              key={meetingId}
+              meetingId={meetingId}
+              onOpenItemsChanged={refreshPrepCount}
+            />
           </div>
         </div>
       )}

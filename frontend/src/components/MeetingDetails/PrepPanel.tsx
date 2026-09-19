@@ -4,15 +4,22 @@
  * PrepPanel (specs/0036) — the Prep tab's body in meeting-details.
  *
  * Three stacked sections for an upcoming (or already-recorded) occurrence:
- *   1. Brief — a short synthesized "where we left off / decisions / open threads"
+ *   1. Prep notes — the editable agenda (PrepNotesEditor). FIRST, as of specs/0063 W4:
+ *      it is the only part of this tab the user writes, and underneath the brief and a
+ *      long carried-over list it was routinely missed (owner feedback on 0.3.1).
+ *   2. Brief — a short synthesized "where we left off / decisions / open threads"
  *      over the series' prior occurrences, rendered with AnswerMarkdown so its
  *      `[M#]` citations become chips linking to the source meetings. Pre-generated
  *      in the background, so it's usually instant; while pending it shows a spinner
  *      and fills in over the `prep-brief-*` events (all filtered by meetingId).
- *   2. Carried-over open action items — still-open commitments from prior
- *      occurrences, split into "yours" vs. "owed by others" (read-only here; the
- *      mutable surface is the Action items section / task hub).
- *   3. Prep notes — the editable agenda (PrepNotesEditor).
+ *      Rendered flat — no card — so the brief reads as the page's prose rather than
+ *      as a widget competing with the notes above it.
+ *   3. Carried-over open action items — still-open commitments from prior occurrences,
+ *      split into "yours" vs. "owed by others". Checkable here since specs/0063 W4: a
+ *      commitment you settle while prepping should not require a trip to its source
+ *      meeting. A checked row STAYS, struck through, until the panel is remounted —
+ *      `api_get_prep` only returns open items, so a reload would make it vanish
+ *      mid-interaction and leave the user unsure whether the click registered.
  *
  * Event discipline mirrors Ask AI: listeners live for the component's lifetime and
  * every payload is dropped unless its `meetingId` matches ours. `prep-briefs-updated`
@@ -42,14 +49,41 @@ import {
 } from '@/lib/prep';
 import type { ActionItem, Person } from '@/types';
 import { cn } from '@/lib/utils';
+import { IconButton } from '@/components/ui/icon-button';
+import { ActionItemRow } from '@/components/ActionItems/ActionItemRow';
+import type { AssigneeCandidate } from '@/components/ActionItems/AssigneePicker';
+import { useActionItemMutations } from '@/hooks/useActionItemMutations';
 import { LinkMeetingPicker } from './LinkMeetingPicker';
 import { PrepNotesEditor } from './PrepNotesEditor';
 
-export function PrepPanel({ meetingId }: { meetingId: string }) {
+/**
+ * `ActionItemRow` requires a candidate list, but this panel renders every row with
+ * `hideAssignee` — the picker it would feed is never mounted. A module-level constant keeps
+ * the prop honest without allocating a new empty array on every render.
+ */
+const NO_CANDIDATES: AssigneeCandidate[] = [];
+
+export function PrepPanel({
+  meetingId,
+  onOpenItemsChanged,
+}: {
+  meetingId: string;
+  /**
+   * Fires after a carried-over item's status commits. The record screen uses it to
+   * refresh the Prep tab's count badge, which reads `api_get_prep` separately and has
+   * no other way to learn that the number just changed (specs/0063 W4).
+   */
+  onOpenItemsChanged?: () => void;
+}) {
   const router = useRouter();
 
   const [view, setView] = useState<PrepView | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+
+  // Carried-over items are held OUTSIDE `view` so `useActionItemMutations` can update them
+  // optimistically without a whole-view reload — and so a checked row keeps its struck-through
+  // state instead of disappearing (`api_get_prep` returns open items only).
+  const [openItems, setOpenItems] = useState<ActionItem[]>([]);
 
   // Brief state is tracked separately from `view` so the streaming `prep-brief-*`
   // events can update it without disturbing the loaded openItems / prep notes.
@@ -70,6 +104,7 @@ export function PrepPanel({ meetingId }: { meetingId: string }) {
 
   const applyView = useCallback((v: PrepView) => {
     setView(v);
+    setOpenItems(v.openItems ?? []);
     // Only adopt the persisted brief when a live event hasn't already moved us
     // past it (e.g. a background broadcast races an in-flight completion).
     if (!briefFromEventRef.current) {
@@ -163,10 +198,7 @@ export function PrepPanel({ meetingId }: { meetingId: string }) {
     [people],
   );
 
-  const { mine, others } = useMemo(
-    () => splitOpenItems(view?.openItems ?? []),
-    [view?.openItems],
-  );
+  const { mine, others } = useMemo(() => splitOpenItems(openItems), [openItems]);
 
   // Group "owed by others" by assignee, resolving people → display names via the SHARED
   // assigneeLabel helper (consistent 'Me'/'Unknown'/raw fallbacks with the Action items list).
@@ -186,6 +218,16 @@ export function PrepPanel({ meetingId }: { meetingId: string }) {
     (id: string) => router.push(`/meeting-details?id=${id}`),
     [router],
   );
+
+  // `meetingId: null` on purpose. Every row here belongs to a PRIOR occurrence, and the
+  // only thing that field drives is `add`, which this panel has no affordance for — passing
+  // this meeting's id would silently create carried-over items on the wrong meeting the
+  // moment someone adds one.
+  const { setStatus, editDescription, assign, deleteItem } = useActionItemMutations({
+    setItems: setOpenItems,
+    meetingId: null,
+    onStatusChanged: () => onOpenItemsChanged?.(),
+  });
 
   // After a link lands the backend regenerates the brief and re-broadcasts; re-read the
   // view (clearing the event guard so the fresh persisted state is adopted).
@@ -239,6 +281,15 @@ export function PrepPanel({ meetingId }: { meetingId: string }) {
 
   return (
     <div className="flex flex-col gap-8">
+      {/* ── Prep notes (agenda) ───────────────────────────────────────────── */}
+      <section aria-label="Prep notes">
+        <PrepNotesEditor
+          meetingId={meetingId}
+          initialMarkdown={view.prepNotesMarkdown}
+          initialJson={view.prepNotesJson}
+        />
+      </section>
+
       {/* ── Brief ─────────────────────────────────────────────────────────── */}
       <section aria-label="Pre-call brief">
         <div className="mb-2 flex items-center justify-between gap-2">
@@ -246,37 +297,28 @@ export function PrepPanel({ meetingId }: { meetingId: string }) {
             <Sparkles size={13} aria-hidden="true" />
             Before this meeting
           </h2>
+          {/* specs/0063 W4 — icon-only; the full text lives in the tooltip and the
+              accessible name, so the header stops competing with the brief itself. */}
           <div className="flex items-center gap-1.5">
             {briefStatus !== 'none' && (
-              <button
-                type="button"
+              <IconButton
+                label="Link previous meeting…"
+                icon={<Link2 size={13} aria-hidden="true" />}
                 onClick={() => setLinkPickerOpen(true)}
-                title="Mark a past meeting as a previous occurrence of this one"
-                className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 py-1 text-xs font-semibold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <Link2 size={12} aria-hidden="true" />
-                Link previous meeting…
-              </button>
+              />
             )}
             {(briefStatus === 'ready' || briefStatus === 'failed') && (
-              <button
-                type="button"
+              <IconButton
+                label="Regenerate the brief"
+                icon={<RefreshCw size={13} aria-hidden="true" />}
                 onClick={() => void regenerate()}
-                title="Regenerate the brief"
-                className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 py-1 text-xs font-semibold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <RefreshCw size={12} aria-hidden="true" />
-                Regenerate
-              </button>
+              />
             )}
           </div>
         </div>
 
         {isBriefLoading(briefStatus) ? (
-          <div
-            role="status"
-            className="flex items-center gap-2 rounded-[3px] border border-border bg-card px-4 py-4 text-sm text-foreground shadow-sm"
-          >
+          <div role="status" className="flex items-center gap-2 py-1 text-sm text-foreground">
             <Loader2 size={15} aria-hidden="true" className="animate-spin text-brand" />
             <span className="truncate">
               {stage ? prepStageLabel(stage) : 'Preparing your brief…'}
@@ -299,44 +341,41 @@ export function PrepPanel({ meetingId }: { meetingId: string }) {
             </button>
           </div>
         ) : briefStatus === 'failed' ? (
-          <div className="rounded-[3px] border border-destructive/30 bg-destructive/5 px-4 py-4">
+          /* Flat, but the destructive tint stays — it is the only signal that this is an
+             error rather than an unusually terse brief. */
+          <div className="rounded-[3px] bg-destructive/5 px-3 py-2">
             <p className="text-sm text-foreground">
               {briefError ?? 'The brief could not be generated.'}
             </p>
             <p className="u-meta mt-1">Try Regenerate, or check your model settings.</p>
           </div>
         ) : briefMarkdown ? (
-          <div className="rounded-[3px] border border-border bg-card p-5 shadow-sm">
+          /* specs/0063 W4 — flat: the brief IS the content of this column, so it gets no
+             card, border or shadow. The citations collapse from a bordered block into one
+             muted line beneath it. */
+          <div>
             <AnswerMarkdown markdown={briefMarkdown} sources={briefSources} />
             {citedSources.length > 0 && (
-              <div className="mt-5 border-t border-border pt-3">
-                <h3 className="u-section-label">From</h3>
-                <div className="mt-1 flex flex-col gap-0.5">
-                  {citedSources.map((s) => (
+              <p className="u-meta mt-3 flex flex-wrap items-baseline gap-x-1.5 gap-y-1">
+                <span>From</span>
+                {citedSources.map((s, i) => (
+                  <span key={s.meetingId} className="inline-flex items-baseline gap-1.5">
+                    {i > 0 && <span aria-hidden="true">·</span>}
                     <button
-                      key={s.meetingId}
                       type="button"
                       onClick={() => openMeeting(s.meetingId)}
                       title="Open this meeting"
-                      className="group/source flex items-baseline gap-2 rounded px-2 py-1 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      className="inline-flex items-baseline gap-1 rounded font-semibold text-muted-foreground transition-colors hover:text-brand focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
-                      <span className="min-w-0 truncate text-[13.5px] font-semibold text-foreground group-hover/source:text-brand">
-                        {s.title?.trim() || 'Untitled meeting'}
-                      </span>
+                      {s.title?.trim() || 'Untitled meeting'}
                       {formatMeetingDate(s.createdAt) && (
-                        <span className="flex-shrink-0 text-xs text-muted-foreground">
-                          {formatMeetingDate(s.createdAt)}
-                        </span>
+                        <span className="font-normal">{formatMeetingDate(s.createdAt)}</span>
                       )}
-                      <ChevronRight
-                        size={13}
-                        aria-hidden="true"
-                        className="self-center text-muted-foreground group-hover/source:text-brand"
-                      />
+                      <ChevronRight size={11} aria-hidden="true" className="self-center" />
                     </button>
-                  ))}
-                </div>
-              </div>
+                  </span>
+                ))}
+              </p>
             )}
           </div>
         ) : (
@@ -403,11 +442,22 @@ export function PrepPanel({ meetingId }: { meetingId: string }) {
           <div>
             <h2 className="u-section-label">Your open items</h2>
             {mine.length > 0 ? (
-              <ul className="mt-2 flex flex-col gap-1.5">
+              <div className="-mx-2 mt-2 flex flex-col gap-0.5">
                 {mine.map((item) => (
-                  <OpenItemRow key={item.id} item={item} onOpenMeeting={openMeeting} />
+                  <ActionItemRow
+                    key={item.id}
+                    item={item}
+                    assigneeName={assigneeLabel(item, nameById)}
+                    candidates={NO_CANDIDATES}
+                    onSetStatus={setStatus}
+                    onEditDescription={editDescription}
+                    onAssign={assign}
+                    onDelete={deleteItem}
+                    hideAssignee
+                    meetingChip={<SourceMeetingChip item={item} onOpenMeeting={openMeeting} />}
+                  />
                 ))}
-              </ul>
+              </div>
             ) : (
               <p className="u-meta mt-2">Nothing outstanding on your side.</p>
             )}
@@ -422,11 +472,22 @@ export function PrepPanel({ meetingId }: { meetingId: string }) {
                     <p className="px-1 text-[12.5px] font-semibold text-foreground">
                       {group.label}
                     </p>
-                    <ul className="mt-1 flex flex-col gap-1.5">
+                    <div className="-mx-2 mt-1 flex flex-col gap-0.5">
                       {group.items.map((item) => (
-                        <OpenItemRow key={item.id} item={item} onOpenMeeting={openMeeting} />
+                        <ActionItemRow
+                          key={item.id}
+                          item={item}
+                          assigneeName={assigneeLabel(item, nameById)}
+                          candidates={NO_CANDIDATES}
+                          onSetStatus={setStatus}
+                          onEditDescription={editDescription}
+                          onAssign={assign}
+                          onDelete={deleteItem}
+                          hideAssignee
+                          meetingChip={<SourceMeetingChip item={item} onOpenMeeting={openMeeting} />}
+                        />
                       ))}
-                    </ul>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -435,48 +496,37 @@ export function PrepPanel({ meetingId }: { meetingId: string }) {
         </section>
       )}
 
-      {/* ── Prep notes (agenda) ───────────────────────────────────────────── */}
-      <section aria-label="Prep notes">
-        <PrepNotesEditor
-          meetingId={meetingId}
-          initialMarkdown={view.prepNotesMarkdown}
-          initialJson={view.prepNotesJson}
-        />
-      </section>
     </div>
   );
 }
 
-/** Read-only carried-over open item. Links to its source occurrence. */
-function OpenItemRow({
+/**
+ * The deep-link back to the occurrence an item was carried over from. `ActionItemRow`
+ * renders this through its `meetingChip` slot — it supplies the checkbox, inline editing,
+ * assignee chip and overflow menu, but knows nothing about where a cross-meeting row came
+ * from, which on this panel is the one thing every row needs.
+ */
+function SourceMeetingChip({
   item,
   onOpenMeeting,
 }: {
   item: ActionItem;
   onOpenMeeting: (meetingId: string) => void;
 }) {
+  if (!item.meetingId) return null;
   return (
-    <li className="rounded-lg border border-border bg-card px-3 py-2">
-      <p className="text-[14px] leading-snug text-foreground">{item.description}</p>
-      <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
-        {item.dueHint && <span>{item.dueHint}</span>}
-        {item.dueHint && item.meetingId && <span aria-hidden="true">·</span>}
-        {item.meetingId && (
-          <button
-            type="button"
-            onClick={() => onOpenMeeting(item.meetingId!)}
-            title="Open the meeting this came from"
-            className={cn(
-              'inline-flex items-center gap-0.5 rounded font-semibold text-muted-foreground',
-              'transition-colors hover:text-brand focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-            )}
-          >
-            From this meeting
-            <ChevronRight size={12} aria-hidden="true" />
-          </button>
-        )}
-      </div>
-    </li>
+    <button
+      type="button"
+      onClick={() => onOpenMeeting(item.meetingId!)}
+      title="Open the meeting this came from"
+      className={cn(
+        'inline-flex items-center gap-0.5 rounded text-[11px] font-semibold text-muted-foreground',
+        'transition-colors hover:text-brand focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+      )}
+    >
+      From this meeting
+      <ChevronRight size={11} aria-hidden="true" />
+    </button>
   );
 }
 

@@ -130,6 +130,21 @@ the system-audio tap silently returns silence (see `CLAUDE.md` / ADR-0004).
       **Process N meetings** and clicking it starts the drain, not the queue. There is no
       separate queue popover on the Today page itself.
 
+## 4a. Prep tab (specs/0063 W4)
+- [ ] Open a meeting that has prep (a scheduled meeting in a series, or one with linked
+      previous meetings) and pick **Prep**. The prep-notes editor is the FIRST thing in the
+      tab, above "Before this meeting".
+- [ ] The brief has no card or border around it — it reads as plain prose in the column —
+      and its citations are one muted "From …" line beneath, not a bordered block.
+- [ ] The two header actions are icons only. Hover each: tooltips read "Link previous
+      meeting…" and "Regenerate the brief". (Regenerate only appears once a brief is ready
+      or has failed.)
+- [ ] With carried-over items present, tick one under **Your open items**. It stays on
+      screen struck through rather than disappearing. Leave the tab and come back — now it
+      is gone (the list only ever loads still-open items).
+- [ ] Do the same while RECORDING, from the record screen's Prep tab: the count badge on the
+      tab drops by one as soon as you tick the item.
+
 ## 5. Channel strip on a meeting (specs/0057 §3.5)
 - [ ] Open a meeting → **Transcript** tab. The speaker list is a channel strip: **CH 1** is
       always you, then CH 2, CH 3, … with talk time and share of talk per channel.
