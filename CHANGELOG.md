@@ -26,6 +26,12 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 - The duplicate queue popover on Today is removed. Its "Processing…" button now opens the
   transport rail's Queue panel instead (specs/0063 W3).
+- Developer-facing: the file-size gate (`scripts/check-file-size.sh`) no longer freezes each
+  large legacy file at its exact line count. The 800-line cap on new files is unchanged, but
+  the grandfathered files now share a single shrinking *excess* budget, so a small justified
+  addition is possible without a refactor first, and splitting a large file now reduces the
+  budget rather than merely being permitted. `scripts/file-size-allowlist.txt` is replaced by
+  `scripts/file-size-tracked.txt` plus `scripts/file-size-budget.txt` (specs/0065).
 
 ### Fixed
 

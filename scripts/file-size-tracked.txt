@@ -1,0 +1,38 @@
+# specs/0065 — the grandfathered set for the file-size gate.
+#
+# Paths only, no numbers. These files exceeded the 800-line cap when the gate
+# was introduced. They are not individually frozen: what is capped is the TOTAL
+# excess across all of them (scripts/file-size-budget.txt), so a small addition
+# here is fine as long as the budget has room.
+#
+# Entries are REMOVED automatically by --update once a file drops to 800 or
+# fewer lines. Adding an entry requires a deliberate reviewed edit, together
+# with the matching budget increase in the same diff.
+frontend/src-tauri/src/calendar/google/sync.rs
+frontend/src-tauri/src/diarization/sherpa.rs
+frontend/src-tauri/src/database/repositories/action_item.rs
+frontend/src-tauri/src/summary/processor.rs
+frontend/src-tauri/src/diarization/pipeline.rs
+frontend/src-tauri/src/audio/recording_saver.rs
+frontend/src-tauri/src/audio/pipeline.rs
+frontend/src-tauri/src/audio/recording_commands.rs
+frontend/src/components/ModelSettingsModal.tsx
+frontend/src-tauri/src/audio/import.rs
+frontend/src-tauri/src/whisper_engine/whisper_engine.rs
+frontend/src-tauri/src/parakeet_engine/parakeet_engine.rs
+frontend/src-tauri/src/action_items/extractor.rs
+frontend/src-tauri/src/aggregation/prompts.rs
+frontend/src-tauri/src/calendar/google/oauth.rs
+frontend/src-tauri/src/audio/audio_processing.rs
+frontend/src-tauri/src/diarization/commands.rs
+frontend/src-tauri/src/audio/retranscription.rs
+frontend/src-tauri/src/database/repositories/google_calendar.rs
+frontend/src-tauri/src/action_items/diff.rs
+frontend/src-tauri/src/summary/summary_engine/model_manager.rs
+frontend/src-tauri/src/audio/decoder.rs
+frontend/src/components/VirtualizedTranscriptView.tsx
+frontend/src-tauri/src/audio/transcription/worker.rs
+frontend/src/hooks/useRecordingStart.ts
+frontend/src/hooks/meeting-details/useSummaryGeneration.ts
+frontend/src-tauri/src/database/repositories/voiceprints.rs
+frontend/src-tauri/src/database/repositories/setting.rs

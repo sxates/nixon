@@ -7,8 +7,8 @@ interface UnprocessedTranscriptEmptyStateProps {
 
 /** specs/0045 WS4 — transcript empty-state copy for a finished-but-unprocessed deferred
  *  recording (audio on disk, no transcript yet), replacing the generic "Welcome to
- *  Nixon!" copy. Extracted out of VirtualizedTranscriptView to stay under its file-size
- *  ratchet ceiling (scripts/check-file-size.sh). */
+ *  Nixon!" copy. Extracted out of VirtualizedTranscriptView to stay under the 800-line
+ *  file-size cap (scripts/check-file-size.sh). */
 export function UnprocessedTranscriptEmptyState({ onProcessNow }: UnprocessedTranscriptEmptyStateProps) {
   return (
     <>

@@ -18,8 +18,8 @@ interface TranscriptEmptyStateProps {
 
 /**
  * The transcript panel's zero-segment empty state — extracted out of
- * VirtualizedTranscriptView to keep that file under its file-size ratchet ceiling
- * (specs/0042 WS6, scripts/check-file-size.sh). Three mutually exclusive variants,
+ * VirtualizedTranscriptView to keep that file under the 800-line file-size cap
+ * (specs/0042 WS6, now specs/0065; scripts/check-file-size.sh). Three mutually exclusive variants,
  * unchanged in behavior from their prior inline form:
  *  - recording (Listening… / paused)
  *  - unprocessed deferred recording (specs/0045 WS4)
