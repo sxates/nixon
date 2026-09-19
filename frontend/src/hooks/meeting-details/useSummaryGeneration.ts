@@ -143,6 +143,7 @@ export function useSummaryGeneration({
     customPrompt = '',
     isRegeneration = false,
     notesGrounded = false,
+    background = false,
   }: {
     transcriptText: string;
     transcriptTexts?: string[];
@@ -154,6 +155,11 @@ export function useSummaryGeneration({
     // notes from the DB and routes the empty transcript into the single-pass
     // notes-grounding synthesis.
     notesGrounded?: boolean;
+    // specs/0063 W3 Task 6b: true only for the auto-summary that fires by itself after a
+    // recording stops. It registers as background work so it appears in the rail's Queue
+    // and survives the user navigating away; a run the user asked for stays foreground,
+    // because this view already shows it its own ChunkProgressDisplay.
+    background?: boolean;
   }) => {
     setSummaryStatus(isRegeneration ? 'regenerating' : 'processing');
     setSummaryError(null);
@@ -192,6 +198,7 @@ export function useSummaryGeneration({
         customPrompt: customPrompt,
         templateId: selectedTemplate,
         summaryLanguage,
+        background,
       }) as any;
 
       const process_id = result.process_id;
@@ -542,7 +549,10 @@ export function useSummaryGeneration({
   }, []);
 
   // Public API: Generate summary from transcripts
-  const handleGenerateSummary = useCallback(async (customPrompt: string = '') => {
+  const handleGenerateSummary = useCallback(async (
+    customPrompt: string = '',
+    opts: { background?: boolean } = {},
+  ) => {
     // Check if model config is still loading
     if (isModelConfigLoading) {
       console.log('⏳ Model configuration is still loading, please wait...');
@@ -739,6 +749,7 @@ export function useSummaryGeneration({
       ...summaryPayload,
       customPrompt,
       notesGrounded,
+      background: opts.background ?? false,
     });
   }, [meeting.id, meeting.folder_path, fetchAllTranscripts, meetingHasNotes, transcribeMeetingAudio, refetchTranscripts, buildSummaryTranscriptPayload, processSummary, modelConfig, isModelConfigLoading, selectedTemplate]);
 

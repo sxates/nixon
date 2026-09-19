@@ -251,6 +251,10 @@ export function useDeferredBacklog(): UseDeferredBacklogReturn {
       }
       const summaryLanguage = await resolveSummaryLanguage(m.id, transcriptTexts);
 
+      // Deliberately NOT `background: true` (specs/0063 W3 Task 6b). The drain already has a
+      // queue row — the dispatch above sets this item to `summarizing`, which `queue-view.ts`
+      // renders — and backlog rows and LLM rows are concatenated with no de-duplication, so
+      // asking for a background registration here would list the same meeting twice.
       const result = await invoke<{ process_id: string }>('api_process_transcript', {
         text: transcriptText,
         model: modelConfig.provider,
