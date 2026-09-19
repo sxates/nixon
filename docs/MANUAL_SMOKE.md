@@ -164,9 +164,12 @@ the system-audio tap silently returns silence (see `CLAUDE.md` / ADR-0004).
 - [ ] Rename an auto-named speaker from the chip menu: it behaves exactly like one you named
       by hand, and reopening the meeting does not put the automatic name back.
 
-## 5. Channel strip on a meeting (specs/0057 §3.5)
-- [ ] Open a meeting → **Transcript** tab. The speaker list is a channel strip: **CH 1** is
-      always you, then CH 2, CH 3, … with talk time and share of talk per channel.
+## 5. Channel strip on a meeting (specs/0057 §3.5, ordering revised by specs/0064 W4)
+- [ ] Open a meeting → **Transcript** tab. The speaker list is a channel strip with talk time
+      and share of talk per channel, ordered by **share of talk, highest first** — so CH 1 is
+      whoever spoke most, which is often but not always you.
+- [ ] The Speakers card is a single box: the channel table inside it has no border or card of
+      its own (specs/0064 W4).
 - [ ] The shares are computed over the **full** meeting (not just the first page of
       transcripts) and sum to ~100%.
 - [ ] From a channel's name cell: **rename** a speaker, **merge** two speakers, and **assign**

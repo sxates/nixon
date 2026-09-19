@@ -359,9 +359,18 @@ export function ParticipantsPanel({
       </p>
     ) : (
       <div
+        data-testid="participants-list"
         className={cn(
-          'flex flex-wrap items-center gap-x-5 gap-y-2',
-          isCompact && 'max-h-56 overflow-y-auto pr-1',
+          // specs/0064 W4 — an auto-fit grid, not a wrap. Names line up in columns instead of
+          // sitting wherever the previous name ended, and because each chip owns a fixed
+          // cell, the hover actions' reserved width can no longer push its neighbours away.
+          // 11.5rem is chosen so the 840px reading column (less its px-6/px-7 padding and the
+          // 1rem gaps) divides into exactly four columns at full width, which is what the
+          // owner asked for — without a breakpoint ladder to maintain.
+          'grid items-center gap-x-4 gap-y-2',
+          isCompact
+            ? 'max-h-56 grid-cols-1 overflow-y-auto pr-1'
+            : '[grid-template-columns:repeat(auto-fit,minmax(11.5rem,1fr))]',
         )}
       >
         {splitForDisplay(participants, PARTICIPANT_CAP, expanded).shown.map((participant) => {

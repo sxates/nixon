@@ -9,6 +9,7 @@
  */
 'use client';
 
+import { useState } from 'react';
 import { MoreHorizontal, UserCheck, X } from 'lucide-react';
 import {
   DropdownMenu,
@@ -59,8 +60,11 @@ export function ParticipantChip({
   return (
     <TooltipProvider delayDuration={400}>
       {/* 0.1.0 canvas feedback: unboxed — avatar + name as plain text; the secondary actions
-          (more / remove) appear on hover or keyboard focus only. */}
-      <div className="group inline-flex items-center gap-1.5 text-xs">
+          (more / remove) appear on hover or keyboard focus only.
+          specs/0064 W4: visibility keys on hover, the button's OWN focus-visible, and an
+          actually-open menu — never `group-focus-within`, which kept a chip lit after a
+          click because the trigger holds focus long after the pointer has gone. */}
+      <div className="group flex min-w-0 items-center gap-1.5 text-xs">
         {showPhoto ? (
           // A self-contained base64 `data:` URI — no image server in the Tauri shell,
           // so a plain <img> (not next/image) is correct here.
@@ -118,7 +122,7 @@ export function ParticipantChip({
                 <button
                   type="button"
                   aria-label={`More actions for ${name}`}
-                  className="flex-shrink-0 rounded-[3px] p-0.5 text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 data-[state=open]:opacity-100"
+                  className="flex-shrink-0 rounded-[3px] p-0.5 text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100"
                 >
                   <MoreHorizontal size={12} />
                 </button>
@@ -140,7 +144,7 @@ export function ParticipantChip({
               type="button"
               onClick={onRemove}
               aria-label={`Remove ${name}`}
-              className="flex-shrink-0 rounded-[3px] p-0.5 text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100"
+              className="flex-shrink-0 rounded-[3px] p-0.5 text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100"
             >
               <X size={12} />
             </button>
