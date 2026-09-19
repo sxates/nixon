@@ -11,6 +11,11 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 > Keep this file updated as part of each change: add an entry under the right heading in
 > _Unreleased_ (Added / Changed / Fixed / Removed / Deprecated / Security).
+>
+> **Those sections are user-facing and are published verbatim** as the GitHub release body
+> AND as the `notes` the in-app updater shows in its update dialog. Anything a person using
+> Nixon would not notice — CI gates, build tooling, refactors, dead-code removal — goes under
+> a trailing `### Internal` heading instead, which `release.sh` strips from both.
 
 ## [Unreleased]
 
@@ -38,12 +43,6 @@ _(nothing yet)_
   Prep count badge updates as you go (specs/0063 W4).
 - The duplicate queue popover on Today is removed. Its "Processing…" button now opens the
   transport rail's Queue panel instead (specs/0063 W3).
-- Developer-facing: the file-size gate (`scripts/check-file-size.sh`) no longer freezes each
-  large legacy file at its exact line count. The 800-line cap on new files is unchanged, but
-  the grandfathered files now share a single shrinking *excess* budget, so a small justified
-  addition is possible without a refactor first, and splitting a large file now reduces the
-  budget rather than merely being permitted. `scripts/file-size-allowlist.txt` is replaced by
-  `scripts/file-size-tracked.txt` plus `scripts/file-size-budget.txt` (specs/0065).
 
 ### Fixed
 
@@ -67,6 +66,19 @@ _(nothing yet)_
   works, so it stays visible if you navigate away from the meeting — and if it fails, it can
   be retried from there. Previously it was only ever visible as inline progress on the meeting
   page, and vanished the moment you left (specs/0063 W3).
+
+### Internal
+
+_Not shown in release notes or the in-app updater (see `release.sh`)._
+
+- The file-size gate (`scripts/check-file-size.sh`) no longer freezes each large legacy file
+  at its exact line count. The 800-line cap on new files is unchanged, but the grandfathered
+  files now share a single shrinking *excess* budget, so a small justified addition is
+  possible without a refactor first, and splitting a large file now reduces the budget rather
+  than merely being permitted. `scripts/file-size-allowlist.txt` is replaced by
+  `scripts/file-size-tracked.txt` plus `scripts/file-size-budget.txt` (specs/0065).
+- The orphaned prep-only retry path (`api_llm_activity_retry` and its unused frontend half)
+  is deleted; `llm_activity::retry::retry_task` is the only retry path.
 
 ## [0.4.0] - 2026-09-18
 

@@ -79,6 +79,13 @@ pnpm shots:real   # real-window captures; needs ./dev-nixon.sh --demo running + 
 ./upgrade-nixon.sh       # rebuild + reinstall /Applications/Nixon.app, preserving data
 ```
 
+**Release notes are user-facing copy.** The changelog's Added/Changed/Fixed sections are
+published verbatim TWICE — as the GitHub release body and as the `notes` the in-app updater
+renders in its update dialog. CI gates, build tooling, refactors and dead-code removal do not
+belong in either: park them under a trailing `### Internal` heading in the version's block,
+which `release.sh` strips from both. (v0.5.0 shipped a file-size-gate paragraph to users'
+update dialogs before this rule existed.)
+
 **Cutting a release: ALWAYS `./release.sh <major|minor|patch> [--yes]` at the repo root —
 never hand-roll the bump/tag/`gh release` steps.** It sources the gitignored `.env.signing`
 (Developer ID + notarization creds; see ADR-0008 + SETUP.md) so the DMG is signed,
