@@ -3,11 +3,15 @@ import { cn } from '@/lib/utils';
 import { ladderSegments } from '@/lib/transport/ladder';
 import { rmsToVu, vuToArcFraction } from '@/lib/transport/vu-ballistics';
 
+// Owner feedback 2026-09-19 — a lit segment glows in its own colour, the way a real meter's
+// lamps bleed onto the panel around them. Unlit segments stay flat: the glow IS the signal,
+// so giving it to everything would say nothing. Each shadow is built from the same token as
+// the fill, so Deck and Faceplate stay in parity without a second palette.
 const SEG: Record<'off' | 'g' | 'a' | 'r', string> = {
   off: 'bg-border/70',
-  g: 'bg-success',
-  a: 'bg-brand',
-  r: 'bg-record',
+  g: 'bg-success shadow-[0_0_4px_hsl(var(--success)/0.75)]',
+  a: 'bg-brand shadow-[0_0_4px_hsl(var(--brand)/0.75)]',
+  r: 'bg-record shadow-[0_0_5px_hsl(var(--record)/0.85)]',
 };
 
 /**
@@ -42,7 +46,9 @@ export function LevelLadder({
     <span
       aria-hidden
       className={cn(
-        'h-3.5 items-end gap-0.5',
+        // h-[7px]: half the old 14px (owner feedback 2026-09-19) — at rail size the ladder
+        // is a level indication, not a second instrument competing with the counter.
+        'h-[7px] items-end gap-0.5',
         fill ? 'flex w-full' : 'inline-flex',
         className,
       )}

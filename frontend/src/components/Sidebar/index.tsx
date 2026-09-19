@@ -19,6 +19,7 @@ import { useConfig } from '@/contexts/ConfigContext';
 import { DeckIcon } from '@/components/ui/deck-icon';
 import { cn } from '@/lib/utils';
 import { QueueRow } from './QueueRow';
+import { SIDEBAR_ICON_SLOT, SIDEBAR_ROW } from './row';
 import { UpdateRow } from './UpdateRow';
 
 import DevBadge from '../DevBadge';
@@ -171,8 +172,10 @@ const Sidebar: React.FC = () => {
       >
         <WalnutCheek />
 
-        {/* Top bar: hamburger toggle + engraved wordmark + DEV badge */}
-        <div className="flex flex-shrink-0 items-center gap-2 px-3 pb-3 pt-4">
+        {/* Top bar: hamburger toggle + engraved wordmark + DEV badge. Shares the row
+            geometry so the hamburger sits in the same icon column as every glyph below it
+            and NIXON starts where the nav labels do. */}
+        <div className={cn(SIDEBAR_ROW, 'flex-shrink-0 pb-3 pt-4')}>
           <HamburgerButton expanded onToggle={toggleCollapse} />
           <span className="u-section-label text-[13px] tracking-[0.18em] text-foreground">
             NIXON
@@ -192,13 +195,15 @@ const Sidebar: React.FC = () => {
                   key={item.label}
                   onClick={() => router.push(item.path)}
                   aria-current={active ? 'page' : undefined}
-                  className="relative flex h-8 items-center gap-2.5 pl-5 pr-3.5 transition-colors hover:bg-key focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className={cn(SIDEBAR_ROW, 'relative h-8 transition-colors hover:bg-key focus:outline-none focus-visible:ring-2 focus-visible:ring-ring')}
                 >
                   <IndexBar active={active} className="left-2" />
-                  <DeckIcon
-                    icon={item.icon}
-                    className={active ? 'text-foreground' : 'text-engrave'}
-                  />
+                  <span className={SIDEBAR_ICON_SLOT}>
+                    <DeckIcon
+                      icon={item.icon}
+                      className={active ? 'text-foreground' : 'text-engrave'}
+                    />
+                  </span>
                   <span
                     className={cn('u-section-label', active ? 'text-foreground' : 'text-engrave')}
                   >
@@ -213,25 +218,31 @@ const Sidebar: React.FC = () => {
           {importEnabled && (
             <button
               onClick={() => openImportDialog()}
-              className="relative mt-2 flex h-8 w-full items-center gap-2.5 pl-5 pr-3.5 text-brand transition-colors hover:bg-key focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className={cn(SIDEBAR_ROW, 'relative mt-2 h-8 w-full text-brand transition-colors hover:bg-key focus:outline-none focus-visible:ring-2 focus-visible:ring-ring')}
             >
-              <DeckIcon icon={FileAudio} className="flex-shrink-0" />
+              <span className={SIDEBAR_ICON_SLOT}>
+                <DeckIcon icon={FileAudio} />
+              </span>
               <span className="u-section-label text-brand">Import audio</span>
               <span className="u-section-label ml-auto text-[9px] text-muted-foreground">Beta</span>
             </button>
           )}
         </nav>
 
-        {/* Footer — settings entry (the avatar puck is gone, specs/0057 Plan 3) */}
-        <div className="flex-shrink-0 border-t border-border p-2">
+        {/* Footer — settings, updates, queue (the avatar puck is gone, specs/0057 Plan 3).
+            Vertical padding only: a horizontal inset here would push these rows 8px right of
+            the nav rows above, which is exactly the misalignment SIDEBAR_ROW exists to stop. */}
+        <div className="flex-shrink-0 border-t border-border py-2">
           <UpdateRow />
 
           <button
             onClick={() => router.push('/settings')}
-            className="relative flex h-8 w-full items-center gap-2.5 pl-3 pr-3.5 text-left text-engrave transition-colors hover:bg-key hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className={cn(SIDEBAR_ROW, 'relative h-8 w-full text-left text-engrave transition-colors hover:bg-key hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring')}
             aria-label="Settings"
           >
-            <DeckIcon icon={Settings} className="flex-shrink-0" />
+            <span className={SIDEBAR_ICON_SLOT}>
+              <DeckIcon icon={Settings} />
+            </span>
             <span className="u-section-label">Settings</span>
           </button>
 
@@ -300,11 +311,22 @@ function HamburgerButton({
       aria-expanded={expanded}
       title={expanded ? 'Collapse sidebar' : 'Expand sidebar'}
       className={cn(
-        'flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-[3px] text-engrave transition-colors hover:bg-key hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        // -m-2/p-2: the glyph stays in the shared icon column while the clickable area
+        // grows back to a comfortable size around it (owner feedback 2026-09-19).
+        'flex flex-shrink-0 items-center justify-center rounded-[3px] text-engrave transition-colors hover:bg-key hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        expanded ? '-m-2 p-2' : 'h-9 w-9',
         className,
       )}
     >
-      <DeckIcon icon={Menu} size={18} />
+      {/* Expanded: the glyph sits in the shared 14px icon column so it lines up with every
+          row below. Collapsed: the rail centres a slightly larger mark, as before. */}
+      {expanded ? (
+        <span className={SIDEBAR_ICON_SLOT}>
+          <DeckIcon icon={Menu} />
+        </span>
+      ) : (
+        <DeckIcon icon={Menu} size={18} />
+      )}
     </button>
   );
 }

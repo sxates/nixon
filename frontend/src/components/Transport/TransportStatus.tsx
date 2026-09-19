@@ -67,8 +67,11 @@ export function TransportStatus({ phase, elapsedSeconds }: { phase: TransportPha
           ladder, BEFORE the title. They used to sit after it, where the title was the
           flex-1 element, so every rename or navigation shifted the counter and the meter
           sideways. A fixed width also keeps the two aligned with each other. */}
-      <div className="flex w-[108px] flex-none flex-col gap-1">
-        <TapeCounter seconds={elapsedSeconds} size="sm" tone={tone} className="justify-center" />
+      <div className="flex w-fit flex-none flex-col gap-1">
+        {/* `w-fit` on the stack and `fill` on the ladder: the block is exactly as wide as the
+            counter's digit wells, and the ladder spans that same width — so the meter can
+            never be wider than the timer above it (owner feedback 2026-09-19). */}
+        <TapeCounter seconds={elapsedSeconds} size="sm" tone={tone} />
         <LevelLadder level={level.rms} active={phase === 'recording' && !micMuted} fill />
       </div>
       {canNavigate ? (

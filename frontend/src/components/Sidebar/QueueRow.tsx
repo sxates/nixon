@@ -8,8 +8,10 @@ import { useRecordingState } from '@/contexts/RecordingStateContext';
 import { useTranscripts } from '@/contexts/TranscriptContext';
 import { useQueueOpen } from '@/contexts/QueueOpenContext';
 import { buildQueueView } from '@/lib/transport/queue-view';
+import { cn } from '@/lib/utils';
 import { LampDot } from '@/components/Transport/LampDot';
 import { QueuePanel } from '@/components/Transport/QueuePanel';
+import { SIDEBAR_ICON_SLOT, SIDEBAR_ROW } from './row';
 
 /**
  * The background-work queue, in the sidebar below Settings (specs/0064 W5).
@@ -60,9 +62,13 @@ export function QueueRow({ collapsed = false }: { collapsed?: boolean }) {
         ) : (
           <button
             type="button"
-            className="relative flex h-8 w-full items-center gap-2.5 pl-3 pr-3.5 text-left transition-colors hover:bg-key focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className={cn(SIDEBAR_ROW, 'relative h-8 w-full text-left transition-colors hover:bg-key focus:outline-none focus-visible:ring-2 focus-visible:ring-ring')}
           >
-            <LampDot tone={view.lamp} label="Queue" decorative />
+            {/* The lamp is narrower than a glyph, so it rides in the shared icon column —
+                otherwise "Queue" would start left of every other label. */}
+            <span className={SIDEBAR_ICON_SLOT}>
+              <LampDot tone={view.lamp} label="Queue" decorative />
+            </span>
             <span className="u-section-label text-engrave">Queue {view.count}</span>
             {/* One line, always — a wrapping status line would shift the settings row below
                 it every time a stage name changed. */}
