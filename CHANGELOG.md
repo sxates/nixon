@@ -19,7 +19,14 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 ## [Unreleased]
 
-_(nothing yet)_
+### Fixed
+
+- Prep notes now follow a meeting that gets **rescheduled**. Moving a meeting to another day
+  used to leave your prep behind on a meeting that had quietly disappeared, and the new time
+  showed up as a blank one; the prep now moves with the meeting, keeping its notes, its brief
+  and its link to previous occurrences. For a macOS Calendar meeting the notes move once the
+  old time is confirmed empty, so a recurring series' other occurrences always keep their own
+  (specs/0064 W1).
 
 ## [0.5.0] - 2026-09-18
 

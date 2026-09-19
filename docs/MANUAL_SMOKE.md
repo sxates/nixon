@@ -145,6 +145,16 @@ the system-audio tap silently returns silence (see `CLAUDE.md` / ADR-0004).
 - [ ] Do the same while RECORDING, from the record screen's Prep tab: the count badge on the
       tab drops by one as soon as you tick the item.
 
+## 4b. Prep survives a reschedule (specs/0064 W1)
+- [ ] Write prep notes on an upcoming **Google** calendar meeting, move it to another day in
+      Google Calendar, let the sync catch up, then open it at its new time — the prep notes
+      are there, the brief regenerates, and no duplicate meeting appeared.
+- [ ] Move that meeting again and rename it in the same edit — the prep still follows and the
+      new name shows. If you had renamed the meeting inside Nixon first, **your** name wins.
+- [ ] Repeat with a **macOS Calendar** meeting: the notes carry when the old time is now
+      empty. For a recurring series where the other occurrences are still on the calendar,
+      the notes deliberately stay put rather than being taken from a sibling occurrence.
+
 ## 5. Channel strip on a meeting (specs/0057 §3.5)
 - [ ] Open a meeting → **Transcript** tab. The speaker list is a channel strip: **CH 1** is
       always you, then CH 2, CH 3, … with talk time and share of talk per channel.
