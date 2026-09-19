@@ -519,7 +519,8 @@ mod tests {
             dt("2026-06-13T10:00:00Z"),
         )
         .await
-        .unwrap();
+        .unwrap()
+        .into_id();
         sqlx::query(
             "INSERT INTO meeting_series_links (meeting_id, series_key) VALUES (?, 'series-A')",
         )

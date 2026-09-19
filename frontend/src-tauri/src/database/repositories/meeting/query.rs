@@ -508,7 +508,7 @@ mod tests {
         let ids: Vec<&str> = enriched.iter().map(|r| r.id.as_str()).collect();
         assert!(ids.contains(&recorded.as_str()));
         assert!(
-            !ids.contains(&scheduled.as_str()),
+            !ids.contains(&scheduled.id()),
             "scheduled row must not list"
         );
 
@@ -521,7 +521,7 @@ mod tests {
         let today_ids: Vec<&str> = today.iter().map(|r| r.id.as_str()).collect();
         assert!(today_ids.contains(&recorded.as_str()));
         assert!(
-            !today_ids.contains(&scheduled.as_str()),
+            !today_ids.contains(&scheduled.id()),
             "scheduled row must not enter the agenda merge"
         );
     }

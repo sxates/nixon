@@ -415,7 +415,7 @@ pub async fn api_ensure_scheduled_meeting<R: Runtime>(
         .map_err(|e| format!("Invalid occurrence start: {e}"))?
         .with_timezone(&chrono::Utc);
 
-    let meeting_id = MeetingsRepository::upsert_scheduled_meeting(
+    let resolution = MeetingsRepository::upsert_scheduled_meeting(
         pool,
         &calendar_event_id,
         series_key.as_deref(),
@@ -424,6 +424,21 @@ pub async fn api_ensure_scheduled_meeting<R: Runtime>(
     )
     .await
     .map_err(|e| format!("{e}"))?;
+
+    // specs/0064 W1 — the row followed a rescheduled meeting onto a new slot, so the brief
+    // cached against its old date is stale (its prior-occurrence set can have changed). Drop
+    // it so the warm below regenerates instead of serving the old one. Best-effort: a failed
+    // delete must not fail opening the Prep tab, it only means a stale brief lingers.
+    if resolution.was_redated() {
+        log::info!(
+            "prep: {} followed its rescheduled meeting to {occurrence} (specs/0064 W1)",
+            resolution.id()
+        );
+        if let Err(e) = MeetingBriefsRepository::delete_for_meeting(pool, resolution.id()).await {
+            log::warn!("prep: could not invalidate the re-dated brief (continuing): {e}");
+        }
+    }
+    let meeting_id = resolution.into_id();
 
     // Warm the brief in the background (no-op if one is already cached/generating).
     if MeetingBriefsRepository::get(pool, &meeting_id)

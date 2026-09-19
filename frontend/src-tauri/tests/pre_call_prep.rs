@@ -325,7 +325,8 @@ async fn brief_cache_roundtrips_ready_and_status() {
         dt("2026-06-29T10:00:00Z"),
     )
     .await
-    .unwrap();
+    .unwrap()
+    .into_id();
 
     assert!(MeetingBriefsRepository::get(pool, &target)
         .await
