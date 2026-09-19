@@ -342,6 +342,10 @@ pub async fn api_process_transcript<R: Runtime>(
     template_id: Option<String>,
     summary_language: Option<String>,
     _auth_token: Option<String>,
+    // specs/0063 W3 Task 6b — `true` only for a run the user did not ask for and is not
+    // necessarily watching (auto-summary after a recording stops). Defaults to false, so
+    // every existing caller stays foreground.
+    background: Option<bool>,
 ) -> Result<ProcessTranscriptResponse, String> {
     use uuid::Uuid;
 
@@ -427,12 +431,24 @@ pub async fn api_process_transcript<R: Runtime>(
             final_prompt,
             final_template_id,
             summary_language,
-            // specs/0063 W3 fix round 1 (I1): this command is invoked from the
-            // Generate/Regenerate button the user is watching live
-            // (`useSummaryGeneration.ts`), which already renders its own
-            // `ChunkProgressDisplay` — Foreground keeps it out of the footer queue's
-            // running list so it is never shown twice.
-            Origin::Foreground,
+            // specs/0063 W3 fix round 1 (I1), refined by Task 6b: this command serves both
+            // the Generate/Regenerate button the user is watching live (which renders its
+            // own `ChunkProgressDisplay`) and the auto-summary that fires by itself after a
+            // recording stops. Only the caller knows which, so it says. Foreground is the
+            // default and keeps a watched run out of the queue's running list so it is
+            // never shown twice; the auto-summary passes `background: true` because the
+            // user never asked for it and may navigate away while it runs.
+            //
+            // NOT background: the deferred-backlog drain. It calls this command too, but it
+            // already has a queue row of its own (`useDeferredBacklog` sets the item to
+            // `summarizing`, which `queue-view.ts` renders), and the two row sources are
+            // concatenated with no de-duplication — so tagging it background would show the
+            // same meeting twice.
+            if background.unwrap_or(false) {
+                Origin::Background
+            } else {
+                Origin::Foreground
+            },
         )
         .await;
     });

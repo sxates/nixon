@@ -51,6 +51,10 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
   the Queue) that generates successfully but then fails to save now shows as "Failed" in
   the Queue instead of being silently logged (specs/0063 W3).
 - A summary you cancel is now recorded as skipped rather than as a success (specs/0063 W3).
+- The automatic summary that runs after a recording stops now appears in the Queue while it
+  works, so it stays visible if you navigate away from the meeting — and if it fails, it can
+  be retried from there. Previously it was only ever visible as inline progress on the meeting
+  page, and vanished the moment you left (specs/0063 W3).
 
 ## [0.4.0] - 2026-09-18
 

@@ -118,6 +118,12 @@ the system-audio tap silently returns silence (see `CLAUDE.md` / ADR-0004).
       removes and the lamp clears.
 - [ ] A **non-retryable failure** (e.g. Ask AI, if supported) shows a **Dismiss** button
       instead of Retry; clicking it removes only that row, leaving other failures intact.
+- [ ] **Auto-summary after stop is visible off-page.** Record a short meeting with a summary
+      provider configured, stop it, and while the automatic summary runs, navigate away from
+      the meeting (e.g. to Today). The rail's Queue count is non-zero and the panel shows a
+      row for it; it clears when the summary lands. Contrast with clicking **Generate
+      summary** yourself on a meeting page — that one is deliberately NOT in the Queue,
+      because the page already shows its own progress bar.
 - [ ] **Today has only one queue popover:** with backlog work running, the Today header
       button reads **Processing… (k of N)** — click it and confirm it opens the rail's
       Queue panel rather than a popover of its own. When idle it instead reads
