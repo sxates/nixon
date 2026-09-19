@@ -49,7 +49,7 @@ impl ScheduledResolution {
 /// occurrence of a recurring series and can be reissued by a provider re-sync, and
 /// `calendarItemExternalIdentifier` (the iCalUID) is shared too. Only the Google form may
 /// therefore be matched without also pinning the day.
-pub(crate) fn is_per_occurrence_event_id(calendar_event_id: &str) -> bool {
+pub fn is_per_occurrence_event_id(calendar_event_id: &str) -> bool {
     calendar_event_id.starts_with("gcal:")
 }
 
@@ -121,7 +121,14 @@ impl MeetingsRepository {
             // meeting on its OLD day — move it rather than leaving the prep behind.
             if is_per_occurrence_event_id(calendar_event_id)
                 && Self::scheduled_day_differs(pool, &existing, occurrence_start).await?
-                && Self::redate_scheduled_meeting(pool, &existing, occurrence_start).await?
+                && Self::redate_scheduled_meeting(
+                    pool,
+                    &existing,
+                    occurrence_start,
+                    Some(title),
+                    series_key,
+                )
+                .await?
             {
                 return Ok(ScheduledResolution::Redated(existing));
             }
@@ -188,7 +195,7 @@ impl MeetingsRepository {
                AND NOT EXISTS (SELECT 1 FROM transcripts t WHERE t.meeting_id = m.id) \
                AND ( \
                  EXISTS (SELECT 1 FROM meeting_notes n WHERE n.meeting_id = m.id \
-                           AND TRIM(COALESCE(n.prep_markdown, '')) <> '') \
+                           AND TRIM(COALESCE(n.prep_markdown, ''), ' \t\r\n') <> '') \
                  OR EXISTS (SELECT 1 FROM meeting_briefs b WHERE b.meeting_id = m.id) \
                ) \
              ORDER BY m.created_at DESC LIMIT 2",
@@ -206,19 +213,33 @@ impl MeetingsRepository {
     /// Move a `scheduled` row onto a new occurrence start (specs/0064 W1). Refuses a row that
     /// is no longer `scheduled` or that has transcripts, so a recording is never re-dated.
     /// Returns whether the row moved.
+    ///
+    /// A reschedule often comes with a rename, so the calendar's current `title` is applied
+    /// too — unless the user has renamed the row themselves (`title_manually_set`), which
+    /// always wins. A non-empty `series_key` is refreshed for the same reason: the occurrence
+    /// may have been moved between series.
     pub async fn redate_scheduled_meeting(
         pool: &SqlitePool,
         meeting_id: &str,
         occurrence_start: DateTime<Utc>,
+        title: Option<&str>,
+        series_key: Option<&str>,
     ) -> Result<bool, SqlxError> {
+        let title = title.map(str::trim).filter(|t| !t.is_empty());
+        let series_key = series_key.map(str::trim).filter(|k| !k.is_empty());
         let result = sqlx::query(
-            "UPDATE meetings SET created_at = ?1, updated_at = ?2 \
+            "UPDATE meetings SET created_at = ?1, updated_at = ?2, \
+                    title = CASE WHEN ?4 IS NOT NULL AND title_manually_set = 0 \
+                                 THEN ?4 ELSE title END, \
+                    calendar_series_key = COALESCE(?5, calendar_series_key) \
              WHERE id = ?3 AND origin = 'scheduled' \
                AND NOT EXISTS (SELECT 1 FROM transcripts t WHERE t.meeting_id = meetings.id)",
         )
         .bind(occurrence_start)
         .bind(Utc::now())
         .bind(meeting_id)
+        .bind(title)
+        .bind(series_key)
         .execute(pool)
         .await?;
         Ok(result.rows_affected() > 0)
@@ -469,5 +490,155 @@ mod tests {
         .unwrap();
         assert_ne!(next.id(), a.id(), "a sibling occurrence gets its own row");
         assert!(matches!(next, ScheduledResolution::Created(_)));
+    }
+
+    /// specs/0064 W1 — the EventKit carry-forward candidate: exactly one unrecorded
+    /// `scheduled` row for the id, and it must actually hold prep worth carrying.
+    #[tokio::test]
+    async fn scheduled_day_with_prep_requires_prep_and_uniqueness() {
+        let pool = memory_db().await;
+        let bare = MeetingsRepository::upsert_scheduled_meeting(
+            &pool,
+            "evt-1",
+            None,
+            "Standup",
+            dt("2026-07-10T15:00:00Z"),
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            MeetingsRepository::scheduled_day_with_prep(&pool, "evt-1")
+                .await
+                .unwrap(),
+            None,
+            "a placeholder with nothing written on it is not worth carrying"
+        );
+
+        MeetingNotesRepository::upsert_prep_notes(&pool, bare.id(), Some("- agenda"), None)
+            .await
+            .unwrap();
+        let found = MeetingsRepository::scheduled_day_with_prep(&pool, "evt-1")
+            .await
+            .unwrap();
+        assert_eq!(
+            found.as_ref().map(|(id, _)| id.as_str()),
+            Some(bare.id()),
+            "prep notes make the row a candidate"
+        );
+        assert_eq!(found.unwrap().1, dt("2026-07-10T15:00:00Z"));
+
+        // A second unrecorded row for the same id is a sibling occurrence: ambiguous.
+        MeetingsRepository::upsert_scheduled_meeting(
+            &pool,
+            "evt-1",
+            None,
+            "Standup",
+            dt("2026-07-17T15:00:00Z"),
+        )
+        .await
+        .unwrap();
+        MeetingNotesRepository::upsert_prep_notes(
+            &pool,
+            MeetingsRepository::find_scheduled_for_occurrence(
+                &pool,
+                "evt-1",
+                dt("2026-07-17T15:00:00Z"),
+            )
+            .await
+            .unwrap()
+            .unwrap()
+            .as_str(),
+            Some("- next week"),
+            None,
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            MeetingsRepository::scheduled_day_with_prep(&pool, "evt-1")
+                .await
+                .unwrap(),
+            None,
+            "two candidates is ambiguous — never guess which occurrence moved"
+        );
+    }
+
+    /// Blank prep notes are not prep: whitespace must not make a row a carry candidate.
+    #[tokio::test]
+    async fn scheduled_day_with_prep_ignores_blank_notes() {
+        let pool = memory_db().await;
+        let row = MeetingsRepository::upsert_scheduled_meeting(
+            &pool,
+            "evt-blank",
+            None,
+            "Standup",
+            dt("2026-07-10T15:00:00Z"),
+        )
+        .await
+        .unwrap();
+        MeetingNotesRepository::upsert_prep_notes(&pool, row.id(), Some("   \n  "), None)
+            .await
+            .unwrap();
+        assert_eq!(
+            MeetingsRepository::scheduled_day_with_prep(&pool, "evt-blank")
+                .await
+                .unwrap(),
+            None
+        );
+    }
+
+    /// A reschedule often comes with a rename; the carried row takes the calendar's current
+    /// title, but never over a title the user set by hand.
+    #[tokio::test]
+    async fn a_redated_row_follows_the_calendar_title_unless_renamed_by_hand() {
+        let pool = memory_db().await;
+        let ev = "gcal:primary/evt-renamed";
+        let first = MeetingsRepository::upsert_scheduled_meeting(
+            &pool,
+            ev,
+            None,
+            "Weekly sync",
+            dt("2026-07-10T15:00:00Z"),
+        )
+        .await
+        .unwrap();
+
+        let moved = MeetingsRepository::upsert_scheduled_meeting(
+            &pool,
+            ev,
+            Some("series-Z"),
+            "Weekly sync (moved)",
+            dt("2026-07-12T15:00:00Z"),
+        )
+        .await
+        .unwrap();
+        assert_eq!(moved.id(), first.id());
+        let meta = MeetingsRepository::get_meeting_metadata(&pool, moved.id())
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(meta.title, "Weekly sync (moved)");
+        assert_eq!(meta.calendar_series_key.as_deref(), Some("series-Z"));
+
+        // Once the user has named it themselves, the calendar no longer overwrites it.
+        sqlx::query("UPDATE meetings SET title = 'My name for it', title_manually_set = 1 WHERE id = ?")
+            .bind(moved.id())
+            .execute(&pool)
+            .await
+            .unwrap();
+        let moved_again = MeetingsRepository::upsert_scheduled_meeting(
+            &pool,
+            ev,
+            None,
+            "Weekly sync (moved again)",
+            dt("2026-07-14T15:00:00Z"),
+        )
+        .await
+        .unwrap();
+        assert!(moved_again.was_redated());
+        let meta = MeetingsRepository::get_meeting_metadata(&pool, moved_again.id())
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(meta.title, "My name for it");
     }
 }

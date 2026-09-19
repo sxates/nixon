@@ -9,7 +9,9 @@
 use crate::aggregation::engine::{SourceMeeting, Stage};
 use crate::aggregation::prep_jobs::generate_brief_for_target;
 use crate::database::repositories::action_item::{ActionItem, ActionItemsRepository};
-use crate::database::repositories::meeting::{MeetingsRepository, SeriesLinkedMeeting};
+use crate::database::repositories::meeting::{
+    is_per_occurrence_event_id, MeetingsRepository, ScheduledResolution, SeriesLinkedMeeting,
+};
 use crate::database::repositories::meeting_brief::MeetingBriefsRepository;
 use crate::database::repositories::meeting_note::MeetingNotesRepository;
 use crate::state::AppState;
@@ -399,6 +401,103 @@ pub async fn api_unlink_meeting_from_series<R: Runtime>(
     Ok(())
 }
 
+/// Has EventKit stopped holding an event with this id anywhere on `day`? (specs/0064 W1)
+///
+/// This is the third condition of the EventKit carry-forward guard: proof that the
+/// occurrence the stranded prep was written for is actually gone, rather than still sitting
+/// there as a sibling of the one being opened. Calendar access must be granted for an empty
+/// read to mean anything — `meetings_between` returns an empty vec on a denied or failed
+/// read too, and treating that as "vacant" would carry prep off a live occurrence. Any doubt
+/// answers false: stranding prep is recoverable, moving another occurrence's prep is not.
+///
+/// EventKit reads touch the Objective-C runtime, so the read runs on a blocking thread.
+async fn old_slot_is_vacant(calendar_event_id: &str, day: chrono::DateTime<chrono::Utc>) -> bool {
+    if crate::calendar::eventkit::access_status() != "authorized" {
+        return false;
+    }
+    let Some(start) = day.date_naive().and_hms_opt(0, 0, 0).map(|d| d.and_utc()) else {
+        return false;
+    };
+    let end = start + chrono::Duration::days(1);
+    let id = calendar_event_id.to_string();
+    match tokio::task::spawn_blocking(move || {
+        crate::calendar::eventkit::meetings_between(start, end)
+            .into_iter()
+            .any(|e| e.id == id)
+    })
+    .await
+    {
+        Ok(still_there) => !still_there,
+        Err(e) => {
+            log::warn!("prep: vacancy probe failed, not carrying prep forward: {e}");
+            false
+        }
+    }
+}
+
+/// The EventKit half of the reschedule carry-forward (specs/0064 W1). Returns the re-dated
+/// meeting id when all three conditions hold: exactly one unrecorded `scheduled` row for this
+/// event id that actually carries prep, its stored day is not the day being opened, and the
+/// old slot is provably vacant. `None` otherwise — the caller mints a fresh row as before.
+///
+/// Google ids never come through here: they name one occurrence, so
+/// `upsert_scheduled_meeting` re-dates them directly without needing any of this.
+async fn carry_prep_forward(
+    pool: &sqlx::SqlitePool,
+    calendar_event_id: &str,
+    occurrence: chrono::DateTime<chrono::Utc>,
+    title: &str,
+    series_key: Option<&str>,
+) -> Option<String> {
+    if is_per_occurrence_event_id(calendar_event_id) {
+        return None;
+    }
+    // An existing row for THIS occurrence wins; nothing was rescheduled.
+    if MeetingsRepository::find_scheduled_for_occurrence(pool, calendar_event_id, occurrence)
+        .await
+        .ok()
+        .flatten()
+        .is_some()
+    {
+        return None;
+    }
+    let (stranded_id, stored_day) =
+        MeetingsRepository::scheduled_day_with_prep(pool, calendar_event_id)
+            .await
+            .ok()
+            .flatten()?;
+    if stored_day.date_naive() == occurrence.date_naive() {
+        return None;
+    }
+    if !old_slot_is_vacant(calendar_event_id, stored_day).await {
+        log::debug!(
+            "prep: {calendar_event_id} still has an occurrence on {stored_day}; leaving its prep where it is"
+        );
+        return None;
+    }
+    match MeetingsRepository::redate_scheduled_meeting(
+        pool,
+        &stranded_id,
+        occurrence,
+        Some(title),
+        series_key,
+    )
+    .await
+    {
+        Ok(true) => {
+            log::info!(
+                "prep: carried prep from the vacated slot {stored_day} to {occurrence} for event {calendar_event_id} (specs/0064 W1)"
+            );
+            Some(stranded_id)
+        }
+        Ok(false) => None,
+        Err(e) => {
+            log::warn!("prep: re-date failed, minting a fresh row instead: {e}");
+            None
+        }
+    }
+}
+
 /// Mint (or return) the `scheduled` prep meeting for one upcoming calendar occurrence, and
 /// warm its brief. Called when the user opens an upcoming event's prep from the Today view.
 #[tauri::command]
@@ -415,15 +514,24 @@ pub async fn api_ensure_scheduled_meeting<R: Runtime>(
         .map_err(|e| format!("Invalid occurrence start: {e}"))?
         .with_timezone(&chrono::Utc);
 
-    let resolution = MeetingsRepository::upsert_scheduled_meeting(
-        pool,
-        &calendar_event_id,
-        series_key.as_deref(),
-        &title,
-        occurrence,
-    )
-    .await
-    .map_err(|e| format!("{e}"))?;
+    // specs/0064 W1 — EventKit's event id is shared across a recurring series, so a moved
+    // occurrence cannot be recognised by id alone; the guarded carry-forward takes over.
+    let carried =
+        carry_prep_forward(pool, &calendar_event_id, occurrence, &title, series_key.as_deref())
+            .await;
+
+    let resolution = match carried {
+        Some(id) => ScheduledResolution::Redated(id),
+        None => MeetingsRepository::upsert_scheduled_meeting(
+            pool,
+            &calendar_event_id,
+            series_key.as_deref(),
+            &title,
+            occurrence,
+        )
+        .await
+        .map_err(|e| format!("{e}"))?,
+    };
 
     // specs/0064 W1 — the row followed a rescheduled meeting onto a new slot, so the brief
     // cached against its old date is stale (its prior-occurrence set can have changed). Drop

@@ -13,6 +13,7 @@ mod scheduled;
 mod series;
 
 pub use query::{normalize_title, RecentPersonMeeting};
+pub use scheduled::{is_per_occurrence_event_id, ScheduledResolution};
 pub use series::SeriesLinkedMeeting;
 
 pub struct MeetingsRepository;
