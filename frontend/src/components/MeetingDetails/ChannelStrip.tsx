@@ -47,10 +47,10 @@ export function ChannelStrip({
     <div
       role="table"
       aria-label="Channels"
-      className={cn(
-        'rounded-[3px] border border-border bg-card px-3.5 pb-2 pt-1.5',
-        className,
-      )}
+      // specs/0064 W4 — no box of its own. The strip is always rendered inside the Speakers
+      // card (SpeakerLegend), and a bordered card within a bordered card read as a box in a
+      // box; the header row and its divider are enough structure on their own.
+      className={cn('pb-1', className)}
     >
       <div role="row" className={cn(GRID, 'h-[22px]')}>
         <span role="columnheader" className="u-section-label text-[9px]">
