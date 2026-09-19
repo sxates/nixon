@@ -19,6 +19,15 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 ## [Unreleased]
 
+### Changed
+
+- A speaker Nixon already recognizes is now **named automatically** instead of offering a
+  "Looks like …" button for you to click. That covers a well-trained voiceprint and a voice
+  it has recognized across several previous meetings, and it now happens when you open an
+  older meeting too — not only at the moment the meeting was first analyzed, which is why
+  confident matches used to keep asking forever. A name applied this way is renamed like any
+  other (specs/0064 W2).
+
 ### Fixed
 
 - Prep notes now follow a meeting that gets **rescheduled**. Moving a meeting to another day

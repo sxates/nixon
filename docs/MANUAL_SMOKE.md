@@ -155,6 +155,15 @@ the system-audio tap silently returns silence (see `CLAUDE.md` / ADR-0004).
       empty. For a recurring series where the other occurrences are still on the calendar,
       the notes deliberately stay put rather than being taken from a sibling occurrence.
 
+## 4c. Speakers are named, not offered (specs/0064 W2)
+- [ ] Open a meeting with a speaker you have confirmed in at least three previous meetings
+      (or whose voiceprint is well trained): the name is already there and there is **no**
+      "Looks like …" button to click.
+- [ ] A speaker the app is unsure about still shows the chip — auto-naming has not swallowed
+      the confirm path.
+- [ ] Rename an auto-named speaker from the chip menu: it behaves exactly like one you named
+      by hand, and reopening the meeting does not put the automatic name back.
+
 ## 5. Channel strip on a meeting (specs/0057 §3.5)
 - [ ] Open a meeting → **Transcript** tab. The speaker list is a channel strip: **CH 1** is
       always you, then CH 2, CH 3, … with talk time and share of talk per channel.
