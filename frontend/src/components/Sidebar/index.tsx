@@ -9,17 +9,16 @@ import {
   Menu,
   MessageSquare,
   Settings,
-  SquarePen,
   Users,
   type LucideIcon,
 } from 'lucide-react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useSidebar } from './SidebarProvider';
-import { useRecordingState } from '@/contexts/RecordingStateContext';
 import { useImportDialog } from '@/contexts/ImportDialogContext';
 import { useConfig } from '@/contexts/ConfigContext';
 import { DeckIcon } from '@/components/ui/deck-icon';
 import { cn } from '@/lib/utils';
+import { QueueRow } from './QueueRow';
 import { UpdateRow } from './UpdateRow';
 
 import DevBadge from '../DevBadge';
@@ -36,7 +35,7 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   {
-    label: 'Home',
+    label: 'Today',
     path: '/',
     icon: Home,
     isActive: (p) => p === '/',
@@ -81,10 +80,8 @@ const INDEX_BAR_ON = 'bg-brand shadow-[0_0_6px_-1px_hsl(var(--brand)/0.6)]';
 const Sidebar: React.FC = () => {
   const router = useRouter();
   const pathname = usePathname();
-  const { isCollapsed, toggleCollapse, handleRecordingToggle, handleNewNote } = useSidebar();
+  const { isCollapsed, toggleCollapse } = useSidebar();
 
-  // Recording state from the single source of truth.
-  const { isRecording } = useRecordingState();
   const { openImportDialog } = useImportDialog();
   const { betaFeatures } = useConfig();
 
@@ -147,10 +144,13 @@ const Sidebar: React.FC = () => {
             onClick={() => router.push('/settings')}
             aria-label="Settings"
             title="Settings"
-            className="mb-2 flex h-10 w-full items-center justify-center text-engrave transition-colors hover:bg-key hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="flex h-10 w-full items-center justify-center text-engrave transition-colors hover:bg-key hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <DeckIcon icon={Settings} size={16} />
           </button>
+
+          {/* Background work (specs/0064 W5) — below Settings, the lamp alone when collapsed. */}
+          <QueueRow collapsed />
 
           <div className="mb-3">
             <DevBadge isCollapsed />
@@ -180,42 +180,6 @@ const Sidebar: React.FC = () => {
           <div className="ml-auto">
             <DevBadge />
           </div>
-        </div>
-
-        {/* New recording — reuses the existing recording-start handler */}
-        <div className="flex-shrink-0 px-3">
-          <button
-            onClick={handleRecordingToggle}
-            disabled={isRecording}
-            className={cn(
-              'flex w-full items-center gap-2.5 rounded-[3px] border border-border bg-key px-3 py-2 text-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-              'shadow-[inset_0_1px_0_hsl(var(--bevel-hi)),0_1px_0_hsl(var(--bevel-lo))]',
-              isRecording ? 'cursor-not-allowed' : 'hover:bg-well',
-            )}
-          >
-            <span
-              className={cn(
-                'h-2 w-2 flex-shrink-0 rounded-full bg-record',
-                isRecording && 'animate-pulse',
-              )}
-              aria-hidden="true"
-            />
-            <span className="font-semibold text-foreground">
-              {isRecording ? 'Recording…' : 'New recording'}
-            </span>
-            {!isRecording && (
-              <kbd className="ml-auto font-mono text-[11px] text-muted-foreground">⌘N</kbd>
-            )}
-          </button>
-
-          {/* New note — creates a notes-only meeting (no recording) and opens it. */}
-          <button
-            onClick={() => void handleNewNote()}
-            className="mt-1.5 flex w-full items-center gap-2.5 rounded-[3px] px-3 py-2 text-sm text-engrave transition-colors hover:bg-key hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <DeckIcon icon={SquarePen} className="flex-shrink-0" />
-            <span>New note</span>
-          </button>
         </div>
 
         {/* Primary navigation — index bar + glyph + engraved label. */}
@@ -270,6 +234,10 @@ const Sidebar: React.FC = () => {
             <DeckIcon icon={Settings} className="flex-shrink-0" />
             <span className="u-section-label">Settings</span>
           </button>
+
+          {/* Background work (specs/0064 W5) — the queue moved off the transport rail, which
+              is the recording surface; this is where app state lives. */}
+          <QueueRow />
         </div>
       </div>
     </div>

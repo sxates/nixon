@@ -34,9 +34,31 @@ vi.mock('@/contexts/ConfigContext', () => ({
   useConfig: () => ({ betaFeatures: { importAndRetranscribe: false } }),
 }));
 
+// specs/0064 W5 — the sidebar now carries the queue row, which reads the backlog, LLM
+// activity and transcript contexts. This suite is about the nav chrome, so they are stubbed
+// to their idle shapes; QueueRow has its own suite.
+vi.mock('@/contexts/DeferredBacklogProvider', () => ({
+  useBacklog: () => ({
+    view: { items: [], pendingCount: 0, processing: false, active: null, activeOrdinal: 0, total: 0 },
+    stop: vi.fn(),
+    startNow: vi.fn(),
+    dismissDone: vi.fn(),
+    enqueueMeeting: vi.fn(),
+  }),
+}));
+vi.mock('@/contexts/LlmActivityProvider', () => ({
+  useOptionalLlmActivity: () => ({ running: [], history: [], hasFailure: false, dismiss: vi.fn(), retry: vi.fn() }),
+}));
+vi.mock('@/contexts/TranscriptContext', () => ({ useTranscripts: () => ({ meetingTitle: null }) }));
+vi.mock('@/contexts/QueueOpenContext', async () => {
+  const react = await import('react');
+  return { useQueueOpen: () => { const [open, setOpen] = react.useState(false); return { open, setOpen }; } };
+});
+
 import Sidebar from '@/components/Sidebar';
 
-const NAV_NAMES = ['Home', 'All meetings', 'Action items', 'People', 'Ask AI'];
+// specs/0064 W5 — 'Home' is now 'Today', matching the screen it opens.
+const NAV_NAMES = ['Today', 'All meetings', 'Action items', 'People', 'Ask AI'];
 
 describe('Sidebar (specs/0057 Plan 3 Task 3)', () => {
   beforeEach(() => {
@@ -57,7 +79,7 @@ describe('Sidebar (specs/0057 Plan 3 Task 3)', () => {
       'aria-current',
       'page',
     );
-    expect(screen.getByRole('button', { name: 'Home' })).not.toHaveAttribute('aria-current');
+    expect(screen.getByRole('button', { name: 'Today' })).not.toHaveAttribute('aria-current');
   });
 
   it('shows the engraved NIXON wordmark when expanded', () => {

@@ -183,36 +183,6 @@ describe('TransportRail', () => {
     render(<TransportRail />);
     expect(screen.getByRole('button', { name: 'Stop recording' }).hasAttribute('aria-pressed')).toBe(false);
   });
-  // The lamp inside the labelled trigger must not pollute its accessible name.
-  it('queue trigger is named by its own text, not the lamp', () => {
-    render(<TransportRail />);
-    expect(screen.getByRole('button', { name: 'Queue 0 Idle' })).toBeTruthy();
-  });
-  it('queue: shows count and lamp, opens the panel', () => {
-    backlog.view = { items: [{ meeting: { id: 'a', title: 'Hiring loop debrief', folderPath: '/x', transcriptCount: 1 }, status: 'transcribing' }], pendingCount: 0, processing: true, active: null, activeOrdinal: 1, total: 1 } as typeof backlog.view;
-    render(<TransportRail />);
-    const btn = screen.getByRole('button', { name: /queue/i });
-    expect(btn.textContent).toMatch(/1/);
-    expect(btn.textContent).toMatch(/transcribing/i);
-    fireEvent.click(btn);
-    expect(screen.getByRole('dialog', { name: /queue/i })).toBeTruthy();
-    expect(screen.getByText('Hiring loop debrief')).toBeTruthy();
-  });
-  // The header's "Dismiss failures" clears the WHOLE history via `api_llm_activity_dismiss`
-  // (no id); per-row Dismiss (specs/0063 W3 Task 6) uses `api_llm_activity_dismiss_task`
-  // to remove only that one record. This test covers both: per-row Retry by numeric task
-  // id, and the header dismiss clearing everything.
-  it('queue panel: per-row Retry dispatches by numeric task id, dismiss still clears the lot', () => {
-    backlog.view = { items: [], pendingCount: 0, processing: false, active: null, activeOrdinal: 0, total: 0 } as typeof backlog.view;
-    Object.assign(llm, {
-      hasFailure: true,
-      history: [{ id: 7, kind: 'prepBrief', label: 'Prep brief — Q3 planning', error: 'Ollama unreachable', meetingId: 'q3', outcome: { type: 'failed', error: 'Ollama unreachable' } }],
-    });
-    render(<TransportRail />);
-    fireEvent.click(screen.getByRole('button', { name: /queue/i }));
-    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
-    expect(invokeMock).toHaveBeenCalledWith('api_llm_activity_retry_task', { taskId: 7 });
-    fireEvent.click(screen.getByRole('button', { name: 'Dismiss failures' }));
-    expect(llm.dismiss).toHaveBeenCalledTimes(1);
-  });
+  // The queue tests moved with the queue itself (specs/0064 W5) — see
+  // `Sidebar/__tests__/QueueRow.test.tsx`.
 });

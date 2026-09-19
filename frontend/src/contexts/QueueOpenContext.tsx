@@ -10,7 +10,7 @@ export interface QueueOpenValue {
 const QueueOpenContext = createContext<QueueOpenValue | null>(null);
 
 /**
- * Whether the ONE queue popover (Transport rail's `QueueIndicator`) is open — shared so
+ * Whether the ONE queue popover (the sidebar's `QueueRow`, specs/0064 W5) is open — shared so
  * that Today's "Process meetings" button can open that same popover instead of keeping a
  * second, duplicate queue surface of its own (specs/0063 W3 Task 6).
  */
