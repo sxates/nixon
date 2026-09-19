@@ -427,12 +427,21 @@ if [ "$NO_RELEASE" -eq 1 ]; then
 else
   c_blue "🚀 Publishing GitHub release ${TAG}…"
   # release notes = this version's changelog section (anchored heading match,
-  # so no regex escaping of the [brackets])
+  # so no regex escaping of the [brackets]), MINUS its "### Internal" section.
+  #
+  # This text is read by users twice: as the GitHub release body and as the `notes` the
+  # in-app updater renders in its update dialog (see the manifest built just below). CI
+  # gates, build tooling and refactors do not belong in either, so the changelog parks
+  # them under "### Internal" and they are dropped here. Dropping at publish time rather
+  # than asking the author to remember keeps the changelog complete while keeping the
+  # release notes about the app.
   NOTES_FILE="$(mktemp)"
   awk -v ver="$NEW" '
     index($0, "## [" ver "]") == 1 { f=1; next }
     f && /^## \[/ { f=0 }
-    f { print }
+    f && /^### Internal[[:space:]]*$/ { skip=1; next }
+    f && skip && /^### / { skip=0 }
+    f && !skip { print }
   ' "$CHANGELOG" > "$NOTES_FILE"
   [ -s "$NOTES_FILE" ] || printf 'Nixon v%s\n' "$NEW" > "$NOTES_FILE"
 
