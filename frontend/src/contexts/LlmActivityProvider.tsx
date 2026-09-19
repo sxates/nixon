@@ -57,7 +57,6 @@ const EMPTY: LlmActivityView = { running: [], history: [], hasFailure: false };
 
 export interface LlmActivityValue extends LlmActivityView {
   dismiss: () => Promise<void>;
-  retry: (meetingId: string) => Promise<void>;
 }
 
 const LlmActivityContext = createContext<LlmActivityValue | null>(null);
@@ -104,16 +103,8 @@ export function LlmActivityProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const retry = useCallback(async (meetingId: string) => {
-    try {
-      await invoke('api_llm_activity_retry', { meetingId });
-    } catch {
-      /* best-effort */
-    }
-  }, []);
-
   return (
-    <LlmActivityContext.Provider value={{ ...view, dismiss, retry }}>
+    <LlmActivityContext.Provider value={{ ...view, dismiss }}>
       {children}
     </LlmActivityContext.Provider>
   );

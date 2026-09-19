@@ -1,9 +1,9 @@
 //! Retry a failed background task by its registry id, dispatched by kind (specs/0063 W3).
 //!
-//! Distinct from [`crate::llm_activity::commands::api_llm_activity_retry`], which is
-//! prep-brief-only and addressed by meeting id. A footer-queue row only knows its task
-//! id — not what kind of work produced it — so this module resolves the kind and
-//! re-dispatches accordingly.
+//! A footer-queue row only knows its task id — not what kind of work produced it — so this
+//! module resolves the kind and re-dispatches accordingly. It is the only retry path: a
+//! prep-brief-only command addressed by meeting id was removed once this landed, since it
+//! had no caller and its behaviour is reproduced exactly by the `PrepBrief` arm below.
 
 use tauri::{AppHandle, Manager, Runtime};
 

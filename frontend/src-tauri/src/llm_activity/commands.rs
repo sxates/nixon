@@ -1,9 +1,7 @@
 //! IPC for the LLM activity indicator (specs/0052).
 
-use crate::database::repositories::meeting_brief::MeetingBriefsRepository;
 use crate::llm_activity::{LlmActivityState, LlmActivityView};
-use crate::state::AppState;
-use tauri::{AppHandle, Emitter, Manager, State};
+use tauri::{AppHandle, Emitter, State};
 
 /// Emitted on every task transition with the full view. The frontend also pulls a snapshot
 /// on mount, so a missed event self-heals on the next transition.
@@ -35,27 +33,6 @@ pub async fn api_llm_activity_dismiss(
     Ok(())
 }
 
-/// Clear a prep brief's failure counter and force one regeneration pass.
-///
-/// Retry is prep-brief-only: prep is the one background task with a durable, addressable
-/// artifact (a `meeting_briefs` row keyed by meeting) and a give-up rule to clear.
-#[tauri::command]
-pub async fn api_llm_activity_retry(app: AppHandle, meeting_id: String) -> Result<(), String> {
-    let pool = app
-        .try_state::<AppState>()
-        .ok_or_else(|| "App state unavailable".to_string())?
-        .db_manager
-        .pool()
-        .clone();
-
-    MeetingBriefsRepository::reset_failures(&pool, &meeting_id)
-        .await
-        .map_err(|e| format!("Could not clear the failure count: {e}"))?;
-
-    crate::aggregation::prep_jobs::run_prep_pass(&app).await;
-    Ok(())
-}
-
 /// Dismiss ONE failed background task, addressed by its registry id (specs/0063 W3 Task 6).
 ///
 /// Distinct from [`api_llm_activity_dismiss`], which acknowledges the WHOLE failure history
@@ -77,9 +54,11 @@ pub async fn api_llm_activity_dismiss_task(
 
 /// Retry one failed background task, addressed by its registry id (specs/0063 W3).
 ///
-/// Distinct from [`api_llm_activity_retry`], which is prep-brief-only and addressed by
-/// meeting. The queue row knows its task id, not what kind of work produced it, so the
-/// dispatch happens in [`crate::llm_activity::retry`].
+/// The queue row knows its task id, not what kind of work produced it, so the dispatch
+/// happens in [`crate::llm_activity::retry`], which resolves the kind first. (A
+/// prep-brief-only `api_llm_activity_retry`, addressed by meeting id, used to sit beside
+/// this one; it was never wired to a caller and its prep arm lives on in `retry::retry_task`
+/// unchanged, so it was removed rather than left as a second way in.)
 #[tauri::command]
 pub async fn api_llm_activity_retry_task(app: AppHandle, task_id: u64) -> Result<(), String> {
     crate::llm_activity::retry::retry_task(&app, task_id).await

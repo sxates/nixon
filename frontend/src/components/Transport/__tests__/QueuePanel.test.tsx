@@ -3,7 +3,7 @@ import { render, screen, fireEvent } from '@testing-library/react';
 
 const { backlog, llm, invokeMock } = vi.hoisted(() => ({
   backlog: { view: { items: [], pendingCount: 0, processing: false, active: null, activeOrdinal: 0, total: 0 }, stop: vi.fn(), startNow: vi.fn(), dismissDone: vi.fn(), enqueueMeeting: vi.fn() },
-  // The provider's context value is FLAT (`{...view, dismiss, retry}` — LlmActivityProvider.tsx),
+  // The provider's context value is FLAT (`{...view, dismiss}` — LlmActivityProvider.tsx),
   // so the fixture mirrors that shape rather than nesting a `view`.
   llm: { running: [] as unknown[], history: [] as unknown[], hasFailure: false, dismiss: vi.fn(), retry: vi.fn() },
   invokeMock: vi.fn(),

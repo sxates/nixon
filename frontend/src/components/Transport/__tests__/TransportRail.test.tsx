@@ -5,7 +5,7 @@ const { state, sidebar, backlog, llm, pauseMock, resumeMock, stopMock, toastErro
   state: { isRecording: false, isPaused: false, isActive: false, status: 'idle', activeDuration: null as number | null, recordingDuration: null as number | null, isStopping: false, isProcessing: false, isSaving: false },
   sidebar: { isCollapsed: true, handleRecordingToggle: vi.fn(), activeRecordingMeetingId: null as string | null, currentMeeting: null as { id: string; title: string } | null },
   backlog: { view: { items: [], pendingCount: 0, processing: false, active: null, activeOrdinal: 0, total: 0 }, stop: vi.fn(), startNow: vi.fn(), dismissDone: vi.fn(), enqueueMeeting: vi.fn() },
-  // The provider's context value is FLAT (`{...view, dismiss, retry}` — LlmActivityProvider.tsx:113),
+  // The provider's context value is FLAT (`{...view, dismiss}` — LlmActivityProvider.tsx),
   // so the fixture mirrors that shape rather than nesting a `view`.
   llm: { running: [] as unknown[], history: [] as unknown[], hasFailure: false, dismiss: vi.fn(), retry: vi.fn() },
   pauseMock: vi.fn(), resumeMock: vi.fn(), stopMock: vi.fn(), toastErrorMock: vi.fn(),
