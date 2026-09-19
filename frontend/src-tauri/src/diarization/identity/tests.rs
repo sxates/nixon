@@ -7,6 +7,15 @@ fn bytes(v: &[f32]) -> Vec<u8> {
     embedding_to_bytes(&l2_normalize(v))
 }
 
+/// Each 1a helper call stands for ONE prior meeting, so a test that builds N candidates is
+/// describing N distinct meetings. `same_meeting_as` exists for the case that matters:
+/// several speaker rows from a SINGLE meeting, which must count once (specs/0064 W2 review).
+fn next_meeting_id() -> String {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    static N: AtomicUsize = AtomicUsize::new(0);
+    format!("m-prior-{}", N.fetch_add(1, Ordering::Relaxed))
+}
+
 fn cand(name: &str, email: Option<&str>, v: &[f32]) -> CandidateSample {
     CandidateSample {
         display_name: name.to_string(),
@@ -16,6 +25,7 @@ fn cand(name: &str, email: Option<&str>, v: &[f32]) -> CandidateSample {
         embedding_model: Some(MODEL.to_string()),
         from_gallery: false,
         gallery_sample_count: 0,
+        meeting_id: Some(next_meeting_id()),
     }
 }
 
@@ -29,6 +39,7 @@ fn cand_person(name: &str, email: Option<&str>, person_id: &str, v: &[f32]) -> C
         embedding_model: Some(MODEL.to_string()),
         from_gallery: false,
         gallery_sample_count: 0,
+        meeting_id: Some(next_meeting_id()),
     }
 }
 
@@ -49,6 +60,7 @@ fn cand_gallery(
         embedding_model: Some(MODEL.to_string()),
         from_gallery: true,
         gallery_sample_count: samples,
+        meeting_id: None,
     }
 }
 
@@ -105,6 +117,7 @@ fn cross_model_candidates_are_ignored() {
         embedding_model: Some("some_other_model_v2".to_string()),
         from_gallery: false,
         gallery_sample_count: 0,
+        meeting_id: Some(next_meeting_id()),
     }];
     let current = vec![("spk_0".to_string(), bytes(&priya), Some(MODEL.to_string()))];
 
@@ -476,4 +489,34 @@ fn a_prior_match_with_no_durable_person_never_auto_labels() {
     let current = vec![("spk_0".to_string(), bytes(&priya), Some(MODEL.to_string()))];
     let s = &match_speakers_with_gallery(&current, &candidates, &[])[0];
     assert!(!s.auto_label);
+}
+
+#[test]
+fn several_speaker_rows_from_ONE_meeting_are_not_several_meetings() {
+    // specs/0064 W2 review — a meeting that over-clusters a person into three speaker rows
+    // the user then labels identically must NOT satisfy the repetition tier. Repetition
+    // across separate meetings is the corroboration; three rows from one meeting is one
+    // meeting's worth of evidence, however confident the cosine.
+    use crate::diarization::auto_label::AUTO_PRIOR_MEETINGS_MIN;
+    let priya = vec![1.0, 0.0, 0.0, 0.0];
+    let one_meeting = next_meeting_id();
+    let candidates: Vec<CandidateSample> = (0..AUTO_PRIOR_MEETINGS_MIN + 2)
+        .map(|_| {
+            let mut c = cand_person("Priya", Some("priya@example.com"), "person-1", &priya);
+            c.meeting_id = Some(one_meeting.clone());
+            c
+        })
+        .collect();
+    let current = vec![("spk_0".to_string(), bytes(&priya), Some(MODEL.to_string()))];
+
+    let s = &match_speakers_with_gallery(&current, &candidates, &[])[0];
+    assert!(
+        !s.auto_label,
+        "one over-clustered meeting is not {AUTO_PRIOR_MEETINGS_MIN} meetings of evidence: {s:?}"
+    );
+    assert!(
+        s.basis.contains("1 prior meeting"),
+        "the basis must say one meeting, got {}",
+        s.basis
+    );
 }

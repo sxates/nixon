@@ -861,6 +861,10 @@ pub(super) async fn run<R: Runtime>(app: AppHandle<R>, meeting_id: String) -> Re
 /// matcher's auto-label gate — only a high-confidence GALLERY match whose person's email
 /// is among them is marked `auto_label`. The DB-only inputs are gathered here; the ranking
 /// itself stays pure.
+/// With NO corroborating emails, so the email-corroborated auto-label route cannot fire —
+/// the voice-only routes still can. Both real callers (the offline pass and
+/// `api_get_speaker_suggestions`) supply the meeting's attendee emails via
+/// [`compute_suggestions_with_emails`]; this wrapper is the email-free case used by tests.
 pub async fn compute_suggestions(
     pool: &sqlx::SqlitePool,
     meeting_id: &str,
@@ -869,9 +873,9 @@ pub async fn compute_suggestions(
 }
 
 /// As [`compute_suggestions`], but with an explicit corroborating-email set for the
-/// auto-label gate. The offline pass passes the meeting's calendar attendee emails here;
-/// the on-demand command passes none (no auto-label on a manual re-fetch — it only
-/// surfaces suggestions, which the user confirms).
+/// auto-label gate. Both the offline pass and the on-demand command pass the meeting's
+/// calendar attendee emails (specs/0064 W2 — the refetch APPLIES auto-labels too, so it
+/// needs the same inputs the pass had; before that it deliberately passed none).
 pub async fn compute_suggestions_with_emails(
     pool: &sqlx::SqlitePool,
     meeting_id: &str,
@@ -908,6 +912,9 @@ pub async fn compute_suggestions_with_emails(
             embedding_model: c.embedding_model,
             from_gallery: false,
             gallery_sample_count: 0,
+            // The meeting this prior speaker row belongs to — the matcher counts DISTINCT
+            // meetings for the repetition tier (specs/0064 W2 review).
+            meeting_id: Some(c.meeting_id),
         })
         .collect();
 
@@ -939,6 +946,8 @@ pub async fn compute_suggestions_with_emails(
                     // specs/0044 WS4: enrollment count gates the trusted (voice-only)
                     // auto-label tier in the matcher.
                     gallery_sample_count: sample_count,
+                    // A centroid belongs to no single meeting.
+                    meeting_id: None,
                 });
             }
         }

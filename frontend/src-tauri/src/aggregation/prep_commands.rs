@@ -452,15 +452,6 @@ async fn carry_prep_forward(
     if is_per_occurrence_event_id(calendar_event_id) {
         return None;
     }
-    // An existing row for THIS occurrence wins; nothing was rescheduled.
-    if MeetingsRepository::find_scheduled_for_occurrence(pool, calendar_event_id, occurrence)
-        .await
-        .ok()
-        .flatten()
-        .is_some()
-    {
-        return None;
-    }
     let (stranded_id, stored_day) =
         MeetingsRepository::scheduled_day_with_prep(pool, calendar_event_id)
             .await
@@ -475,25 +466,70 @@ async fn carry_prep_forward(
         );
         return None;
     }
-    match MeetingsRepository::redate_scheduled_meeting(
-        pool,
-        &stranded_id,
-        occurrence,
-        Some(title),
-        series_key,
-    )
-    .await
+
+    // A row may already exist for the new slot: the background prep pass mints one for every
+    // upcoming occurrence of a recurring series, on a 30-minute timer, so by the time the
+    // user opens Prep the new day usually has a bare placeholder. Re-dating the stranded row
+    // would then collide with it, so the NOTES move instead — which is what the user cares
+    // about; the placeholder already has the brief for its own date.
+    if let Ok(Some(target_id)) =
+        MeetingsRepository::find_scheduled_for_occurrence(pool, calendar_event_id, occurrence).await
     {
-        Ok(true) => {
-            log::info!(
-                "prep: carried prep from the vacated slot {stored_day} to {occurrence} for event {calendar_event_id} (specs/0064 W1)"
-            );
-            Some(stranded_id)
+        // Never overwrite prep already written against the new slot.
+        let target_has_notes = MeetingNotesRepository::get_notes(pool, &target_id)
+            .await
+            .ok()
+            .flatten()
+            .and_then(|n| n.prep_markdown)
+            .map(|m| !m.trim().is_empty())
+            .unwrap_or(false);
+        if target_has_notes {
+            return None;
         }
-        Ok(false) => None,
-        Err(e) => {
-            log::warn!("prep: re-date failed, minting a fresh row instead: {e}");
-            None
+        let stranded = MeetingNotesRepository::get_notes(pool, &stranded_id)
+            .await
+            .ok()
+            .flatten()?;
+        match MeetingNotesRepository::upsert_prep_notes(
+            pool,
+            &target_id,
+            stranded.prep_markdown.as_deref(),
+            stranded.prep_json.as_deref(),
+        )
+        .await
+        {
+            Ok(_) => {
+                log::info!(
+                    "prep: copied prep notes from the vacated slot {stored_day} onto the existing row for {occurrence} (event {calendar_event_id}, specs/0064 W1)"
+                );
+                Some(target_id)
+            }
+            Err(e) => {
+                log::warn!("prep: could not copy prep notes forward (continuing): {e}");
+                None
+            }
+        }
+    } else {
+        match MeetingsRepository::redate_scheduled_meeting(
+            pool,
+            &stranded_id,
+            occurrence,
+            Some(title),
+            series_key,
+        )
+        .await
+        {
+            Ok(true) => {
+                log::info!(
+                    "prep: carried prep from the vacated slot {stored_day} to {occurrence} for event {calendar_event_id} (specs/0064 W1)"
+                );
+                Some(stranded_id)
+            }
+            Ok(false) => None,
+            Err(e) => {
+                log::warn!("prep: re-date failed, minting a fresh row instead: {e}");
+                None
+            }
         }
     }
 }
@@ -543,8 +579,10 @@ pub async fn api_ensure_scheduled_meeting<R: Runtime>(
     // it so the warm below regenerates instead of serving the old one. Best-effort: a failed
     // delete must not fail opening the Prep tab, it only means a stale brief lingers.
     if resolution.was_redated() {
+        // Says what happened, not what we hoped happened: the row followed the meeting,
+        // whether or not anything was written on it.
         log::info!(
-            "prep: {} followed its rescheduled meeting to {occurrence} (specs/0064 W1)",
+            "prep: scheduled row {} moved with its rescheduled meeting to {occurrence} (specs/0064 W1)",
             resolution.id()
         );
         if let Err(e) = MeetingBriefsRepository::delete_for_meeting(pool, resolution.id()).await {

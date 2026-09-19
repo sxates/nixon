@@ -175,8 +175,15 @@ impl MeetingsRepository {
         Ok(same.is_none())
     }
 
-    /// The one unrecorded `scheduled` row for this event id that carries prep — notes or a
-    /// cached brief — together with its stored occurrence start.
+    /// The one unrecorded `scheduled` row for this event id that carries prep NOTES, together
+    /// with its stored occurrence start.
+    ///
+    /// Notes only, deliberately: a cached brief is machine-written and regenerable, and the
+    /// background prep pass writes a `meeting_briefs` row for every upcoming occurrence of a
+    /// recurring series it touches. Counting those as prep would (a) make the uniqueness
+    /// check below see two candidates for any daily series and refuse every carry-forward,
+    /// and (b) let a row whose only "prep" is an auto-generated brief consume the one carry.
+    /// What the user actually wrote is what must survive a reschedule.
     ///
     /// `None` when no such row exists, or when more than one does. Ambiguity must never be
     /// guessed at: on EventKit a sibling occurrence shares the event id, and stranding prep
@@ -192,11 +199,8 @@ impl MeetingsRepository {
             "SELECT m.id, m.created_at FROM meetings m \
              WHERE m.calendar_event_id = ?1 AND m.origin = 'scheduled' \
                AND NOT EXISTS (SELECT 1 FROM transcripts t WHERE t.meeting_id = m.id) \
-               AND ( \
-                 EXISTS (SELECT 1 FROM meeting_notes n WHERE n.meeting_id = m.id \
-                           AND TRIM(COALESCE(n.prep_markdown, ''), ' \t\r\n') <> '') \
-                 OR EXISTS (SELECT 1 FROM meeting_briefs b WHERE b.meeting_id = m.id) \
-               ) \
+               AND EXISTS (SELECT 1 FROM meeting_notes n WHERE n.meeting_id = m.id \
+                             AND TRIM(COALESCE(n.prep_markdown, ''), ' \t\r\n') <> '') \
              ORDER BY m.created_at DESC LIMIT 2",
         )
         .bind(calendar_event_id)
@@ -647,5 +651,95 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(meta.title, "My name for it");
+    }
+
+    /// specs/0064 W1 review — the background prep pass writes a `meeting_briefs` row for every
+    /// upcoming occurrence of a recurring series it touches. If a brief counted as prep, every
+    /// daily series would look like two candidates (ambiguous → no carry ever), and a row whose
+    /// only content is a machine-written brief could consume the one carry. Notes only.
+    #[tokio::test]
+    async fn a_machine_written_brief_is_not_prep_worth_carrying() {
+        let pool = memory_db().await;
+        let row = MeetingsRepository::upsert_scheduled_meeting(
+            &pool,
+            "evt-brief",
+            None,
+            "Standup",
+            dt("2026-07-10T15:00:00Z"),
+        )
+        .await
+        .unwrap();
+        sqlx::query(
+            "INSERT INTO meeting_briefs (meeting_id, status, created_at, updated_at) \
+             VALUES (?, 'ready', ?, ?)",
+        )
+        .bind(row.id())
+        .bind(dt("2026-07-10T15:00:00Z"))
+        .bind(dt("2026-07-10T15:00:00Z"))
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        assert_eq!(
+            MeetingsRepository::scheduled_day_with_prep(&pool, "evt-brief")
+                .await
+                .unwrap(),
+            None,
+            "a cached brief is regenerable; only what the user wrote is carried"
+        );
+    }
+
+    /// specs/0064 W1 review — adoption at record start preserves `created_at` by design, so a
+    /// Google row still dated to the slot the meeting was moved FROM would file the recording
+    /// under the wrong day. The command re-dates before promoting; this pins that sequence.
+    #[tokio::test]
+    async fn adoption_re_dates_before_promoting() {
+        let pool = memory_db().await;
+        let ev = "gcal:primary/evt-moved";
+        let row = MeetingsRepository::upsert_scheduled_meeting(
+            &pool,
+            ev,
+            None,
+            "Review",
+            dt("2026-07-10T15:00:00Z"),
+        )
+        .await
+        .unwrap();
+
+        // The meeting moved to the 13th and is recorded there without Prep being reopened.
+        let occurrence = dt("2026-07-13T09:00:00Z");
+        let found = MeetingsRepository::find_scheduled_for_occurrence(&pool, ev, occurrence)
+            .await
+            .unwrap();
+        assert_eq!(
+            found.as_deref(),
+            Some(row.id()),
+            "matched by id across the move"
+        );
+
+        assert!(MeetingsRepository::redate_scheduled_meeting(
+            &pool,
+            row.id(),
+            occurrence,
+            None,
+            None
+        )
+        .await
+        .unwrap());
+        assert!(
+            MeetingsRepository::promote_scheduled_to_recorded(&pool, row.id())
+                .await
+                .unwrap()
+        );
+
+        let meta = MeetingsRepository::get_meeting_metadata(&pool, row.id())
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(meta.origin, "recorded");
+        assert_eq!(
+            meta.created_at.0, occurrence,
+            "the recording is filed under the day it was actually recorded"
+        );
     }
 }

@@ -132,6 +132,12 @@ pub struct CandidateSample {
     /// prior-speaker candidates). Gates the voice-only auto-label tier
     /// ([`TRUSTED_GALLERY_MIN_SAMPLES`]).
     pub gallery_sample_count: usize,
+    /// The prior meeting this 1a sample came from (`None` for gallery centroids, which
+    /// belong to no single meeting). specs/0064 W2 review — the "from N prior meetings"
+    /// tally must count MEETINGS, not rows: one meeting that over-clustered a person into
+    /// three speaker rows the user labelled identically would otherwise look like three
+    /// meetings' worth of corroboration, which is exactly what the auto tier must not accept.
+    pub meeting_id: Option<String>,
 }
 
 impl CandidateSample {
@@ -166,7 +172,8 @@ struct PersonScore {
     email: Option<String>,
     person_id: Option<String>,
     best_cosine: f32,
-    meeting_count: usize,
+    /// DISTINCT prior meetings this person was recognized in (1a samples only).
+    meetings: std::collections::HashSet<String>,
     /// Whether the BEST-scoring sample for this person came from the voiceprint gallery
     /// (1c) rather than a prior per-meeting speaker (1a). Gates auto-label eligibility.
     best_from_gallery: bool,
@@ -252,14 +259,17 @@ fn best_suggestion_for(
             email: c.email.clone(),
             person_id: c.person_id.clone(),
             best_cosine: f32::MIN,
-            meeting_count: 0,
+            meetings: std::collections::HashSet::new(),
             best_from_gallery: c.from_gallery,
             best_gallery_sample_count: c.gallery_sample_count,
         });
         // A gallery centroid is one durable artifact, not a per-meeting occurrence; only
-        // prior-speaker samples count toward the "from N prior meetings" tally.
+        // prior-speaker samples count toward the "from N prior meetings" tally, and each
+        // meeting counts once however many speaker rows in it map to this person.
         if !c.from_gallery {
-            entry.meeting_count += 1;
+            if let Some(mid) = c.meeting_id.as_deref() {
+                entry.meetings.insert(mid.to_string());
+            }
         }
         if cos > entry.best_cosine {
             entry.best_cosine = cos;
@@ -316,7 +326,10 @@ fn best_suggestion_for(
     // too — it must resolve to a durable person, since that link is what applying it means.
     let prior_meetings_auto = !best.best_from_gallery
         && best.person_id.is_some()
-        && crate::diarization::auto_label::prior_meeting_auto(best.best_cosine, best.meeting_count);
+        && crate::diarization::auto_label::prior_meeting_auto(
+            best.best_cosine,
+            best.meetings.len(),
+        );
     let auto_label = email_auto || trusted_voice_auto || prior_meetings_auto;
 
     let basis = if best.best_from_gallery {
@@ -331,7 +344,7 @@ fn best_suggestion_for(
             format!("looks like {} (from the voice gallery)", best.display_name)
         }
     } else {
-        let n = best.meeting_count;
+        let n = best.meetings.len();
         let plural = if n == 1 { "meeting" } else { "meetings" };
         format!(
             "matched {}'s voice from {} prior {}",

@@ -15,6 +15,7 @@
 
 use sqlx::SqlitePool;
 
+use crate::database::repositories::meeting_participant::MeetingParticipantsRepository;
 use crate::database::repositories::people::PeopleRepository;
 use crate::database::repositories::speaker::SpeakersRepository;
 use crate::diarization::identity::{SpeakerSuggestion, TAU_VOICE_AUTO};
@@ -31,6 +32,16 @@ use crate::diarization::identity::{SpeakerSuggestion, TAU_VOICE_AUTO};
 /// that many times.
 pub const AUTO_PRIOR_MEETINGS_MIN: usize = 3;
 
+/// Whether this speaker row still carries the name diarization generated for it, or one the
+/// user chose. Pure, so the rule is testable without a DB.
+///
+/// `display_name_for_key` is the generator: `local` → "You", `spk_N` → "Speaker N+1".
+fn is_claimed_by_hand(row: &crate::database::models::SpeakerModel) -> bool {
+    row.person_id.is_none()
+        && row.display_name.trim()
+            != crate::diarization::pipeline::display_name_for_key(&row.speaker_key)
+}
+
 /// Whether a NON-gallery (prior-speaker) match may be auto-applied: it must clear the same
 /// acoustic bar as the voice-only gallery route AND have been seen in enough distinct prior
 /// meetings. Pure, so the tier boundary is unit-testable without a DB.
@@ -38,8 +49,10 @@ pub fn prior_meeting_auto(confidence: f32, meeting_count: usize) -> bool {
     confidence >= TAU_VOICE_AUTO && meeting_count >= AUTO_PRIOR_MEETINGS_MIN
 }
 
-/// Persist every `auto_label` suggestion as a real identity assignment, exactly as a user
-/// confirmation would (so enroll-on-confirm and the durable person link behave identically).
+/// Persist every `auto_label` suggestion as a real identity assignment: the durable person
+/// link plus the participant-roster row a user confirmation also creates. It deliberately
+/// does NOT enroll a voiceprint — enrolment is consent-gated on a *user* confirmation
+/// (ADR-0007 §2/§3), and an automatic label is not one.
 ///
 /// Best-effort per row: a failure is logged and the rest still apply, because the caller has
 /// already committed the work these names decorate. Returns how many were applied.
@@ -52,19 +65,34 @@ pub async fn apply(
     suggestions: &[SpeakerSuggestion],
 ) -> usize {
     let mut applied = 0usize;
-    // Already-linked rows are skipped rather than re-written: the matcher re-derives the same
-    // auto-label on every refetch (a named speaker keeps its embedding and keeps matching), so
-    // without this the count would say "applied" forever and the log would repeat each time a
-    // meeting is opened. Skipping makes a non-zero count mean "something actually changed".
-    let linked = SpeakersRepository::get_by_meeting(pool, meeting_id)
+    // The matcher re-derives the same auto-label on every refetch (a named speaker keeps its
+    // embedding and keeps matching), so this runs against rows that may already be settled.
+    // Two of them must be left alone — see `is_claimed_by_hand` and the already-linked check
+    // below — and skipping makes a non-zero count mean "something actually changed".
+    let rows = SpeakersRepository::get_by_meeting(pool, meeting_id)
         .await
         .unwrap_or_default();
     for s in suggestions.iter().filter(|s| s.auto_label) {
-        if linked
-            .iter()
-            .any(|row| row.speaker_key == s.speaker_key && row.person_id == s.suggested_person_id)
+        let row = rows.iter().find(|row| row.speaker_key == s.speaker_key);
+        if row
+            .map(|r| r.person_id == s.suggested_person_id)
+            .unwrap_or(false)
         {
             continue;
+        }
+        // NEVER overwrite a name the user typed. `SpeakersRepository::rename` sets only
+        // `display_name`, leaving `person_id` NULL, so a hand-named speaker is indistinguishable
+        // from an unnamed one by the person link alone — and auto-labeling it would replace the
+        // user's word with the matcher's on the very next refresh, repeatedly. A row still
+        // carrying its generated name (`Speaker 3`, `You`) is fair game; anything else is not.
+        if let Some(row) = row {
+            if is_claimed_by_hand(row) {
+                log::debug!(
+                    "diarization: leaving {} alone — it carries a name the user typed",
+                    s.speaker_key
+                );
+                continue;
+            }
         }
         let Some(person_id) = s.suggested_person_id.as_deref() else {
             log::warn!(
@@ -88,6 +116,19 @@ pub async fn apply(
                     s.speaker_key,
                     s.suggested_name
                 );
+                // specs/0038 WS6.c — identifying a speaker also puts that person on the
+                // meeting's participant roster, so a named speaker always shows up as a
+                // participant. `api_assign_speaker_to_person` does this for a user
+                // confirmation; an automatic label must not produce a half-identified
+                // speaker that appears in the Speakers card but never on the roster.
+                // `add_identified` skips the singleton owner and dedupes on its PK.
+                if let Err(e) =
+                    MeetingParticipantsRepository::add_identified(pool, meeting_id, person_id).await
+                {
+                    log::warn!(
+                        "diarization: roster add for auto-labeled person {person_id} failed (continuing): {e}"
+                    );
+                }
             }
             Ok(false) => log::warn!(
                 "diarization: auto-label of {} found no speaker/person row to link",
@@ -119,6 +160,8 @@ mod tests {
         pool
     }
 
+    /// A freshly diarized speaker row: the display name is the one the pipeline generates,
+    /// which is what makes it eligible for auto-labeling (see `is_claimed_by_hand`).
     async fn insert_speaker(pool: &SqlitePool, meeting_id: &str, key: &str) {
         let now = chrono::Utc::now().to_rfc3339();
         sqlx::query(
@@ -128,7 +171,7 @@ mod tests {
         .bind(format!("speaker-{}", Uuid::new_v4()))
         .bind(meeting_id)
         .bind(key)
-        .bind("Speaker")
+        .bind(crate::diarization::pipeline::display_name_for_key(key))
         .bind(&now)
         .bind(&now)
         .execute(pool)
@@ -266,6 +309,105 @@ mod tests {
             apply(&pool, &meeting, &batch).await,
             0,
             "the same auto-label applied twice is not a second change"
+        );
+    }
+
+    /// specs/0064 W2 review — a name the user typed must survive every refresh. The rename
+    /// path leaves `person_id` NULL, so without this guard the matcher would overwrite the
+    /// user's word with its own on the very next open, over and over.
+    #[tokio::test]
+    async fn apply_never_overwrites_a_name_the_user_typed() {
+        let pool = test_pool().await;
+        let meeting =
+            MeetingsRepository::create_meeting(&pool, Some("M".into()), None, None, None, None)
+                .await
+                .unwrap();
+        insert_speaker(&pool, &meeting, "spk_1").await;
+        let priya = crate::database::repositories::people::PeopleRepository::create(
+            &pool, "Priya", None, None, None,
+        )
+        .await
+        .unwrap();
+
+        // The user renames the speaker by hand — display_name only, person_id still NULL.
+        SpeakersRepository::rename(&pool, &meeting, "spk_1", "Mum")
+            .await
+            .unwrap();
+
+        let applied = apply(
+            &pool,
+            &meeting,
+            &[suggestion("spk_1", Some(&priya.id), true)],
+        )
+        .await;
+        assert_eq!(applied, 0, "a hand-typed name is never replaced");
+
+        let rows = SpeakersRepository::get_by_meeting(&pool, &meeting)
+            .await
+            .unwrap();
+        let row = rows.iter().find(|r| r.speaker_key == "spk_1").unwrap();
+        assert_eq!(row.display_name, "Mum");
+        assert_eq!(row.person_id, None);
+    }
+
+    /// The generated name is not a claim, so an untouched speaker is still auto-namable.
+    #[tokio::test]
+    async fn apply_still_names_a_speaker_carrying_its_generated_name() {
+        let pool = test_pool().await;
+        let meeting =
+            MeetingsRepository::create_meeting(&pool, Some("M".into()), None, None, None, None)
+                .await
+                .unwrap();
+        insert_speaker(&pool, &meeting, "spk_1").await;
+        SpeakersRepository::rename(&pool, &meeting, "spk_1", "Speaker 2")
+            .await
+            .unwrap();
+        let priya = crate::database::repositories::people::PeopleRepository::create(
+            &pool, "Priya", None, None, None,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(
+            apply(
+                &pool,
+                &meeting,
+                &[suggestion("spk_1", Some(&priya.id), true)]
+            )
+            .await,
+            1
+        );
+    }
+
+    /// specs/0038 WS6.c — an automatically named speaker joins the roster, exactly as one the
+    /// user confirms does. Otherwise it shows in the Speakers card but nowhere else.
+    #[tokio::test]
+    async fn apply_puts_the_named_person_on_the_participant_roster() {
+        let pool = test_pool().await;
+        let meeting =
+            MeetingsRepository::create_meeting(&pool, Some("M".into()), None, None, None, None)
+                .await
+                .unwrap();
+        insert_speaker(&pool, &meeting, "spk_1").await;
+        let priya = crate::database::repositories::people::PeopleRepository::create(
+            &pool, "Priya", None, None, None,
+        )
+        .await
+        .unwrap();
+
+        apply(
+            &pool,
+            &meeting,
+            &[suggestion("spk_1", Some(&priya.id), true)],
+        )
+        .await;
+
+        let roster = crate::database::repositories::meeting_participant::MeetingParticipantsRepository::list(&pool, &meeting)
+            .await
+            .unwrap();
+        assert!(
+            roster.iter().any(|p| p.person_id == priya.id),
+            "the auto-named person must appear on the roster"
         );
     }
 }
