@@ -20,6 +20,7 @@
 
 pub mod accel;
 pub mod align;
+pub mod auto_label;
 pub mod commands;
 pub mod corrections;
 pub mod embedding;

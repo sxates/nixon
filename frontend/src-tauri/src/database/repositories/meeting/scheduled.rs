@@ -166,13 +166,12 @@ impl MeetingsRepository {
         meeting_id: &str,
         occurrence_start: DateTime<Utc>,
     ) -> Result<bool, SqlxError> {
-        let same: Option<(i64,)> = sqlx::query_as(
-            "SELECT 1 FROM meetings WHERE id = ?1 AND date(created_at) = date(?2)",
-        )
-        .bind(meeting_id)
-        .bind(occurrence_start)
-        .fetch_optional(pool)
-        .await?;
+        let same: Option<(i64,)> =
+            sqlx::query_as("SELECT 1 FROM meetings WHERE id = ?1 AND date(created_at) = date(?2)")
+                .bind(meeting_id)
+                .bind(occurrence_start)
+                .fetch_optional(pool)
+                .await?;
         Ok(same.is_none())
     }
 
@@ -296,7 +295,11 @@ mod tests {
         )
         .await
         .unwrap();
-        assert_eq!(a.id(), b.id(), "same occurrence returns the same scheduled row");
+        assert_eq!(
+            a.id(),
+            b.id(),
+            "same occurrence returns the same scheduled row"
+        );
 
         // Same event, DIFFERENT day (next occurrence of the recurring series) → a new row,
         // disambiguated by day even though EventKit shares the event id.
@@ -324,9 +327,11 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(found.as_deref(), Some(a.id()));
-        assert!(MeetingsRepository::promote_scheduled_to_recorded(&pool, a.id())
-            .await
-            .unwrap());
+        assert!(
+            MeetingsRepository::promote_scheduled_to_recorded(&pool, a.id())
+                .await
+                .unwrap()
+        );
         // Promotion is a no-op the second time (already recorded).
         assert!(
             !MeetingsRepository::promote_scheduled_to_recorded(&pool, a.id())
@@ -620,11 +625,13 @@ mod tests {
         assert_eq!(meta.calendar_series_key.as_deref(), Some("series-Z"));
 
         // Once the user has named it themselves, the calendar no longer overwrites it.
-        sqlx::query("UPDATE meetings SET title = 'My name for it', title_manually_set = 1 WHERE id = ?")
-            .bind(moved.id())
-            .execute(&pool)
-            .await
-            .unwrap();
+        sqlx::query(
+            "UPDATE meetings SET title = 'My name for it', title_manually_set = 1 WHERE id = ?",
+        )
+        .bind(moved.id())
+        .execute(&pool)
+        .await
+        .unwrap();
         let moved_again = MeetingsRepository::upsert_scheduled_meeting(
             &pool,
             ev,

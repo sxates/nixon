@@ -516,9 +516,14 @@ pub async fn api_ensure_scheduled_meeting<R: Runtime>(
 
     // specs/0064 W1 — EventKit's event id is shared across a recurring series, so a moved
     // occurrence cannot be recognised by id alone; the guarded carry-forward takes over.
-    let carried =
-        carry_prep_forward(pool, &calendar_event_id, occurrence, &title, series_key.as_deref())
-            .await;
+    let carried = carry_prep_forward(
+        pool,
+        &calendar_event_id,
+        occurrence,
+        &title,
+        series_key.as_deref(),
+    )
+    .await;
 
     let resolution = match carried {
         Some(id) => ScheduledResolution::Redated(id),

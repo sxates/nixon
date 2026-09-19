@@ -598,13 +598,21 @@ pub struct AttendeeSuggestion {
 
 /// Cross-meeting name suggestions for a saved meeting (specs/0016 1a). Re-runs the
 /// pure cosine matcher over this meeting's persisted remote voiceprints vs. previously
-/// identified speakers, returning a suggestion per current speaker that clears the
-/// confidence threshold + runner-up margin. Empty when nothing matches (or the meeting
-/// has no stored embeddings, e.g. it predates 1a). Suggestions carry **no** embedding
-/// bytes — only display-safe fields.
+/// identified speakers AND the voiceprint gallery, returning a suggestion per current
+/// speaker that clears the confidence threshold + runner-up margin. Empty when nothing
+/// matches (or the meeting has no stored embeddings, e.g. it predates 1a). Suggestions
+/// carry **no** embedding bytes — only display-safe fields.
 ///
-/// This is the same matcher the offline pass runs and attaches to
-/// `diarization-complete`; the command lets the detail view re-fetch on demand.
+/// This is the same matcher the offline pass runs and attaches to `diarization-complete`;
+/// the command lets the detail view re-fetch on demand.
+///
+/// specs/0064 W2 — the refetch APPLIES the matches confident enough to need no confirmation,
+/// exactly as the offline pass does, instead of returning them as chips nobody acts on. It
+/// matters most here: the voiceprint gallery is grown by enroll-on-confirm, so a person
+/// becomes well-trained AFTER the meetings that taught it, and this is the only path those
+/// earlier meetings are ever re-matched on. The meeting's calendar attendee emails are
+/// gathered for the same reason the offline pass gathers them — they corroborate a gallery
+/// match for the email auto-label route.
 #[tauri::command]
 pub async fn api_get_speaker_suggestions<R: Runtime>(
     app: AppHandle<R>,
@@ -613,9 +621,27 @@ pub async fn api_get_speaker_suggestions<R: Runtime>(
     let state = app.state::<AppState>();
     let pool = state.db_manager.pool();
 
-    pipeline::compute_suggestions(pool, &meeting_id)
+    let corroborating_emails: Vec<String> = pipeline::lookup_calendar_attendees(&app, &meeting_id)
         .await
-        .map_err(|e| format!("Failed to compute speaker suggestions: {e:#}"))
+        .into_iter()
+        .filter_map(|a| a.email)
+        .map(|e| e.trim().to_lowercase())
+        .filter(|e| !e.is_empty())
+        .collect();
+
+    let suggestions =
+        pipeline::compute_suggestions_with_emails(pool, &meeting_id, &corroborating_emails)
+            .await
+            .map_err(|e| format!("Failed to compute speaker suggestions: {e:#}"))?;
+
+    let applied = crate::diarization::auto_label::apply(pool, &meeting_id, &suggestions).await;
+    if applied > 0 {
+        log::info!(
+            "speakers: applied {applied} auto-label(s) on refetch for meeting {meeting_id} (specs/0064 W2)"
+        );
+    }
+
+    Ok(suggestions)
 }
 
 #[tauri::command]
