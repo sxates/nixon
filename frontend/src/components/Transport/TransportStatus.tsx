@@ -80,7 +80,9 @@ export function TransportStatus({ phase, elapsedSeconds }: { phase: TransportPha
           // meeting title and state line the rail exists to convey.
           aria-label={`Back to the recording: ${line1}, ${line2}`}
           className={cn(
-            'flex min-w-0 flex-col items-start rounded-[3px] text-left leading-tight',
+            // flex-1 so the title takes the slack and truncates predictably; the
+            // instruments sit before it and cannot be moved by its length (specs/0064 W6).
+            'flex min-w-0 flex-1 flex-col items-start rounded-[3px] text-left leading-tight',
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-panel',
             'hover:[&>span:first-child]:text-brand',
           )}
@@ -91,7 +93,7 @@ export function TransportStatus({ phase, elapsedSeconds }: { phase: TransportPha
           <span className="u-section-label text-[9px]">{line2}</span>
         </button>
       ) : (
-        <div className="flex min-w-0 flex-col leading-tight">
+        <div className="flex min-w-0 flex-1 flex-col leading-tight">
           <span className="truncate text-xs font-semibold text-foreground">{line1}</span>
           <span className="u-section-label text-[9px]">{line2}</span>
         </div>
