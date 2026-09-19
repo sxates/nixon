@@ -35,11 +35,39 @@ describe('TransportKey', () => {
     expect(screen.getByText('HOLD').className).toContain('text-lamp-ink');
   });
 
-  it('a dimmed lit key (REC while on HOLD) keeps the unlit face', () => {
-    render(<TransportKey fn="rec" lit dim legend="REC" aria-label="Recording" />);
+  // specs/0064 W6 — REC on HOLD used to keep the unlit face while its cream ink stayed at
+  // 55%: cream on an unlit key, which the owner reported as "turns kind of clear, but the
+  // text remains white, so it's hard to read". It now reads as a standard key with RED ink,
+  // so the state says "still recording, paused" rather than "off".
+  it('REC on HOLD is a standard key with red ink, not dimmed cream', () => {
+    const { container } = render(
+      <TransportKey fn="rec" lit holding legend="REC" aria-label="Recording" />,
+    );
     const btn = screen.getByRole('button', { name: 'Recording' });
     expect(btn.className).toContain('bg-key');
     expect(btn.className).not.toContain('bg-lamp-red');
+
+    const glyph = container.querySelector('svg')?.getAttribute('class') ?? '';
+    expect(glyph).toContain('fill-lamp-red');
+    expect(glyph).not.toContain('opacity-[0.55]');
+    expect(screen.getByText('REC').className).toContain('text-lamp-red');
+    expect(screen.getByText('REC').className).not.toContain('opacity-[0.55]');
+  });
+
+  it('the REC lamp blinks slowly while on HOLD, and holds still for reduced motion', () => {
+    const { container } = render(
+      <TransportKey fn="rec" lit holding legend="REC" aria-label="Recording" />,
+    );
+    // The bar is the first absolutely-positioned span inside the key.
+    const bar = container.querySelector('span[aria-hidden]');
+    expect(bar?.getAttribute('class')).toContain('animate-hold-blink');
+    expect(bar?.getAttribute('class')).toContain('motion-reduce:animate-none');
+  });
+
+  it('a lit REC key that is NOT holding does not blink', () => {
+    const { container } = render(<TransportKey fn="rec" lit legend="REC" aria-label="Recording" />);
+    const bar = container.querySelector('span[aria-hidden]');
+    expect(bar?.getAttribute('class')).not.toContain('animate-hold-blink');
   });
 
   it('a lit and disabled key is not dimmed — the lit face carries its own state', () => {

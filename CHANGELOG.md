@@ -21,6 +21,23 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 ### Changed
 
+- The sidebar's **Home** is now **Today**, and the New recording / New note buttons are gone
+  from it — both are on the Today header, and recording has the REC key (specs/0064 W5).
+- The **Queue** moved from the transport rail into the sidebar, below Settings. Expanded it
+  shows the lamp, the count and what is running; collapsed it is just the lamp. It opens the
+  same panel as before (specs/0064 W5).
+- On the transport rail, the timer and level meter now sit together in one fixed block to the
+  left of the meeting title, so a long or renamed title no longer shoves them sideways, and
+  REC/HOLD/STOP moved to the right-hand end (specs/0064 W6).
+- Search and Ask AI on the Today header are no longer more rounded than New note and Record
+  (specs/0064 W5).
+
+### Fixed
+
+- **REC is readable while a recording is on hold.** It used to lose its red background and
+  keep white text, which read as "off, but oddly". A held recording now shows a normal key
+  with a red icon and red REC legend, and the lamp blinks slowly — still recording, paused
+  (specs/0064 W6).
 - The Summary tab's row of buttons is down to the ones that get used: **Regenerate Summary**,
   the template picker, and a **…** menu holding Copy, Summary language, AI Model and Re-think
   structure. Save lives in that menu too, and jumps back out as a button the moment you have
@@ -38,8 +55,6 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
   older meeting too — not only at the moment the meeting was first analyzed, which is why
   confident matches used to keep asking forever. A name applied this way is renamed like any
   other (specs/0064 W2).
-
-### Fixed
 
 - Prep notes now follow a meeting that gets **rescheduled**. Moving a meeting to another day
   used to leave your prep behind on a meeting that had quietly disappeared, and the new time

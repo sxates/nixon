@@ -68,6 +68,16 @@ the system-audio tap silently returns silence (see `CLAUDE.md` / ADR-0004).
       returns to idle.
 - [ ] Toasts/alerts stack **above** the rail, never underneath it.
 - [ ] Everything above still reads correctly in **both themes** (Faceplate light / Deck dark).
+- [ ] **Order (specs/0064 W6):** left to right the rail reads reels → timer above the level
+      meter, both the same width → meeting title; REC/HOLD/STOP sit at the far right. Rename
+      the meeting mid-recording: the timer and meter do not move.
+- [ ] **On hold (specs/0064 W6):** press HOLD while recording. REC keeps the standard key
+      face with a **red** dot and a **red** REC legend, and its lamp blinks slowly — legible
+      in both themes. Resume: REC goes back to the solid lit red face.
+- [ ] **Queue in the sidebar (specs/0064 W5):** the rail no longer carries a Queue; it is
+      below Settings in the sidebar. Expanded shows lamp + count + one line; collapsed shows
+      the lamp alone. Both open the same panel, and Today's "Processing…" button opens it too.
+- [ ] The sidebar reads **Today** (not Home) and has no New recording / New note buttons.
 - [ ] While recording, navigate to **Meetings**, then click the rail's meeting title — it
       returns to /record. On /record the title is not clickable.
 - [ ] Rename the meeting in the record header; the rail's title updates immediately, and so

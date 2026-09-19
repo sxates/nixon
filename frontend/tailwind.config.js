@@ -121,6 +121,16 @@ module.exports = {
   				to: {
   					transform: 'rotate(360deg)'
   				}
+  			},
+  			// specs/0064 W6 — the REC lamp while a recording is on HOLD. Slow and shallow: a
+  			// held recording is a steady state, not an alarm.
+  			'hold-blink': {
+  				'0%, 100%': {
+  					opacity: '1'
+  				},
+  				'50%': {
+  					opacity: '0.3'
+  				}
   			}
   		},
   		animation: {
@@ -130,7 +140,8 @@ module.exports = {
   			// real deck — the supply reel (left, fuller) lags the take-up reel (right).
   			reel: 'reel 2.6s linear infinite',
   			'reel-slow': 'reel 3.6s linear infinite',
-  			'reel-spindown': 'reel 0.9s ease-out 1'
+  			'reel-spindown': 'reel 0.9s ease-out 1',
+  			'hold-blink': 'hold-blink 1.8s ease-in-out infinite'
   		}
   	}
   },

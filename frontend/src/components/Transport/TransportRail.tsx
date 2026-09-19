@@ -104,14 +104,16 @@ export function TransportRail() {
         isCollapsed ? 'left-16' : 'left-64',
       )}
     >
+      {/* Instruments first, keys last (specs/0064 W6) — the status zone takes the slack, so
+          the keys sit against the right edge whatever the meeting is called. */}
       <TransportStatus phase={phase} elapsedSeconds={elapsed} />
       <div className="w-px self-stretch bg-border" />
-      <div className="flex items-center gap-1.5 px-5">
+      <div className="flex flex-none items-center gap-1.5 px-5">
         <TransportKey
           fn="rec"
           legend="REC"
           lit={inFlight && phase !== 'finalizing'}
-          dim={phase === 'paused'}
+          holding={phase === 'paused'}
           disabled={phase !== 'idle'}
           aria-label={phase === 'idle' ? 'Start recording' : 'Recording'}
           onClick={onRec}

@@ -14,7 +14,8 @@ import { LevelLadder } from './LevelLadder';
 export type TransportPhase = 'idle' | 'starting' | 'recording' | 'paused' | 'finalizing';
 
 /**
- * Left zone of the rail: reels · title/state · counter · ladder (specs/0057 §3.1 state table).
+ * Left zone of the rail: reels · counter-over-ladder · title/state (specs/0057 §3.1 state
+ * table, reordered by specs/0064 W6 so the instruments hold still while titles change).
  *
  * The second line is the state vocabulary the whole app now shares — "Nothing on the reel" /
  * "On the reel" / "On hold" / "Finishing the reel" — so the rail never disagrees with itself
@@ -62,6 +63,14 @@ export function TransportStatus({ phase, elapsedSeconds }: { phase: TransportPha
     <div className="flex min-w-0 flex-1 items-center gap-3.5 px-5">
       {/* Nothing is on the reel yet while the tap is arming, so the hubs stay still. */}
       <Reels state={phase === 'starting' ? 'idle' : phase} />
+      {/* specs/0064 W6 — the instruments live in one fixed-width block, counter above
+          ladder, BEFORE the title. They used to sit after it, where the title was the
+          flex-1 element, so every rename or navigation shifted the counter and the meter
+          sideways. A fixed width also keeps the two aligned with each other. */}
+      <div className="flex w-[108px] flex-none flex-col gap-1">
+        <TapeCounter seconds={elapsedSeconds} size="sm" tone={tone} className="justify-center" />
+        <LevelLadder level={level.rms} active={phase === 'recording' && !micMuted} fill />
+      </div>
       {canNavigate ? (
         <button
           type="button"
@@ -87,8 +96,6 @@ export function TransportStatus({ phase, elapsedSeconds }: { phase: TransportPha
           <span className="u-section-label text-[9px]">{line2}</span>
         </div>
       )}
-      <TapeCounter seconds={elapsedSeconds} size="sm" tone={tone} />
-      <LevelLadder level={level.rms} active={phase === 'recording' && !micMuted} />
     </div>
   );
 }
