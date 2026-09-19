@@ -21,6 +21,17 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 ### Changed
 
+- The Summary tab's row of buttons is down to the ones that get used: **Regenerate Summary**,
+  the template picker, and a **…** menu holding Copy, Summary language, AI Model and Re-think
+  structure. Save lives in that menu too, and jumps back out as a button the moment you have
+  unsaved edits (specs/0064 W3).
+- The participants list is a proper grid — four columns at full width — instead of a ragged
+  wrap. The hover actions no longer linger after the pointer leaves, and no longer push the
+  names apart while they are hidden (specs/0064 W4).
+- The **Speakers** box is one box instead of a box inside a box, and its channels are ordered
+  by share of talk, so whoever spoke most is CH 1 (specs/0064 W4).
+- A meeting's title and back button span the window like every other screen's header, instead
+  of being squeezed into the width of the text column below them (specs/0064 W4).
 - A speaker Nixon already recognizes is now **named automatically** instead of offering a
   "Looks like …" button for you to click. That covers a well-trained voiceprint and a voice
   it has recognized across several previous meetings, and it now happens when you open an
