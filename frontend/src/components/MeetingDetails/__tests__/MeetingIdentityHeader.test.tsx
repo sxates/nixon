@@ -58,10 +58,16 @@ describe('MeetingIdentityHeader', () => {
     expect(screen.getByTestId('meeting-identity-line').textContent).toContain('4 voices');
   });
 
-  it('hangs the back button in the gutter at the wide breakpoint only', () => {
+  // The back button used to hang in the gutter beside the centred reading column
+  // (`lg:absolute lg:-left-9`). specs/0064 W4 moved this header across the full width, where
+  // that 36px pull dragged it into the page's own padding and hard against the sidebar
+  // (owner feedback 2026-09-19). It is inline again, inside that padding.
+  it('keeps the back button inline, not pulled out of the page padding', () => {
     render(<MeetingIdentityHeader {...base} onBack={() => {}} />);
     const back = screen.getByRole('button', { name: 'Back to meetings' });
-    expect(back.className).toContain('lg:absolute');
-    expect(back.className).toContain('lg:-left-9');
+    expect(back.className).not.toContain('lg:absolute');
+    expect(back.className).not.toContain('lg:-left-9');
+    // -ml-1 is optical alignment of the glyph, not a pull out of the container.
+    expect(back.className).toContain('-ml-1');
   });
 });
