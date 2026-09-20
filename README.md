@@ -48,9 +48,17 @@ Deck (dark) variants live in [`docs/screenshots/real`](docs/screenshots/real). E
 
 ## Requirements
 
-- macOS on Apple Silicon (Metal).
-- **Microphone** and **audio-capture** permission. (Audio capture is what
-  lets the Core Audio tap capture system / Zoom audio — no BlackHole needed.)
+- **macOS 14.4 or later on Apple Silicon.** Metal does the transcription and
+  summarization work; 14.4 is where the Core Audio process tap lands, which is what
+  captures system / Zoom audio without BlackHole.
+- **Microphone** and **audio-capture** permission.
+- **8 GB RAM minimum, 16 GB recommended.** Everything runs on this machine, so memory is
+  the real constraint: at 16 GB or more Nixon uses a 4B summary model (~2.9 GB while it
+  writes a summary), and below that it picks a smaller one automatically. You never choose.
+- **~3 GB free disk** for the models it downloads on first use (speech recognition ~0.6 GB,
+  speaker identification ~0.1 GB, summarization 1.3–2.6 GB depending on your RAM), plus
+  **~250 MB per hour** of meetings you record. Recorded audio can be set to auto-delete
+  after a number of days in Settings → Recordings.
 
 ## Build & run (macOS / Metal)
 
