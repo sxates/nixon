@@ -285,10 +285,18 @@ async fn parakeet_vs_whisper_word_error_rate() {
         eprintln!("NOTE: no Whisper model loadable — skipping that column");
     }
 
-    println!("\n{:<34} {:>12} {:>12}", "sample", "parakeet", "whisper");
-    println!("{}", "-".repeat(60));
+    println!(
+        "\n{:<30} {:>9} {:>7} {:>9} {:>7}",
+        "sample", "parakeet", "xRT", "whisper", "xRT"
+    );
+    println!("{}", "-".repeat(66));
 
     let mut totals = [(0usize, 0usize); 2]; // (errors, ref words) for parakeet, whisper
+                                            // Wall-clock per engine, against audio seconds processed, for a real-time factor.
+                                            // For live transcription this matters at least as much as WER: an engine slower than
+                                            // real time cannot keep up with a meeting at all.
+    let mut spent = [0f64; 2];
+    let mut audio_secs_total = 0f64;
     for sample in &samples {
         let decoded = match decode_audio_file(&sample.media) {
             Ok(d) => d,
@@ -323,8 +331,11 @@ async fn parakeet_vs_whisper_word_error_rate() {
             .map(<[f32]>::to_vec)
             .collect();
 
+        audio_secs_total += audio.len() as f64 / SAMPLE_RATE as f64;
         let mut row = [f64::NAN; 2];
+        let mut elapsed = [0f64; 2];
         if parakeet_ok {
+            let started = std::time::Instant::now();
             let mut parts = Vec::new();
             for chunk in &chunks {
                 match parakeet.transcribe_audio(chunk.clone()).await {
@@ -332,6 +343,8 @@ async fn parakeet_vs_whisper_word_error_rate() {
                     Err(e) => eprintln!("    [parakeet] chunk FAILED: {e}"),
                 }
             }
+            elapsed[0] = started.elapsed().as_secs_f64();
+            spent[0] += elapsed[0];
             let text = parts.join(" ");
             let hyp = normalize(&text);
             show("parakeet", &text, hyp.len());
@@ -341,6 +354,7 @@ async fn parakeet_vs_whisper_word_error_rate() {
             totals[0].1 += refs;
         }
         if whisper_ok {
+            let started = std::time::Instant::now();
             let mut parts = Vec::new();
             for chunk in &chunks {
                 match whisper
@@ -351,6 +365,8 @@ async fn parakeet_vs_whisper_word_error_rate() {
                     Err(e) => eprintln!("    [whisper] chunk FAILED: {e}"),
                 }
             }
+            elapsed[1] = started.elapsed().as_secs_f64();
+            spent[1] += elapsed[1];
             let text = parts.join(" ");
             let hyp = normalize(&text);
             show("whisper", &text, hyp.len());
@@ -362,15 +378,25 @@ async fn parakeet_vs_whisper_word_error_rate() {
         if debug {
             eprintln!("    [reference] {} words", reference.len());
         }
+        let audio_secs = audio.len() as f64 / SAMPLE_RATE as f64;
+        let xrt = |secs: f64| {
+            if secs > 0.0 {
+                audio_secs / secs
+            } else {
+                f64::NAN
+            }
+        };
         println!(
-            "{:<34} {:>11.1}% {:>11.1}%",
+            "{:<30} {:>8.1}% {:>6.1}x {:>8.1}% {:>6.1}x",
             sample.name,
             row[0] * 100.0,
-            row[1] * 100.0
+            xrt(elapsed[0]),
+            row[1] * 100.0,
+            xrt(elapsed[1])
         );
     }
 
-    println!("{}", "-".repeat(60));
+    println!("{}", "-".repeat(66));
     let pooled = |t: (usize, usize)| {
         if t.1 == 0 {
             f64::NAN
@@ -378,11 +404,23 @@ async fn parakeet_vs_whisper_word_error_rate() {
             t.0 as f64 / t.1 as f64 * 100.0
         }
     };
+    let xrt_total = |secs: f64| {
+        if secs > 0.0 {
+            audio_secs_total / secs
+        } else {
+            f64::NAN
+        }
+    };
     println!(
-        "{:<34} {:>11.1}% {:>11.1}%",
+        "{:<30} {:>8.1}% {:>6.1}x {:>8.1}% {:>6.1}x",
         "POOLED",
         pooled(totals[0]),
-        pooled(totals[1])
+        xrt_total(spent[0]),
+        pooled(totals[1]),
+        xrt_total(spent[1])
+    );
+    println!(
+        "\nxRT = audio seconds per wall-clock second (higher is faster; <1 cannot keep up live)."
     );
     println!(
         "\nwhisper model: {}\nreference: Zoom's own VTT (ASR, not a human transcript) — these are\nagreement scores between two engines and a third opinion, not absolute accuracy.\n",
