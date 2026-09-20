@@ -1,19 +1,12 @@
-// Notification system module
-pub mod commands;
-pub mod manager;
-pub mod settings;
-pub mod system;
-pub mod types;
+// Notifications.
+//
+// Everything here is the specs/0068 path: a native `UNUserNotificationCenter` layer and the
+// commands that front it. The 0008-era module that used to live beside it — a manager, a
+// settings store, a DND model and fourteen registered commands — was deleted with that spec:
+// it delivered through `tauri-plugin-notification`, which on desktop has no action buttons
+// and reports permission as granted without asking macOS, and by the end the frontend called
+// two of its commands, both of which wrote settings that nothing read.
 
-// Re-export main types for easy access
-pub use manager::NotificationManager;
-pub use settings::{get_default_settings, ConsentManager, NotificationSettings};
-pub use system::SystemNotificationHandler;
-pub use types::{Notification, NotificationPriority, NotificationTimeout, NotificationType};
-
-// Export commands for Tauri
-pub use commands::{
-    get_notification_settings, get_system_dnd_status, is_dnd_active,
-    request_notification_permission, set_notification_settings, show_notification,
-    show_test_notification,
-};
+/// Native macOS notifications — the path that actually delivers.
+pub mod macos;
+pub mod os_commands;

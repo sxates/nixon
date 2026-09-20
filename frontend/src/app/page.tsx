@@ -25,7 +25,6 @@
 import { Suspense, useCallback, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
-import { invoke } from '@tauri-apps/api/core';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useRecordingState } from '@/contexts/RecordingStateContext';
@@ -40,6 +39,7 @@ import {
   dayLabel,
   type TimelineContext,
 } from '@/lib/today-timeline';
+import { prepRouteForEvent } from '@/lib/prep';
 import { useDayAgenda } from '@/hooks/useDayAgenda';
 import { TodayHeader } from '@/components/Today/TodayHeader';
 import { TodayToolbar } from '@/components/Today/TodayToolbar';
@@ -167,13 +167,14 @@ function HomeView() {
           return;
         case 'prep':
           try {
-            const meetingId = await invoke<string>('api_ensure_scheduled_meeting', {
-              calendarEventId: route.calendarEventId,
-              seriesKey: route.seriesKey,
-              title: route.title,
-              occurrenceStart: route.occurrenceStart,
-            });
-            router.push(`/meeting-details?id=${meetingId}&tab=prep`);
+            router.push(
+              await prepRouteForEvent({
+                id: route.calendarEventId,
+                title: route.title,
+                startsAt: route.occurrenceStart,
+                externalId: route.seriesKey,
+              }),
+            );
           } catch (err) {
             console.error('Failed to open prep:', err);
             toast.error('Could not open prep for this meeting', {

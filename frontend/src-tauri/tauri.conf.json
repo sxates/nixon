@@ -61,8 +61,6 @@
                         "core:window:allow-show",
                         "core:window:allow-unminimize",
                         "store:default",
-                        "notification:default",
-                        "notification:allow-is-permission-granted",
                         "global-shortcut:default",
                         {
                             "identifier": "fs:scope",

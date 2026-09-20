@@ -39,7 +39,7 @@ import { useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { safeListen } from '@/lib/safe-listen';
-import { notify, focusMainWindow } from '@/lib/osNotification';
+import { notify, focusMainWindow, CATEGORY_RECORD } from '@/lib/osNotification';
 import { requestFullRecordingStop } from '@/lib/recording-stop';
 import { peekPendingJoinMeeting } from '@/lib/calendar';
 import { useRecordingState } from '@/contexts/RecordingStateContext';
@@ -159,32 +159,31 @@ export default function ZoomAutoDetect() {
       // affordance — show it directly and skip the OS notification (keeps it to
       // one prompt). Otherwise, fire the native notification so a backgrounded
       // user still sees it.
-      // ALWAYS show the persistent in-app Record/Ignore toast — this is the reliable
-      // actionable prompt. We intentionally do NOT depend on macOS notification action
-      // buttons: they only render in "Alerts" notification style (new apps default to
-      // "Banners"), and the body-click action routing is flaky. So the toast is the
-      // source of truth for the choice, and it's always present in the app.
+      // ALWAYS show the persistent in-app Record/Ignore toast: it is the prompt that is
+      // there whenever Nixon is on screen, and the one that survives a refused
+      // notification permission.
       showToast();
 
-      // If Nixon is backgrounded, ALSO fire an OS notification so the user is alerted
-      // when they aren't looking at the app. Clicking it brings Nixon to the front,
-      // where the Record/Ignore toast is waiting. The Record/Ignore action buttons are
-      // still attached for users whose macOS notification style is set to "Alerts".
+      // If Nixon is backgrounded, ALSO fire an OS notification, whose Record button now
+      // starts the recording from the banner (specs/0068 — before that the button could
+      // not fire at all, which is what the note here used to describe as flaky routing).
       const windowFocused = typeof document !== 'undefined' && document.hasFocus();
       console.log('[ZoomAutoDetect] handling detection; windowFocused =', windowFocused);
       if (!windowFocused) {
         void notify({
           title: 'Zoom meeting detected',
-          body: 'Record this meeting? Open Nixon to choose.',
-          onRecord: startRecording,
-          onIgnore: () => {
-            console.log('[ZoomAutoDetect] User ignored detected meeting (OS notification)');
+          body: 'Record this meeting?',
+          category: CATEGORY_RECORD,
+          onRecord: () => {
+            // Dismiss the in-app toast: the choice has been made from the banner, and
+            // leaving it up would ask the same question again.
             toast.dismiss(DETECTED_TOAST_ID);
+            startRecording();
           },
-          onClick: () => {
-            // Body click reliably activates the app — bring it forward so the
-            // persistent Record/Ignore toast is visible and the user can choose.
-            console.log('[ZoomAutoDetect] OS notification clicked; focusing (toast awaits)');
+          onOpen: () => {
+            // Tapped the banner itself rather than the button — bring Nixon forward,
+            // where the Record/Ignore toast is waiting.
+            console.log('[ZoomAutoDetect] OS notification tapped; focusing (toast awaits)');
             void focusMainWindow();
           },
         });

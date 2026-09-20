@@ -6,6 +6,19 @@ import { DeveloperSettings } from '../DeveloperSettings';
 
 vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn() }));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+// The notification probe (specs/0068) runs the real Join & Record path, so this component
+// now reads the recording state and the sidebar's start handler.
+vi.mock('@/contexts/RecordingStateContext', () => ({
+  useRecordingState: () => ({ isRecording: false }),
+}));
+vi.mock('@/components/Sidebar/SidebarProvider', () => ({
+  useSidebar: () => ({ handleRecordingToggle: vi.fn() }),
+}));
+vi.mock('@/lib/calendar', () => ({ joinAndRecord: vi.fn() }));
+vi.mock('@/lib/osNotification', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/osNotification')>('@/lib/osNotification');
+  return { ...actual, notify: vi.fn().mockResolvedValue(true) };
+});
 const invokeMock = vi.mocked(invoke);
 const toastSuccessMock = vi.mocked(toast.success);
 

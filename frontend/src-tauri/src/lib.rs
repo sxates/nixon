@@ -65,10 +65,8 @@ pub mod whisper_engine;
 pub mod zoom;
 
 use log::info as log_info;
-use notifications::commands::NotificationManagerState;
 use std::sync::Arc;
 use tauri::Manager;
-use tokio::sync::RwLock;
 
 pub fn run() {
     log::set_max_level(log::LevelFilter::Info);
@@ -149,14 +147,10 @@ pub fn run() {
                 ])
                 .build(),
         )
-        .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_dialog::init())
         // specs/0058 — updater state (status machine; the payload is staged on disk).
         .manage(updater::UpdaterState::default())
-        .manage(Arc::new(RwLock::new(
-            None::<notifications::manager::NotificationManager<tauri::Wry>>,
-        )) as NotificationManagerState<tauri::Wry>)
         .manage(audio::init_system_audio_state())
         .manage(summary::summary_engine::ModelManagerState(Arc::new(tokio::sync::Mutex::new(None))))
         // Background LLM activity registry (specs/0052) — the sidebar indicator reads it.
@@ -236,31 +230,13 @@ pub fn run() {
                 }
             }
 
-            // Initialize notification system with proper defaults
-            log::info!("Initializing notification system...");
-            let app_for_notif = _app.handle().clone();
-            tauri::async_runtime::spawn(async move {
-                let notif_state = app_for_notif.state::<NotificationManagerState<tauri::Wry>>();
-                match notifications::commands::initialize_notification_manager(app_for_notif.clone()).await {
-                    Ok(manager) => {
-                        // Set default consent and permissions on first launch
-                        if let Err(e) = manager.set_consent(true).await {
-                            log::error!("Failed to set initial consent: {}", e);
-                        }
-                        if let Err(e) = manager.request_permission().await {
-                            log::error!("Failed to request initial permission: {}", e);
-                        }
-
-                        // Store the initialized manager
-                        let mut state_lock = notif_state.write().await;
-                        *state_lock = Some(manager);
-                        log::info!("Notification system initialized with default permissions");
-                    }
-                    Err(e) => {
-                        log::error!("Failed to initialize notification manager: {}", e);
-                    }
-                }
-            });
+            // Install the UNUserNotificationCenter delegate + categories (specs/0068).
+            // Must happen before the first banner: the delegate is how a press gets back
+            // into Nixon, and the categories are what give the banner its buttons. No-ops
+            // on an unbundled dev binary, where the framework would abort the process.
+            if let Err(e) = notifications::macos::install(_app.handle()) {
+                log::warn!("Could not install the notification delegate: {}", e);
+            }
 
             // Start the Zoom meeting auto-detection monitor (specs/0008 P1).
             // Background task: polls for Zoom's `CptHost` meeting-helper process

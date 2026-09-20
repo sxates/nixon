@@ -7,6 +7,7 @@
  *   - events:   prep-brief-progress, prep-brief-complete, prep-brief-error, prep-briefs-updated
  */
 
+import { invoke } from '@tauri-apps/api/core';
 import type { ActionItem } from '@/types';
 import type { SourceMeeting } from '@/lib/ask-ai';
 
@@ -91,4 +92,33 @@ export function splitOpenItems(items: ActionItem[]): { mine: ActionItem[]; other
     (it.assigneeIsSelf ? mine : others).push(it);
   }
   return { mine, others };
+}
+
+/** The fields `api_ensure_scheduled_meeting` needs, as an upcoming calendar event carries them. */
+export interface ScheduledMeetingSeed {
+  /** The calendar occurrence's id. */
+  id: string;
+  title: string;
+  /** ISO-8601 occurrence start. */
+  startsAt: string;
+  /** The event's `external_id` — series-level, so a recording groups into its series. */
+  externalId?: string | null;
+}
+
+/**
+ * Mint (or return) the `scheduled` meeting row for a calendar occurrence and give back the
+ * route to its Prep tab.
+ *
+ * The Today view has done this inline since specs/0036; it moved here when the five-minute
+ * meeting alert grew a **Prep** button (specs/0068) and needed the same two steps from a
+ * background component with no router of its own.
+ */
+export async function prepRouteForEvent(event: ScheduledMeetingSeed): Promise<string> {
+  const meetingId = await invoke<string>('api_ensure_scheduled_meeting', {
+    calendarEventId: event.id,
+    seriesKey: event.externalId ?? null,
+    title: event.title,
+    occurrenceStart: event.startsAt,
+  });
+  return `/meeting-details?id=${meetingId}&tab=prep`;
 }
