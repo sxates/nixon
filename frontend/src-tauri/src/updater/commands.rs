@@ -63,3 +63,12 @@ pub async fn api_set_updater_settings(app: AppHandle, auto_update: bool) -> Resu
     }
     Ok(())
 }
+
+/// specs/0069 W6 — the first launch after an install asks for the note the old version left.
+/// Take-once: the file is consumed here, so a second window or a reload shows nothing.
+#[tauri::command]
+pub async fn api_take_update_receipt(
+    app: AppHandle,
+) -> Result<Option<super::receipt::UpdateReceipt>, String> {
+    Ok(super::receipt::take(&app.package_info().version.to_string()))
+}

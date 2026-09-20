@@ -275,6 +275,27 @@ async fn install_staged<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
         .await
         .map_err(|e| format!("Update install task failed: {e}"))?
         .map_err(|e| e.to_string())?;
+    // specs/0069 W6 — leave the incoming version a note saying what it is. Best-effort:
+    // a failed write costs the "what's new" dialog, never the install the user just asked
+    // for. Scoped so the lock is released before the process is replaced.
+    {
+        let notes = app
+            .state::<UpdaterState>()
+            .core
+            .lock()
+            .unwrap()
+            .staged_notes()
+            .unwrap_or_default()
+            .to_string();
+        let receipt = super::receipt::UpdateReceipt {
+            version: version.clone(),
+            notes,
+            installed_at: chrono::Utc::now(),
+        };
+        if let Err(e) = super::receipt::write(&receipt) {
+            log::warn!("updater: could not record the update receipt (continuing): {e}");
+        }
+    }
     log::info!("updater: installed {version}; restarting");
     app.restart();
 }

@@ -206,6 +206,11 @@ impl UpdaterCore {
         self.staged.as_ref().map(|s| s.digest)
     }
 
+    /// The staged payload's release notes, if any (the receipt the install leaves behind).
+    pub fn staged_notes(&self) -> Option<&str> {
+        self.staged.as_ref().map(|s| s.notes.as_str())
+    }
+
     pub fn last_checked_at(&self) -> Option<DateTime<Utc>> {
         self.last_checked()
     }

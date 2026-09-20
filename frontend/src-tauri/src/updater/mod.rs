@@ -7,6 +7,7 @@
 
 pub mod commands;
 pub mod driver;
+pub mod receipt;
 pub mod settings;
 pub mod state;
 pub mod verify;
@@ -18,6 +19,7 @@ use std::time::Duration;
 
 use tauri::{AppHandle, Emitter, Manager, Runtime};
 
+pub use receipt::UpdateReceipt;
 pub use state::{InstallRefusal, UpdateStatus, UpdaterCore};
 
 pub const EVENT_NAME: &str = "update-status";

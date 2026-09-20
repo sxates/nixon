@@ -285,6 +285,7 @@ pub fn invoke_handler() -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Sen
         updater::commands::api_install_update,
         updater::commands::api_get_updater_settings,
         updater::commands::api_set_updater_settings,
+        updater::commands::api_take_update_receipt,
         // macOS calendar (EventKit) commands (specs/0008 P2)
         calendar::commands::api_get_calendar_access_status,
         calendar::commands::api_request_calendar_access,
