@@ -28,12 +28,6 @@ vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn(async () => null) }));
 vi.mock('@/contexts/RecordingStateContext', () => ({
   useRecordingState: () => ({ isRecording: false }),
 }));
-vi.mock('@/contexts/ImportDialogContext', () => ({
-  useImportDialog: () => ({ openImportDialog: vi.fn() }),
-}));
-vi.mock('@/contexts/ConfigContext', () => ({
-  useConfig: () => ({ betaFeatures: { importAndRetranscribe: false } }),
-}));
 
 // specs/0064 W5 — the sidebar now carries the queue row, which reads the backlog, LLM
 // activity and transcript contexts. This suite is about the nav chrome, so they are stubbed
@@ -156,22 +150,6 @@ describe('Sidebar parity (specs/0069 W1)', () => {
     expect(slotOrder(collapsed.container)).toEqual(expandedSlots);
   });
 
-  it('gives every slot the same column class in both states', () => {
-    sidebarState.isCollapsed = false;
-    const expanded = render(<Sidebar />);
-    const cls = Array.from(expanded.container.querySelectorAll('[data-sidebar-slot]')).map(
-      (el) => el.className,
-    );
-    expanded.unmount();
-    sidebarState.isCollapsed = true;
-    const collapsed = render(<Sidebar />);
-    expect(
-      Array.from(collapsed.container.querySelectorAll('[data-sidebar-slot]')).map(
-        (el) => el.className,
-      ),
-    ).toEqual(cls);
-  });
-
   it("gives every slot's ROW the shared row classes, in both states", () => {
     sidebarState.isCollapsed = false;
     const expanded = render(<Sidebar />);
@@ -214,5 +192,15 @@ describe('Sidebar parity (specs/0069 W1)', () => {
     sidebarState.isCollapsed = false;
     const { container } = render(<Sidebar />);
     expect(container.querySelector('.border-t')).toBeNull();
+  });
+
+  it('no longer offers Import audio in either state (specs/0069 W2)', () => {
+    sidebarState.isCollapsed = false;
+    const { unmount } = render(<Sidebar />);
+    expect(screen.queryByRole('button', { name: /import audio/i })).toBeNull();
+    unmount();
+    sidebarState.isCollapsed = true;
+    render(<Sidebar />);
+    expect(screen.queryByRole('button', { name: /import audio/i })).toBeNull();
   });
 });

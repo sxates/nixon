@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import { invoke } from '@tauri-apps/api/core';
-import { Mic, Loader2, MoreHorizontal, Trash2, CalendarDays, List } from 'lucide-react';
+import { Mic, Loader2, MoreHorizontal, Trash2, CalendarDays, List, FileAudio } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -15,6 +15,7 @@ import {
 import { DeleteMeetingDialog } from '@/components/MeetingDetails/DeleteMeetingDialog';
 import { useSidebar } from '@/components/Sidebar/SidebarProvider';
 import { useRecordingState } from '@/contexts/RecordingStateContext';
+import { useImportDialog } from '@/contexts/ImportDialogContext';
 import { AvatarStack } from '@/components/AvatarStack';
 import { attendeeSummaryLabel } from '@/lib/attendees';
 import type { AgendaAttendee } from '@/lib/day-agenda';
@@ -226,6 +227,7 @@ export default function AllMeetingsPage() {
   const router = useRouter();
   const { refetchMeetings, activeRecordingMeetingId } = useSidebar();
   const { isRecording } = useRecordingState();
+  const { openImportDialog } = useImportDialog();
   const [meetings, setMeetings] = useState<DashboardMeeting[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -355,6 +357,17 @@ export default function AllMeetingsPage() {
         }
         actions={
           <>
+            {/* specs/0069 W2 — import lives here, not in the nav: this is the page an
+                imported recording lands on. Muted, not brand — it is a secondary action,
+                and its old amber made it the loudest thing in the sidebar. */}
+            <button
+              type="button"
+              onClick={() => openImportDialog()}
+              className="flex items-center gap-[7px] rounded-[3px] border border-border bg-card px-[11px] py-[7px] text-[13px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <FileAudio className="h-[13px] w-[13px]" aria-hidden="true" />
+              <span>Import audio</span>
+            </button>
             {/* Search lives here rather than in the sidebar (specs/0054 W3 follow-up):
                 this is the page people are on when they cannot find a meeting. */}
             <SearchMeetingsButton />

@@ -16,6 +16,10 @@ vi.mock('@/contexts/RecordingStateContext', () => ({
 vi.mock('@/components/MeetingDetails/DeleteMeetingDialog', () => ({
   DeleteMeetingDialog: () => null,
 }));
+const openImportDialog = vi.fn();
+vi.mock('@/contexts/ImportDialogContext', () => ({
+  useImportDialog: () => ({ openImportDialog }),
+}));
 // framer-motion `motion.div` → passthrough so jsdom renders children immediately.
 // Each tag (motion.div, motion.span, …) must resolve to the SAME component
 // reference across renders — a Proxy `get` trap that mints a fresh function on
@@ -214,5 +218,14 @@ describe('All Meetings row decorative counter (fix round 1, Important 2)', () =>
     expect(row.textContent).not.toMatch(/Elapsed time/);
     // The visible digit-well counter must not itself be an accessible timer landmark.
     expect(within(row).queryByRole('timer')).not.toBeInTheDocument();
+  });
+});
+
+describe('All Meetings import button (specs/0069 W2)', () => {
+  it('opens the import dialog from the header (specs/0069 W2)', () => {
+    invokeMock.mockResolvedValue([]);
+    render(<AllMeetingsPage />);
+    fireEvent.click(screen.getByRole('button', { name: /import audio/i }));
+    expect(openImportDialog).toHaveBeenCalledTimes(1);
   });
 });
