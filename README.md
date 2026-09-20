@@ -48,22 +48,43 @@ Deck (dark) variants live in [`docs/screenshots/real`](docs/screenshots/real). E
 
 ## Requirements
 
-- **macOS 14.4 or later on Apple Silicon.** Metal does the transcription and
-  summarization work; 14.4 is where the Core Audio process tap lands, which is what
-  captures system / Zoom audio without BlackHole.
-- **Microphone** and **audio-capture** permission.
-- **8 GB RAM minimum, 16 GB recommended.** Everything runs on this machine, so memory is
-  the real constraint. At 16 GB or more Nixon summarizes with a 4B model (~3.9 GB while it
-  works); below that it picks a 2B model (~1.8 GB) automatically. You never choose. On 8 GB
-  the thing to watch is not Nixon alone but Nixon *plus* your video-call app.
-- **Speed is not the constraint on older hardware.** Summarizing an hour-long meeting takes
-  seconds on an M-series Max or Ultra and around a minute on a base M1 — the on-device model
-  reads the transcript far faster than the meeting took. Transcription keeps up with live
-  audio on every Apple Silicon generation.
-- **~3 GB free disk** for the models it downloads on first use (speech recognition ~0.6 GB,
-  speaker identification ~0.1 GB, summarization 1.3–2.6 GB depending on your RAM), plus
-  **~250 MB per hour** of meetings you record. Recorded audio can be set to auto-delete
-  after a number of days in Settings → Recordings.
+**Any Apple Silicon Mac running macOS 14.4 or later.** That includes the original M1 — the
+work is sized to the machine rather than gated on a recent one. (14.4 is where the Core
+Audio process tap arrives, which is what lets Nixon capture system and Zoom audio without
+BlackHole. Intel Macs are not supported.)
+
+You will also need to grant **microphone** and **audio-capture** permission, once.
+
+### What your hardware changes
+
+Everything — transcription, speaker identification, summarization — runs on your Mac, so
+your hardware decides two things: which summary model Nixon picks, and how long you wait.
+
+| Your Mac | Summary model | Hour-long meeting summarized in |
+|---|---|---|
+| 8 GB RAM | Qwen 3.5 2B (~1.8 GB in use) | about a minute on an M1, less on newer chips |
+| 16 GB RAM or more | Qwen 3.5 4B (~3.9 GB in use) | seconds to half a minute |
+
+**RAM is what unlocks the better model.** Nixon checks how much you have on first run and
+picks for you — you never have to choose, though Settings → Summary will let you if you
+want to. 16 GB is the line, and crossing it buys summary quality rather than speed.
+
+**A faster chip buys time, not capability.** Every Apple Silicon generation transcribes
+faster than the meeting happens, so live transcripts keep up regardless; a quicker GPU
+mostly means the summary lands sooner after you stop recording.
+
+**On an 8 GB Mac, watch what else is open.** Nixon's own footprint is modest, but it shares
+memory with your video-call app — which is by definition running during a meeting.
+
+*(Memory figures are measured; the times are estimates scaled from a measured baseline, so
+treat them as the right order of magnitude rather than a benchmark.)*
+
+### Disk
+
+About **3 GB** for the models Nixon downloads the first time it needs them — speech
+recognition ~0.6 GB, speaker identification ~0.1 GB, summarization 1.2–2.6 GB depending on
+your RAM — plus roughly **250 MB per hour** of meetings you record. Recorded audio can be
+set to auto-delete after a number of days in Settings → Recordings.
 
 ## Build & run (macOS / Metal)
 
