@@ -53,8 +53,13 @@ Deck (dark) variants live in [`docs/screenshots/real`](docs/screenshots/real). E
   captures system / Zoom audio without BlackHole.
 - **Microphone** and **audio-capture** permission.
 - **8 GB RAM minimum, 16 GB recommended.** Everything runs on this machine, so memory is
-  the real constraint: at 16 GB or more Nixon uses a 4B summary model (~2.9 GB while it
-  writes a summary), and below that it picks a smaller one automatically. You never choose.
+  the real constraint. At 16 GB or more Nixon summarizes with a 4B model (~3.9 GB while it
+  works); below that it picks a 2B model (~1.8 GB) automatically. You never choose. On 8 GB
+  the thing to watch is not Nixon alone but Nixon *plus* your video-call app.
+- **Speed is not the constraint on older hardware.** Summarizing an hour-long meeting takes
+  seconds on an M-series Max or Ultra and around a minute on a base M1 — the on-device model
+  reads the transcript far faster than the meeting took. Transcription keeps up with live
+  audio on every Apple Silicon generation.
 - **~3 GB free disk** for the models it downloads on first use (speech recognition ~0.6 GB,
   speaker identification ~0.1 GB, summarization 1.3–2.6 GB depending on your RAM), plus
   **~250 MB per hour** of meetings you record. Recorded audio can be set to auto-delete
