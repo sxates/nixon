@@ -201,14 +201,14 @@ describe('RecordingSettings — settings hygiene (specs/0061 W6)', () => {
     expect(screen.queryByText('File format')).not.toBeInTheDocument();
   });
 
-  it('has no second auto-summary switch, and points to Summary instead', async () => {
+  // specs/0061 W6 removed a duplicate auto-summary switch from this tab and left a note
+  // pointing at Summary. specs/0067 removed the note too: a settings tab does not need to
+  // narrate what the other tabs contain. The guarantee that matters is unchanged — only
+  // one control for that setting exists app-wide, and it is not here.
+  it('has no second auto-summary switch, and no signpost to one', async () => {
     await renderSettings();
-    // Only one control with this aria-label may exist app-wide; RecordingSettings no
-    // longer renders one of its own.
     expect(screen.queryByLabelText('Summarize automatically when a meeting ends')).not.toBeInTheDocument();
-    expect(
-      screen.getByText('Automatic summaries are configured under Summary.'),
-    ).toBeInTheDocument();
+    expect(screen.queryByText(/configured under Summary/i)).not.toBeInTheDocument();
   });
 
   // specs/0066 W1 — the expected-speaker override is gone. The audio-derived seed

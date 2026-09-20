@@ -11,6 +11,7 @@ import { useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { toast } from 'sonner';
 import { Switch } from '@/components/ui/switch';
+import { SettingsRow } from '@/components/ui/settings';
 
 export default function ZoomMuteGateToggle() {
   const [enabled, setEnabled] = useState(false);
@@ -55,18 +56,20 @@ export default function ZoomMuteGateToggle() {
     }
   };
 
+  // specs/0067: a plain row, not a card of its own. It is one of the things Nixon does
+  // while recording, so it belongs in that group with the others rather than sitting
+  // underneath it in different clothes.
   return (
-    <div className="rounded-[3px] border border-border bg-card px-4">
-      <div className="flex items-center justify-between gap-4 py-3">
-        <div className="flex-1 pr-4">
-          <div className="text-sm font-medium text-foreground">Pause mic when muted in Zoom</div>
-          <div className="text-sm text-muted-foreground">
-            While recording, stop transcribing your microphone whenever you&rsquo;re muted in
-            Zoom. Needs macOS Accessibility permission (you&rsquo;ll be prompted).
-          </div>
-        </div>
-        <Switch checked={enabled} onCheckedChange={onToggle} />
-      </div>
-    </div>
+    <SettingsRow
+      label="Pause mic when muted in Zoom"
+      description="While recording, stop transcribing your microphone whenever you&rsquo;re muted in Zoom. Needs macOS Accessibility permission (you&rsquo;ll be prompted)."
+      control={
+        <Switch
+          checked={enabled}
+          onCheckedChange={onToggle}
+          aria-label="Pause mic when muted in Zoom"
+        />
+      }
+    />
   );
 }

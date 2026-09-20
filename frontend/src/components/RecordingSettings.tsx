@@ -9,6 +9,13 @@ import {
   retentionChoiceFromSelectValue,
   retentionChoiceToSelectValue,
 } from '@/lib/audio-retention';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { toast } from 'sonner';
 import { patchRecordingPreferences } from '@/lib/recording-preferences';
 import { useSidebar } from '@/components/Sidebar/SidebarProvider';
@@ -326,18 +333,10 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
               />
             }
           />
+          {/* Zoom mute gate (specs/0049) — opt-in, needs Accessibility permission. One of
+              the things Nixon does while recording, so it sits with them (specs/0067). */}
+          <ZoomMuteGateToggle />
         </SettingsGroup>
-
-        {/* specs/0061 W6 — this used to be a SECOND "Summarize automatically" switch here,
-            duplicating the one under Summary (same ConfigContext state, two surfaces to
-            keep in sync). One control, one place; this just points to it. */}
-        <SettingsNote tone="muted">
-          Automatic summaries are configured under Summary.
-        </SettingsNote>
-
-        {/* Zoom mute gate (specs/0049) — opt-in, needs Accessibility permission.
-            Renders its own ruled-row card in the same vocabulary. */}
-        <ZoomMuteGateToggle />
       </SettingsSection>
 
 
@@ -363,26 +362,31 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
               </>
             }
             control={
-              <select
-                id="audio-retention"
+              /* The app's Select, not a bare <select> — this was the one control still
+                 wearing the browser's chrome (specs/0067). */
+              <Select
                 value={retentionChoiceToSelectValue(retentionChoice)}
-                onChange={(e) => void handleRetentionChange(e.target.value)}
+                onValueChange={(value) => void handleRetentionChange(value)}
                 disabled={loading}
-                className="rounded-md border border-input bg-background px-2 py-1 text-sm"
               >
-                <option value="immediately">Immediately</option>
-                <option value="7">After 7 days</option>
-                <option value="30">After 30 days</option>
-                <option value="90">After 90 days</option>
-                {/* A custom value stored outside the presets still renders truthfully. */}
-                {typeof retentionChoice === 'number' &&
-                  ![7, 30, 90].includes(retentionChoice) && (
-                    <option value={String(retentionChoice)}>
-                      After {retentionChoice} days
-                    </option>
-                  )}
-                <option value="never">Never</option>
-              </select>
+                <SelectTrigger id="audio-retention" className="w-48">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="immediately">Immediately</SelectItem>
+                  <SelectItem value="7">After 7 days</SelectItem>
+                  <SelectItem value="30">After 30 days</SelectItem>
+                  <SelectItem value="90">After 90 days</SelectItem>
+                  {/* A custom value stored outside the presets still renders truthfully. */}
+                  {typeof retentionChoice === 'number' &&
+                    ![7, 30, 90].includes(retentionChoice) && (
+                      <SelectItem value={String(retentionChoice)}>
+                        After {retentionChoice} days
+                      </SelectItem>
+                    )}
+                  <SelectItem value="never">Never</SelectItem>
+                </SelectContent>
+              </Select>
             }
           />
 
