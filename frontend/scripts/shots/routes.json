@@ -252,19 +252,6 @@
     ]
   },
   {
-    "name": "settings-beta",
-    "route": "/settings?tab=beta",
-    "ignore": [
-      {
-        "x": 470,
-        "y": 816,
-        "w": 130,
-        "h": 24,
-        "why": "footer TapeCounter 00:00:00 roller digits (specs/0060 Task 3 determinism check)"
-      }
-    ]
-  },
-  {
     "name": "onboarding-1",
     "route": "/",
     "onboardingStep": 1

@@ -84,7 +84,6 @@ const Sidebar: React.FC = () => {
   const { isCollapsed, toggleCollapse } = useSidebar();
 
   const { openImportDialog } = useImportDialog();
-  const { betaFeatures } = useConfig();
 
   // Expose openSettings to window for the Rust tray to call (preserved from the
   // previous sidebar — the tray invokes this to surface settings).
@@ -98,7 +97,6 @@ const Sidebar: React.FC = () => {
     };
   }, [router]);
 
-  const importEnabled = betaFeatures.importAndRetranscribe;
 
   // ----- Collapsed: the icon rail ------------------------------------------
   if (isCollapsed) {
@@ -214,19 +212,17 @@ const Sidebar: React.FC = () => {
             })}
           </div>
 
-          {/* Import audio (beta) — secondary action, gated by the beta flag */}
-          {importEnabled && (
-            <button
-              onClick={() => openImportDialog()}
-              className={cn(SIDEBAR_ROW, 'relative mt-2 h-8 w-full text-brand transition-colors hover:bg-key focus:outline-none focus-visible:ring-2 focus-visible:ring-ring')}
-            >
-              <span className={SIDEBAR_ICON_SLOT}>
-                <DeckIcon icon={FileAudio} />
-              </span>
-              <span className="u-section-label text-brand">Import audio</span>
-              <span className="u-section-label ml-auto text-[9px] text-muted-foreground">Beta</span>
-            </button>
-          )}
+          {/* Import audio — an ordinary secondary action since specs/0066 W3 (it spent
+              the fork's whole life behind a beta flag it no longer needs). */}
+          <button
+            onClick={() => openImportDialog()}
+            className={cn(SIDEBAR_ROW, 'relative mt-2 h-8 w-full text-brand transition-colors hover:bg-key focus:outline-none focus-visible:ring-2 focus-visible:ring-ring')}
+          >
+            <span className={SIDEBAR_ICON_SLOT}>
+              <DeckIcon icon={FileAudio} />
+            </span>
+            <span className="u-section-label text-brand">Import audio</span>
+          </button>
         </nav>
 
         {/* Footer — settings, updates, queue (the avatar puck is gone, specs/0057 Plan 3).

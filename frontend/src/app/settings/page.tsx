@@ -13,7 +13,7 @@ import { CalendarSettings } from '@/components/CalendarSettings';
 import { OwnerEmailSettings } from '@/components/OwnerEmailSettings';
 import { SummaryModelSettings } from '@/components/SummaryModelSettings';
 import { TemplateSettings } from '@/components/TemplateSettings';
-import { BetaSettings } from '@/components/BetaSettings';
+import { DeveloperSettings } from '@/components/DeveloperSettings';
 import { About } from '@/components/About';
 import { useConfig } from '@/contexts/ConfigContext';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
@@ -26,9 +26,17 @@ const TABS = [
   { value: 'Transcriptionmodels', label: 'Transcription' },
   { value: 'summaryModels', label: 'Summary' },
   { value: 'templates', label: 'Templates' },
-  { value: 'beta', label: 'Beta' },
   { value: 'about', label: 'About' }
 ] as const;
+
+/**
+ * The Developer tab (specs/0059) only exists in debug builds, and only became a tab of its
+ * own in specs/0066 W3: it used to ride along under "Beta", which had exactly one feature —
+ * Import Audio & Retranscribe. With import graduated there are no beta features left, so a
+ * "Beta" tab in a release build would be an empty room. `dev_get_flags` is a debug-only
+ * command, so its presence is the build check.
+ */
+const DEV_TAB = { value: 'developer', label: 'Developer' } as const;
 
 function SettingsPageContent() {
   const { transcriptModelConfig, setTranscriptModelConfig } = useConfig();
@@ -37,7 +45,18 @@ function SettingsPageContent() {
   // an unrecognized (or absent) value falls back to the existing 'general' default.
   const searchParams = useSearchParams();
   const requestedTab = searchParams.get('tab');
-  const initialTab = TABS.some((t) => t.value === requestedTab) ? (requestedTab as string) : 'general';
+  const initialTab =
+    TABS.some((t) => t.value === requestedTab) || requestedTab === DEV_TAB.value
+      ? (requestedTab as string)
+      : 'general';
+
+  // Probed once: a release build's `dev_get_flags` does not exist, so the tab never shows.
+  const [devToolsAvailable, setDevToolsAvailable] = useState(false);
+  useEffect(() => {
+    invoke('dev_get_flags')
+      .then(() => setDevToolsAvailable(true))
+      .catch(() => setDevToolsAvailable(false));
+  }, []);
 
   const [activeTab, setActiveTab] = useState(initialTab);
 
@@ -79,7 +98,7 @@ function SettingsPageContent() {
             border-bottom, the same formula as the meeting-details tab bar. The old
             measured framer-motion bar could land in the wrong place on first paint. */}
         <TabsList className="mt-3 h-auto rounded-none border-b border-border bg-transparent p-0">
-          {TABS.map((tab) => (
+          {[...TABS, ...(devToolsAvailable ? [DEV_TAB] : [])].map((tab) => (
             <TabsTrigger
               key={tab.value}
               value={tab.value}
@@ -126,8 +145,8 @@ function SettingsPageContent() {
           <TabsContent value="templates" className="space-y-8">
             <TemplateSettings />
           </TabsContent>
-          <TabsContent value="beta" className="space-y-8">
-            <BetaSettings />
+          <TabsContent value="developer" className="space-y-8">
+            <DeveloperSettings />
           </TabsContent>
           {/* About (spec 0038 WS7.c) — version, credits, and links. Reuses the
               same <About /> body that was previously a standalone modal. */}

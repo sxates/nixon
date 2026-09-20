@@ -20,8 +20,6 @@ vi.mock('@/contexts/ConfigContext', () => ({
     updateNotificationSettings: vi.fn(),
     isAutoSummary: false,
     toggleIsAutoSummary: vi.fn(),
-    betaFeatures: { importAndRetranscribe: true },
-    toggleBetaFeature: vi.fn(),
   }),
 }));
 vi.mock('@/contexts/ThemeContext', () => ({
@@ -35,10 +33,22 @@ import SettingsPage from '@/app/settings/page';
 
 describe('settings ?tab= (specs/0060)', () => {
   it('opens the requested tab', async () => {
-    searchParamsMock.mockReturnValue(new URLSearchParams('tab=beta'));
+    searchParamsMock.mockReturnValue(new URLSearchParams('tab=templates'));
     render(<SettingsPage />);
-    const tab = await screen.findByRole('tab', { name: /beta/i });
+    const tab = await screen.findByRole('tab', { name: /templates/i });
     expect(tab).toHaveAttribute('data-state', 'active');
+  });
+
+  // specs/0066 W3 — Import Audio was the only beta feature, so the Beta tab went with it.
+  // The debug-only Developer section it used to host is its own tab now, and `dev_get_flags`
+  // (a debug-only command) decides whether that tab exists at all. The mock above resolves
+  // every invoke, so this stands in for a debug build; a release build's rejection leaves
+  // the tab out entirely.
+  it('shows a Developer tab only where the debug command answers', async () => {
+    searchParamsMock.mockReturnValue(new URLSearchParams('tab=general'));
+    render(<SettingsPage />);
+    expect(await screen.findByRole('tab', { name: /developer/i })).toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: /^beta$/i })).not.toBeInTheDocument();
   });
 
   it('falls back to the default tab for an unknown ?tab= value', async () => {

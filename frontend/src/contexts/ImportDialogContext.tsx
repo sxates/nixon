@@ -22,19 +22,10 @@ interface ImportDialogProviderProps {
 }
 
 export function ImportDialogProvider({ children, onOpen }: ImportDialogProviderProps) {
-  const { betaFeatures } = useConfig();
-
+  // specs/0066 W3: import is an ordinary feature, so there is no flag left to check here.
   const openImportDialog = useCallback((filePath?: string | null) => {
-    // Gate: Check beta feature flag before opening dialog
-    if (!betaFeatures.importAndRetranscribe) {
-      toast.error('Beta feature disabled', {
-        description: 'Enable "Import Audio & Retranscribe" in Settings > Beta to use this feature.'
-      });
-      return;
-    }
-
     onOpen(filePath);
-  }, [onOpen, betaFeatures]);
+  }, [onOpen]);
 
   return (
     <ImportDialogContext.Provider value={{ openImportDialog }}>
