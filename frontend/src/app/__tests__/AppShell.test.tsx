@@ -44,6 +44,7 @@ vi.mock('@/components/NotificationPermissionBootstrap', () => ({ default: vi.fn(
 vi.mock('@/components/Calendar/CalendarAlerts', () => ({ default: vi.fn(() => null) }));
 vi.mock('@/components/People/VoiceprintRetractionListener', () => ({ default: vi.fn(() => null) }));
 vi.mock('@/components/PermissionsModal', () => ({ default: vi.fn(() => null) }));
+vi.mock('@/components/Updates/UpdatedNotice', () => ({ UpdatedNotice: vi.fn(() => null) }));
 vi.mock('@/contexts/LlmActivityProvider', () => ({
   LlmActivityProvider: ({ children }: { children: React.ReactNode }) => children,
 }));
