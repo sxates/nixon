@@ -98,6 +98,18 @@ _Not shown in release notes or the in-app updater (see `release.sh`)._
   "or init" half, so import failed where live transcription self-healed (specs/0066).
 - The screenshot mock now rejects debug-only commands (`dev_get_flags` and friends) instead
   of resolving everything, so shots show the release build's UI (specs/0066).
+- A saved summary no longer has to have a `transcript_chunks` row to be readable.
+  `get_summary_data_for_meeting` joined that table, which is written only by the summary
+  *generation* path — so a summary that arrived any other way was invisible to the app
+  holding it. Every meeting in the demo dataset was in that state, which is why `--demo`
+  showed five meetings with no summaries. No real meeting is affected (a generated summary
+  always writes chunks; checked against a production profile), so this is dev-visible only
+  (specs/0066).
+- The README's real-window screenshots are regenerated for the release: the debug-only
+  Developer tab is hidden during captures (`data-dev-only` + the existing `data-shot`
+  mechanism), the meeting routes wait long enough for their content, and the stale
+  TapeCounter ignore rect — left pointing at the old rail layout by specs/0064 — moved to
+  where the counter actually is (specs/0066).
 
 ## [0.5.0] - 2026-09-18
 
