@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { Switch } from '@/components/ui/switch';
 import ZoomMuteGateToggle from '@/components/ZoomMuteGateToggle';
 import { invoke } from '@tauri-apps/api/core';
-import { DeviceSelection, SelectedDevices } from '@/components/DeviceSelection';
 import { SaveLocationRow } from '@/components/SaveLocationRow';
 import {
   applyRetentionChoice,
@@ -11,6 +10,7 @@ import {
   retentionChoiceToSelectValue,
 } from '@/lib/audio-retention';
 import { toast } from 'sonner';
+import { patchRecordingPreferences } from '@/lib/recording-preferences';
 import { useSidebar } from '@/components/Sidebar/SidebarProvider';
 import {
   noticeForSetting,
@@ -81,7 +81,6 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
     low_power_on_battery: true
   });
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [showRecordingNotification, setShowRecordingNotification] = useState(true);
   const [zoomAutoDetect, setZoomAutoDetect] = useState(true);
   // Owner emails (specs/0018) moved to Settings → General (OwnerEmailSettings),
@@ -164,7 +163,7 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
     const newPreferences = applyRetentionChoice(preferences, choice);
     setPreferences(newPreferences);
     try {
-      await invoke('set_recording_preferences', { preferences: newPreferences });
+      await patchRecordingPreferences<RecordingPreferences>(newPreferences);
       onSave?.(newPreferences);
       toast.success('Preference saved', {
         description:
@@ -189,7 +188,7 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
     const newPreferences = { ...preferences, live_transcription_enabled: enabled };
     setPreferences(newPreferences);
     try {
-      await invoke('set_recording_preferences', { preferences: newPreferences });
+      await patchRecordingPreferences<RecordingPreferences>(newPreferences);
       onSave?.(newPreferences);
       toastSaved(
         'live-transcription',
@@ -213,7 +212,7 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
     const newPreferences = { ...preferences, low_power_on_battery: enabled };
     setPreferences(newPreferences);
     try {
-      await invoke('set_recording_preferences', { preferences: newPreferences });
+      await patchRecordingPreferences<RecordingPreferences>(newPreferences);
       onSave?.(newPreferences);
       toastSaved(
         'low-power-on-battery',
@@ -226,16 +225,6 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
       setPreferences(previous); // revert on failure
       toast.error('Failed to save preference');
     }
-  };
-
-  const handleDeviceChange = async (devices: SelectedDevices) => {
-    const newPreferences = {
-      ...preferences,
-      preferred_mic_device: devices.micDevice,
-      preferred_system_device: devices.systemDevice
-    };
-    setPreferences(newPreferences);
-    await savePreferences(newPreferences);
   };
 
   const handleNotificationToggle = async (enabled: boolean) => {
@@ -252,27 +241,6 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
     }
   };
 
-  const savePreferences = async (prefs: RecordingPreferences) => {
-    setSaving(true);
-    try {
-      await invoke('set_recording_preferences', { preferences: prefs });
-      onSave?.(prefs);
-
-      // Show success toast with device details
-      const micDevice = prefs.preferred_mic_device || 'Default';
-      const systemDevice = prefs.preferred_system_device || 'Default';
-      toast.success("Device preferences saved", {
-        description: `Microphone: ${micDevice}, System Audio: ${systemDevice}`
-      });
-    } catch (error) {
-      console.error('Failed to save recording preferences:', error);
-      toast.error("Failed to save device preferences", {
-        description: error instanceof Error ? error.message : String(error)
-      });
-    } finally {
-      setSaving(false);
-    }
-  };
 
   // What the single "Delete audio recordings" select shows for the stored
   // { auto_save, retention_days } pair. auto_save=false always reads as
@@ -284,27 +252,6 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
   // (and the destructive cleanup last).
   return (
     <div className="space-y-8">
-      <SettingsSection
-        title="Audio devices"
-        description="Which microphone and system-audio source new recordings start with."
-      >
-        <SettingsGroup>
-          <SettingsRow
-            label="Default devices"
-            description="Used automatically when you start a new recording. System audio is what captures the other participants."
-            align="start"
-          >
-            <DeviceSelection
-              selectedDevices={{
-                micDevice: preferences.preferred_mic_device,
-                systemDevice: preferences.preferred_system_device,
-              }}
-              onDeviceChange={handleDeviceChange}
-              disabled={saving || loading}
-            />
-          </SettingsRow>
-        </SettingsGroup>
-      </SettingsSection>
 
       <SettingsSection
         title="Recording"
@@ -328,7 +275,7 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
               <Switch
                 checked={preferences.live_transcription_enabled}
                 onCheckedChange={handleLiveTranscriptionToggle}
-                disabled={saving || loading}
+                disabled={loading}
                 aria-label="Transcribe in real time during recording"
               />
             }
@@ -350,7 +297,7 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
               <Switch
                 checked={preferences.low_power_on_battery}
                 onCheckedChange={handleLowPowerToggle}
-                disabled={saving || loading}
+                disabled={loading}
                 aria-label="Low Power Mode on battery"
               />
             }
@@ -420,7 +367,7 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
                 id="audio-retention"
                 value={retentionChoiceToSelectValue(retentionChoice)}
                 onChange={(e) => void handleRetentionChange(e.target.value)}
-                disabled={saving || loading}
+                disabled={loading}
                 className="rounded-md border border-input bg-background px-2 py-1 text-sm"
               >
                 <option value="immediately">Immediately</option>

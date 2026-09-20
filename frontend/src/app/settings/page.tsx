@@ -9,7 +9,7 @@ import { SpeakerSettings } from '@/components/SpeakerSettings';
 import { RecordingSettings } from '@/components/RecordingSettings';
 import { AppearanceSettings } from '@/components/AppearanceSettings';
 import { PreferenceSettings } from '@/components/PreferenceSettings';
-import { RecordingPermissionsSettings } from '@/components/RecordingPermissionsSettings';
+import { AudioSettings } from '@/components/AudioSettings';
 import { CalendarSettings } from '@/components/CalendarSettings';
 import { OwnerEmailSettings } from '@/components/OwnerEmailSettings';
 import { SummaryModelSettings } from '@/components/SummaryModelSettings';
@@ -37,7 +37,7 @@ import { PageHeader } from '@/components/ui/page-header';
  */
 const TABS = [
   { value: 'general', label: 'General' },
-  { value: 'permissions', label: 'Permissions' },
+  { value: 'audio', label: 'Audio' },
   { value: 'calendar', label: 'Calendar' },
   { value: 'recording', label: 'Recording' },
   { value: 'Transcriptionmodels', label: 'Transcription' },
@@ -155,11 +155,11 @@ function SettingsPageContent() {
             <AppearanceSettings />
             <PreferenceSettings />
           </TabsContent>
-          <TabsContent value="permissions" className="space-y-8">
-            {/* macOS grants only (mic + audio capture today). The calendar grant is read
-                and requested from the Calendar tab, which owns that subject; duplicating a
-                control across two tabs is the specs/0061 two-switches bug. */}
-            <RecordingPermissionsSettings />
+          <TabsContent value="audio" className="space-y-8">
+            {/* Permission AND device per input, one row each (owner, specs/0067). When the
+                mic is not working you do not know in advance which of the two is wrong, so
+                they belong on one line rather than two tabs apart. */}
+            <AudioSettings />
           </TabsContent>
           <TabsContent value="calendar" className="space-y-8">
             {/* Source (0008 EventKit + 0032 Google), the Google connection, and the sync

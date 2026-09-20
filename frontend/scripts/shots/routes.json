@@ -265,8 +265,8 @@
     ]
   },
   {
-    "name": "settings-permissions",
-    "route": "/settings?tab=permissions",
+    "name": "settings-audio",
+    "route": "/settings?tab=audio",
     "ignore": [
       {
         "x": 338,
