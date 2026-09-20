@@ -86,11 +86,21 @@ export function UpdateRow({ collapsed = false }: { collapsed?: boolean }) {
         <IconSlot name="update">
           <UpdateGlyph ready={ready} />
         </IconSlot>
-        <span className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground">{line}</span>
-        {ready && <RestartToUpdateButton />}
+        {/* The right inset belongs to the trailing content, not the row itself — matching
+            `QueueRow`'s own trailing status span (`QueueRow.tsx`). The row div stays
+            `SIDEBAR_ROW`-only so its className matches the collapsed variant's, slot for
+            slot; without this wrapper the `RestartToUpdateButton` sat flush against the
+            panel's border while every other row stopped `pr-3.5` short (review finding,
+            fix round 2). */}
+        <div className="flex min-w-0 flex-1 items-center gap-2 pr-3.5">
+          <span className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground">{line}</span>
+          {ready && <RestartToUpdateButton />}
+        </div>
       </div>
       {updates.error && (
-        <p className="truncate pb-1 pl-3 pr-2 text-[11px] text-record-ink" title={updates.error}>
+        // Aligned to where labels start (the `w-16` icon column), not the old `pl-5` from
+        // before the shared row geometry (specs/0069 W1).
+        <p className="truncate pb-1 pl-16 pr-3.5 text-[11px] text-record-ink" title={updates.error}>
           {updates.error}
         </p>
       )}
