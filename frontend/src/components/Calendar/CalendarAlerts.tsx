@@ -19,33 +19,37 @@
  *     per session. Fired keys are kept in-memory AND mirrored to sessionStorage so a
  *     reload (Next fast-refresh in dev, or a real reload) doesn't re-fire alerts for
  *     meetings that already passed.
- *   - The banner carries **Join** and **Join & Record**, plus a body tap that does what
- *     Join & Record does. Join & Record opens the Zoom client (deep link, https fallback)
- *     AND starts a recording bound to the event — unless Nixon is already recording, in
- *     which case the record half is skipped (`handleRecordingToggle` also no-ops while
- *     recording, so we never double-start). Those buttons only began working in
- *     specs/0068; before that the plugin they went through had no action support on
- *     macOS at all.
+ *   - The banner carries one button, **Join & Record**: it opens the Zoom client (deep
+ *     link, https fallback) AND starts a recording bound to the event — unless Nixon is
+ *     already recording, in which case the record half is skipped
+ *     (`handleRecordingToggle` also no-ops while recording, so we never double-start).
+ *     One button rather than two because macOS 26 hides a second one behind an "Options"
+ *     menu; tapping the banner body opens Nixon, where joining without recording is one
+ *     click away. The button only began working in specs/0068 — before that the plugin it
+ *     went through had no action support on macOS at all.
  *
  * Degrades gracefully: on a bare dev binary calendar access is never authorized and there
  * is no notification centre to deliver to (specs/0068), so this is a silent no-op.
  */
 
 import { useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
+import { toast } from 'sonner';
 import {
   type UpcomingMeeting,
   getCalendarAccessStatus,
   getUpcomingMeetings,
   joinAndRecord,
-  openZoomMeeting,
   formatClockTime,
 } from '@/lib/calendar';
 import {
   notify,
   focusMainWindow,
   CATEGORY_MEETING,
+  CATEGORY_PREP,
   CATEGORY_RECORD,
 } from '@/lib/osNotification';
+import { prepRouteForEvent } from '@/lib/prep';
 import { useRecordingState } from '@/contexts/RecordingStateContext';
 import { useSidebar } from '@/components/Sidebar/SidebarProvider';
 
@@ -99,7 +103,7 @@ async function alertMeeting(
   meeting: UpcomingMeeting,
   start: Date,
   joinAndRecord: () => void,
-  joinOnly: () => void,
+  openPrep: () => void,
   starting: boolean,
 ): Promise<void> {
   // The caller has already decided which of the two alerts this is; re-deriving it from the
@@ -113,11 +117,17 @@ async function alertMeeting(
   if (meeting.calendarName) bodyParts.push(meeting.calendarName);
   const body = bodyParts.join(' · ');
 
-  // A meeting with a link gets both buttons; one without gets the single Record button,
-  // because "Join" with nothing to join is a dead control. Nixon still records either
-  // way — system audio + mic do not care what the call is on, which is the specs/0038
-  // point about link-less Teams/Meet meetings.
-  const category = meeting.zoomUrl ? CATEGORY_MEETING : CATEGORY_RECORD;
+  // Each alert carries the one thing worth doing at that moment — a banner can only show
+  // a single button (see `CATEGORY_MEETING` on the Rust side). Five minutes out that is
+  // **Prep**: you are not joining yet, you are working out what the meeting is for. At the
+  // top of the hour it is **Join & Record**, or plain **Record** when there is no link to
+  // open — Nixon records either way, since system audio and mic do not care what the call
+  // is on (the specs/0038 point about link-less Teams/Meet meetings).
+  const category = !starting
+    ? CATEGORY_PREP
+    : meeting.zoomUrl
+      ? CATEGORY_MEETING
+      : CATEGORY_RECORD;
 
   await notify({
     title,
@@ -127,22 +137,22 @@ async function alertMeeting(
     // than stacking a second one.
     id: `meeting-${meeting.id}`,
     userInfo: { meetingId: meeting.id },
-    onJoin: joinOnly,
-    // The link-less category's only button; same intent as Join & Record.
-    onRecord: joinAndRecord,
-    // Body tap is the same as the recording action — pressing an alert about a meeting
-    // that is starting means "take me in", and this is the one Nixon is for.
     onJoinAndRecord: joinAndRecord,
-    onOpen: () => {
-      void focusMainWindow();
-      joinAndRecord();
-    },
+    // The link-less category's only button; same intent.
+    onRecord: joinAndRecord,
+    onPrep: openPrep,
+    // Tapping the body opens Nixon at whatever the button would have done something
+    // about: the Prep tab for the warning, and the app itself as the meeting starts —
+    // the route to joining WITHOUT recording, which the single button cannot offer.
+    onOpen: starting ? () => void focusMainWindow() : openPrep,
   });
 }
 
 export default function CalendarAlerts() {
   // In-memory fired set, seeded from sessionStorage so a reload doesn't re-fire.
   const firedRef = useRef<Set<string>>(new Set());
+  const router = useRouter();
+  const routerRef = useRef(router);
 
   // Keep the latest recording state + start path in refs so the long-lived
   // notification callbacks (created when an alert fires) always read current
@@ -154,6 +164,9 @@ export default function CalendarAlerts() {
   useEffect(() => {
     isRecordingRef.current = isRecording;
   }, [isRecording]);
+  useEffect(() => {
+    routerRef.current = router;
+  }, [router]);
   useEffect(() => {
     handleRecordingToggleRef.current = handleRecordingToggle;
   }, [handleRecordingToggle]);
@@ -174,6 +187,26 @@ export default function CalendarAlerts() {
         isRecordingRef.current,
         handleRecordingToggleRef.current,
       );
+    };
+
+    // "Prep" on the five-minute warning: mint (or reuse) the scheduled meeting row for
+    // this occurrence and open its Prep tab. Nixon is behind something when the banner is
+    // pressed, so bring it forward first.
+    const openPrep = async (meeting: UpcomingMeeting) => {
+      void focusMainWindow();
+      try {
+        routerRef.current.push(
+          await prepRouteForEvent({
+            id: meeting.id,
+            title: meeting.title,
+            startsAt: meeting.startsAt,
+            externalId: meeting.externalId,
+          }),
+        );
+      } catch (error) {
+        console.error('[CalendarAlerts] could not open prep:', error);
+        toast.error('Could not open prep for this meeting');
+      }
     };
 
     const tick = async () => {
@@ -213,15 +246,7 @@ export default function CalendarAlerts() {
         firedRef.current.add(key);
         changed = true;
         const m = meeting;
-        void alertMeeting(
-          m,
-          start,
-          () => triggerJoinAndRecord(m),
-          () => {
-            if (m.zoomUrl) void openZoomMeeting(m.zoomUrl);
-          },
-          starting,
-        );
+        void alertMeeting(m, start, () => triggerJoinAndRecord(m), () => openPrep(m), starting);
       }
       if (changed) persistFired(firedRef.current);
     };

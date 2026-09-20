@@ -35,21 +35,39 @@ mod delegate;
 #[cfg(target_os = "macos")]
 mod deliver;
 
-/// Category carrying the two meeting actions. Registered at setup; referenced by id on
-/// every alert `CalendarAlerts`/`ZoomAutoDetect` send.
+/// Category carrying the meeting action. Registered at setup; referenced by id on every
+/// alert `CalendarAlerts` sends.
+///
+/// **One action per category, deliberately.** macOS 26 renders a lone notification action
+/// as a visible button and collapses two or more behind an "Options" menu — measured, not
+/// assumed, with a throwaway app under a fresh bundle id: the same banner showed "Join" and
+/// "Join & Record" under Options, and showed a "Join & Record" button when the category
+/// carried only that one.
+///
+/// So the two meeting alerts carry different single actions instead of one alert carrying
+/// two: at T-5 the useful thing is [`CATEGORY_PREP`] ("Prep"), and at T-0 it is this one
+/// ("Join & Record"). Which is arguably the better design anyway — each alert offers the
+/// thing you would actually do at that moment.
+///
+/// (The notification *style* — temporary vs persistent — makes no difference to this; both
+/// were tried. There is no Info.plist key or category option that changes it either.)
 pub const CATEGORY_MEETING: &str = "nixon.meeting";
-/// Category for "a call started — record it?" (`ZoomAutoDetect`). One button: macOS
-/// already gives dismissal for free, so an "Ignore" button would only take up room.
+/// Category for the five-minute warning. Its button opens the meeting's Prep tab — at
+/// T-5 you are not joining yet, you are deciding what this meeting is for.
+pub const CATEGORY_PREP: &str = "nixon.prep";
+/// Category for "a call started — record it?" (`ZoomAutoDetect`), and for a meeting
+/// starting with no join link. One button: macOS already gives dismissal for free, so an
+/// "Ignore" button would only take up room.
 pub const CATEGORY_RECORD: &str = "nixon.record";
 /// Category with no buttons — the test banner and anything purely informational.
 pub const CATEGORY_PLAIN: &str = "nixon.plain";
 
-/// Open the meeting only.
-pub const ACTION_JOIN: &str = "join";
 /// Open the meeting and start a Nixon recording bound to it.
 pub const ACTION_JOIN_AND_RECORD: &str = "join_and_record";
 /// Start recording the call that was detected.
 pub const ACTION_RECORD: &str = "record";
+/// Open the meeting's Prep tab.
+pub const ACTION_PREP: &str = "prep";
 /// Normalized identifier for "tapped the banner itself" — Apple sends
 /// `UNNotificationDefaultActionIdentifier`, which is not a name the frontend should know.
 pub const ACTION_OPEN: &str = "open";

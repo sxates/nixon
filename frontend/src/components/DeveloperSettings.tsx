@@ -6,7 +6,7 @@ import { toast } from "sonner"
 import { Button } from "./ui/button"
 import { Switch } from "./ui/switch"
 import { SettingsGroup, SettingsNote, SettingsRow, SettingsSection } from "./ui/settings"
-import { CATEGORY_MEETING, notify } from "@/lib/osNotification"
+import { CATEGORY_MEETING, CATEGORY_PREP, notify } from "@/lib/osNotification"
 
 export interface DevFlags { fixtures: boolean; no_audio: boolean; fake_downloads: boolean; reset_onboarding: boolean; control: boolean }
 interface SeedReport { meetings: number; people: number; segments: number; failed: number }
@@ -50,13 +50,13 @@ export function DeveloperSettings() {
 
   // specs/0068 — the only way to exercise the action buttons without waiting for a real
   // meeting. Dev-only on purpose: it is a probe, not a feature.
-  const testMeetingAlert = async () => {
+  const testAlert = async (starting: boolean) => {
     const sent = await notify({
-      title: "Standup in 5 min",
+      title: starting ? "Standup starting now" : "Standup in 5 min",
       body: "10:00 · Work",
-      category: CATEGORY_MEETING,
+      category: starting ? CATEGORY_MEETING : CATEGORY_PREP,
       id: "dev-test-meeting",
-      onJoin: () => toast.success("Join pressed", { description: "The delegate routed the press back into Nixon." }),
+      onPrep: () => toast.success("Prep pressed", { description: "The delegate routed the press back into Nixon." }),
       onJoinAndRecord: () => toast.success("Join & Record pressed", { description: "The delegate routed the press back into Nixon." }),
       onOpen: () => toast.success("Banner tapped", { description: "Default action routed back into Nixon." }),
     })
@@ -84,12 +84,17 @@ export function DeveloperSettings() {
           }
         />
         <SettingsRow
-          label="Test a meeting alert"
-          description="Fires the two-button meeting banner. Put another window in front first, then press Join or Join & Record — each one toasts here, which proves the delegate routed the press back into the app (specs/0068)."
+          label="Test the meeting alerts"
+          description="Fires the real banners. Put another window in front first, then press the button or tap the banner — each toasts here, which proves the delegate routed the press back into the app (specs/0068)."
           control={
-            <Button size="sm" variant="secondary" onClick={testMeetingAlert}>
-              Send meeting alert
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button size="sm" variant="secondary" onClick={() => testAlert(false)}>
+                T-5 (Prep)
+              </Button>
+              <Button size="sm" variant="secondary" onClick={() => testAlert(true)}>
+                Starting now
+              </Button>
+            </div>
           }
         />
         <SettingsRow

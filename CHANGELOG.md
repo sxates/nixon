@@ -33,12 +33,13 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 ### Added
 
 - **Meeting alerts you can act on without opening Nixon.** The alert five minutes before a
-  meeting now carries **Join** and **Join & Record**; Join & Record opens the call *and*
-  starts a recording filed against that meeting. A meeting with no join link offers
-  **Record** on its own, rather than a Join button with nothing to open.
-- **A second alert as the meeting actually starts.** Five minutes of warning is the wrong
-  amount when you get absorbed in something else, so the banner is replaced by a "starting
-  now" one at the top of the hour. It stays quiet if you are already recording.
+  meeting carries a **Prep** button that opens that meeting's Prep tab — five minutes out,
+  what you want is to remember what the meeting is for, not to join it yet.
+- **A second alert as the meeting actually starts**, carrying **Join & Record**: it opens
+  the call *and* starts a recording filed against that meeting. Five minutes of warning is
+  the wrong amount when you get absorbed in something else, so this one replaces the earlier
+  banner rather than adding to it. It stays quiet if you are already recording, and offers
+  plain **Record** when the meeting has no link to join.
 - **A Record button on the "meeting detected" alert**, which starts the recording from the
   banner instead of only bringing Nixon forward.
 - **Settings → General → Notifications** now shows whether macOS is letting Nixon notify
@@ -61,6 +62,10 @@ _Not shown in release notes or the in-app updater (see `release.sh`)._
   ~1,500 lines, 14 registered commands of which the frontend called two) and drops
   `tauri-plugin-notification` and `@tauri-apps/plugin-notification`. Net −413 lines.
 - specs/0067 W3 is superseded: it assumed the action-button plumbing already existed.
+- macOS 26 renders one notification action as a button and hides two or more behind an
+  "Options" menu, whatever the notification style; `NSUserNotificationAlertStyle` is
+  ignored. Hence one action per category, and two alerts carrying different ones. Measured
+  with a throwaway app under a fresh bundle id, not assumed.
 
 ## [0.7.0] - 2026-09-19
 

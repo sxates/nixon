@@ -13,9 +13,9 @@ vi.mock('@tauri-apps/api/core', () => ({ invoke: invokeMock }));
 vi.mock('@tauri-apps/api/event', () => ({ listen: listenMock }));
 
 import {
-  ACTION_JOIN,
   ACTION_JOIN_AND_RECORD,
   ACTION_OPEN,
+  ACTION_PREP,
   ACTION_RECORD,
   CATEGORY_MEETING,
   __resetNotificationStateForTests,
@@ -123,25 +123,27 @@ describe('a press comes back to the right callback', () => {
       body: 'B',
       category: CATEGORY_MEETING,
       id: 'n-1',
-      onJoin: () => pressed.push('join'),
       onJoinAndRecord: () => pressed.push('joinAndRecord'),
       onRecord: () => pressed.push('record'),
+      onPrep: () => pressed.push('prep'),
       onOpen: () => pressed.push('open'),
     });
     handler?.({ payload: { actionId, notificationId: 'n-1', userInfo: {} } });
     return pressed;
   }
 
-  it('routes Join', async () => {
-    expect(await sendAndPress(ACTION_JOIN)).toEqual(['join']);
-  });
-
+  // macOS 26 shows a lone action as a button and hides two behind "Options", so a
+  // category carries one; the ids the delegate can send are these three.
   it('routes Join & Record', async () => {
     expect(await sendAndPress(ACTION_JOIN_AND_RECORD)).toEqual(['joinAndRecord']);
   });
 
   it('routes Record', async () => {
     expect(await sendAndPress(ACTION_RECORD)).toEqual(['record']);
+  });
+
+  it('routes Prep', async () => {
+    expect(await sendAndPress(ACTION_PREP)).toEqual(['prep']);
   });
 
   it('routes a body tap', async () => {

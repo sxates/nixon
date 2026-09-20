@@ -34,18 +34,26 @@ import { listen } from '@tauri-apps/api/event';
 
 /** Categories, mirroring `notifications::macos` — a banner gets its buttons by naming one. */
 export const CATEGORY_MEETING = 'nixon.meeting';
+export const CATEGORY_PREP = 'nixon.prep';
 export const CATEGORY_RECORD = 'nixon.record';
 export const CATEGORY_PLAIN = 'nixon.plain';
 
-/** Action ids, mirroring `notifications::macos`. */
-export const ACTION_JOIN = 'join';
+/**
+ * Action ids, mirroring `notifications::macos`.
+ *
+ * Each category carries at most ONE action, because macOS 26 renders a lone action as a
+ * visible button and hides two or more behind an "Options" menu — see `CATEGORY_MEETING`
+ * on the Rust side for the measurement.
+ */
 export const ACTION_JOIN_AND_RECORD = 'join_and_record';
 export const ACTION_RECORD = 'record';
+export const ACTION_PREP = 'prep';
 /** The banner body itself was tapped (Apple's default action, normalized in Rust). */
 export const ACTION_OPEN = 'open';
 
 export type NotificationCategory =
   | typeof CATEGORY_MEETING
+  | typeof CATEGORY_PREP
   | typeof CATEGORY_RECORD
   | typeof CATEGORY_PLAIN;
 
@@ -63,12 +71,12 @@ export interface NotificationCapability {
 }
 
 export interface NotifyCallbacks {
-  /** "Join" — open the meeting, don't record. */
-  onJoin?: () => void;
   /** "Join & Record" — open the meeting and start a recording bound to it. */
   onJoinAndRecord?: () => void;
   /** "Record" — the single button on a detected-call prompt. */
   onRecord?: () => void;
+  /** "Prep" — the single button on the five-minute warning. */
+  onPrep?: () => void;
   /** The banner body was tapped. */
   onOpen?: () => void;
 }
@@ -183,14 +191,14 @@ async function ensureListener(): Promise<void> {
       callbacks.delete(payload.notificationId);
 
       switch (payload.actionId) {
-        case ACTION_JOIN:
-          registered.onJoin?.();
-          break;
         case ACTION_JOIN_AND_RECORD:
           registered.onJoinAndRecord?.();
           break;
         case ACTION_RECORD:
           registered.onRecord?.();
+          break;
+        case ACTION_PREP:
+          registered.onPrep?.();
           break;
         case ACTION_OPEN:
           registered.onOpen?.();
@@ -215,9 +223,9 @@ export async function notify(options: NotifyOptions): Promise<boolean> {
     body,
     category = CATEGORY_PLAIN,
     userInfo = {},
-    onJoin,
     onJoinAndRecord,
     onRecord,
+    onPrep,
     onOpen,
   } = options;
 
@@ -230,8 +238,8 @@ export async function notify(options: NotifyOptions): Promise<boolean> {
   await ensureListener();
 
   const id = options.id ?? `nixon-${nextId++}`;
-  if (onJoin || onJoinAndRecord || onRecord || onOpen) {
-    callbacks.set(id, { onJoin, onJoinAndRecord, onRecord, onOpen });
+  if (onJoinAndRecord || onRecord || onPrep || onOpen) {
+    callbacks.set(id, { onJoinAndRecord, onRecord, onPrep, onOpen });
     setTimeout(() => callbacks.delete(id), CALLBACK_TTL_MS);
   }
 

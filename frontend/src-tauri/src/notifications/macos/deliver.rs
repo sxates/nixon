@@ -1,8 +1,9 @@
 // Building and posting the banner (specs/0068).
 //
 // Categories are the reason this module exists in the shape it does: a macOS notification
-// gets buttons by naming a category that was registered up front, so the two meeting
-// actions are declared once at setup and every later alert just carries the category id.
+// gets its button by naming a category that was registered up front, so the actions are
+// declared once at setup and every later alert just carries the category id. Each category
+// here carries at most ONE action — see `CATEGORY_MEETING` for the measurement behind that.
 // An unregistered id is not an error — macOS delivers the banner without buttons — which is
 // why `CATEGORY_PLAIN` can be an empty category rather than a special case.
 //
@@ -20,8 +21,8 @@ use objc2_user_notifications::{
 };
 
 use super::{
-    ActionPayload, DeliverRequest, ACTION_JOIN, ACTION_JOIN_AND_RECORD, ACTION_RECORD,
-    CATEGORY_MEETING, CATEGORY_PLAIN, CATEGORY_RECORD,
+    ActionPayload, DeliverRequest, ACTION_JOIN_AND_RECORD, ACTION_PREP, ACTION_RECORD,
+    CATEGORY_MEETING, CATEGORY_PLAIN, CATEGORY_PREP, CATEGORY_RECORD,
 };
 
 /// `id` → the `user_info` its sender attached.
@@ -39,9 +40,8 @@ const REMEMBERED: usize = 64;
 
 /// Register the categories. Idempotent — macOS replaces the whole set each call.
 pub fn register_categories() {
-    let join = action(ACTION_JOIN, "Join", UNNotificationActionOptions::Foreground);
-    // Join & Record brings Nixon forward: it is about to start recording, and a recording
-    // that begins with no visible sign of it is worse than one extra window.
+    // Foreground: it is about to start recording, and a recording that begins with no
+    // visible sign of it is worse than one extra window coming forward.
     let join_and_record = action(
         ACTION_JOIN_AND_RECORD,
         "Join & Record",
@@ -50,7 +50,18 @@ pub fn register_categories() {
 
     let meeting = UNNotificationCategory::categoryWithIdentifier_actions_intentIdentifiers_options(
         &NSString::from_str(CATEGORY_MEETING),
-        &NSArray::from_retained_slice(&[join, join_and_record]),
+        &NSArray::from_retained_slice(&[join_and_record]),
+        &NSArray::from_slice(&[]),
+        UNNotificationCategoryOptions::empty(),
+    );
+
+    let prep = UNNotificationCategory::categoryWithIdentifier_actions_intentIdentifiers_options(
+        &NSString::from_str(CATEGORY_PREP),
+        &NSArray::from_retained_slice(&[action(
+            ACTION_PREP,
+            "Prep",
+            UNNotificationActionOptions::Foreground,
+        )]),
         &NSArray::from_slice(&[]),
         UNNotificationCategoryOptions::empty(),
     );
@@ -74,7 +85,7 @@ pub fn register_categories() {
     );
 
     let center = UNUserNotificationCenter::currentNotificationCenter();
-    center.setNotificationCategories(&NSSet::from_retained_slice(&[meeting, record, plain]));
+    center.setNotificationCategories(&NSSet::from_retained_slice(&[meeting, prep, record, plain]));
 }
 
 fn action(
@@ -173,7 +184,7 @@ mod tests {
 
     #[test]
     fn an_unknown_banner_still_produces_a_payload() {
-        let payload = payload_for(ACTION_JOIN, "never-sent");
+        let payload = payload_for(ACTION_JOIN_AND_RECORD, "never-sent");
         assert!(payload.user_info.is_empty());
         assert_eq!(payload.notification_id, "never-sent");
     }
@@ -182,7 +193,7 @@ mod tests {
     fn re_delivering_an_id_replaces_its_user_info_rather_than_stacking_it() {
         remember("m-2", HashMap::from([("v".into(), "first".into())]));
         remember("m-2", HashMap::from([("v".into(), "second".into())]));
-        assert_eq!(payload_for(ACTION_JOIN, "m-2").user_info.get("v").unwrap(), "second");
+        assert_eq!(payload_for(ACTION_JOIN_AND_RECORD, "m-2").user_info.get("v").unwrap(), "second");
     }
 
     #[test]

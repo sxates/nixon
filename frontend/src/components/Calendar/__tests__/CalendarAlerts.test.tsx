@@ -5,12 +5,18 @@ import { render, waitFor } from '@testing-library/react';
 // pinning are which one fires when, that neither fires twice, and that the start alert
 // stands down while Nixon is already recording.
 
-const { notifyMock, getStatusMock, getUpcomingMock, joinAndRecordMock } = vi.hoisted(() => ({
-  notifyMock: vi.fn().mockResolvedValue(true),
-  getStatusMock: vi.fn().mockResolvedValue('authorized'),
-  getUpcomingMock: vi.fn(),
-  joinAndRecordMock: vi.fn(),
-}));
+const { notifyMock, getStatusMock, getUpcomingMock, joinAndRecordMock, pushMock, prepRouteMock } =
+  vi.hoisted(() => ({
+    notifyMock: vi.fn().mockResolvedValue(true),
+    getStatusMock: vi.fn().mockResolvedValue('authorized'),
+    getUpcomingMock: vi.fn(),
+    joinAndRecordMock: vi.fn(),
+    pushMock: vi.fn(),
+    prepRouteMock: vi.fn().mockResolvedValue('/meeting-details?id=minted&tab=prep'),
+  }));
+
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push: pushMock }) }));
+vi.mock('@/lib/prep', () => ({ prepRouteForEvent: prepRouteMock }));
 
 vi.mock('@/lib/osNotification', async () => {
   const actual = await vi.importActual<typeof import('@/lib/osNotification')>('@/lib/osNotification');
@@ -138,19 +144,57 @@ describe('while already recording', () => {
   });
 });
 
-describe('a meeting with no join link', () => {
-  it('offers Record rather than a Join button with nothing to open', async () => {
+// A banner can only show one button, so each alert carries the thing worth doing at that
+// moment: Prep five minutes out, Join & Record as it starts.
+describe('which button each alert carries', () => {
+  it('offers Prep on the five-minute warning', async () => {
+    getUpcomingMock.mockResolvedValue(meetingIn(4 * 60 * 1000));
+    render(<CalendarAlerts />);
+    await waitFor(() => expect(notifyMock).toHaveBeenCalled());
+    expect(notifyMock.mock.calls[0][0].category).toBe('nixon.prep');
+  });
+
+  it('offers Prep even when the meeting has no join link — prep needs no link', async () => {
     getUpcomingMock.mockResolvedValue([{ ...meetingIn(4 * 60 * 1000)[0], zoomUrl: null }]);
+    render(<CalendarAlerts />);
+    await waitFor(() => expect(notifyMock).toHaveBeenCalled());
+    expect(notifyMock.mock.calls[0][0].category).toBe('nixon.prep');
+  });
+
+  it('offers Join & Record as the meeting starts', async () => {
+    getUpcomingMock.mockResolvedValue(meetingIn(20 * 1000));
+    render(<CalendarAlerts />);
+    await waitFor(() => expect(notifyMock).toHaveBeenCalled());
+    expect(notifyMock.mock.calls[0][0].category).toBe('nixon.meeting');
+  });
+
+  it('offers plain Record at the start of a meeting with nothing to join', async () => {
+    getUpcomingMock.mockResolvedValue([{ ...meetingIn(20 * 1000)[0], zoomUrl: null }]);
     render(<CalendarAlerts />);
     await waitFor(() => expect(notifyMock).toHaveBeenCalled());
     expect(notifyMock.mock.calls[0][0].category).toBe('nixon.record');
   });
+});
 
-  it('offers both buttons when there is a link', async () => {
+describe('pressing Prep', () => {
+  it('mints the scheduled meeting and routes to its Prep tab', async () => {
     getUpcomingMock.mockResolvedValue(meetingIn(4 * 60 * 1000));
     render(<CalendarAlerts />);
     await waitFor(() => expect(notifyMock).toHaveBeenCalled());
-    expect(notifyMock.mock.calls[0][0].category).toBe('nixon.meeting');
+
+    await notifyMock.mock.calls[0][0].onPrep();
+    expect(prepRouteMock).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'm-1', title: 'Standup' }),
+    );
+    expect(pushMock).toHaveBeenCalledWith('/meeting-details?id=minted&tab=prep');
+  });
+
+  // The body tap should land somewhere useful, not just raise the window.
+  it('is also what tapping the warning banner does', async () => {
+    getUpcomingMock.mockResolvedValue(meetingIn(4 * 60 * 1000));
+    render(<CalendarAlerts />);
+    await waitFor(() => expect(notifyMock).toHaveBeenCalled());
+    expect(notifyMock.mock.calls[0][0].onOpen).toBe(notifyMock.mock.calls[0][0].onPrep);
   });
 });
 
