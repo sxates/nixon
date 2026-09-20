@@ -175,7 +175,6 @@ tauri = { version = "2.6.2", features = [ "macos-private-api", "protocol-asset",
 tauri-plugin-fs = "2.4.0"
 tauri-plugin-dialog = "2.3.0"
 tauri-plugin-store = "2.4.0"
-tauri-plugin-notification = "2.3.1"
 
 # Desktop-only single instance guard
 [target.'cfg(any(target_os = "macos", windows, target_os = "linux"))'.dependencies]
@@ -216,11 +215,15 @@ objc2 = "0.6"
 objc2-foundation = { version = "0.3", default-features = false, features = [
     "std",
     "NSArray",
+    "NSBundle",
     "NSDate",
+    "NSDictionary",
     "NSError",
     "NSPredicate",
+    "NSSet",
     "NSString",
     "NSURL",
+    "NSValue",
     "NSObjCRuntime",
 ] }
 objc2-event-kit = { version = "0.3", default-features = false, features = [
@@ -233,6 +236,30 @@ objc2-event-kit = { version = "0.3", default-features = false, features = [
     "EKParticipant",
     "EKObject",
     "EKTypes",
+] }
+
+# UserNotifications framework (specs/0068) — the API macOS still delivers on.
+# `tauri-plugin-notification` routes desktop through the deprecated
+# NSUserNotificationCenter (nil outside a bundle on macOS 26) and exposes no
+# action buttons, so Nixon talks to UNUserNotificationCenter directly.
+# Trimmed to the classes we touch; `block2` for the async authorization and the
+# delegate's completion handlers.
+objc2-user-notifications = { version = "0.3", default-features = false, features = [
+    "std",
+    "block2",
+    "bitflags",
+    "NSString_UserNotifications",
+    "UNError",
+    "UNNotification",
+    "UNNotificationAction",
+    "UNNotificationCategory",
+    "UNNotificationContent",
+    "UNNotificationRequest",
+    "UNNotificationResponse",
+    "UNNotificationSettings",
+    "UNNotificationSound",
+    "UNNotificationTrigger",
+    "UNUserNotificationCenter",
 ] }
 block2 = "0.6"
 dasp = "0.11.0"

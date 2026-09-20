@@ -1,18 +1,19 @@
 'use client';
 
 /**
- * Requests OS notification permission once at app startup (spec 0008, #4).
+ * Asks macOS for notification permission once, after onboarding (specs/0008, #4;
+ * specs/0068 for why it now does something).
  *
- * Why a dedicated mounted component: previously notification permission was only
- * requested lazily inside `osNotification.notify()` — i.e. mid-meeting, while
- * Nixon is backgrounded and the user is in Zoom, where the macOS permission
- * dialog is easy to miss. For a fresh bundle id the plugin's `isPermissionGranted`
- * is not auto-granted, so `notify()` would silently return false and the Zoom
- * "record this?" prompt would be lost. Asking up front, on launch, lets the user
- * grant it before any meeting starts.
+ * The alternative is to ask at the point of first use, which sounds tidier and is worse:
+ * the first use is a meeting alert firing while Nixon is in the background and the user is
+ * in Zoom — exactly where a permission dialog goes unread, and the alert that prompted it
+ * is lost. Mounted post-onboarding, this asks at a moment when the person is looking at
+ * Nixon and has just finished granting microphone and audio-capture, without stacking a
+ * third dialog on top of those two.
  *
- * Best-effort and side-effect-only: renders nothing. On a bare `cargo run` dev
- * binary (no plugin) it no-ops. Mounted post-onboarding inside the provider tree.
+ * `ensureNotificationPermission()` only shows the dialog when macOS has not been asked
+ * before, so this is a no-op on every later launch — and on the unbundled dev binary,
+ * where there is no notification centre to ask (specs/0068).
  */
 
 import { useEffect } from 'react';

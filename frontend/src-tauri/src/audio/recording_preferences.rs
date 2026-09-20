@@ -59,6 +59,7 @@ fn default_low_power_on_battery() -> bool {
     true
 }
 
+
 impl Default for RecordingPreferences {
     fn default() -> Self {
         Self {

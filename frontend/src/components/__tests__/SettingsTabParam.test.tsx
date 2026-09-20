@@ -16,10 +16,8 @@ vi.mock('@/contexts/ConfigContext', () => ({
   useConfig: () => ({
     transcriptModelConfig: { provider: 'localWhisper', model: 'large-v3', apiKey: null },
     setTranscriptModelConfig: vi.fn(),
-    notificationSettings: null,
     isLoadingPreferences: false,
     loadPreferences: vi.fn(),
-    updateNotificationSettings: vi.fn(),
     isAutoSummary: false,
     toggleIsAutoSummary: vi.fn(),
   }),

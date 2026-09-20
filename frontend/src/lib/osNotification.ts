@@ -1,298 +1,253 @@
 /**
- * OS-level (native macOS) notification helper (spec 0008).
+ * OS-level (macOS Notification Center) notifications — specs/0068.
  *
- * Why this exists: in-app sonner toasts only appear when the Nixon window is
- * visible/focused. For prompts that must reach the user while Nixon is
- * backgrounded (Zoom-meeting-detected in P1, calendar alerts in P2), we send a
- * real macOS Notification Center notification via the Tauri notification plugin
- * (`@tauri-apps/plugin-notification`).
+ * ## Why this file was rewritten
  *
- * This wraps three concerns so callers don't have to repeat them:
- *   1. Permission — `isPermissionGranted` / `requestPermission`, cached.
- *   2. Actionable buttons — a single registered action type ("Record" / "Ignore")
- *      via `registerActionTypes`, wired once.
- *   3. Routing — a module-level registry maps each sent notification (by id) to
- *      its `onRecord` / `onIgnore` / `onClick` callbacks. A single `onAction`
- *      listener (set up lazily, once) dispatches the pressed button / body-tap to
- *      the right callback, so the recording logic stays in the React component
- *      that owns `handleRecordingToggle`.
+ * It used to call `@tauri-apps/plugin-notification` directly, and could never have worked.
+ * That plugin registers three commands on desktop — `notify`, `request_permission`,
+ * `is_permission_granted`; `registerActionTypes` and `onAction` are **mobile-only**, so the
+ * action buttons and the click routing threw on every macOS call and were swallowed by the
+ * `try/catch` around them. `request_permission` returned `granted` without asking macOS, so
+ * the system never showed its dialog. And delivery went through the deprecated
+ * `NSUserNotificationCenter`, which macOS 26 no longer surfaces.
  *
- * Graceful degradation: if the plugin isn't available, permission is denied, or
- * sending throws (common in a bare `cargo run` dev binary — actionable macOS
- * notifications generally require a bundled, code-signed `.app`), `notify()`
- * returns `false` so the caller can fall back to an in-app toast and lose
- * nothing.
+ * Everything now goes through four Tauri commands over a native `UNUserNotificationCenter`
+ * implementation (`src-tauri/src/notifications/macos/`), and a press comes back as a
+ * `notification-action` event rather than a plugin callback — which is what lets a button
+ * work while Nixon is in the background, the whole point of the feature.
  *
- * Reusability note (P2): keep this generic — `notify()` takes title/body/actions
- * and is not Zoom-specific. Calendar alerts will reuse it as-is.
+ * ## Routing
+ *
+ * Each `notify()` registers its callbacks under the notification's id. One `listen` for
+ * `notification-action` dispatches the press to them. A press for an id we do not know —
+ * a banner that outlived a reload — is dropped.
+ *
+ * ## Degradation
+ *
+ * `notify()` returns `false` rather than throwing when notifications are unavailable (the
+ * dev build is not inside an `.app`, so macOS will not hand out a notification centre) or
+ * permission was refused, so every caller can fall back to an in-app toast.
  */
 
-import type {
-  isPermissionGranted as IsPermissionGrantedFn,
-  requestPermission as RequestPermissionFn,
-  registerActionTypes as RegisterActionTypesFn,
-  sendNotification as SendNotificationFn,
-  onAction as OnActionFn,
-} from '@tauri-apps/plugin-notification';
+import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 
-/** Action type id shared by every "Record this?" prompt. */
-const RECORD_PROMPT_ACTION_TYPE = 'nixon-record-prompt';
-const ACTION_RECORD = 'record';
-const ACTION_IGNORE = 'ignore';
+/** Categories, mirroring `notifications::macos` — a banner gets its buttons by naming one. */
+export const CATEGORY_MEETING = 'nixon.meeting';
+export const CATEGORY_RECORD = 'nixon.record';
+export const CATEGORY_PLAIN = 'nixon.plain';
 
-/**
- * Identifiers macOS sends for a body tap (vs a specific button). The plugin
- * forwards Apple's default-action identifier; older/newer builds have used a few
- * spellings, so we treat any of these as "clicked the notification itself".
- */
-const DEFAULT_TAP_IDS = new Set([
-  'tap',
-  'default',
-  'com.apple.UNNotificationDefaultActionIdentifier',
-]);
+/** Action ids, mirroring `notifications::macos`. */
+export const ACTION_JOIN = 'join';
+export const ACTION_JOIN_AND_RECORD = 'join_and_record';
+export const ACTION_RECORD = 'record';
+/** The banner body itself was tapped (Apple's default action, normalized in Rust). */
+export const ACTION_OPEN = 'open';
+
+export type NotificationCategory =
+  | typeof CATEGORY_MEETING
+  | typeof CATEGORY_RECORD
+  | typeof CATEGORY_PLAIN;
+
+export type AuthorizationStatus =
+  | 'not_determined'
+  | 'denied'
+  | 'authorized'
+  | 'provisional'
+  | 'unavailable';
+
+export interface NotificationCapability {
+  supported: boolean;
+  /** Why not, in a sentence the Settings row prints as-is. */
+  reason: string | null;
+}
 
 export interface NotifyCallbacks {
-  /** User pressed the "Record" button. */
+  /** "Join" — open the meeting, don't record. */
+  onJoin?: () => void;
+  /** "Join & Record" — open the meeting and start a recording bound to it. */
+  onJoinAndRecord?: () => void;
+  /** "Record" — the single button on a detected-call prompt. */
   onRecord?: () => void;
-  /** User pressed the "Ignore" button. */
-  onIgnore?: () => void;
-  /** User clicked the notification body (not a button). */
-  onClick?: () => void;
+  /** The banner body was tapped. */
+  onOpen?: () => void;
 }
 
 export interface NotifyOptions extends NotifyCallbacks {
   title: string;
   body: string;
+  /** Defaults to `CATEGORY_PLAIN` — a banner with no buttons. */
+  category?: NotificationCategory;
   /**
-   * When true (default), attach the Record/Ignore action buttons. Set false for
-   * a plain informational notification.
+   * Stable id. Delivering the same id twice replaces the banner instead of stacking a
+   * second one, which is what you want for "meeting in N minutes". Generated when omitted.
    */
-  actionable?: boolean;
+  id?: string;
+  /** Handed back verbatim on the action event; useful for logging and debugging. */
+  userInfo?: Record<string, string>;
+}
+
+interface ActionEvent {
+  actionId: string;
+  notificationId: string;
+  userInfo: Record<string, string>;
 }
 
 // ---------------------------------------------------------------------------
-// Module state (all lazily initialized so importing this file is side-effect-free)
+// Module state (lazy, so importing this file has no side effects)
 // ---------------------------------------------------------------------------
 
-type NotifModule = {
-  isPermissionGranted: typeof IsPermissionGrantedFn;
-  requestPermission: typeof RequestPermissionFn;
-  registerActionTypes: typeof RegisterActionTypesFn;
-  sendNotification: typeof SendNotificationFn;
-  onAction: typeof OnActionFn;
-};
+let capabilityPromise: Promise<NotificationCapability> | null = null;
+let listenerWired = false;
+let nextId = 1;
 
-let modulePromise: Promise<NotifModule | null> | null = null;
-let permissionGranted: boolean | null = null;
-let actionTypesRegistered = false;
-let actionListenerWired = false;
+const callbacks = new Map<string, NotifyCallbacks>();
 
-/** id → callbacks for in-flight notifications we sent. */
-const callbackRegistry = new Map<number, NotifyCallbacks>();
-let nextNotificationId = 1;
-
-async function loadModule(): Promise<NotifModule | null> {
-  if (!modulePromise) {
-    modulePromise = import('@tauri-apps/plugin-notification')
-      .then((m) => m as unknown as NotifModule)
-      .catch((err) => {
-        console.warn('[osNotification] notification plugin unavailable:', err);
-        return null;
-      });
-  }
-  return modulePromise;
-}
+/** An unpressed banner should not pin its callbacks forever. */
+const CALLBACK_TTL_MS = 60 * 60 * 1000;
 
 /**
- * Ensure we have notification permission, requesting it once if needed.
- * Returns true only if granted. Result is cached for the session.
+ * Can this build deliver an OS notification? Cached: it cannot change within a session,
+ * since it is decided by whether the running process is inside an `.app`.
  */
-async function ensurePermission(mod: NotifModule): Promise<boolean> {
-  if (permissionGranted !== null) return permissionGranted;
+export async function getNotificationCapability(): Promise<NotificationCapability> {
+  if (!capabilityPromise) {
+    capabilityPromise = invoke<NotificationCapability>('notif_capability').catch((error) => {
+      console.warn('[osNotification] capability check failed:', error);
+      return { supported: false, reason: 'Notifications are unavailable in this build.' };
+    });
+  }
+  return capabilityPromise;
+}
+
+/** Read the macOS authorization state. Never prompts. */
+export async function getNotificationPermission(): Promise<AuthorizationStatus> {
   try {
-    let granted = await mod.isPermissionGranted();
-    console.log('[osNotification] isPermissionGranted:', granted);
-    if (!granted) {
-      const result = await mod.requestPermission();
-      console.log('[osNotification] requestPermission result:', result);
-      granted = result === 'granted';
-    }
-    permissionGranted = granted;
-  } catch (err) {
-    console.warn('[osNotification] permission check failed:', err);
-    permissionGranted = false;
-  }
-  return permissionGranted;
-}
-
-/**
- * Proactively ensure notification permission at app startup (spec 0008, #4).
- *
- * Why: previously permission was requested lazily inside `notify()` — i.e.
- * mid-meeting, when Nixon is backgrounded and the user is in Zoom. The macOS
- * permission dialog is easy to miss there, and for a fresh bundle id
- * (`ai.vinyl.app.debug`) the plugin's `isPermissionGranted` is NOT auto-granted
- * despite the Rust side reporting so — so `notify()` silently returns false and
- * the prompt is lost. Calling this once on launch surfaces the dialog up front.
- *
- * Returns the resulting granted boolean (false if the plugin is unavailable).
- */
-export async function ensureNotificationPermission(): Promise<boolean> {
-  const mod = await loadModule();
-  if (!mod) {
-    console.warn('[osNotification] ensureNotificationPermission: plugin unavailable');
-    return false;
-  }
-  return ensurePermission(mod);
-}
-
-/**
- * Read whether OS notifications are currently granted, WITHOUT prompting.
- * Returns null if the plugin is unavailable or the check throws. Does not use the
- * session cache so the Settings UI always reflects the live OS state.
- */
-export async function getNotificationPermission(): Promise<boolean | null> {
-  const mod = await loadModule();
-  if (!mod) return null;
-  try {
-    return await mod.isPermissionGranted();
-  } catch (err) {
-    console.warn('[osNotification] getNotificationPermission failed:', err);
-    return null;
+    return await invoke<AuthorizationStatus>('notif_authorization_status');
+  } catch (error) {
+    console.warn('[osNotification] status read failed:', error);
+    return 'unavailable';
   }
 }
 
 /**
- * Explicitly request notification permission (for a user-initiated Settings
- * button). Unlike `ensureNotificationPermission`, this bypasses the session cache
- * and always asks the plugin, then updates the cache with the fresh result.
- * Returns the granted boolean (false if unavailable / denied / threw).
+ * Ask macOS for permission, showing its dialog. Only ever prompts once per install — after
+ * that macOS returns the stored answer — so a refusal has to be undone in System Settings.
  */
 export async function requestNotificationPermission(): Promise<boolean> {
-  const mod = await loadModule();
-  if (!mod) return false;
+  const { supported } = await getNotificationCapability();
+  if (!supported) return false;
   try {
-    const result = await mod.requestPermission();
-    console.log('[osNotification] requestNotificationPermission result:', result);
-    const granted = result === 'granted';
-    permissionGranted = granted;
-    return granted;
-  } catch (err) {
-    console.warn('[osNotification] requestNotificationPermission failed:', err);
+    return await invoke<boolean>('notif_request_authorization');
+  } catch (error) {
+    console.warn('[osNotification] permission request failed:', error);
     return false;
   }
 }
 
-/** Register the Record/Ignore action type once. Best-effort. */
-async function ensureActionTypes(mod: NotifModule): Promise<void> {
-  if (actionTypesRegistered) return;
+/**
+ * Make sure we are allowed to notify, asking the first time.
+ *
+ * Called at the point of first *use* rather than at launch, deliberately: asking on first
+ * run would stack a third dialog behind microphone and audio-capture, where it is easy to
+ * dismiss without reading. The Settings row offers the same request explicitly.
+ */
+export async function ensureNotificationPermission(): Promise<boolean> {
+  const { supported } = await getNotificationCapability();
+  if (!supported) return false;
+
+  const status = await getNotificationPermission();
+  if (status === 'authorized' || status === 'provisional') return true;
+  if (status === 'not_determined') return requestNotificationPermission();
+  return false;
+}
+
+/** Open System Settings → Notifications, the only way back from a refusal. */
+export async function openNotificationSettings(): Promise<void> {
   try {
-    await mod.registerActionTypes([
-      {
-        id: RECORD_PROMPT_ACTION_TYPE,
-        actions: [
-          // `foreground: true` brings Nixon to the front when Record is pressed.
-          { id: ACTION_RECORD, title: 'Record', foreground: true },
-          { id: ACTION_IGNORE, title: 'Ignore', destructive: true },
-        ],
-      },
-    ]);
-    actionTypesRegistered = true;
-  } catch (err) {
-    // Not fatal — the notification can still show without buttons.
-    console.warn('[osNotification] registerActionTypes failed:', err);
+    await invoke('notif_open_system_settings');
+  } catch (error) {
+    console.warn('[osNotification] could not open notification settings:', error);
   }
 }
 
-/**
- * Wire the single global `onAction` listener once. It dispatches the pressed
- * button / body-tap to the callbacks registered for that notification id.
- */
-async function ensureActionListener(mod: NotifModule): Promise<void> {
-  if (actionListenerWired) return;
-  actionListenerWired = true;
+/** Wire the single `notification-action` listener. */
+async function ensureListener(): Promise<void> {
+  if (listenerWired) return;
+  listenerWired = true;
   try {
-    await mod.onAction((payload) => {
-      // The runtime payload carries the notification `id` plus the chosen
-      // `actionId` (the plugin's type only models `Options`, so read loosely).
-      const p = payload as { id?: number; actionId?: string };
-      const id = p.id;
-      const actionId = p.actionId;
-      if (typeof id !== 'number') return;
+    await listen<ActionEvent>('notification-action', ({ payload }) => {
+      const registered = callbacks.get(payload.notificationId);
+      if (!registered) return;
+      // Buttons are one-shot: the banner is gone once pressed.
+      callbacks.delete(payload.notificationId);
 
-      const cbs = callbackRegistry.get(id);
-      if (!cbs) return;
-      callbackRegistry.delete(id);
-
-      if (actionId === ACTION_RECORD) {
-        cbs.onRecord?.();
-      } else if (actionId === ACTION_IGNORE) {
-        cbs.onIgnore?.();
-      } else if (actionId === undefined || DEFAULT_TAP_IDS.has(actionId)) {
-        // Body tap (no specific button): treat as "open it".
-        cbs.onClick?.();
+      switch (payload.actionId) {
+        case ACTION_JOIN:
+          registered.onJoin?.();
+          break;
+        case ACTION_JOIN_AND_RECORD:
+          registered.onJoinAndRecord?.();
+          break;
+        case ACTION_RECORD:
+          registered.onRecord?.();
+          break;
+        case ACTION_OPEN:
+          registered.onOpen?.();
+          break;
+        default:
+          console.warn('[osNotification] unknown action:', payload.actionId);
       }
     });
-  } catch (err) {
-    console.warn('[osNotification] onAction listener failed to register:', err);
-    actionListenerWired = false; // allow a later retry
+  } catch (error) {
+    console.warn('[osNotification] could not listen for notification actions:', error);
+    listenerWired = false; // allow a later retry
   }
 }
 
 /**
- * Send a native OS notification. Returns true if it was dispatched, false if it
- * couldn't be (plugin missing, permission denied, or send threw) — in which case
- * the caller should fall back to an in-app prompt.
+ * Send a native OS notification. Returns true if it was handed to macOS, false if it could
+ * not be — in which case the caller should fall back to an in-app prompt.
  */
 export async function notify(options: NotifyOptions): Promise<boolean> {
-  const { title, body, actionable = true, onRecord, onIgnore, onClick } = options;
+  const {
+    title,
+    body,
+    category = CATEGORY_PLAIN,
+    userInfo = {},
+    onJoin,
+    onJoinAndRecord,
+    onRecord,
+    onOpen,
+  } = options;
 
-  const mod = await loadModule();
-  if (!mod) {
-    console.warn('[osNotification] notify: plugin unavailable, falling back');
-    return false;
-  }
-
-  const granted = await ensurePermission(mod);
+  const granted = await ensureNotificationPermission();
   if (!granted) {
-    console.warn('[osNotification] notify: permission not granted, falling back');
+    console.warn('[osNotification] not permitted; falling back to the in-app prompt');
     return false;
   }
 
-  // Set up action plumbing only when we actually need buttons.
-  if (actionable) {
-    await ensureActionTypes(mod);
-    await ensureActionListener(mod);
-  }
+  await ensureListener();
 
-  const id = nextNotificationId++;
-  if (onRecord || onIgnore || onClick) {
-    callbackRegistry.set(id, { onRecord, onIgnore, onClick });
-    // Don't let a never-actioned notification leak its callbacks forever.
-    setTimeout(() => callbackRegistry.delete(id), 60 * 60 * 1000);
+  const id = options.id ?? `nixon-${nextId++}`;
+  if (onJoin || onJoinAndRecord || onRecord || onOpen) {
+    callbacks.set(id, { onJoin, onJoinAndRecord, onRecord, onOpen });
+    setTimeout(() => callbacks.delete(id), CALLBACK_TTL_MS);
   }
 
   try {
-    mod.sendNotification({
-      id,
-      title,
-      body,
-      ...(actionable && actionTypesRegistered
-        ? { actionTypeId: RECORD_PROMPT_ACTION_TYPE }
-        : {}),
-    });
-    console.log('[osNotification] notify: sent OS notification', { id, actionable });
+    await invoke('notif_deliver', { request: { id, title, body, category, userInfo } });
     return true;
-  } catch (err) {
-    console.warn('[osNotification] sendNotification failed:', err);
-    callbackRegistry.delete(id);
+  } catch (error) {
+    console.warn('[osNotification] delivery failed:', error);
+    callbacks.delete(id);
     return false;
   }
 }
 
 /**
- * Bring the Nixon window to the front (used when a backgrounded notification is
- * clicked). Best-effort and safe to call even if window APIs are unavailable.
+ * Bring the Nixon window to the front. Best-effort and safe to call even if the window APIs
+ * are unavailable.
  */
 export async function focusMainWindow(): Promise<void> {
   try {
@@ -301,7 +256,15 @@ export async function focusMainWindow(): Promise<void> {
     await win.show().catch(() => {});
     await win.unminimize().catch(() => {});
     await win.setFocus().catch(() => {});
-  } catch (err) {
-    console.warn('[osNotification] focusMainWindow failed:', err);
+  } catch (error) {
+    console.warn('[osNotification] focusMainWindow failed:', error);
   }
+}
+
+/** Test seam: forget the cached capability and the registered callbacks. */
+export function __resetNotificationStateForTests(): void {
+  capabilityPromise = null;
+  listenerWired = false;
+  callbacks.clear();
+  nextId = 1;
 }

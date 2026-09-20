@@ -6,6 +6,7 @@ import { toast } from "sonner"
 import { Button } from "./ui/button"
 import { Switch } from "./ui/switch"
 import { SettingsGroup, SettingsNote, SettingsRow, SettingsSection } from "./ui/settings"
+import { CATEGORY_MEETING, notify } from "@/lib/osNotification"
 
 export interface DevFlags { fixtures: boolean; no_audio: boolean; fake_downloads: boolean; reset_onboarding: boolean; control: boolean }
 interface SeedReport { meetings: number; people: number; segments: number; failed: number }
@@ -47,6 +48,21 @@ export function DeveloperSettings() {
     } finally { setBusy(false) }
   }
 
+  // specs/0068 — the only way to exercise the action buttons without waiting for a real
+  // meeting. Dev-only on purpose: it is a probe, not a feature.
+  const testMeetingAlert = async () => {
+    const sent = await notify({
+      title: "Standup in 5 min",
+      body: "10:00 · Work",
+      category: CATEGORY_MEETING,
+      id: "dev-test-meeting",
+      onJoin: () => toast.success("Join pressed", { description: "The delegate routed the press back into Nixon." }),
+      onJoinAndRecord: () => toast.success("Join & Record pressed", { description: "The delegate routed the press back into Nixon." }),
+      onOpen: () => toast.success("Banner tapped", { description: "Default action routed back into Nixon." }),
+    })
+    if (!sent) toast.error("Could not send the alert", { description: "Check Settings → General → Notifications." })
+  }
+
   const reset = async () => {
     try { await invoke("dev_reset_onboarding") } catch (e) { toast.error(`Could not reset onboarding: ${String(e)}`) }
   }
@@ -65,6 +81,15 @@ export function DeveloperSettings() {
               </label>
               <Button size="sm" variant="secondary" disabled={busy} onClick={load}>{busy ? "Loading…" : "Load demo data"}</Button>
             </div>
+          }
+        />
+        <SettingsRow
+          label="Test a meeting alert"
+          description="Fires the two-button meeting banner. Put another window in front first, then press Join or Join & Record — each one toasts here, which proves the delegate routed the press back into the app (specs/0068)."
+          control={
+            <Button size="sm" variant="secondary" onClick={testMeetingAlert}>
+              Send meeting alert
+            </Button>
           }
         />
         <SettingsRow

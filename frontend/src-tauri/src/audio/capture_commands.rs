@@ -8,10 +8,9 @@
 use log::{error as log_error, info as log_info};
 use serde::{Deserialize, Serialize};
 use std::sync::Mutex as StdMutex;
-use tauri::{AppHandle, Manager, Runtime};
+use tauri::{AppHandle, Runtime};
 
 use crate::notifications;
-use crate::notifications::commands::NotificationManagerState;
 use crate::tray;
 
 use super::{list_audio_devices, trigger_audio_permission, AudioDevice};
@@ -72,20 +71,16 @@ pub async fn start_recording<R: Runtime>(
 
             log_info!("Recording started successfully");
 
-            // Show recording started notification through NotificationManager
-            // This respects user's notification preferences
-            let notification_manager_state = app.state::<NotificationManagerState<R>>();
-            if let Err(e) = notifications::commands::show_recording_started_notification(
+            // Banner: the recording may have been started from a notification button
+            // while Nixon has no visible window, and this is the only sign of it
+            // (specs/0068 — before that, this call could not produce one).
+            notifications::os_commands::recording_banner(
                 &app,
-                &notification_manager_state,
-                meeting_name.clone(),
+                "Recording started",
+                meeting_name.as_deref().unwrap_or("Meeting"),
+                "nixon-recording",
             )
-            .await
-            {
-                log_error!("Failed to show recording started notification: {}", e);
-            } else {
-                log_info!("Successfully showed recording started notification");
-            }
+            .await;
 
             Ok(())
         }
@@ -136,19 +131,15 @@ pub async fn stop_recording<R: Runtime>(
                 }
             }
 
-            // Show recording stopped notification through NotificationManager
-            // This respects user's notification preferences
-            let notification_manager_state = app.state::<NotificationManagerState<R>>();
-            if let Err(e) = notifications::commands::show_recording_stopped_notification(
+            // Same id as the start banner, so the stop notice replaces it rather than
+            // leaving two entries for one recording in Notification Center.
+            notifications::os_commands::recording_banner(
                 &app,
-                &notification_manager_state,
+                "Recording stopped",
+                "Nixon is processing the meeting.",
+                "nixon-recording",
             )
-            .await
-            {
-                log_error!("Failed to show recording stopped notification: {}", e);
-            } else {
-                log_info!("Successfully showed recording stopped notification");
-            }
+            .await;
 
             Ok(stop_info)
         }
@@ -274,18 +265,14 @@ pub async fn start_recording_with_devices_and_meeting<R: Runtime>(
         Ok(_) => {
             log_info!("Recording started successfully via tauri command");
 
-            // Show recording started notification through NotificationManager
-            // This respects user's notification preferences
-            let notification_manager_state = app.state::<NotificationManagerState<R>>();
-            if let Err(e) = notifications::commands::show_recording_started_notification(
+            // Same banner as the direct path above.
+            notifications::os_commands::recording_banner(
                 &app,
-                &notification_manager_state,
-                meeting_name_for_notification.clone(),
+                "Recording started",
+                meeting_name_for_notification.as_deref().unwrap_or("Meeting"),
+                "nixon-recording",
             )
-            .await
-            {
-                log_error!("Failed to show recording started notification: {}", e);
-            }
+            .await;
 
             Ok(())
         }

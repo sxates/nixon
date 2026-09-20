@@ -19,7 +19,48 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 ## [Unreleased]
 
-_(nothing yet)_
+### Fixed
+
+- **macOS notifications work.** Nixon has offered to alert you before a meeting starts, and
+  when it spots a call you might want to record, since well before this release — and not
+  one of those alerts could ever reach you. The notification library it used has no action
+  buttons on macOS, reported permission as granted without ever asking the system, and
+  delivered through an interface Apple retired years ago. That is why macOS never asked
+  whether Nixon could send you notifications: Nixon never asked it. Notifications are now
+  built directly on the macOS framework, so the permission is real, the banners appear when
+  Nixon is behind another window, and they stay in Notification Center.
+
+### Added
+
+- **Meeting alerts you can act on without opening Nixon.** The alert five minutes before a
+  meeting now carries **Join** and **Join & Record**; Join & Record opens the call *and*
+  starts a recording filed against that meeting. A meeting with no join link offers
+  **Record** on its own, rather than a Join button with nothing to open.
+- **A second alert as the meeting actually starts.** Five minutes of warning is the wrong
+  amount when you get absorbed in something else, so the banner is replaced by a "starting
+  now" one at the top of the hour. It stays quiet if you are already recording.
+- **A Record button on the "meeting detected" alert**, which starts the recording from the
+  banner instead of only bringing Nixon forward.
+- **Settings → General → Notifications** now shows whether macOS is letting Nixon notify
+  you, with a way to grant it, a way into System Settings if you have turned it off, and a
+  **Send a test** button.
+- **A banner when a recording starts and stops** — but only while Nixon is behind another
+  window, where it is the one sign that the recording is running.
+
+### Internal
+
+_Not shown in release notes or the in-app updater (see `release.sh`)._
+
+- specs/0068 replaces the specs/0008 notification path with a native
+  `UNUserNotificationCenter` layer (`notifications/macos/`, objc2-user-notifications 0.3):
+  capability gate, authorization, delivery, and a `define_class!` delegate that emits
+  `notification-action`. The bundle gate matters — `currentNotificationCenter` raises an
+  uncaught `NSInternalInconsistencyException` outside an `.app`, so `tauri dev` would abort;
+  `bundle_gate_holds` covers it and was sabotage-verified.
+- Deletes the 0008 module it replaces (`manager`/`settings`/`system`/`types`/`commands`,
+  ~1,500 lines, 14 registered commands of which the frontend called two) and drops
+  `tauri-plugin-notification` and `@tauri-apps/plugin-notification`. Net −413 lines.
+- specs/0067 W3 is superseded: it assumed the action-button plumbing already existed.
 
 ## [0.7.0] - 2026-09-19
 

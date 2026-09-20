@@ -11,10 +11,8 @@ vi.mock('@tauri-apps/api/core', () => ({ invoke: (...args: unknown[]) => invoke(
 
 vi.mock('@/contexts/ConfigContext', () => ({
   useConfig: () => ({
-    notificationSettings: null,
     isLoadingPreferences: false,
     loadPreferences: vi.fn(),
-    updateNotificationSettings: vi.fn(),
   }),
 }));
 

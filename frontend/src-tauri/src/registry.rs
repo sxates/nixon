@@ -213,21 +213,12 @@ pub fn invoke_handler() -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Sen
         audio::deferred_backlog::api_list_deferred_meetings,
         // Language preference commands
         audio::capture_commands::set_language_preference,
-        // Notification system commands
-        notifications::commands::get_notification_settings,
-        notifications::commands::set_notification_settings,
-        notifications::commands::request_notification_permission,
-        notifications::commands::show_notification,
-        notifications::commands::show_test_notification,
-        notifications::commands::is_dnd_active,
-        notifications::commands::get_system_dnd_status,
-        notifications::commands::set_manual_dnd,
-        notifications::commands::set_notification_consent,
-        notifications::commands::clear_notifications,
-        notifications::commands::is_notification_system_ready,
-        notifications::commands::initialize_notification_manager_manual,
-        notifications::commands::test_notification_with_auto_consent,
-        notifications::commands::get_notification_stats,
+        // Notification system commands (specs/0068 — the surface macOS answers).
+        notifications::os_commands::notif_capability,
+        notifications::os_commands::notif_authorization_status,
+        notifications::os_commands::notif_request_authorization,
+        notifications::os_commands::notif_deliver,
+        notifications::os_commands::notif_open_system_settings,
         // System audio capture commands
         audio::system_audio_commands::start_system_audio_capture_command,
         audio::system_audio_commands::list_system_audio_devices_command,
