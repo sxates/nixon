@@ -27,6 +27,21 @@
     ]
   },
   {
+    "name": "sidebar-update-ready",
+    "route": "/meetings",
+    "sidebar": "open",
+    "update": "ready",
+    "ignore": [
+      {
+        "x": 338,
+        "y": 816,
+        "w": 106,
+        "h": 22,
+        "why": "footer TapeCounter roller digits (specs/0060 Task 3). Moved here in specs/0066: specs/0064 W6 reordered the rail (reel, then counter-over-meter, then title, keys right), so the old box at x=470 sat over \"Deck ready\" while the digits flaked unignored at x=343..434 — measured, not guessed."
+      }
+    ]
+  },
+  {
     "name": "meetings",
     "route": "/meetings",
     "sidebar": "open",

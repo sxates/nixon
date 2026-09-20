@@ -21,6 +21,10 @@
 //     THEME_STORAGE_KEY (src/contexts/ThemeContext.tsx) before the app boots.
 //   sidebar=open — expand the sidebar (default is collapsed). Written to the real
 //     SIDEBAR_COLLAPSED_KEY (src/components/Sidebar/SidebarProvider.tsx).
+//   update=ready|downloading — stage an update so UpdateRow (Sidebar/UpdateRow.tsx) shows
+//     the restart/download glyph instead of rendering nothing (specs/0069 review, fix
+//     round 2: no route staged one, so the restart glyph — and the row-geometry fix next
+//     to it — appeared in no screenshot at all). Omit for the normal no-update case.
 (function () {
   const q = new URLSearchParams(location.search);
 
@@ -37,6 +41,8 @@
   if (q.get('sidebar') === 'open') {
     localStorage.setItem(SIDEBAR_COLLAPSED_KEY, '0');
   }
+
+  const updateParam = q.get('update');
 
   // --- Fixture dataset (src-tauri/fixtures/demo), embedded verbatim. ---
   const PEOPLE = [{"id":"person-maya","display_name":"Maya Okafor","email":"maya@halden.example","role":null},{"id":"person-tomas","display_name":"Tomas Lindqvist","email":"tomas@halden.example","role":null},{"id":"person-ines","display_name":"Inès Marchetti","email":"ines@halden.example","role":null},{"id":"person-rafael","display_name":"Rafael Duarte","email":"rafael@halden.example","role":null},{"id":"person-sun","display_name":"Sun Ji-woo","email":"sun@halden.example","role":null},{"id":"person-dele","display_name":"Dele Adeyemi","email":"dele@halden.example","role":null},{"id":"person-greta","display_name":"Greta Voss","email":"greta@halden.example","role":null}];
@@ -356,6 +362,18 @@
 
     // audio/retention.rs `api_meeting_audio_available` -> bool. Args: { meetingId }.
     api_meeting_audio_available: () => true,
+
+    // updater/commands.rs `api_get_update_status` -> UpdateStatus (contexts/
+    // UpdateStatusContext.tsx's tagged union, serde tag = "state"). Idle by default; the
+    // `update=ready|downloading` route flag (see the URL-params doc above) stages one so
+    // UpdateRow's restart/download glyph (and its row geometry) shows up in a screenshot
+    // at all (specs/0069 review, fix round 2 — previously no route exercised this).
+    api_get_update_status: () =>
+      updateParam === 'ready'
+        ? { state: 'ready', version: '9.9.9', notes: '- Faster startup\n- Bug fixes', last_checked: null }
+        : updateParam === 'downloading'
+          ? { state: 'downloading', version: '9.9.9', received: 42 * 1024 * 1024, total: 100 * 1024 * 1024 }
+          : { state: 'idle', last_checked: null },
 
     // parakeet_engine/commands.rs `parakeet_has_available_models` -> bool. No args.
     // Tracks MODELS_READY (see above) so an in-progress onboardingStep preview (1-3)
