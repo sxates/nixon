@@ -130,6 +130,9 @@ pub fn invoke_handler() -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Sen
         transcripts::api_set_segment_text,
         transcripts::api_count_user_edited,
         meetings::commands::open_meeting_folder,
+        meetings::manual_commands::api_create_manual_meeting,
+        meetings::manual_commands::api_update_manual_meeting,
+        meetings::manual_commands::api_delete_manual_meeting,
         utils::open_external_url,
         // Custom OpenAI commands
         settings::custom_openai::api_save_custom_openai_config,
