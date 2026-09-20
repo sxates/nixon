@@ -50,7 +50,10 @@ impl ScheduledResolution {
 /// `calendarItemExternalIdentifier` (the iCalUID) is shared too. Only the Google form may
 /// therefore be matched without also pinning the day.
 pub fn is_per_occurrence_event_id(calendar_event_id: &str) -> bool {
-    calendar_event_id.starts_with("gcal:")
+    // specs/0069 W3 — a Nixon-minted manual id names exactly one entry, like a Google
+    // instance id; without this, adopting its prep row at record start falls back to
+    // "same UTC day" and misses a recording that starts after midnight UTC.
+    calendar_event_id.starts_with("gcal:") || super::is_manual_event_id(calendar_event_id)
 }
 
 impl MeetingsRepository {
