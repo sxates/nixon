@@ -19,6 +19,10 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 ## [Unreleased]
 
+_(nothing yet)_
+
+## [0.6.0] - 2026-09-19
+
 ### Changed
 
 - **A summary is now written automatically when a recording stops.** This was off by
