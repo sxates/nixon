@@ -19,6 +19,29 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 ## [Unreleased]
 
+### Changed
+
+- **Nixon no longer asks you to pick AI models.** It chooses the transcription engine and
+  the summary model to suit your Mac, and Settings shows what is in use rather than a menu
+  of names only an enthusiast could rank. Each one still has a **Change** next to it if you
+  want the full list back — including the cloud providers — and a choice you have already
+  made stays on screen instead of hiding behind that link.
+- **Settings is reorganised so each tab is one subject.** General, Audio, Calendar,
+  Recording, Transcription, Summary, About. Notably: **Audio** shows each input's
+  permission *and* its device on the same row, so you are not checking two tabs to find out
+  why the microphone is quiet; speaker labels and voiceprints moved to **Transcription**,
+  beside the engine they describe; your calendar source, Google connection and email
+  addresses are together on **Calendar**; and templates are on **Summary**, which is what
+  they shape.
+- **Fewer settings that did nothing.** The transcription-language picker is gone for the
+  default engine, which only ever detects the language automatically; the summary-language
+  picker is gone from both Settings and the meeting page, where Auto already follows the
+  transcript; and the **AI Model** entry is gone from a meeting's "…" menu, since the model
+  is chosen for you and lives in Settings.
+- The **Recording** tab is tidier: the pause-mic-in-Zoom switch sits with the other
+  recording switches, the audio-retention dropdown matches every other dropdown in the app,
+  and a signpost pointing at another tab is gone.
+
 ### Fixed
 
 - **On the collapsed sidebar, the update lamp now opens a panel instead of restarting the
@@ -27,9 +50,29 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
   refused mid-recording, but clicking a light to find out what it means should never be the
   same gesture as "restart now". It opens a flyout describing the update, with Restart as a
   separate, labelled button inside it.
+- A person's name no longer wraps onto a second line on their page while the rest of the
+  row sits empty.
 
+### Internal
 
-_(nothing yet)_
+_Not shown in release notes or the in-app updater (see `release.sh`)._
+
+- `tests/transcription_wer.rs` scores both transcription engines against the Zoom VTTs in
+  the eval corpus — the repo had no WER measurement at all, only DER for diarization. Both
+  engines are fed 30-second windows, matching how the app actually calls them; an earlier
+  version handed them five-minute buffers and produced a ~100% WER for Whisper that would
+  have argued for deleting the better engine. Parakeet 17.6% vs Whisper medium-q5_0 20.6%;
+  against Whisper's actual default (large-v3-turbo) it is 17.6% vs 14.7%, with Whisper also
+  faster on this hardware — the default stays Parakeet on size, streaming design and the
+  fact that every figure comes from one M3 Ultra (specs/0067).
+- `patchRecordingPreferences` read-modify-writes the recording-preferences store. Every
+  caller used to save the whole object from state loaded at mount, which was safe until
+  devices and recording behaviour ended up on different tabs (specs/0067).
+- A saved summary no longer needs a `transcript_chunks` row to be readable, which is why
+  every `--demo` meeting showed "No Summary Generated Yet" (specs/0066).
+- README requirements now state measured hardware expectations: peak memory per summary
+  model, model download sizes, ~250 MB per recorded hour, and that a base M1 summarises an
+  hour-long meeting in about a minute (specs/0066).
 
 ## [0.6.0] - 2026-09-19
 
