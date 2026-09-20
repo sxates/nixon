@@ -52,10 +52,7 @@ export interface SummaryToolbarProps {
   isDirty: boolean;
   onSave: () => Promise<void>;
   onCopy: () => Promise<void>;
-  /** Current summary language, shown on the flyout item ("Summary language · English"). */
-  summaryLanguageLabel: string;
   /** Opens the language picker, which the panel owns (it holds the language state). */
-  onOpenLanguagePicker: () => void;
   modelConfig: ModelConfig;
   setModelConfig: (config: ModelConfig | ((prev: ModelConfig) => ModelConfig)) => void;
   onSaveModelConfig: (config?: ModelConfig) => Promise<void>;
@@ -72,7 +69,7 @@ export interface SummaryToolbarProps {
  * The Summary tab's action bar (specs/0064 W3).
  *
  * Replaces the two button groups that between them showed up to eight controls — Stop,
- * Generate/Regenerate, AI Model, the template picker, Re-think structure, a language picker,
+ * Generate/Regenerate, the template picker, Re-think structure,
  * Save and Copy — which the owner reported as "overkill". What is left is the primary action,
  * the template picker, and a "…" flyout for everything that is occasionally useful.
  *
@@ -100,8 +97,6 @@ export function SummaryToolbar({
   isDirty,
   onSave,
   onCopy,
-  summaryLanguageLabel,
-  onOpenLanguagePicker,
   modelConfig,
   setModelConfig,
   onSaveModelConfig,
@@ -294,12 +289,6 @@ export function SummaryToolbar({
               Copy
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onSelect={() => onOpenLanguagePicker()}>
-              Summary language · {summaryLanguageLabel}
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => setSettingsDialogOpen(true)}>
-              AI Model
-            </DropdownMenuItem>
             {canRethinkStructure && (
               <DropdownMenuItem
                 onSelect={() => {
