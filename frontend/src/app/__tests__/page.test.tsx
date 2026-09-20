@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 
 // specs/0069 W3 — recording a manually added meeting must go through the SAME adoption
 // path as calendar Join & Record: `joinAndRecord` stashes the event's `calendarEventId`
@@ -75,7 +75,10 @@ vi.mock('@/hooks/useDayAgenda', () => ({
     visibleItems: [manualItem],
     calendarStatus: 'granted',
     loaded: true,
-    now: new Date('2026-09-20T14:00:00.000Z'),
+    // Inside the manual item's 15:00–15:30 window — Record is phase-gated (fix round 1
+    // Finding 1), same as Join & Record, so `now` must land in the item's "now" window
+    // for the button to render at all.
+    now: new Date('2026-09-20T15:10:00.000Z'),
     viewDate: '2026-09-20',
     viewMode: 'day',
     viewIsToday: true,
@@ -134,6 +137,53 @@ describe('recording a manual entry (specs/0069 W3)', () => {
     expect(invokeMock).not.toHaveBeenCalledWith(
       'api_create_meeting',
       expect.objectContaining({ calendarEventId: 'meeting-1' }),
+    );
+  });
+});
+
+describe('edit → close → add (specs/0069 W3, fix round 1 Finding 2)', () => {
+  it('leaves the form blank and creates (not updates) after editing then reopening Add', async () => {
+    render(<Home />);
+
+    // Open the manual entry's ⋯ menu and choose Edit.
+    const menuTrigger = await screen.findByRole('button', { name: 'Event options' });
+    menuTrigger.focus();
+    fireEvent.keyDown(menuTrigger, { key: 'Enter' });
+    fireEvent.click(await screen.findByText('Edit'));
+
+    // The dialog seeded from the manual entry — title field carries its title, and
+    // "Save" (not "Add meeting") is the submit label in edit mode. Scope to the dialog:
+    // the header's own "Add meeting" button is a separate, always-present element.
+    let dialog = await screen.findByRole('dialog');
+    const titleInput = within(dialog).getByLabelText('Title') as HTMLInputElement;
+    expect(titleInput.value).toBe('Call with Sam');
+    expect(within(dialog).getByRole('button', { name: 'Save' })).toBeInTheDocument();
+
+    // Close without saving.
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+
+    // Reopen via the header's "Add meeting" — a STALE `editing` prop would silently
+    // reseed the previous entry's fields and turn this create into an update.
+    fireEvent.click(screen.getByRole('button', { name: /add meeting/i }));
+
+    dialog = await screen.findByRole('dialog');
+    const reopenedTitle = within(dialog).getByLabelText('Title') as HTMLInputElement;
+    expect(reopenedTitle.value).toBe('');
+    expect(within(dialog).getByRole('button', { name: 'Add meeting' })).toBeInTheDocument();
+
+    fireEvent.change(reopenedTitle, { target: { value: 'Brand new call' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Add meeting' }));
+
+    await waitFor(() =>
+      expect(invokeMock).toHaveBeenCalledWith(
+        'api_create_manual_meeting',
+        expect.objectContaining({ title: 'Brand new call' }),
+      ),
+    );
+    expect(invokeMock).not.toHaveBeenCalledWith(
+      'api_update_manual_meeting',
+      expect.anything(),
     );
   });
 });

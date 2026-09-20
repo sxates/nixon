@@ -280,12 +280,22 @@ export function canEditManualItem(item: DayAgendaItem): boolean {
 /**
  * Whether a timeline item should show an explicit "Record" button (specs/0069 W3): a
  * manual entry, not yet recorded, with no recording already in progress anywhere.
- * Unlike `canJoinItem` this isn't gated to the "now" phase — a manual entry added
- * for later is still yours to record whenever you're ready, not only in a window
- * around its scheduled time.
+ *
+ * Gated to the "now" phase — the SAME `itemPhase` check `canJoinItem` uses (including
+ * its pre-start grace) — deliberately, not merely for visual consistency: pressing
+ * Record threads `item.startTime` through `joinAndRecord` as `startedAt`, and the
+ * backend (`meetings/commands.rs`) calls `redate_scheduled_meeting` to that occurrence
+ * BEFORE promoting the row to recorded. Recording a future manual entry wouldn't just
+ * show a stale date — it would re-date the row forward and file the recording you just
+ * made under a day that hasn't happened yet, sorting it ahead of "now" in every
+ * date-keyed view. A calendar event can't do this because Join & Record is already
+ * phase-gated; a manual entry must not be the one affordance that can. Recording right
+ * now regardless of any scheduled slot is still one press away via the transport
+ * rail's REC key — it just isn't filed against a future date.
  */
 export function canRecordManualItem(item: DayAgendaItem, ctx: TimelineContext): boolean {
-  return item.source === 'manual' && !item.status.recorded && !ctx.isRecording;
+  if (item.source !== 'manual' || item.status.recorded || ctx.isRecording) return false;
+  return itemPhase(item, ctx.now, ctx.recordingThisId) === 'now';
 }
 
 // ---------------------------------------------------------------------------
