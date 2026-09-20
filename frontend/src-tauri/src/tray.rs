@@ -66,16 +66,14 @@ fn handle_menu_event<R: Runtime>(app: &AppHandle<R>, item_id: &str) {
             }
         }
         "install_update" => {
-            let app = app.clone();
-            tauri::async_runtime::spawn(async move {
-                if let Err(e) = crate::updater::driver::install_and_restart(app.clone()).await {
-                    // The refusal already went out as `update-install-refused`; bring the
-                    // window forward so the user can actually read it. A tray click with
-                    // no window on screen would otherwise fail in total silence.
-                    log::warn!("updater: tray install refused: {e}");
-                    focus_main_window(&app);
-                }
-            });
+            // specs/0069 W5 — bring the window forward and ask; the frontend's app-wide
+            // confirmation performs the install. This used to call the updater's installer
+            // straight from the menu, so a tray click relaunched the app with no warning
+            // and nothing on screen to explain what had happened.
+            focus_main_window(app);
+            if let Err(e) = app.emit(crate::updater::EVENT_CONFIRM_RESTART, ()) {
+                log::warn!("updater: could not ask the window to confirm the restart: {e}");
+            }
         }
         "quit" => app.exit(0),
         _ => {}

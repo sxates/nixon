@@ -10,11 +10,15 @@ vi.mock('@tauri-apps/api/app', () => ({ getVersion: async () => '0.3.0' }));
 let status: UpdateStatus = { state: 'idle', last_checked: null };
 const checkNow = vi.fn(async () => {});
 const install = vi.fn(async () => {});
+const request = vi.fn();
 vi.mock('@/contexts/UpdateStatusContext', async (orig) => ({
   ...(await orig<typeof import('@/contexts/UpdateStatusContext')>()),
   useOptionalUpdateStatus: () => ({ status, busy: false, error: null, checkNow, install }),
 }));
 vi.mock('@/contexts/RecordingStateContext', () => ({ useRecordingState: () => ({ isRecording: false }) }));
+// specs/0069 W5 — About's Restart to update button now asks the app-wide confirmation
+// (RestartConfirmContext) instead of installing directly.
+vi.mock('@/contexts/RestartConfirmContext', () => ({ useRestartConfirm: () => ({ request, canRestart: true }) }));
 // AnswerMarkdown reaches for the router to open a cited meeting; release notes carry no
 // citations, but the hook still runs.
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
@@ -36,7 +40,8 @@ describe('About updates (specs/0058)', () => {
     expect(screen.getByText('0.3.1 ready — restart to update')).toBeInTheDocument();
     expect(screen.getByText('Fixed a thing')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Restart to update' }));
-    expect(install).toHaveBeenCalled();
+    expect(request).toHaveBeenCalledTimes(1);
+    expect(install).not.toHaveBeenCalled();
   });
 
   // specs/0066 W4 — the release body IS markdown (the changelog's own sections, published
