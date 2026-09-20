@@ -102,6 +102,9 @@ function SettingsPageContent() {
             <TabsTrigger
               key={tab.value}
               value={tab.value}
+              // Hidden while a screenshot driver is attached (`data-shot="1"`, globals.css):
+              // this tab exists only in debug builds, so a README capture must not show it.
+              {...(tab.value === DEV_TAB.value ? { 'data-dev-only': '' } : {})}
               className="-mb-px rounded-none border-0 border-b-2 border-transparent bg-transparent px-3 py-1.5 text-sm font-semibold text-muted-foreground transition-colors [transition-duration:140ms] hover:text-foreground data-[state=active]:border-brand data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
             >
               {tab.label}

@@ -1,5 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 // specs/0060 — the screenshot pipeline reaches a specific settings tab via
 // `/settings?tab=<value>`. Everything below is scaffolding so SettingsPage (which pulls
@@ -49,6 +51,27 @@ describe('settings ?tab= (specs/0060)', () => {
     render(<SettingsPage />);
     expect(await screen.findByRole('tab', { name: /developer/i })).toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: /^beta$/i })).not.toBeInTheDocument();
+  });
+
+  // specs/0066 — the Developer tab exists only in debug builds, and a real-window README
+  // capture runs against exactly such a build. `data-dev-only` is what globals.css hides
+  // when a screenshot driver sets `data-shot="1"`, the same mechanism as the DEV badge, so
+  // the published images show the shipped app's tab strip.
+  it('marks the Developer tab as dev-only chrome so screenshots hide it', async () => {
+    searchParamsMock.mockReturnValue(new URLSearchParams('tab=general'));
+    render(<SettingsPage />);
+    const dev = await screen.findByRole('tab', { name: /developer/i });
+    expect(dev).toHaveAttribute('data-dev-only');
+    // The shipped tabs must NOT carry it, or a capture would lose the whole strip.
+    expect(screen.getByRole('tab', { name: /^general$/i })).not.toHaveAttribute('data-dev-only');
+  });
+
+  // The attribute above is inert without the rule that acts on it, and the two live in
+  // different files — so pin the pair, the way mock-contract.test.ts pins the screenshot
+  // mock against the Rust command registry.
+  it('has a stylesheet rule that actually hides dev-only chrome in shot mode', () => {
+    const css = readFileSync(join(process.cwd(), 'src/app/globals.css'), 'utf8');
+    expect(css).toMatch(/html\[data-shot="1"\]\s*\[data-dev-only\]/);
   });
 
   it('falls back to the default tab for an unknown ?tab= value', async () => {

@@ -83,8 +83,12 @@
     --rail-h: 3.5rem; /* transport rail height (specs/0057 Plan 2; 56px after specs/0063 W2 grew the keys to 44px so the glyph clears the lamp bar) */
   }
 
-  /* specs/0060: a screenshot driver sets data-shot="1" to hide dev-only chrome. */
-  html[data-shot="1"] [data-dev-badge] { display: none; }
+  /* specs/0060: a screenshot driver sets data-shot="1" to hide dev-only chrome. The
+     badge was the only such thing until specs/0066 gave the debug-only Developer settings
+     section its own tab — which a README screenshot would otherwise advertise as a feature
+     the shipped app has. Anything dev-only and visible belongs on this list. */
+  html[data-shot="1"] [data-dev-badge],
+  html[data-shot="1"] [data-dev-only] { display: none; }
 
   /* ---- DECK (dark) — anodized charcoal, cream silkscreen. Applied by ThemeProvider. ---- */
   .dark {

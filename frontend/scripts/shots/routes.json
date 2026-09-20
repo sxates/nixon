@@ -58,7 +58,8 @@
         "h": 22,
         "why": "footer TapeCounter roller digits (specs/0060 Task 3). Moved here in specs/0066: specs/0064 W6 reordered the rail (reel, then counter-over-meter, then title, keys right), so the old box at x=470 sat over \"Deck ready\" while the digits flaked unignored at x=343..434 \u2014 measured, not guessed."
       }
-    ]
+    ],
+    "wait": 4500
   },
   {
     "name": "meeting-transcript",
@@ -78,7 +79,8 @@
         "h": 22,
         "why": "footer TapeCounter roller digits (specs/0060 Task 3). Moved here in specs/0066: specs/0064 W6 reordered the rail (reel, then counter-over-meter, then title, keys right), so the old box at x=470 sat over \"Deck ready\" while the digits flaked unignored at x=343..434 \u2014 measured, not guessed."
       }
-    ]
+    ],
+    "wait": 4500
   },
   {
     "name": "meeting-notes",
@@ -98,7 +100,8 @@
         "h": 22,
         "why": "footer TapeCounter roller digits (specs/0060 Task 3). Moved here in specs/0066: specs/0064 W6 reordered the rail (reel, then counter-over-meter, then title, keys right), so the old box at x=470 sat over \"Deck ready\" while the digits flaked unignored at x=343..434 \u2014 measured, not guessed."
       }
-    ]
+    ],
+    "wait": 4500
   },
   {
     "name": "meeting-prep",
@@ -118,7 +121,8 @@
         "h": 22,
         "why": "footer TapeCounter roller digits (specs/0060 Task 3). Moved here in specs/0066: specs/0064 W6 reordered the rail (reel, then counter-over-meter, then title, keys right), so the old box at x=470 sat over \"Deck ready\" while the digits flaked unignored at x=343..434 \u2014 measured, not guessed."
       }
-    ]
+    ],
+    "wait": 4500
   },
   {
     "name": "meeting-steerco-speakers",
@@ -138,7 +142,8 @@
         "h": 22,
         "why": "footer TapeCounter roller digits (specs/0060 Task 3). Moved here in specs/0066: specs/0064 W6 reordered the rail (reel, then counter-over-meter, then title, keys right), so the old box at x=470 sat over \"Deck ready\" while the digits flaked unignored at x=343..434 \u2014 measured, not guessed."
       }
-    ]
+    ],
+    "wait": 4500
   },
   {
     "name": "meeting-unprocessed",
@@ -158,7 +163,8 @@
         "h": 22,
         "why": "footer TapeCounter roller digits (specs/0060 Task 3). Moved here in specs/0066: specs/0064 W6 reordered the rail (reel, then counter-over-meter, then title, keys right), so the old box at x=470 sat over \"Deck ready\" while the digits flaked unignored at x=343..434 \u2014 measured, not guessed."
       }
-    ]
+    ],
+    "wait": 4500
   },
   {
     "name": "record-idle",
