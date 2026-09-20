@@ -112,10 +112,12 @@ function toBlocks(markdown: string): Block[] {
 
 export function AnswerMarkdown({
   markdown,
-  sources,
+  sources = [],
 }: {
   markdown: string;
-  sources: SourceMeeting[];
+  /** Ask-AI citation targets. Optional: other callers (the About page's release notes,
+   *  specs/0066 W4) render the same markdown vocabulary with no `[M#]` markers in it. */
+  sources?: SourceMeeting[];
 }) {
   const router = useRouter();
   const onOpenMeeting = useCallback(

@@ -20,6 +20,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Calendar, Video, CircleDot } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import { ConnectCalendarCard } from '@/components/Calendar/ConnectCalendarCard';
 import { useRecordingState } from '@/contexts/RecordingStateContext';
 import { useSidebar } from '@/components/Sidebar/SidebarProvider';
 import {
@@ -198,34 +199,11 @@ export default function UpcomingMeetings() {
   if (!canPrompt) return null;
 
   return (
-    <div className="flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-3">
-      <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-muted">
-        <Calendar className="h-4 w-4 text-muted-foreground" />
-      </div>
-      <div className="min-w-0 flex-1">
-        <div className="text-sm font-medium text-foreground">
-          Connect your calendar to see upcoming meetings
-        </div>
-        <div className="text-xs text-muted-foreground">
-          Nixon reads your macOS Calendar on-device — nothing leaves your machine.
-        </div>
-      </div>
-      <Button
-        variant="brand"
-        size="sm"
-        className="flex-shrink-0"
-        onClick={handleConnect}
-        disabled={connecting}
-      >
-        {connecting ? 'Connecting…' : 'Connect'}
-      </Button>
-      <button
-        type="button"
-        onClick={handleDismiss}
-        className="flex-shrink-0 text-xs text-muted-foreground hover:text-foreground"
-      >
-        Dismiss
-      </button>
-    </div>
+    <ConnectCalendarCard
+      title="Connect your calendar to see upcoming meetings"
+      connecting={connecting}
+      onConnect={() => void handleConnect()}
+      onDismiss={handleDismiss}
+    />
   );
 }

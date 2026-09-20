@@ -3,6 +3,7 @@ import { getVersion } from '@tauri-apps/api/app';
 import { useOptionalUpdateStatus, describeStatus } from '@/contexts/UpdateStatusContext';
 import { useRecordingState } from '@/contexts/RecordingStateContext';
 import { SettingsNote } from '@/components/ui/settings';
+import { AnswerMarkdown } from '@/components/AskAI/AnswerMarkdown';
 
 // specs/0058 Task 5 — the update status line + Check for updates / Restart to
 // update controls. Provider-tolerant: renders nothing when the app-wide
@@ -25,7 +26,7 @@ function UpdatesBlockContent({
 }: NonNullable<ReturnType<typeof useOptionalUpdateStatus>>) {
     const { isRecording } = useRecordingState();
     const ready = status.state === 'ready';
-    const notes = ready ? status.notes.split('\n').map((l) => l.replace(/^\s*[-*]\s*/, '').trim()).filter(Boolean) : [];
+    const notes = ready ? status.notes.trim() : '';
     return (
         <div className="space-y-2 text-left">
             <div className="flex items-center justify-between gap-3">
@@ -54,12 +55,18 @@ function UpdatesBlockContent({
             </div>
             {status.state === 'error' && <p className="text-xs text-muted-foreground">{status.message}</p>}
             {error && <p className="text-xs text-record-ink">{error}</p>}
+            {/* The release body IS markdown — it is the changelog's Added/Changed/Fixed
+                sections, published verbatim (CLAUDE.md). Splitting it into one bullet per
+                line printed the `###` headings as bullets and dropped the structure
+                entirely (specs/0066 W4). `AnswerMarkdown` already renders this vocabulary,
+                so the notes go through it rather than through a second renderer or a new
+                markdown dependency. */}
             {ready && notes.length > 0 && (
                 <SettingsNote tone="muted">
                     <p className="u-section-label mb-1 text-[9px]">What&apos;s new in {status.version}</p>
-                    <ul className="list-disc space-y-0.5 pl-4 text-xs text-muted-foreground">
-                        {notes.map((n, i) => <li key={i}>{n}</li>)}
-                    </ul>
+                    <div className="text-xs [&_h3]:text-[11px] [&_li]:text-xs [&_p]:text-xs">
+                        <AnswerMarkdown markdown={notes} />
+                    </div>
                 </SettingsNote>
             )}
         </div>
@@ -75,7 +82,8 @@ export function About() {
     }, []);
 
     return (
-        <div className="max-w-2xl space-y-4">
+        // specs/0066 W4: the column was left-hugging in a wide settings pane.
+        <div className="mx-auto max-w-2xl space-y-4">
             {/* Header */}
             <div className="text-center">
                 <h1 className="u-section-label text-[28px] tracking-[0.22em] text-foreground">NIXON</h1>
