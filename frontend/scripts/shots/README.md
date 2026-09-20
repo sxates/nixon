@@ -103,11 +103,14 @@ driver additionally needs to hide dev-only chrome:
   `Runtime.evaluate`; the control listener's `ready` command polls it indirectly by having
   the app call the `dev_shot_ping` Tauri command in a loop (`eval` has no return value, so
   the round trip is required — see `control.rs`).
-- `document.documentElement.dataset.shot = "1"` hides the "DEV" badge
-  (`globals.css`: `html[data-shot="1"] [data-dev-badge] { display: none }`). The real
-  driver sets this via the `hide_dev_badge` command before every capture (a full
+- `document.documentElement.dataset.shot = "1"` hides dev-only chrome — the "DEV" badge
+  and, since specs/0066, the debug-only Developer settings tab (`globals.css`:
+  `html[data-shot="1"] [data-dev-badge], html[data-shot="1"] [data-dev-only]`). Anything
+  that exists only in a debug build and is visible on a captured route belongs on that
+  list, or a README image advertises a feature the shipped app does not have. The real
+  driver sets the flag via the `hide_dev_badge` command before every capture (a full
   `navigate` reload clears it, so it's re-sent after any navigation) and clears it again on
-  exit.
+  exit; the command name predates the broader meaning.
 
 ## Control protocol (real captures only)
 `real.mjs` talks NDJSON-over-TCP-loopback to a debug-only listener

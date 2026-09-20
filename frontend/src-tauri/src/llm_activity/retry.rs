@@ -128,8 +128,17 @@ pub async fn retry_task<R: Runtime>(app: &AppHandle<R>, task_id: u64) -> Result<
             .map_err(|e| format!("{e:#}"))
         }
         TaskKind::Diarization => {
-            crate::diarization::launch::diarize_meeting(app.clone(), meeting_id);
-            Ok(())
+            // specs/0066 W2: `diarize_meeting` returns false when a pass is ALREADY running
+            // for this meeting (`launch.rs` registry guard). The first version of this arm
+            // discarded that bool and reported `Ok(())` — and because `take_record` has
+            // already run by here, the row and its lamp were gone too. The user was left
+            // with a failure they could no longer see and a retry that never ran: the
+            // literal "clicking Retry does nothing" report. Refusal is an error now.
+            if crate::diarization::launch::diarize_meeting(app.clone(), meeting_id) {
+                Ok(())
+            } else {
+                Err("Speaker identification is already running for this meeting.".to_string())
+            }
         }
         TaskKind::AskAI | TaskKind::Rollup | TaskKind::NoteEnhancement => {
             unreachable!("non-retryable kinds are rejected by is_retryable above")

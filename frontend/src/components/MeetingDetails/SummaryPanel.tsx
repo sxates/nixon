@@ -3,6 +3,7 @@
 import { Summary, SummaryChunkStatus, Transcript } from '@/types';
 import { BlockNoteSummaryView, BlockNoteSummaryViewRef } from '@/components/AISummary/BlockNoteSummaryView';
 import { EmptyStateSummary } from '@/components/EmptyStateSummary';
+import { SummaryGenerating } from './SummaryGenerating';
 import { ModelConfig } from '@/components/ModelSettingsModal';
 import { SummaryToolbar } from './SummaryToolbar';
 import { useEffect, useRef, useState, RefObject } from 'react';
@@ -386,13 +387,7 @@ export function SummaryPanel({
               onCopy={onCopySummary}
             />
           </div>
-          {/* Loading spinner */}
-          <div className="flex items-center justify-center flex-1">
-            <div className="text-center">
-              <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-brand mb-4"></div>
-              <p className="text-muted-foreground">Generating AI Summary...</p>
-            </div>
-          </div>
+          <SummaryGenerating />
         </div>
       ) : !aiSummary ? (
         <div className={isDoc ? 'flex flex-col min-h-[40vh]' : 'flex flex-col h-full'}>

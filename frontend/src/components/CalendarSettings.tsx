@@ -34,6 +34,14 @@ import {
 import { useGoogleCalendarConnect } from '@/hooks/useGoogleCalendarConnect';
 import { SettingsNote, SettingsSection } from '@/components/ui/settings';
 
+/**
+ * Anchor for deep links into this section (specs/0066). Today's connect-calendar card
+ * routes to `/settings?tab=general#calendar`, which lands mid-page — the settings page
+ * scrolls here on arrival so "Connect" puts the calendar choice in front of you instead of
+ * dropping you at the top of General to hunt for it.
+ */
+export const CALENDAR_SECTION_ID = 'calendar';
+
 /** Human-readable label for each EventKit access status. */
 const CALENDAR_STATUS_LABEL: Record<CalendarAccessStatus, string> = {
   authorized: 'Connected',
@@ -338,6 +346,7 @@ export function CalendarSettings() {
 
   return (
     <SettingsSection
+      id={CALENDAR_SECTION_ID}
       title="Calendar"
       description="Nixon uses one calendar source — your Mac's calendar, or Google Calendar connected directly."
     >

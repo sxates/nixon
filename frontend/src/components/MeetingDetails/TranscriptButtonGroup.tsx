@@ -6,7 +6,6 @@ import { Button } from '@/components/ui/button';
 import { ButtonGroup } from '@/components/ui/button-group';
 import { Loader2 } from 'lucide-react';
 import { RetranscribeDialog } from './RetranscribeDialog';
-import { useConfig } from '@/contexts/ConfigContext';
 import { useBacklog } from '@/contexts/DeferredBacklogProvider';
 import { useDiarization } from '@/hooks/useDiarization';
 import { SPARSE_TRANSCRIPT_SEGMENTS } from '@/lib/deferred-transcription';
@@ -36,7 +35,6 @@ export function TranscriptButtonGroup({
   meetingFolderPath,
   onRefetchTranscripts,
 }: TranscriptButtonGroupProps) {
-  const { betaFeatures } = useConfig();
   const { view, enqueueMeeting } = useBacklog();
   const [showRetranscribeDialog, setShowRetranscribeDialog] = useState(false);
 
@@ -247,7 +245,7 @@ export function TranscriptButtonGroup({
           </Button>
         )}
 
-        {betaFeatures.importAndRetranscribe && !needsFirstTranscription && meetingId && meetingFolderPath && (
+        {!needsFirstTranscription && meetingId && meetingFolderPath && (
           <Button
             size="xs"
             variant="outline"
@@ -267,17 +265,15 @@ export function TranscriptButtonGroup({
         )}
       </ButtonGroup>
 
-      {(betaFeatures.importAndRetranscribe || needsFirstTranscription) &&
-        meetingId &&
-        meetingFolderPath && (
-          <RetranscribeDialog
-            open={showRetranscribeDialog}
-            onOpenChange={setShowRetranscribeDialog}
-            meetingId={meetingId}
-            meetingFolderPath={meetingFolderPath}
-            onComplete={handleRetranscribeComplete}
-          />
-        )}
+      {meetingId && meetingFolderPath && (
+        <RetranscribeDialog
+          open={showRetranscribeDialog}
+          onOpenChange={setShowRetranscribeDialog}
+          meetingId={meetingId}
+          meetingFolderPath={meetingFolderPath}
+          onComplete={handleRetranscribeComplete}
+        />
+      )}
     </div>
   );
 }

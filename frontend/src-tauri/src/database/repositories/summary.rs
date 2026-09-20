@@ -70,16 +70,25 @@ impl SummaryProcessesRepository {
         Ok(true)
     }
 
+    /// The summary process for a meeting, if one exists.
+    ///
+    /// specs/0066: this used to `JOIN transcript_chunks`, which made a meeting's summary
+    /// invisible unless that table also held a row for it. `transcript_chunks` is written
+    /// in exactly one place — the summary *generation* entry points — so any summary that
+    /// arrived another way read as "No Summary Generated Yet" even though the row was
+    /// sitting in `summary_processes` with its markdown intact. Every meeting in the demo
+    /// dataset was in that state (the seeder writes the summary directly), which is how a
+    /// screenshot of an empty Summary tab reached the README twice. (It was only ever an
+    /// existence test, never a fan-out: `transcript_chunks.meeting_id` is UNIQUE — a first
+    /// draft of this comment claimed otherwise and the test written to prove it failed.)
     pub async fn get_summary_data_for_meeting(
         pool: &SqlitePool,
         meeting_id: &str,
     ) -> Result<Option<SummaryProcess>, sqlx::Error> {
-        sqlx::query_as::<_, SummaryProcess>(
-            "SELECT p.* FROM summary_processes p JOIN transcript_chunks t ON p.meeting_id = t.meeting_id WHERE p.meeting_id = ?",
-        )
-        .bind(meeting_id)
-        .fetch_optional(pool)
-        .await
+        sqlx::query_as::<_, SummaryProcess>("SELECT * FROM summary_processes WHERE meeting_id = ?")
+            .bind(meeting_id)
+            .fetch_optional(pool)
+            .await
     }
 
     pub async fn create_or_reset_process(

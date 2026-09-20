@@ -4,6 +4,9 @@ mod ffmpeg;
 #[path = "build/sherpa.rs"]
 mod sherpa;
 
+#[path = "build/templates.rs"]
+mod templates;
+
 fn main() {
     // Loud (non-fatal) net for release-profile builds run OUTSIDE ./release.sh:
     // the Google client id is baked at compile time via option_env!, and a
@@ -40,6 +43,11 @@ fn main() {
     // Bundle sherpa-onnx diarization dylibs into the .app + set rpaths
     // (specs/0010, ADR-0005). No-op on non-macOS.
     sherpa::bundle_sherpa_dylibs();
+
+    // Drop bundled templates the source dir no longer has, before resources are staged
+    // (specs/0066 W1) — the copy only adds, so a deleted template would live on in
+    // target/<profile>/templates and keep being served by the dev build.
+    templates::prune_stale_bundled_templates();
 
     tauri_build::build()
 }

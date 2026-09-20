@@ -153,30 +153,6 @@ pub async fn api_set_live_diarization_enabled(enabled: bool) -> Result<(), Strin
         .map_err(|e| format!("Failed to save live diarization setting: {e}"))
 }
 
-/// The user's expected-speaker-count override, or `None` for Auto (specs/0011
-/// accuracy gate). When set, diarization forces exactly this many speakers.
-#[tauri::command]
-pub async fn api_get_expected_speaker_count() -> Result<Option<u32>, String> {
-    Ok(settings::load_settings().await.expected_speaker_count)
-}
-
-/// Set (or clear, with `None`/`Some(0)`) the expected-speaker-count override.
-/// Persisted to disk; preserves the other toggles. Takes effect on the next
-/// diarization pass (offline) and next recording start (live). `Some(0)` is
-/// normalized to `None` (Auto).
-#[tauri::command]
-pub async fn api_set_expected_speaker_count(count: Option<u32>) -> Result<(), String> {
-    let mut current = settings::load_settings().await;
-    // Normalize 0 → None (Auto): a fixed count of zero is meaningless.
-    current.expected_speaker_count = match count {
-        Some(0) | None => None,
-        Some(n) => Some(n),
-    };
-    settings::save_settings(&current)
-        .await
-        .map_err(|e| format!("Failed to save expected speaker count: {e}"))
-}
-
 /// The two voiceprint-consent toggles surfaced to the frontend (specs/0016 1c,
 /// ADR-0007 §2/§3). `storeOthersVoiceprints` is the global opt-in to persist *other
 /// people's* voiceprints (default false); `selfEnrollVoiceprint` is the owner ("You")

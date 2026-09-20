@@ -114,6 +114,16 @@ module.exports = {
   			// specs/0057 §3.4 — the reel hubs. Named animations (not arbitrary
   			// `duration-[…]`) because tailwindcss-animate makes arbitrary duration/ease
   			// values ambiguous, so Tailwind emits nothing for them.
+  			// specs/0066: rewind turns the other way. A separate keyframe rather than
+  			// `animation-direction: reverse`, which Tailwind has no utility for.
+  			'reel-rev': {
+  				from: {
+  					transform: 'rotate(360deg)'
+  				},
+  				to: {
+  					transform: 'rotate(0deg)'
+  				}
+  			},
   			reel: {
   				from: {
   					transform: 'rotate(0deg)'
@@ -141,6 +151,10 @@ module.exports = {
   			reel: 'reel 2.6s linear infinite',
   			'reel-slow': 'reel 3.6s linear infinite',
   			'reel-spindown': 'reel 0.9s ease-out 1',
+  			// Rewind runs several times transport speed, and the hubs swap roles: the
+  			// SUPPLY reel is the one winding tape now, so it is the fast one.
+  			'reel-rewind': 'reel-rev 0.75s linear infinite',
+  			'reel-rewind-slow': 'reel-rev 1.15s linear infinite',
   			'hold-blink': 'hold-blink 1.8s ease-in-out infinite'
   		}
   	}

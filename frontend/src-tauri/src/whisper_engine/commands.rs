@@ -18,8 +18,17 @@ pub fn set_models_directory<R: Runtime>(app: &AppHandle<R>) {
         .app_data_dir()
         .expect("Failed to get app data dir");
 
-    let models_dir = app_data_dir.join("models");
+    set_models_directory_path(app_data_dir.join("models"));
+}
 
+/// Point the engine at an explicit models directory.
+///
+/// The app always reaches this through [`set_models_directory`], which derives the path
+/// from the identifier's app-data dir. It is separate so an integration test can aim the
+/// engine at a real, already-downloaded model without a real app handle — `mock_app`'s
+/// app-data dir is a scratch path with no models in it, and the import path needs a
+/// genuine one (specs/0066 W3).
+pub fn set_models_directory_path(models_dir: PathBuf) {
     // Create directory if it doesn't exist
     if !models_dir.exists() {
         if let Err(e) = std::fs::create_dir_all(&models_dir) {

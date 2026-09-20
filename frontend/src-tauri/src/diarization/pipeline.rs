@@ -993,18 +993,6 @@ async fn resolve_meeting_speaker_count<R: Runtime>(
 ) {
     use crate::diarization::settings;
 
-    let s = settings::load_settings().await;
-
-    // Manual override short-circuits — skip the roster/calendar lookup entirely. The
-    // user asserted an exact number, so this stays Fixed (specs/0017).
-    if let Some(n) = s.expected_speaker_count {
-        if n >= 1 {
-            let (count, source) = settings::resolve_speaker_count(&s, &[]);
-            log::info!("diarization: using fixed speaker count = {n} (manual Settings override)");
-            return (count, source);
-        }
-    }
-
     // specs/0017 roster-first sizing: the persistent participant roster is the
     // user-curatable source of truth for the cap — manual add/remove moves it.
     // WS3.3 (specs/0029): the bound uses the remote-linked person count when
@@ -1055,7 +1043,7 @@ async fn resolve_meeting_speaker_count<R: Runtime>(
     let attendees = lookup_calendar_attendees(app, meeting_id).await;
 
     let total = attendees.len();
-    let (count, source) = settings::resolve_speaker_count(&s, &attendees);
+    let (count, source) = settings::resolve_speaker_count(&attendees);
     match source {
         settings::SpeakerCountSource::Calendar => {
             if let crate::diarization::SpeakerCount::AtMost(n) = count {
@@ -1071,7 +1059,6 @@ async fn resolve_meeting_speaker_count<R: Runtime>(
                  Auto; the audio seed caps at AtMost(n_audio) in the pass (specs/0050)"
             );
         }
-        settings::SpeakerCountSource::Manual => {} // handled above
     }
     (count, source)
 }

@@ -65,7 +65,6 @@ function HomeView() {
     weekDays,
     weekItems,
     weekLoaded,
-    refresh,
     goToDate,
     goPrev,
     goNext,
@@ -223,7 +222,7 @@ function HomeView() {
         <div className="mx-auto max-w-[840px]">
           {(calendarStatus === 'notDetermined' || calendarStatus === 'denied') && (
             <div className="mb-4">
-              <ConnectCalendarNudge onConnected={() => void refresh()} />
+              <ConnectCalendarNudge />
             </div>
           )}
 

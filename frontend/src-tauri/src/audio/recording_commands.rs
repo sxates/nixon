@@ -60,20 +60,12 @@ static LIVE_SEGMENTS: Mutex<Vec<crate::diarization::live::LiveSegment>> = Mutex:
 /// EventKit only (its FFI runs off the async executor).
 async fn resolve_live_speaker_count<R: Runtime>(
     app: &AppHandle<R>,
-    settings: &crate::diarization::settings::DiarizationSettings,
     meeting_name: &str,
 ) -> (
     crate::diarization::SpeakerCount,
     crate::diarization::settings::SpeakerCountSource,
 ) {
     use crate::diarization::settings::resolve_speaker_count;
-
-    // Manual override short-circuits the calendar lookup.
-    if let Some(n) = settings.expected_speaker_count {
-        if n >= 1 {
-            return resolve_speaker_count(settings, &[]);
-        }
-    }
 
     let title = meeting_name.to_string();
     // The recording is starting "now"; the calendar reader searches a ±4h window
@@ -106,7 +98,7 @@ async fn resolve_live_speaker_count<R: Runtime>(
         }
     };
 
-    resolve_speaker_count(settings, &attendees)
+    resolve_speaker_count(&attendees)
 }
 
 /// Build a `LiveDiarizer` for this recording, gated on
@@ -145,16 +137,11 @@ async fn build_live_diarizer<R: Runtime>(
     // The live path has no persisted meeting row yet (the frontend saves on stop), so
     // we locate the linked calendar event by the in-progress meeting *name* + "now" as
     // the start instant. Best-effort and non-fatal — any failure falls through to Auto.
-    let (speaker_count, count_source) = resolve_live_speaker_count(&app, &s, &meeting_id).await;
+    let (speaker_count, count_source) = resolve_live_speaker_count(&app, &meeting_id).await;
     match count_source {
         crate::diarization::settings::SpeakerCountSource::Calendar => {
             if let crate::diarization::SpeakerCount::Fixed(n) = speaker_count {
                 info!("🗣️ Live diarization: seeding expected speakers = {n} from calendar attendees (excluding self)");
-            }
-        }
-        crate::diarization::settings::SpeakerCountSource::Manual => {
-            if let crate::diarization::SpeakerCount::Fixed(n) = speaker_count {
-                info!("🗣️ Live diarization: using fixed speaker count = {n} (manual Settings override)");
             }
         }
         crate::diarization::settings::SpeakerCountSource::Auto => {} // specs/0050: audio seed caps in the pass

@@ -12,7 +12,8 @@
  *   2. deferred /
  *      deferred-processing — the deferred-meeting machinery owns this meeting
  *                            (1.10 feedback); nothing may auto-run here.
- *   3. disabled            — the `isAutoSummary` toggle is off (its default!).
+ *   3. disabled            — the `isAutoSummary` toggle is off (it defaults ON
+ *                            since specs/0066 W1, so this is now a deliberate choice).
  *   4. empty-transcript    — nothing to summarize.
  *   5. no-model            — no LLM configured and the gemma3:1b fallback isn't installed.
  */

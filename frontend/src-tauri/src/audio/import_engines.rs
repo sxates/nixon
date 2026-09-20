@@ -14,6 +14,13 @@ use std::sync::Arc;
 use tauri::{AppHandle, Manager, Runtime};
 
 /// Get or initialize the Whisper engine
+///
+/// specs/0066 W3: the "or initialize" half used to be missing — an empty global was an
+/// immediate `Err("Whisper engine not initialized")`. Startup does init the engine, so
+/// this only bit when that init had failed or not run yet, and then it bit confusingly:
+/// the *recording* path (`audio::transcription::engine`) calls `whisper_init()` itself and
+/// recovers, so the same machine could transcribe a live meeting but refuse to import a
+/// file. Init here too, and keep the error for the case where init itself fails.
 pub(crate) async fn get_or_init_whisper<R: Runtime>(
     app: &AppHandle<R>,
     requested_model: Option<&str>,
@@ -23,6 +30,16 @@ pub(crate) async fn get_or_init_whisper<R: Runtime>(
     let engine = {
         let guard = WHISPER_ENGINE.lock().unwrap_or_else(|e| e.into_inner());
         guard.as_ref().cloned()
+    };
+    let engine = match engine {
+        Some(e) => Some(e),
+        None => {
+            crate::whisper_engine::commands::whisper_init()
+                .await
+                .map_err(|e| anyhow!("Failed to initialize the Whisper engine: {e}"))?;
+            let guard = WHISPER_ENGINE.lock().unwrap_or_else(|e| e.into_inner());
+            guard.as_ref().cloned()
+        }
     };
 
     match engine {
@@ -59,7 +76,7 @@ pub(crate) async fn get_or_init_whisper<R: Runtime>(
     }
 }
 
-/// Get or initialize the Parakeet engine
+/// Get or initialize the Parakeet engine (same lazy-init as the Whisper half above).
 pub(crate) async fn get_or_init_parakeet<R: Runtime>(
     app: &AppHandle<R>,
     requested_model: Option<&str>,
@@ -69,6 +86,16 @@ pub(crate) async fn get_or_init_parakeet<R: Runtime>(
     let engine = {
         let guard = PARAKEET_ENGINE.lock().unwrap_or_else(|e| e.into_inner());
         guard.as_ref().cloned()
+    };
+    let engine = match engine {
+        Some(e) => Some(e),
+        None => {
+            crate::parakeet_engine::commands::parakeet_init()
+                .await
+                .map_err(|e| anyhow!("Failed to initialize the Parakeet engine: {e}"))?;
+            let guard = PARAKEET_ENGINE.lock().unwrap_or_else(|e| e.into_inner());
+            guard.as_ref().cloned()
+        }
     };
 
     match engine {

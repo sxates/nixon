@@ -7,7 +7,6 @@ import { configService, ModelConfig } from '@/services/configService';
 import { invoke } from '@tauri-apps/api/core';
 import { safeListen } from '@/lib/safe-listen';
 import { ApiKeyStatus, apiKeyHint, maskApiKey } from '@/lib/utils';
-import { BetaFeatures, BetaFeatureKey, loadBetaFeatures, saveBetaFeatures } from '@/types/betaFeatures';
 
 export interface OllamaModel {
   name: string;
@@ -65,8 +64,6 @@ interface ConfigContextType {
   toggleConfidenceIndicator: (checked: boolean) => void;
 
   // Beta features
-  betaFeatures: BetaFeatures;
-  toggleBetaFeature: (featureKey: BetaFeatureKey, enabled: boolean) => void;
 
   // Ollama models
   models: OllamaModel[];
@@ -151,23 +148,21 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
   const [showConfidenceIndicator, setShowConfidenceIndicator] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('showConfidenceIndicator');
-      return saved !== null ? saved === 'true' : true;
+      return saved !== null ? saved === 'true' : false;
     }
     return true;
   });
 
   // Summary configs
+  // Default ON (specs/0066 W1, owner request). A summary when the recording stops is the
+  // expected behaviour, not an opt-in; anyone who turned it off has the key stored and
+  // keeps that choice, since only an ABSENT key falls through to the default.
   const [isAutoSummary, setisAutoSummary] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('isAutoSummary');
-      return saved !== null ? saved === 'true' : false
+      return saved !== null ? saved === 'true' : true
     }
-    return false;
-  });
-
-  // Beta features state (localStorage)
-  const [betaFeatures, setBetaFeatures] = useState<BetaFeatures>(() => {
-    return loadBetaFeatures();
+    return true;
   });
 
   // Preference settings state (lazy loaded)
@@ -386,15 +381,6 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  // Toggle beta feature with localStorage persistence
-  const toggleBetaFeature = useCallback((featureKey: BetaFeatureKey, enabled: boolean) => {
-    setBetaFeatures(prev => {
-      const updated = { ...prev, [featureKey]: enabled };
-      saveBetaFeatures(updated);
-      return updated;
-    });
-  }, []);
-
   // Update individual provider API key
   const updateProviderApiKey = useCallback((provider: string, apiKey: string | null) => {
     setProviderApiKeys(prev => ({ ...prev, [provider]: apiKey }));
@@ -487,8 +473,6 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
     setSelectedLanguage: handleSetSelectedLanguage,
     showConfidenceIndicator,
     toggleConfidenceIndicator,
-    betaFeatures,
-    toggleBetaFeature,
     models,
     modelOptions,
     error,
@@ -509,8 +493,6 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
     handleSetSelectedLanguage,
     showConfidenceIndicator,
     toggleConfidenceIndicator,
-    betaFeatures,
-    toggleBetaFeature,
     models,
     modelOptions,
     error,

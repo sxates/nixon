@@ -282,6 +282,42 @@ pub fn find_parakeet_models_dir() -> Option<PathBuf> {
     None
 }
 
+/// Returns `(models_dir, model_name)` for a downloaded Whisper ggml model, or `None`.
+///
+/// The name is the CATALOG key (`config::WHISPER_MODEL_CATALOG`), which is the filename
+/// without its `ggml-` prefix and `.bin` suffix — `load_model` takes that, not a path.
+///
+/// Whisper resolves models from one flat dir (`<app-data>/models/ggml-*.bin`), so unlike
+/// Parakeet there is no per-model folder to check for completeness — any `ggml-*.bin` in a
+/// candidate root will do. Prefers a smaller model when several are present, since these
+/// tests transcribe a couple of seconds of speech and model load dominates.
+pub fn find_whisper_model() -> Option<(PathBuf, String)> {
+    for root in parakeet_models_root_candidates() {
+        let Ok(entries) = std::fs::read_dir(&root) else {
+            continue;
+        };
+        let mut found: Vec<(u64, String)> = entries
+            .flatten()
+            .filter_map(|e| {
+                let name = e.file_name().to_str()?.to_string();
+                if !name.starts_with("ggml-") || !name.ends_with(".bin") {
+                    return None;
+                }
+                let catalog_name = name
+                    .trim_start_matches("ggml-")
+                    .trim_end_matches(".bin")
+                    .to_string();
+                Some((e.metadata().ok()?.len(), catalog_name))
+            })
+            .collect();
+        found.sort_by_key(|(size, _)| *size);
+        if let Some((_, name)) = found.into_iter().next() {
+            return Some((root, name));
+        }
+    }
+    None
+}
+
 /// Print a uniform skip message and return. Use at the top of a model-gated test.
 pub fn skip_no_model(test_name: &str) {
     eprintln!(

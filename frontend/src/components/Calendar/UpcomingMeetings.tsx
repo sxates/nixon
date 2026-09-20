@@ -17,9 +17,9 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
-import { Calendar, Video, CircleDot } from 'lucide-react';
-import { toast } from 'sonner';
+import { Video, CircleDot } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { ConnectCalendarCard } from '@/components/Calendar/ConnectCalendarCard';
 import { useRecordingState } from '@/contexts/RecordingStateContext';
 import { useSidebar } from '@/components/Sidebar/SidebarProvider';
 import {
@@ -27,7 +27,6 @@ import {
   type UpcomingMeeting,
   getCalendarAccessStatus,
   getUpcomingMeetings,
-  requestCalendarAccess,
   openZoomMeeting,
   joinAndRecord,
   formatClockTime,
@@ -98,7 +97,6 @@ export default function UpcomingMeetings() {
   const [status, setStatus] = useState<CalendarAccessStatus | null>(null);
   const [meetings, setMeetings] = useState<UpcomingMeeting[]>([]);
   const [dismissed, setDismissed] = useState(false);
-  const [connecting, setConnecting] = useState(false);
 
   // Read the sticky "dismissed the connect prompt" flag once on mount.
   useEffect(() => {
@@ -132,38 +130,6 @@ export default function UpcomingMeetings() {
     };
   }, [refresh]);
 
-  const handleConnect = useCallback(async () => {
-    setConnecting(true);
-    try {
-      const before = await getCalendarAccessStatus();
-      console.log('[UpcomingMeetings] handleConnect: status before =', before);
-
-      const granted = await requestCalendarAccess();
-      console.log('[UpcomingMeetings] handleConnect: requestCalendarAccess() =', granted);
-
-      await refresh(); // pick up the new status (and meetings if granted)
-
-      const after = await getCalendarAccessStatus();
-      console.log('[UpcomingMeetings] handleConnect: status after refresh =', after);
-
-      if (!granted && after !== 'authorized') {
-        toast.error('Calendar access not granted', {
-          description:
-            'You can grant access in System Settings → Privacy & Security → Calendars.',
-        });
-      }
-    } catch (err) {
-      // requestCalendarAccess/refresh swallow IPC errors and return safe
-      // defaults, so reaching here is unexpected — surface it rather than fail
-      // silently.
-      console.error('[UpcomingMeetings] handleConnect failed:', err);
-      toast.error('Could not connect calendar', {
-        description: err instanceof Error ? err.message : String(err),
-      });
-    } finally {
-      setConnecting(false);
-    }
-  }, [refresh]);
 
   const handleDismiss = useCallback(() => {
     setDismissed(true);
@@ -198,34 +164,9 @@ export default function UpcomingMeetings() {
   if (!canPrompt) return null;
 
   return (
-    <div className="flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-3">
-      <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-muted">
-        <Calendar className="h-4 w-4 text-muted-foreground" />
-      </div>
-      <div className="min-w-0 flex-1">
-        <div className="text-sm font-medium text-foreground">
-          Connect your calendar to see upcoming meetings
-        </div>
-        <div className="text-xs text-muted-foreground">
-          Nixon reads your macOS Calendar on-device — nothing leaves your machine.
-        </div>
-      </div>
-      <Button
-        variant="brand"
-        size="sm"
-        className="flex-shrink-0"
-        onClick={handleConnect}
-        disabled={connecting}
-      >
-        {connecting ? 'Connecting…' : 'Connect'}
-      </Button>
-      <button
-        type="button"
-        onClick={handleDismiss}
-        className="flex-shrink-0 text-xs text-muted-foreground hover:text-foreground"
-      >
-        Dismiss
-      </button>
-    </div>
+    <ConnectCalendarCard
+      title="Connect your calendar to see upcoming meetings"
+      onDismiss={handleDismiss}
+    />
   );
 }
