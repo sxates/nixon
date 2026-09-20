@@ -111,30 +111,25 @@ const Sidebar: React.FC = () => {
       >
         <WalnutCheek />
 
-        {/* Hamburger — a row like any other, so the glyph does not move when the panel
-            opens. It carries no label: the panel's own width says which way it goes. */}
-        <button
-          type="button"
-          onClick={toggleCollapse}
-          aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          title={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          aria-expanded={!isCollapsed}
-          className={cn(
-            SIDEBAR_ROW,
-            'mt-2 flex-shrink-0 text-engrave transition-colors hover:bg-key hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-          )}
-        >
-          <IconSlot name="menu">
-            <DeckIcon icon={Menu} size={18} />
-          </IconSlot>
-        </button>
-
-        {/* The reel mark, in both states. Expanded it gains NIXON as its label rather than
-            being swapped for a wordmark that sits somewhere else. */}
-        <div className={cn(SIDEBAR_ROW, 'flex-shrink-0')}>
-          <IconSlot name="mark">
-            <NixonMark />
-          </IconSlot>
+        {/* Hamburger + wordmark on one row (owner request, 2026-09-20 — the separate reel-mark
+            row is gone and everything below moved up). The wordmark is a SIBLING of the toggle,
+            not inside it: a button whose visible text reads NIXON but whose accessible name is
+            "Collapse sidebar" fails WCAG 2.5.3 Label in Name, and clicking a logo should not
+            collapse the panel. The toggle keeps the shared icon column, so the glyph still sits
+            at the same x in both states. */}
+        <div data-sidebar-row className={cn(SIDEBAR_ROW, 'mt-2 flex-shrink-0')}>
+          <button
+            type="button"
+            onClick={toggleCollapse}
+            aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            title={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            aria-expanded={!isCollapsed}
+            className="flex h-10 flex-none items-center text-engrave transition-colors hover:bg-key hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <IconSlot name="menu">
+              <DeckIcon icon={Menu} size={18} />
+            </IconSlot>
+          </button>
           {!isCollapsed && (
             <span className={cn(SIDEBAR_LABEL, 'text-[13px] tracking-[0.18em] text-foreground')}>
               NIXON
@@ -168,7 +163,7 @@ const Sidebar: React.FC = () => {
           />
           <QueueRow collapsed={isCollapsed} />
           {process.env.NODE_ENV !== 'production' && (
-            <div className={cn(SIDEBAR_ROW, 'mb-1')}>
+            <div data-sidebar-row className={cn(SIDEBAR_ROW, 'mb-1')}>
               <IconSlot name="dev">
                 <DevBadge />
               </IconSlot>
@@ -183,27 +178,6 @@ const Sidebar: React.FC = () => {
 /** The walnut cheek running down the machine's left edge (specs/0057 decision 5). */
 function WalnutCheek() {
   return <span aria-hidden className="absolute inset-y-0 left-0 z-10 w-1.5 bg-walnut" />;
-}
-
-/** The ⊙—⊙ reel mark. Renders in both states — collapsed it stands alone; expanded it sits
- *  beside the NIXON label rather than being swapped out for it. */
-function NixonMark() {
-  return (
-    <svg
-      viewBox="0 0 32 16"
-      width="28"
-      height="14"
-      role="img"
-      aria-label="Nixon"
-      fill="none"
-      className="stroke-foreground"
-      strokeWidth={1.25}
-    >
-      <circle cx="8" cy="8" r="5.5" />
-      <circle cx="24" cy="8" r="5.5" />
-      <line x1="13.5" y1="8" x2="18.5" y2="8" />
-    </svg>
-  );
 }
 
 export default Sidebar;

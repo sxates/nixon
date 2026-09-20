@@ -58,6 +58,7 @@ export function NavRow({
   return (
     <button
       type="button"
+      data-sidebar-row
       onClick={onClick}
       aria-label={label}
       title={collapsed ? label : undefined}

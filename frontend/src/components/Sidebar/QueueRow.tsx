@@ -56,6 +56,7 @@ export function QueueRow({ collapsed = false }: { collapsed?: boolean }) {
             type="button"
             aria-label={`Queue ${view.count} — ${line}`}
             title={`Queue ${view.count} — ${line}`}
+            data-sidebar-row
             className={cn(SIDEBAR_ROW, 'transition-colors hover:bg-key focus:outline-none focus-visible:ring-2 focus-visible:ring-ring')}
           >
             <IconSlot name="queue">
@@ -65,6 +66,7 @@ export function QueueRow({ collapsed = false }: { collapsed?: boolean }) {
         ) : (
           <button
             type="button"
+            data-sidebar-row
             className={cn(SIDEBAR_ROW, 'relative text-left transition-colors hover:bg-key focus:outline-none focus-visible:ring-2 focus-visible:ring-ring')}
           >
             {/* The lamp is narrower than a glyph, so it rides in the shared icon column —

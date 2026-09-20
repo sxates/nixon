@@ -56,6 +56,7 @@ export function UpdateRow({ collapsed = false }: { collapsed?: boolean }) {
             type="button"
             title={line}
             aria-label={`Update status — ${line}`}
+            data-sidebar-row
             className={cn(SIDEBAR_ROW, 'transition-colors hover:bg-key focus:outline-none focus-visible:ring-2 focus-visible:ring-ring')}
           >
             <IconSlot name="update">
@@ -82,7 +83,7 @@ export function UpdateRow({ collapsed = false }: { collapsed?: boolean }) {
 
   return (
     <div>
-      <div className={SIDEBAR_ROW}>
+      <div data-sidebar-row className={SIDEBAR_ROW}>
         <IconSlot name="update">
           <UpdateGlyph ready={ready} />
         </IconSlot>

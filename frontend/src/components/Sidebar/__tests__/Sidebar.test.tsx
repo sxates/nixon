@@ -140,13 +140,18 @@ function slotOrder(container: HTMLElement): string[] {
 // The slot span's own className is the hardcoded `SIDEBAR_ICON_SLOT` constant, so comparing
 // it against itself can never fail (review finding, fix round 1). What actually carries
 // `SIDEBAR_ROW` — and so is where a stray `h-8`/`mb-1`/`pl-5` would come back — is the row
-// element the slot lives in (the `<button>`/`<div>` one level up). Keying by slot name makes
-// a mismatch name the offending row instead of just diffing two opaque arrays.
+// the slot lives in. That row is marked `data-sidebar-row` rather than inferred as the slot's
+// parent: when the wordmark moved up beside the hamburger (owner request, 2026-09-20) the
+// toggle stopped being the row and became a child of it, and a `parentElement` lookup silently
+// started measuring the button instead. Keying by slot name makes a mismatch name the
+// offending row instead of just diffing two opaque arrays.
 function rowClassesBySlot(container: HTMLElement): Record<string, string> {
   const rows: Record<string, string> = {};
   container.querySelectorAll('[data-sidebar-slot]').forEach((el) => {
     const slot = el.getAttribute('data-sidebar-slot') as string;
-    rows[slot] = el.parentElement?.className ?? '';
+    const row = el.closest('[data-sidebar-row]');
+    expect(row, `slot "${slot}" is not inside a [data-sidebar-row]`).not.toBeNull();
+    rows[slot] = row?.className ?? '';
   });
   return rows;
 }
@@ -224,17 +229,21 @@ describe('Sidebar parity (specs/0069 W1)', () => {
     }
   });
 
-  it('shows the reel mark in both states and NIXON only when expanded', () => {
+  it('shows NIXON beside the hamburger when expanded, and no reel-mark row in either state', () => {
     sidebarState.isCollapsed = true;
     const collapsed = render(<Sidebar />);
-    expect(collapsed.container.querySelector('[data-sidebar-slot="mark"]')).not.toBeNull();
+    expect(collapsed.container.querySelector('[data-sidebar-slot="mark"]')).toBeNull();
     expect(screen.queryByText('NIXON')).toBeNull();
     collapsed.unmount();
 
     sidebarState.isCollapsed = false;
     const expanded = render(<Sidebar />);
-    expect(expanded.container.querySelector('[data-sidebar-slot="mark"]')).not.toBeNull();
-    expect(screen.getByText('NIXON')).toBeInTheDocument();
+    expect(expanded.container.querySelector('[data-sidebar-slot="mark"]')).toBeNull();
+    // The wordmark rides in the hamburger's row, so it is a sibling of the toggle — not its
+    // label. A button reading NIXON but announced as "Collapse sidebar" fails WCAG 2.5.3.
+    const toggle = screen.getByRole('button', { name: /collapse sidebar/i });
+    expect(toggle).not.toHaveTextContent('NIXON');
+    expect(toggle.closest('[data-sidebar-row]')).toHaveTextContent('NIXON');
   });
 
   it('has no divider above the footer rows', () => {
