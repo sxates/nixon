@@ -12,6 +12,7 @@ import { safeListen, makeSafeUnlisten } from '@/lib/safe-listen'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { RecordingStateProvider } from '@/contexts/RecordingStateContext'
 import { UpdateStatusProvider } from '@/contexts/UpdateStatusContext'
+import { RestartConfirmProvider } from '@/contexts/RestartConfirmContext'
 import { ThemeProvider, useTheme } from '@/contexts/ThemeContext'
 import { OllamaDownloadProvider } from '@/contexts/OllamaDownloadContext'
 import { TranscriptProvider } from '@/contexts/TranscriptContext'
@@ -274,6 +275,7 @@ export default function RootLayout({
         <ThemeProvider>
           <RecordingStateProvider>
             <UpdateStatusProvider>
+            <RestartConfirmProvider>
               <TranscriptProvider>
                 <ConfigProvider>
                   <OllamaDownloadProvider>
@@ -328,6 +330,7 @@ export default function RootLayout({
                   </OllamaDownloadProvider>
                 </ConfigProvider>
               </TranscriptProvider>
+            </RestartConfirmProvider>
             </UpdateStatusProvider>
           </RecordingStateProvider>
           <ThemedToaster offset={showOnboarding ? undefined : RAIL_TOAST_OFFSET} />
