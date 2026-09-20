@@ -145,7 +145,7 @@ License.
 
 ## Design records
 
-Numbered design specs (`NNNN-*.md`) and implementation plans referenced from code comments
-(for example `specs/0057 §3.2`), along with the dated review and audit notes cited in
-ROADMAP.md, are working documents kept outside this repository. The spec number is the
-stable reference; the code comment near it describes the behaviour.
+Numbered design specs (`NNNN-*.md`), the roadmap, and implementation plans referenced from
+code comments (for example `specs/0057 §3.2`) are working documents kept outside this
+repository. The spec number is the stable reference; the code comment near it describes the
+behaviour.

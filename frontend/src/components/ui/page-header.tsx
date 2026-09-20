@@ -30,7 +30,11 @@ export function PageHeader({ title, subtitle, actions, className }: PageHeaderPr
         className
       )}
     >
-      <div className="min-w-0">
+      {/* `flex-1`, not just `min-w-0`: without it this box takes its content width and
+          then shrinks, so a two-word name wraps while the rest of the row sits empty
+          (owner report on the person page, specs/0067). Actions stay `flex-shrink-0`, so
+          the title claims the free space and wraps only when there genuinely is none. */}
+      <div className="min-w-0 flex-1">
         <h1 className="font-display text-[22px] font-semibold leading-[1.1] tracking-[-0.011em] text-foreground">
           {title}
         </h1>

@@ -5,13 +5,15 @@ import { useSearchParams } from 'next/navigation';
 import { LoaderIcon } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import { TranscriptSettings } from '@/components/TranscriptSettings';
+import { SpeakerSettings } from '@/components/SpeakerSettings';
 import { RecordingSettings } from '@/components/RecordingSettings';
 import { AppearanceSettings } from '@/components/AppearanceSettings';
 import { PreferenceSettings } from '@/components/PreferenceSettings';
-import { RecordingPermissionsSettings } from '@/components/RecordingPermissionsSettings';
+import { AudioSettings } from '@/components/AudioSettings';
 import { CalendarSettings } from '@/components/CalendarSettings';
 import { OwnerEmailSettings } from '@/components/OwnerEmailSettings';
 import { SummaryModelSettings } from '@/components/SummaryModelSettings';
+import { SummaryModelSection } from '@/components/SummaryModelSection';
 import { TemplateSettings } from '@/components/TemplateSettings';
 import { DeveloperSettings } from '@/components/DeveloperSettings';
 import { About } from '@/components/About';
@@ -20,12 +22,26 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { PageHeader } from '@/components/ui/page-header';
 
 // Tabs configuration (constant)
+/**
+ * One subject per tab (specs/0067 revision, owner review 2026-09-19).
+ *
+ * What changed and why: Transcription had been reduced to a single row, while Recordings
+ * had grown into a grab-bag of devices, language, biometric consent and retention. Speaker
+ * settings sat two tabs away from the engine they describe, "Transcription language" lived
+ * under Recordings while "Summary language" lived under Summary, permissions were scattered
+ * across General, and Templates — which are how a summary is shaped — had a tab of their
+ * own next to Summary.
+ *
+ * `permissions` is macOS grants only: the Google *connection* is an account, not a
+ * permission, and lives with the calendar source. No control appears on two tabs.
+ */
 const TABS = [
   { value: 'general', label: 'General' },
-  { value: 'recording', label: 'Recordings' },
+  { value: 'audio', label: 'Audio' },
+  { value: 'calendar', label: 'Calendar' },
+  { value: 'recording', label: 'Recording' },
   { value: 'Transcriptionmodels', label: 'Transcription' },
   { value: 'summaryModels', label: 'Summary' },
-  { value: 'templates', label: 'Templates' },
   { value: 'about', label: 'About' }
 ] as const;
 
@@ -138,21 +154,30 @@ function SettingsPageContent() {
             {/* Appearance (specs/0057 decision 1) — Faceplate / Deck / System. */}
             <AppearanceSettings />
             <PreferenceSettings />
-            {/* Recording permissions (spec 0038 WS7.a) — mic + audio-capture
-                status with an action that opens the same first-run permissions
-                modal. Replaces the former top-level "Permissions" sidebar entry. */}
-            <RecordingPermissionsSettings />
-            {/* Calendar source (0008 EventKit + 0032 Google) — lives under General
-                because it's an app-wide source choice, not a recording knob. */}
+          </TabsContent>
+          <TabsContent value="audio" className="space-y-8">
+            {/* Permission AND device per input, one row each (owner, specs/0067). When the
+                mic is not working you do not know in advance which of the two is wrong, so
+                they belong on one line rather than two tabs apart. */}
+            <AudioSettings />
+          </TabsContent>
+          <TabsContent value="calendar" className="space-y-8">
+            {/* Source (0008 EventKit + 0032 Google), the Google connection, and the sync
+                options — one subject, one tab. */}
             <CalendarSettings />
-            {/* Owner addresses (specs/0018) — auto-filled with the Google account
-                email when Google Calendar connects (specs/0032). */}
+            {/* Your addresses (specs/0018) live here because they exist to recognise you in
+                calendar invites; outside a synced meeting they mean nothing (owner, 0067). */}
             <OwnerEmailSettings />
           </TabsContent>
           <TabsContent value="recording" className="space-y-8">
             <RecordingSettings />
           </TabsContent>
           <TabsContent value="Transcriptionmodels" className="space-y-8">
+            {/* Language and speakers moved here from Recordings (specs/0067): they describe
+                what a transcript says and who said it. They come FIRST — the engine is the
+                one thing on this tab nobody should need to touch, so it sits at the bottom
+                rather than leading with a decision we already made for them. */}
+            <SpeakerSettings />
             <TranscriptSettings
               transcriptModelConfig={transcriptModelConfig}
               setTranscriptModelConfig={setTranscriptModelConfig}
@@ -160,9 +185,11 @@ function SettingsPageContent() {
           </TabsContent>
           <TabsContent value="summaryModels" className="space-y-8">
             <SummaryModelSettings />
-          </TabsContent>
-          <TabsContent value="templates" className="space-y-8">
+            {/* A template is how a summary is shaped, so it belongs to this subject rather
+                than a tab of its own (owner, specs/0067). */}
             <TemplateSettings />
+            {/* Last: the model is the one thing here nobody should need to choose. */}
+            <SummaryModelSection />
           </TabsContent>
           <TabsContent value="developer" className="space-y-8">
             <DeveloperSettings />

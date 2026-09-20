@@ -74,6 +74,7 @@ interface ConfigContextType {
   isAutoSummary: boolean;
   toggleIsAutoSummary: (checked: boolean) => void;
 
+
   // Provider-specific API key hints: masked display values ("••••1234") or
   // null when unconfigured — raw keys never reach the webview (0030 WS2)
   providerApiKeys: {

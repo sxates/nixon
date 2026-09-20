@@ -1,5 +1,5 @@
 {
-  "sha": "d43f509",
+  "sha": "7865df3",
   "shots": [
     {
       "file": "today.faceplate.png",
@@ -9,32 +9,32 @@
     {
       "file": "today.deck.png",
       "status": "ok",
-      "ms": 2109
+      "ms": 2090
     },
     {
       "file": "meetings.faceplate.png",
       "status": "ok",
-      "ms": 2115
+      "ms": 2082
     },
     {
       "file": "meetings.deck.png",
       "status": "ok",
-      "ms": 2098
+      "ms": 2090
     },
     {
       "file": "meeting-summary.faceplate.png",
       "status": "ok",
-      "ms": 5116
+      "ms": 5118
     },
     {
       "file": "meeting-summary.deck.png",
       "status": "ok",
-      "ms": 5121
+      "ms": 5134
     },
     {
       "file": "meeting-transcript.faceplate.png",
       "status": "ok",
-      "ms": 5142
+      "ms": 5156
     },
     {
       "file": "meeting-transcript.deck.png",
@@ -49,47 +49,47 @@
     {
       "file": "meeting-notes.deck.png",
       "status": "ok",
-      "ms": 5117
+      "ms": 5133
     },
     {
       "file": "meeting-prep.faceplate.png",
       "status": "ok",
-      "ms": 5142
+      "ms": 5125
     },
     {
       "file": "meeting-prep.deck.png",
       "status": "ok",
-      "ms": 5132
+      "ms": 5134
     },
     {
       "file": "meeting-steerco-speakers.faceplate.png",
       "status": "ok",
-      "ms": 5174
+      "ms": 5153
     },
     {
       "file": "meeting-steerco-speakers.deck.png",
       "status": "ok",
-      "ms": 5180
+      "ms": 5145
     },
     {
       "file": "meeting-unprocessed.faceplate.png",
       "status": "ok",
-      "ms": 5113
+      "ms": 5111
     },
     {
       "file": "meeting-unprocessed.deck.png",
       "status": "ok",
-      "ms": 5125
+      "ms": 5116
     },
     {
       "file": "record-idle.faceplate.png",
       "status": "ok",
-      "ms": 2117
+      "ms": 2109
     },
     {
       "file": "record-idle.deck.png",
       "status": "ok",
-      "ms": 2114
+      "ms": 2103
     },
     {
       "file": "people.faceplate.png",
@@ -104,87 +104,127 @@
     {
       "file": "person.faceplate.png",
       "status": "ok",
-      "ms": 2097
+      "ms": 2098
     },
     {
       "file": "person.deck.png",
       "status": "ok",
-      "ms": 2102
+      "ms": 2093
     },
     {
       "file": "tasks.faceplate.png",
       "status": "ok",
-      "ms": 2099
+      "ms": 2083
     },
     {
       "file": "tasks.deck.png",
       "status": "ok",
-      "ms": 2098
+      "ms": 2088
     },
     {
       "file": "ask.faceplate.png",
       "status": "ok",
-      "ms": 2099
+      "ms": 2100
     },
     {
       "file": "ask.deck.png",
       "status": "ok",
-      "ms": 2102
+      "ms": 2098
     },
     {
       "file": "settings-general.faceplate.png",
       "status": "ok",
-      "ms": 2101
+      "ms": 2090
     },
     {
       "file": "settings-general.deck.png",
       "status": "ok",
-      "ms": 2089
+      "ms": 2098
     },
     {
       "file": "settings-recordings.faceplate.png",
       "status": "ok",
-      "ms": 2104
+      "ms": 2113
     },
     {
       "file": "settings-recordings.deck.png",
       "status": "ok",
-      "ms": 2133
+      "ms": 2086
+    },
+    {
+      "file": "settings-audio.faceplate.png",
+      "status": "ok",
+      "ms": 2100
+    },
+    {
+      "file": "settings-audio.deck.png",
+      "status": "ok",
+      "ms": 2100
+    },
+    {
+      "file": "settings-calendar.faceplate.png",
+      "status": "ok",
+      "ms": 2106
+    },
+    {
+      "file": "settings-calendar.deck.png",
+      "status": "ok",
+      "ms": 2094
+    },
+    {
+      "file": "settings-transcription.faceplate.png",
+      "status": "ok",
+      "ms": 2112
+    },
+    {
+      "file": "settings-transcription.deck.png",
+      "status": "ok",
+      "ms": 2097
+    },
+    {
+      "file": "settings-summary.faceplate.png",
+      "status": "ok",
+      "ms": 2097
+    },
+    {
+      "file": "settings-summary.deck.png",
+      "status": "ok",
+      "ms": 2110
     },
     {
       "file": "onboarding-1.faceplate.png",
       "status": "ok",
-      "ms": 2099
+      "ms": 2090
     },
     {
       "file": "onboarding-1.deck.png",
       "status": "ok",
-      "ms": 2101
+      "ms": 2072
     },
     {
       "file": "onboarding-2.faceplate.png",
       "status": "ok",
-      "ms": 2103
+      "ms": 2082
     },
     {
       "file": "onboarding-2.deck.png",
       "status": "ok",
-      "ms": 2099
+      "ms": 2083
     },
     {
       "file": "onboarding-3.faceplate.png",
       "status": "ok",
-      "ms": 2149
+      "ms": 2117
     },
     {
       "file": "onboarding-3.deck.png",
       "status": "ok",
-      "ms": 2149
+      "ms": 2113
     },
     {
       "file": "onboarding-4.faceplate.png",
       "status": "ok",
-      "ms": 2100
+      "ms": 2104
     },
     {
       "file": "onboarding-4.deck.png",
@@ -194,12 +234,12 @@
     {
       "file": "onboarding-5.faceplate.png",
       "status": "ok",
-      "ms": 2083
+      "ms": 2098
     },
     {
       "file": "onboarding-5.deck.png",
       "status": "ok",
-      "ms": 2076
+      "ms": 2099
     }
   ]
 }

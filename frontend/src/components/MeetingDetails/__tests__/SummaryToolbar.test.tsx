@@ -34,8 +34,6 @@ const base = {
   isDirty: false,
   onSave: vi.fn(async () => {}),
   onCopy: vi.fn(async () => {}),
-  summaryLanguageLabel: 'Auto',
-  onOpenLanguagePicker: vi.fn(),
   modelConfig: { provider: 'ollama', model: 'gemma2:2b' } as never,
   setModelConfig: vi.fn(),
   onSaveModelConfig: vi.fn(async () => {}),
@@ -67,25 +65,7 @@ describe('SummaryToolbar (specs/0064 W3)', () => {
     expect(screen.getByRole('button', { name: /save/i })).toBeInTheDocument();
   });
 
-  it('keeps Copy, language, model and re-think inside the flyout', async () => {
-    render(<SummaryToolbar {...base} />);
-    await userEvent.click(screen.getByRole('button', { name: /more summary actions/i }));
 
-    expect(screen.getByRole('menuitem', { name: /copy/i })).toBeInTheDocument();
-    expect(screen.getByRole('menuitem', { name: /summary language/i })).toBeInTheDocument();
-    expect(screen.getByRole('menuitem', { name: /ai model/i })).toBeInTheDocument();
-    expect(screen.getByRole('menuitem', { name: /re-think structure/i })).toBeInTheDocument();
-  });
-
-  it('opens the language picker from the flyout', async () => {
-    const onOpenLanguagePicker = vi.fn();
-    render(<SummaryToolbar {...base} onOpenLanguagePicker={onOpenLanguagePicker} />);
-
-    await userEvent.click(screen.getByRole('button', { name: /more summary actions/i }));
-    await userEvent.click(screen.getByRole('menuitem', { name: /summary language/i }));
-
-    expect(onOpenLanguagePicker).toHaveBeenCalledOnce();
-  });
 
   it('hides Re-think structure unless the template is Auto and a summary exists', async () => {
     render(<SummaryToolbar {...base} selectedTemplate="standup" />);

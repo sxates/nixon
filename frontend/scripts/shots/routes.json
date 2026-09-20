@@ -265,6 +265,58 @@
     ]
   },
   {
+    "name": "settings-audio",
+    "route": "/settings?tab=audio",
+    "ignore": [
+      {
+        "x": 338,
+        "y": 816,
+        "w": 106,
+        "h": 22,
+        "why": "footer TapeCounter roller digits (specs/0060 Task 3). Moved here in specs/0066: specs/0064 W6 reordered the rail (reel, then counter-over-meter, then title, keys right), so the old box at x=470 sat over \"Deck ready\" while the digits flaked unignored at x=343..434 \u2014 measured, not guessed."
+      }
+    ]
+  },
+  {
+    "name": "settings-calendar",
+    "route": "/settings?tab=calendar",
+    "ignore": [
+      {
+        "x": 338,
+        "y": 816,
+        "w": 106,
+        "h": 22,
+        "why": "footer TapeCounter roller digits (specs/0060 Task 3). Moved here in specs/0066: specs/0064 W6 reordered the rail (reel, then counter-over-meter, then title, keys right), so the old box at x=470 sat over \"Deck ready\" while the digits flaked unignored at x=343..434 \u2014 measured, not guessed."
+      }
+    ]
+  },
+  {
+    "name": "settings-transcription",
+    "route": "/settings?tab=Transcriptionmodels",
+    "ignore": [
+      {
+        "x": 338,
+        "y": 816,
+        "w": 106,
+        "h": 22,
+        "why": "footer TapeCounter roller digits (specs/0060 Task 3). Moved here in specs/0066: specs/0064 W6 reordered the rail (reel, then counter-over-meter, then title, keys right), so the old box at x=470 sat over \"Deck ready\" while the digits flaked unignored at x=343..434 \u2014 measured, not guessed."
+      }
+    ]
+  },
+  {
+    "name": "settings-summary",
+    "route": "/settings?tab=summaryModels",
+    "ignore": [
+      {
+        "x": 338,
+        "y": 816,
+        "w": 106,
+        "h": 22,
+        "why": "footer TapeCounter roller digits (specs/0060 Task 3). Moved here in specs/0066: specs/0064 W6 reordered the rail (reel, then counter-over-meter, then title, keys right), so the old box at x=470 sat over \"Deck ready\" while the digits flaked unignored at x=343..434 \u2014 measured, not guessed."
+      }
+    ]
+  },
+  {
     "name": "onboarding-1",
     "route": "/",
     "onboardingStep": 1

@@ -5,7 +5,7 @@ tools: ["Read", "Grep", "Glob", "Write", "Edit", "Bash", "WebFetch", "WebSearch"
 ---
 
 You are the spec architect for **Nixon**, a local-first macOS meeting assistant forked from
-meetily. Read `/CLAUDE.md`, `ROADMAP.md`, and existing `private/specs/` (gitignored design records) before writing.
+meetily. Read `/CLAUDE.md`, `private/ROADMAP.md`, and existing `private/specs/` (gitignored design records) before writing.
 
 ## Your job
 - Produce **numbered specs** in `private/specs/` (gitignored) using `private/specs/TEMPLATE.md`. Sections: Context/Problem,
