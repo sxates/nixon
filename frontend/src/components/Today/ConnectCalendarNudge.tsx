@@ -28,8 +28,13 @@ function readDismissed(): boolean {
 }
 
 export function ConnectCalendarNudge() {
-  // Starts visible (matches the caller's own gate, which is already resolved by the
-  // time this mounts) and hides itself once the persisted dismissal is read.
+  // Starts visible and hides itself once the persisted dismissal is read in the effect
+  // below — a one-frame flash for a returning dismisser, not fixed with a lazy `useState`
+  // initializer. This page is a static export: the prerendered HTML has no `localStorage`,
+  // so hydration requires the FIRST client render to match that HTML exactly; reading the
+  // dismissal in the initializer would mismatch (and `useSyncExternalStore` settles on the
+  // same post-mount timing, so it wouldn't remove the flash either — just formalize this
+  // shape). Confirmed with review (specs/0069 W4 fix round 1): this trade-off stands.
   const [dismissed, setDismissed] = useState(false);
 
   useEffect(() => {

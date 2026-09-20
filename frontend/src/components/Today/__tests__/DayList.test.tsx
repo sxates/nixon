@@ -37,6 +37,7 @@ const base = {
   onSelect: vi.fn(),
   onJoin: vi.fn(),
   onRecord: vi.fn(),
+  onHide: vi.fn(),
   onEdit: vi.fn(),
   onDelete: vi.fn(),
   onAddMeeting: vi.fn(),
@@ -77,5 +78,39 @@ describe('DayList (specs/0069 W4)', () => {
     render(<DayList {...base} items={[manual]} onRecord={onRecord} />);
     fireEvent.click(screen.getByRole('button', { name: 'Record' }));
     expect(onRecord).toHaveBeenCalledWith(manual);
+  });
+
+  // fix round 1 Finding 1 — List is the DEFAULT view for no-calendar users, exactly the
+  // people most likely to want an unwanted calendar row off their day, so this menu item
+  // (and the ⋯ trigger itself) can't be missing here the way it briefly was.
+  describe('Hide from timeline (fix round 1 Finding 1)', () => {
+    it('offers Hide for an unrecorded calendar event and calls onHide', async () => {
+      const onHide = vi.fn();
+      const item = at('15:00', 'Standalone sync'); // calendar, unrecorded, no meetingId
+      render(<DayList {...base} items={[item]} onHide={onHide} />);
+
+      const trigger = screen.getByRole('button', { name: 'Event options' });
+      trigger.focus();
+      fireEvent.keyDown(trigger, { key: 'Enter' });
+      fireEvent.click(await screen.findByText('Hide from timeline'));
+      expect(onHide).toHaveBeenCalledWith(item);
+    });
+
+    it('renders no ⋯ menu at all once that calendar event is recorded', () => {
+      const item = at('09:00', 'Standup', {
+        meetingId: 'meeting-1',
+        status: { recorded: true, transcribed: true, summarized: false, speakersIdentified: false },
+      });
+      render(<DayList {...base} items={[item]} />);
+      expect(screen.queryByRole('button', { name: 'Event options' })).not.toBeInTheDocument();
+    });
+  });
+
+  // fix round 1 Finding 2 — field-by-field parity pass against `TimelineBlock`: the
+  // attendee count was surfaced there and silently dropped here.
+  it('surfaces the attendee count next to the title, same as the grid', () => {
+    const item = at('09:00', 'Standup', { attendeeCount: 3 });
+    render(<DayList {...base} items={[item]} />);
+    expect(screen.getByText(/3 attendees/)).toBeInTheDocument();
   });
 });

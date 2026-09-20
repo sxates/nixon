@@ -29,7 +29,8 @@ export function ConnectCalendarCard({
   onDismiss,
 }: {
   title: string;
-  /** Omitted where the card has no dismiss affordance (Today's nudge). */
+  /** Omitted where the card has no dismiss affordance (the Upcoming section's card;
+   *  Today's nudge passes one, specs/0069 W4). */
   onDismiss?: () => void;
 }) {
   const router = useRouter();

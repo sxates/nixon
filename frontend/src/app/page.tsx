@@ -341,6 +341,7 @@ function HomeView() {
               onSelect={handleSelect}
               onJoin={handleJoin}
               onRecord={handleRecordManual}
+              onHide={(it) => void handleHide(it)}
               onEdit={handleEditManual}
               onDelete={handleDeleteManual}
               onAddMeeting={() => setAddOpen(true)}

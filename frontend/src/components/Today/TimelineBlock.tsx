@@ -20,8 +20,12 @@ export const LANE_GAP_PX = 6; // horizontal gap between side-by-side (overlappin
  * (see `barClass`) rather than by a coloured glow. The one panel that differs is a
  * calendar event that was never recorded — a dashed outline over nothing, because
  * there is no tape.
+ *
+ * Exported (specs/0069 W4 fix round 1) so `DayList` paints the SAME per-state chrome —
+ * notably the dashed/transparent "no tape" treatment for `past-unrecorded` — instead of
+ * a single hardcoded style that silently drifts from the grid's.
  */
-function blockClasses(state: TimelineVisualState): string {
+export function blockClasses(state: TimelineVisualState): string {
   switch (state) {
     case 'past-unrecorded':
       return 'border-dashed border-border/70 bg-transparent text-muted-foreground';
