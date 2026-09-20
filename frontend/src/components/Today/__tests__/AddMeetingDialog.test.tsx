@@ -12,25 +12,40 @@ describe('AddMeetingDialog (specs/0069 W3)', () => {
   beforeEach(() => invoke.mockReset());
 
   it('creates a meeting at the chosen local time', async () => {
-    invoke.mockResolvedValue('meeting-1');
-    const onSaved = vi.fn();
-    render(
-      <AddMeetingDialog open onOpenChange={() => {}} defaultDateKey="2026-09-20" onSaved={onSaved} />,
-    );
-    fireEvent.change(screen.getByLabelText(/title/i), { target: { value: 'Call with Sam' } });
-    fireEvent.change(screen.getByLabelText(/start/i), { target: { value: '15:00' } });
-    fireEvent.click(screen.getByRole('button', { name: /add meeting/i }));
+    // Pin a non-UTC zone with a large, unambiguous offset and no DST near this date
+    // (Etc/GMT-14 = UTC+14, no daylight saving) around the round-trip assertions below.
+    // Without this, CI's ubuntu-latest runs in UTC, where a hand-rolled-UTC bug in
+    // localInstant() (e.g. appending "Z" before parsing) produces byte-identical output
+    // to the correct local-time build and this test could never catch it. Pinned here
+    // rather than in vitest.config.ts / the setup file so it doesn't shift every other
+    // date-sensitive suite in the repo; restored in `finally` so later tests see the
+    // ambient zone.
+    const originalTz = process.env.TZ;
+    process.env.TZ = 'Etc/GMT-14';
+    try {
+      invoke.mockResolvedValue('meeting-1');
+      const onSaved = vi.fn();
+      render(
+        <AddMeetingDialog open onOpenChange={() => {}} defaultDateKey="2026-09-20" onSaved={onSaved} />,
+      );
+      fireEvent.change(screen.getByLabelText(/title/i), { target: { value: 'Call with Sam' } });
+      fireEvent.change(screen.getByLabelText(/start/i), { target: { value: '15:00' } });
+      fireEvent.click(screen.getByRole('button', { name: /add meeting/i }));
 
-    await waitFor(() => expect(invoke).toHaveBeenCalledWith('api_create_manual_meeting', expect.anything()));
-    const [, args] = invoke.mock.calls[0] as [string, Record<string, unknown>];
-    expect(args.title).toBe('Call with Sam');
-    // Local 15:00 on the viewed day, sent as an absolute instant.
-    expect(new Date(args.startsAt as string).getHours()).toBe(15);
-    // Default duration is 30 minutes.
-    expect(
-      (new Date(args.endsAt as string).getTime() - new Date(args.startsAt as string).getTime()) / 60000,
-    ).toBe(30);
-    await waitFor(() => expect(onSaved).toHaveBeenCalled());
+      await waitFor(() => expect(invoke).toHaveBeenCalledWith('api_create_manual_meeting', expect.anything()));
+      const [, args] = invoke.mock.calls[0] as [string, Record<string, unknown>];
+      expect(args.title).toBe('Call with Sam');
+      // Local 15:00 on the viewed day, sent as an absolute instant. Under the pinned
+      // UTC+14 zone, a hand-rolled-UTC bug would read back as hour 5, not 15.
+      expect(new Date(args.startsAt as string).getHours()).toBe(15);
+      // Default duration is 30 minutes.
+      expect(
+        (new Date(args.endsAt as string).getTime() - new Date(args.startsAt as string).getTime()) / 60000,
+      ).toBe(30);
+      await waitFor(() => expect(onSaved).toHaveBeenCalled());
+    } finally {
+      process.env.TZ = originalTz;
+    }
   });
 
   it('will not submit an empty title', () => {
