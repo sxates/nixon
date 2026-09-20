@@ -119,3 +119,58 @@ describe('Sidebar (specs/0057 Plan 3 Task 3)', () => {
     expect(screen.getByRole('button', { name: /settings/i })).toBeInTheDocument();
   });
 });
+
+function slotOrder(container: HTMLElement): string[] {
+  return Array.from(container.querySelectorAll('[data-sidebar-slot]')).map(
+    (el) => el.getAttribute('data-sidebar-slot') as string,
+  );
+}
+
+describe('Sidebar parity (specs/0069 W1)', () => {
+  it('renders the same icon column, in the same order, in both states', () => {
+    sidebarState.isCollapsed = false;
+    const expanded = render(<Sidebar />);
+    const expandedSlots = slotOrder(expanded.container);
+    expect(expandedSlots.length).toBeGreaterThan(5);
+    expanded.unmount();
+
+    sidebarState.isCollapsed = true;
+    const collapsed = render(<Sidebar />);
+    expect(slotOrder(collapsed.container)).toEqual(expandedSlots);
+  });
+
+  it('gives every slot the same column class in both states', () => {
+    sidebarState.isCollapsed = false;
+    const expanded = render(<Sidebar />);
+    const cls = Array.from(expanded.container.querySelectorAll('[data-sidebar-slot]')).map(
+      (el) => el.className,
+    );
+    expanded.unmount();
+    sidebarState.isCollapsed = true;
+    const collapsed = render(<Sidebar />);
+    expect(
+      Array.from(collapsed.container.querySelectorAll('[data-sidebar-slot]')).map(
+        (el) => el.className,
+      ),
+    ).toEqual(cls);
+  });
+
+  it('shows the reel mark in both states and NIXON only when expanded', () => {
+    sidebarState.isCollapsed = true;
+    const collapsed = render(<Sidebar />);
+    expect(collapsed.container.querySelector('[data-sidebar-slot="mark"]')).not.toBeNull();
+    expect(screen.queryByText('NIXON')).toBeNull();
+    collapsed.unmount();
+
+    sidebarState.isCollapsed = false;
+    const expanded = render(<Sidebar />);
+    expect(expanded.container.querySelector('[data-sidebar-slot="mark"]')).not.toBeNull();
+    expect(screen.getByText('NIXON')).toBeInTheDocument();
+  });
+
+  it('has no divider above the footer rows', () => {
+    sidebarState.isCollapsed = false;
+    const { container } = render(<Sidebar />);
+    expect(container.querySelector('.border-t')).toBeNull();
+  });
+});

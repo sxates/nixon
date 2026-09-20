@@ -4,7 +4,8 @@ import React from 'react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import { LampDot } from '@/components/Transport/LampDot';
-import { SIDEBAR_ICON_SLOT, SIDEBAR_ROW } from './row';
+import { IconSlot } from './SidebarRow';
+import { SIDEBAR_ROW } from './row';
 import { useOptionalUpdateStatus } from '@/contexts/UpdateStatusContext';
 import { useRecordingState } from '@/contexts/RecordingStateContext';
 
@@ -48,9 +49,11 @@ export function UpdateRow({ collapsed = false }: { collapsed?: boolean }) {
             type="button"
             title={line}
             aria-label={`Update status — ${line}`}
-            className="mb-1 flex h-10 w-full items-center justify-center transition-colors hover:bg-key focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className={cn(SIDEBAR_ROW, 'transition-colors hover:bg-key focus:outline-none focus-visible:ring-2 focus-visible:ring-ring')}
           >
-            <LampDot tone="amber" label={line} decorative pulse={!ready} />
+            <IconSlot name="update">
+              <LampDot tone="amber" label={line} decorative pulse={!ready} />
+            </IconSlot>
           </button>
         </PopoverTrigger>
         <PopoverContent side="right" align="end" aria-label="Update" className="w-72 border-border bg-popover p-3">
@@ -85,10 +88,10 @@ export function UpdateRow({ collapsed = false }: { collapsed?: boolean }) {
 
   return (
     <div>
-      <div className={cn(SIDEBAR_ROW, 'h-8')}>
-        <span className={SIDEBAR_ICON_SLOT}>
+      <div className={SIDEBAR_ROW}>
+        <IconSlot name="update">
           <LampDot tone="amber" label={line} decorative pulse={!ready} />
-        </span>
+        </IconSlot>
         <span className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground">{line}</span>
         {ready && (
           <button
