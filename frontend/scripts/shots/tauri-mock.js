@@ -448,8 +448,17 @@
     return words.some((w) => OBJECT_SHAPED_WORDS.has(w)) ? {} : [];
   }
 
+  // Commands that a RELEASE build genuinely does not have. The blanket resolve above is
+  // right for the ~300 real ones, but a debug-only command must reject here or the shots
+  // show UI the shipped app never has — the Developer settings tab probes `dev_get_flags`
+  // exactly this way to decide whether it exists (specs/0066 W3).
+  const DEBUG_ONLY = new Set(['dev_get_flags', 'dev_load_fixtures', 'dev_reset_onboarding']);
+
   window.__TAURI_INTERNALS__ = {
-    invoke: (cmd, args) => Promise.resolve(Object.hasOwn(FIXTURES, cmd) ? FIXTURES[cmd](args || {}) : fallback(cmd)),
+    invoke: (cmd, args) =>
+      DEBUG_ONLY.has(cmd)
+        ? Promise.reject(new Error(`Command ${cmd} not found`))
+        : Promise.resolve(Object.hasOwn(FIXTURES, cmd) ? FIXTURES[cmd](args || {}) : fallback(cmd)),
     transformCallback: () => Math.floor(Math.random() * 1e9),
     convertFileSrc: (p) => p,
     metadata: { currentWindow: { label: 'main' }, currentWebview: { label: 'main' } },

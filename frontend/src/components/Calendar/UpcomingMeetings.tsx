@@ -17,7 +17,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
-import { Calendar, Video, CircleDot } from 'lucide-react';
+import { Video, CircleDot } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { ConnectCalendarCard } from '@/components/Calendar/ConnectCalendarCard';

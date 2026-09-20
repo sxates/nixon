@@ -1,8 +1,6 @@
 'use client';
 
 import { createContext, useContext, useCallback, ReactNode } from 'react';
-import { useConfig } from './ConfigContext';
-import { toast } from 'sonner';
 
 interface ImportDialogContextType {
   openImportDialog: (filePath?: string | null) => void;

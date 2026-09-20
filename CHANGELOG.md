@@ -21,6 +21,21 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 ### Changed
 
+- **A summary is now written automatically when a recording stops.** This was off by
+  default and had to be found in Settings first. If you turned it off deliberately, it
+  stays off (specs/0066).
+- **Import audio is no longer a beta feature.** It is an ordinary part of the app: the
+  sidebar button has lost its BETA tag, and there is no switch to turn it on first. The
+  Beta section of Settings is gone with it, since that was the only feature in it
+  (specs/0066).
+- Two settings are removed (specs/0066). **Expected number of speakers** is no longer
+  needed — Nixon sizes a meeting from the audio itself, and a number set here used to
+  override that for good. **System Audio Backend** offered a second capture path that
+  needed BlackHole and reverted itself on the next launch; system audio always uses the
+  Core Audio tap now.
+- The "connect your calendar" prompts mention **Google Calendar** as well as the Mac's,
+  and offer a way to get to it — previously they named only macOS Calendar, and the
+  Google connection could be found only by going to Settings yourself (specs/0066).
 - The sidebar's **Home** is now **Today**, and the New recording / New note buttons are gone
   from it — both are on the Today header, and recording has the REC key (specs/0064 W5).
 - The **Queue** moved from the transport rail into the sidebar, below Settings. Expanded it
@@ -34,6 +49,13 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 ### Fixed
 
+- **Retry in the Queue now works, or tells you why it can't.** Clicking it on a failed item
+  could quietly do nothing: a retry the app refused — because that work was already running,
+  or the task had already been cleared — was thrown away without a word, and a refused
+  speaker-identification retry even reported success while the row vanished. Every refusal
+  now says what happened (specs/0066).
+- Release notes in Settings → About render as formatted text instead of one bullet per
+  line with the `###` marks still showing, and the About page is centred (specs/0066).
 - **REC is readable while a recording is on hold.** It used to lose its red background and
   keep white text, which read as "off, but oddly". A held recording now shows a normal key
   with a red icon and red REC legend, and the lamp blinks slowly — still recording, paused
@@ -62,6 +84,20 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
   and its link to previous occurrences. For a macOS Calendar meeting the notes move once the
   old time is confirmed empty, so a recurring series' other occurrences always keep their own
   (specs/0064 W1).
+
+### Internal
+
+_Not shown in release notes or the in-app updater (see `release.sh`)._
+
+- Tauri copies `templates/*.json` into `target/<profile>/templates/` and never prunes, so a
+  template deleted from source kept being served by dev builds — the Psychiatric Session
+  template was still listed as hidden two specs after its removal. `build.rs` now deletes
+  staged templates the source dir no longer has (specs/0066).
+- `tests/import_audio.rs` runs a real file through the whole import path (model-gated,
+  skips without a Whisper model). Writing it found that `get_or_init_whisper` never did the
+  "or init" half, so import failed where live transcription self-healed (specs/0066).
+- The screenshot mock now rejects debug-only commands (`dev_get_flags` and friends) instead
+  of resolving everything, so shots show the release build's UI (specs/0066).
 
 ## [0.5.0] - 2026-09-18
 
