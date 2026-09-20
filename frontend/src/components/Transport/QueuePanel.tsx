@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { useBacklog } from '@/contexts/DeferredBacklogProvider';
 import { useOptionalLlmActivity } from '@/contexts/LlmActivityProvider';
@@ -65,6 +66,20 @@ function Row({ row, onRetry, onDismiss }: { row: QueueRow; onRetry: () => void; 
   );
 }
 
+/** A Rust command error is a plain string; anything else gets a readable fallback. */
+function messageOf(error: unknown): string {
+  if (typeof error === 'string' && error.trim() !== '') return error;
+  if (error instanceof Error && error.message.trim() !== '') return error.message;
+  return 'Something went wrong. Check the logs for details.';
+}
+
+/** Why a backlog hand-off was refused, in the user's terms (`HandoffOutcome.reason`). */
+function describeHandoff(reason: 'no-folder-path' | 'threw'): string {
+  return reason === 'no-folder-path'
+    ? "This meeting's recording folder is missing, so there is nothing to process."
+    : 'The meeting could not be queued for processing.';
+}
+
 /**
  * specs/0057 decision 8 — the ONE queue panel: deferred processing and background AI in a
  * single ordered list, with the same actions their two retired surfaces had (Today's own
@@ -80,23 +95,41 @@ export function QueuePanel({ view, className }: { view: QueueView; className?: s
   // A backlog row retries by re-enqueuing that meeting (TranscriptPanel.tsx's "Process now"
   // uses the same call shape); an LLM row retries by its numeric registry task id, never by
   // string-slicing the `llm:` prefix off `row.id` (specs/0063 W3 Task 6).
-  const handleRetry = (row: QueueRow) => {
+  //
+  // specs/0066 W2 — a rejected dispatch SAYS SO. Both of these used to end in
+  // `.catch(() => {})`, borrowed from the LLM-activity provider, where swallowing is right:
+  // a snapshot poll that fails is noise the user never asked for. A click is the opposite.
+  // Every reason a retry can be refused — the task already gone, a diarization pass already
+  // running, no model configured, a meeting whose folder has moved — arrived as a clean Rust
+  // error message and was then thrown away, which is precisely what "clicking Retry doesn't
+  // seem to do anything" looks like from the outside. Success stays silent: the row leaving
+  // the failed section and coming back as running is the feedback.
+  const handleRetry = async (row: QueueRow) => {
     if (row.source === 'backlog' && row.meetingId) {
-      void enqueueMeeting(row.meetingId, { force: true });
-    } else if (row.source === 'llm' && typeof row.taskId === 'number') {
-      void invoke('api_llm_activity_retry_task', { taskId: row.taskId }).catch(() => {
-        /* best-effort, like every other LLM-activity call (LlmActivityProvider.tsx) */
-      });
+      const outcome = await enqueueMeeting(row.meetingId, { force: true });
+      if (!outcome.accepted) {
+        toast.error('Could not retry', { description: describeHandoff(outcome.reason) });
+      }
+      return;
+    }
+    if (row.source === 'llm' && typeof row.taskId === 'number') {
+      try {
+        await invoke('api_llm_activity_retry_task', { taskId: row.taskId });
+      } catch (error) {
+        toast.error('Could not retry', { description: messageOf(error) });
+      }
     }
   };
   // Per-row dismiss removes just that record (fix-round 1, specs/0063 W3 Task 6) — distinct
   // from the header's `handleDismissAll`, which is the honestly-global
   // `api_llm_activity_dismiss` and stays that way.
-  const handleDismiss = (row: QueueRow) => {
+  const handleDismiss = async (row: QueueRow) => {
     if (typeof row.taskId === 'number') {
-      void invoke('api_llm_activity_dismiss_task', { taskId: row.taskId }).catch(() => {
-        /* best-effort, like every other LLM-activity call (LlmActivityProvider.tsx) */
-      });
+      try {
+        await invoke('api_llm_activity_dismiss_task', { taskId: row.taskId });
+      } catch (error) {
+        toast.error('Could not dismiss', { description: messageOf(error) });
+      }
     }
   };
   const handleDismissAll = () => void llm?.dismiss();
@@ -129,7 +162,12 @@ export function QueuePanel({ view, className }: { view: QueueView; className?: s
           <li className="px-2 py-3 text-center text-xs text-muted-foreground">Nothing in the queue.</li>
         )}
         {view.rows.map((row) => (
-          <Row key={row.id} row={row} onRetry={() => handleRetry(row)} onDismiss={() => handleDismiss(row)} />
+          <Row
+            key={row.id}
+            row={row}
+            onRetry={() => void handleRetry(row)}
+            onDismiss={() => void handleDismiss(row)}
+          />
         ))}
       </ul>
       {hasFinished && (
