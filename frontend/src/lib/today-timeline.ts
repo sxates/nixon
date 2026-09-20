@@ -192,7 +192,8 @@ export function itemVisualState(item: DayAgendaItem, ctx: TimelineContext): Time
 
 export type ItemRoute =
   | { kind: 'return' } // this is the live recording → return to /record
-  | { kind: 'open'; meetingId: string } // recorded → /meeting-details
+  | { kind: 'open'; meetingId: string; tab?: 'prep' } // recorded → /meeting-details (`tab`
+  //   set only for an unrecorded manual entry, whose Prep tab opens directly)
   | {
       // an unrecorded calendar occurrence (upcoming, happening-now, or past) → ensure a
       // scheduled row, open its Prep tab. Join & Record is a separate explicit button, not
@@ -228,6 +229,16 @@ export function routeForItem(item: DayAgendaItem, ctx: TimelineContext): ItemRou
   const { recordingThisId } = ctx;
   if (recordingThisId && item.id === recordingThisId) return { kind: 'return' };
 
+  // A manual entry's `meetingId` is set from the moment it's created — it IS a
+  // meeting row, not something the click has to ensure into existence — so the
+  // `item.meetingId` branch below would otherwise fire immediately and open its
+  // (empty) details instead of letting you prep it. Route to Prep directly (no
+  // `api_ensure_scheduled_meeting` round-trip) until it's actually been recorded, at
+  // which point it falls through to the ordinary details route (specs/0069 W3).
+  if (item.source === 'manual' && item.meetingId && !item.status.recorded) {
+    return { kind: 'open', meetingId: item.meetingId, tab: 'prep' };
+  }
+
   // Anything already recorded → its details.
   if (item.meetingId) return { kind: 'open', meetingId: item.meetingId };
 
@@ -253,6 +264,28 @@ export function canJoinItem(item: DayAgendaItem, ctx: TimelineContext): boolean 
     isRecordingThis: false,
     anyRecordingInProgress: isRecording,
   });
+}
+
+/**
+ * Whether a timeline item can be edited or deleted in place (specs/0069 W3): a
+ * manually added entry (no calendar event, no recording behind it) that hasn't been
+ * recorded yet. The backend refuses to edit/delete a manual row once it's been
+ * recorded — "edit it from the meeting page instead" — so the menu shouldn't offer
+ * an action it knows will be rejected.
+ */
+export function canEditManualItem(item: DayAgendaItem): boolean {
+  return item.source === 'manual' && !item.status.recorded;
+}
+
+/**
+ * Whether a timeline item should show an explicit "Record" button (specs/0069 W3): a
+ * manual entry, not yet recorded, with no recording already in progress anywhere.
+ * Unlike `canJoinItem` this isn't gated to the "now" phase — a manual entry added
+ * for later is still yours to record whenever you're ready, not only in a window
+ * around its scheduled time.
+ */
+export function canRecordManualItem(item: DayAgendaItem, ctx: TimelineContext): boolean {
+  return item.source === 'manual' && !item.status.recorded && !ctx.isRecording;
 }
 
 // ---------------------------------------------------------------------------

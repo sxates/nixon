@@ -47,6 +47,7 @@ import { DayTimeline } from '@/components/Today/DayTimeline';
 import { WeekView } from '@/components/Today/WeekView';
 import { ConnectCalendarNudge } from '@/components/Today/ConnectCalendarNudge';
 import { AddMeetingDialog } from '@/components/Today/AddMeetingDialog';
+import { DeleteManualMeetingDialog } from '@/components/Today/DeleteManualMeetingDialog';
 
 function HomeView() {
   const router = useRouter();
@@ -54,6 +55,10 @@ function HomeView() {
   const { handleRecordingToggle, activeRecordingMeetingId } = useSidebar();
   const { currentMeetingId, meetingTitle } = useTranscripts();
   const [addOpen, setAddOpen] = useState(false);
+  // specs/0069 W3 — editing/deleting a manually added entry reuses AddMeetingDialog's
+  // `editing` mode and a dedicated confirm dialog, both driven by the target item.
+  const [editingItem, setEditingItem] = useState<DayAgendaItem | null>(null);
+  const [deletingItem, setDeletingItem] = useState<DayAgendaItem | null>(null);
 
   const {
     items,
@@ -151,6 +156,51 @@ function HomeView() {
     [isRecording, handleRecordingToggle],
   );
 
+  // Recording a manual entry goes through the SAME path as Join & Record:
+  // `joinAndRecord` creates the meeting with this entry's EVENT id (`calendarEventId`,
+  // `nixon-manual:{uuid}`), which makes `api_create_meeting` adopt the scheduled row and
+  // promote it (specs/0036), so the prep notes and cached brief carry into the recording
+  // instead of a second, empty meeting appearing beside it. The manual item's own `id`
+  // IS its meeting id (not its event id) — passing that instead would match nothing and
+  // silently create that second meeting, so this refuses rather than guess.
+  const handleRecordManual = useCallback(
+    (item: DayAgendaItem) => {
+      const calendarEventId = item.calendarEventId;
+      if (!calendarEventId) {
+        console.error(
+          '[today] manual item missing calendarEventId; refusing to record to avoid a duplicate meeting',
+          item,
+        );
+        toast.error('Could not start recording for this meeting');
+        return;
+      }
+      void joinAndRecord(
+        {
+          id: calendarEventId,
+          title: item.title,
+          zoomUrl: item.zoomUrl,
+          startsAt: item.startTime,
+          seriesKey: null,
+        },
+        isRecording,
+        handleRecordingToggle,
+      );
+    },
+    [isRecording, handleRecordingToggle],
+  );
+
+  const handleEditManual = useCallback((item: DayAgendaItem) => setEditingItem(item), []);
+  const handleDeleteManual = useCallback((item: DayAgendaItem) => setDeletingItem(item), []);
+
+  // Add and Edit share one dialog instance (AddMeetingDialog's `editing` prop); closing
+  // either clears both so the next open starts clean.
+  const closeManualDialog = useCallback((open: boolean) => {
+    if (!open) {
+      setAddOpen(false);
+      setEditingItem(null);
+    }
+  }, []);
+
   // Click routing: pure decision → side effect (specs/0036). The body click only ever
   // views/opens — Join & Record is the separate `handleJoin` button.
   const handleSelect = useCallback(
@@ -161,7 +211,11 @@ function HomeView() {
           router.push('/record');
           return;
         case 'open':
-          router.push(`/meeting-details?id=${route.meetingId}`);
+          router.push(
+            route.tab
+              ? `/meeting-details?id=${route.meetingId}&tab=${route.tab}`
+              : `/meeting-details?id=${route.meetingId}`,
+          );
           return;
         case 'prep':
           try {
@@ -198,10 +252,34 @@ function HomeView() {
       <TodayHeader now={now} daySummary={daySummary} onAddMeeting={() => setAddOpen(true)} />
 
       <AddMeetingDialog
-        open={addOpen}
-        onOpenChange={setAddOpen}
+        open={addOpen || !!editingItem}
+        onOpenChange={closeManualDialog}
         defaultDateKey={viewDate}
+        editing={
+          editingItem
+            ? {
+                meetingId: editingItem.meetingId ?? editingItem.id,
+                title: editingItem.title,
+                startsAt: editingItem.startTime,
+                endsAt: editingItem.endTime,
+                joinUrl: editingItem.zoomUrl,
+              }
+            : undefined
+        }
         onSaved={() => void refresh()}
+      />
+
+      <DeleteManualMeetingDialog
+        open={!!deletingItem}
+        onOpenChange={(open) => {
+          if (!open) setDeletingItem(null);
+        }}
+        meetingId={deletingItem?.meetingId ?? deletingItem?.id ?? null}
+        meetingTitle={deletingItem?.title}
+        onDeleted={() => {
+          setDeletingItem(null);
+          void refresh();
+        }}
       />
 
       {/* Toolbar — date nav + Day/Week toggle + quick actions; fixed above the scroll region. */}
@@ -257,6 +335,9 @@ function HomeView() {
               onSelect={handleSelect}
               onJoin={handleJoin}
               onHide={(it) => void handleHide(it)}
+              onEdit={handleEditManual}
+              onDelete={handleDeleteManual}
+              onRecord={handleRecordManual}
             />
           )}
         </div>
