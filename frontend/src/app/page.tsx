@@ -44,6 +44,7 @@ import { useDayAgenda } from '@/hooks/useDayAgenda';
 import { TodayHeader } from '@/components/Today/TodayHeader';
 import { TodayToolbar } from '@/components/Today/TodayToolbar';
 import { DayTimeline } from '@/components/Today/DayTimeline';
+import { DayList } from '@/components/Today/DayList';
 import { WeekView } from '@/components/Today/WeekView';
 import { ConnectCalendarNudge } from '@/components/Today/ConnectCalendarNudge';
 import { AddMeetingDialog } from '@/components/Today/AddMeetingDialog';
@@ -63,7 +64,7 @@ function HomeView() {
   const {
     items,
     visibleItems,
-    calendarStatus,
+    calendarConnected,
     loaded,
     now,
     viewDate,
@@ -298,7 +299,12 @@ function HomeView() {
       {/* Body — the day timeline / week list; scrolls beneath the fixed toolbar. */}
       <div className="flex-1 overflow-y-auto px-7 pb-12">
         <div className="mx-auto max-w-[840px]">
-          {(calendarStatus === 'notDetermined' || calendarStatus === 'denied') && (
+          {/* specs/0069 W4 — gated on `calendarConnected` (EventKit OR Google), not the
+              EventKit-only `calendarStatus`: a Google-connected user must never be told
+              forever to connect a calendar they already connected. `null` (not yet
+              resolved) hides it, same as the prior status-based gate did before its
+              first read. */}
+          {calendarConnected === false && (
             <div className="mb-4">
               <ConnectCalendarNudge />
             </div>
@@ -325,6 +331,20 @@ function HomeView() {
               <Loader2 className="mr-2 h-5 w-5 animate-spin" />
               <span className="text-sm">Loading your day…</span>
             </div>
+          ) : viewMode === 'list' ? (
+            // specs/0069 W4 — same single-day data + handlers as the grid, presented as
+            // a list (the default with no calendar connected).
+            <DayList
+              items={visibleItems}
+              ctx={ctx}
+              now={now}
+              onSelect={handleSelect}
+              onJoin={handleJoin}
+              onRecord={handleRecordManual}
+              onEdit={handleEditManual}
+              onDelete={handleDeleteManual}
+              onAddMeeting={() => setAddOpen(true)}
+            />
           ) : (
             <DayTimeline
               visibleItems={visibleItems}

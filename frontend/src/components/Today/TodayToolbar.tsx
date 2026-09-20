@@ -13,6 +13,7 @@ import { SegmentedControl } from '@/components/ui/segmented-control';
 const AGENDA_VIEWS = [
   { value: 'day', label: 'Day' },
   { value: 'week', label: 'Week' },
+  { value: 'list', label: 'List' },
 ];
 
 interface TodayToolbarProps {
@@ -106,7 +107,7 @@ export function TodayToolbar({
               <ChevronRight className="h-4 w-4" aria-hidden="true" />
             </button>
 
-            {!(viewMode === 'day' && viewIsToday) && (
+            {!(viewMode !== 'week' && viewIsToday) && (
               <button
                 type="button"
                 onClick={onToday}
@@ -123,7 +124,7 @@ export function TodayToolbar({
               aria-label="Agenda view"
               options={AGENDA_VIEWS}
               value={viewMode}
-              onChange={(next) => onSwitchMode(next as 'day' | 'week')}
+              onChange={(next) => onSwitchMode(next as 'day' | 'week' | 'list')}
             />
 
             <button

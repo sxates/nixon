@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { safeListen } from '@/lib/safe-listen';
@@ -12,7 +12,11 @@ import {
   setItemDismissed,
   type DayAgendaItem,
 } from '@/lib/day-agenda';
-import { getCalendarAccessStatus, type CalendarAccessStatus } from '@/lib/calendar';
+import {
+  getCalendarAccessStatus,
+  isAnyCalendarConnected,
+  type CalendarAccessStatus,
+} from '@/lib/calendar';
 import {
   localDateKey,
   isTodayKey,
@@ -27,7 +31,24 @@ function isValidDateKey(v: string | null): v is string {
   return !!v && /^\d{4}-\d{2}-\d{2}$/.test(v);
 }
 
-export type AgendaViewMode = 'day' | 'week';
+export type AgendaViewMode = 'day' | 'week' | 'list';
+
+const VIEW_MODE_STORAGE_KEY = 'nixon.today.viewMode';
+
+function isAgendaViewMode(v: string | null): v is AgendaViewMode {
+  return v === 'day' || v === 'week' || v === 'list';
+}
+
+/** The persisted view-mode preference, or null if there isn't one (or storage throws —
+ *  private windows throw on `localStorage` access, and Today must still render). */
+function readStoredViewMode(): AgendaViewMode | null {
+  try {
+    const v = localStorage.getItem(VIEW_MODE_STORAGE_KEY);
+    return isAgendaViewMode(v) ? v : null;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Data + navigation state for the Home/Today agenda (specs/0036 WS7, 0038 WS4).
@@ -47,9 +68,19 @@ export function useDayAgenda() {
 
   const [items, setItems] = useState<DayAgendaItem[]>(() => readCachedAgenda());
   const [calendarStatus, setCalendarStatus] = useState<CalendarAccessStatus | null>(null);
+  // Whether ANY calendar source is connected (EventKit or Google, specs/0069 W4) — null
+  // until the one-shot check below resolves. Distinct from `calendarStatus`, which is
+  // EventKit-only and drives the (separate) "Connect your calendar" nudge gate.
+  const [calendarConnected, setCalendarConnected] = useState<boolean | null>(null);
   const [loaded, setLoaded] = useState(false);
   // Advances each minute so the now-line moves and phases (upcoming→now→past) re-classify.
   const [now, setNow] = useState<Date>(() => new Date());
+
+  // Whether the initial view mode came from an explicit source (the `?view=` URL param
+  // or a persisted preference) rather than the bare default. Tracked once at
+  // initialization — NOT recomputed later — because the no-calendar default below must
+  // never override a real choice, including one made only moments ago via `switchMode`.
+  const hasExplicitViewPreferenceRef = useRef(false);
 
   // Date navigation (specs/0038 WS4): which local day the agenda shows, and whether
   // we're in single-day or week mode. Both feed the same `api_get_day_agenda(date)`.
@@ -57,9 +88,42 @@ export function useDayAgenda() {
     const d = searchParams.get('day');
     return isValidDateKey(d) ? d : localDateKey();
   });
-  const [viewMode, setViewMode] = useState<AgendaViewMode>(() =>
-    searchParams.get('view') === 'week' ? 'week' : 'day',
-  );
+  // Precedence: `?view=` -> persisted `nixon.today.viewMode` -> 'day' (the no-calendar
+  // 'list' default, below, only applies when NEITHER of the first two fired).
+  const [viewMode, setViewMode] = useState<AgendaViewMode>(() => {
+    const fromUrl = searchParams.get('view');
+    if (isAgendaViewMode(fromUrl)) {
+      hasExplicitViewPreferenceRef.current = true;
+      return fromUrl;
+    }
+    const stored = readStoredViewMode();
+    if (stored) {
+      hasExplicitViewPreferenceRef.current = true;
+      return stored;
+    }
+    return 'day';
+  });
+
+  // specs/0069 W4 — a machine with no calendar opens on the list, not on an hour grid
+  // with nothing in it. This resolves asynchronously, so a fresh no-calendar profile
+  // sees Day for one frame before it settles; an explicit choice never gets overridden
+  // at all (`hasExplicitViewPreferenceRef`, set only at initialization above).
+  useEffect(() => {
+    let cancelled = false;
+    void isAnyCalendarConnected().then((connected) => {
+      if (cancelled) return;
+      setCalendarConnected(connected);
+      if (!connected && !hasExplicitViewPreferenceRef.current) {
+        setViewMode('list');
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+    // Runs once — a mid-session calendar connect/disconnect doesn't retroactively
+    // change which view you're looking at.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   // Week mode: one agenda array per day, index-aligned to `weekDaysFor(viewDate)`.
   const [weekItems, setWeekItems] = useState<DayAgendaItem[][]>([]);
   const [weekLoaded, setWeekLoaded] = useState(false);
@@ -150,12 +214,22 @@ export function useDayAgenda() {
   useEffect(() => {
     const params = new URLSearchParams();
     if (viewDate !== localDateKey()) params.set('day', viewDate);
-    if (viewMode === 'week') params.set('view', 'week');
+    if (viewMode === 'week' || viewMode === 'list') params.set('view', viewMode);
     const qs = params.toString();
     router.replace(qs ? `/?${qs}` : '/', { scroll: false });
   }, [viewDate, viewMode, router]);
 
   const switchMode = useCallback((mode: AgendaViewMode) => {
+    // A deliberate switch IS an explicit preference — persist it so the no-calendar
+    // 'list' default (above) never fights it on a later mount, and so the choice
+    // survives a reload. Wrapped in try/catch: private windows throw on `localStorage`.
+    hasExplicitViewPreferenceRef.current = true;
+    try {
+      localStorage.setItem(VIEW_MODE_STORAGE_KEY, mode);
+    } catch {
+      /* private window — the in-memory ref above still prevents this session's
+         auto-switch from overriding the choice just made */
+    }
     setViewMode(mode);
     setLoaded(false);
     setWeekLoaded(false);
@@ -223,6 +297,7 @@ export function useDayAgenda() {
     items,
     visibleItems,
     calendarStatus,
+    calendarConnected,
     loaded,
     now,
     viewDate,

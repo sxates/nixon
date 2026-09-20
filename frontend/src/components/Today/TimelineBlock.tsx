@@ -40,8 +40,12 @@ function blockClasses(state: TimelineVisualState): string {
   }
 }
 
-/** The 3px spine down the left edge — the block's state colour. `null` = no tape, no bar. */
-function barClass(state: TimelineVisualState): string | null {
+/**
+ * The 3px spine down the left edge — the block's state colour. `null` = no tape, no bar.
+ * Exported so the List presentation (`DayList`, specs/0069 W4) paints the SAME spine
+ * rather than re-deriving its own state→colour mapping.
+ */
+export function barClass(state: TimelineVisualState): string | null {
   switch (state) {
     case 'recording':
       return 'bg-record';
