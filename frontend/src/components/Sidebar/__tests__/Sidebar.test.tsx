@@ -50,6 +50,22 @@ vi.mock('@/contexts/QueueOpenContext', async () => {
   return { useQueueOpen: () => { const [open, setOpen] = react.useState(false); return { open, setOpen }; } };
 });
 
+// specs/0069 review, fix round 2 — this suite previously mocked no `UpdateStatusContext`, so
+// `useOptionalUpdateStatus()` returned null and `UpdateRow` bailed out of every render before
+// rendering anything. The parity tests below compare "every slot's row classes across both
+// states" and "no orphan row" — with the update row absent, they never looked at the one row
+// this branch changed the most. A `ready` status makes it render (with a `RestartToUpdateButton`)
+// in both the expanded and collapsed variants, like every other footer row.
+vi.mock('@/contexts/UpdateStatusContext', () => ({
+  useOptionalUpdateStatus: () => ({
+    status: { state: 'ready', version: '9.9.9', notes: '', last_checked: null },
+    busy: false,
+    error: null,
+    checkNow: vi.fn(),
+    install: vi.fn(),
+  }),
+}));
+
 import Sidebar from '@/components/Sidebar';
 
 // specs/0064 W5 — 'Home' is now 'Today', matching the screen it opens.
@@ -137,6 +153,20 @@ function rowClassesBySlot(container: HTMLElement): Record<string, string> {
 
 const ROW_TOKENS = SIDEBAR_ROW.split(' ');
 
+// specs/0069 review, fix round 2 — the containment check above passes even when one state
+// carries an extra box-model class the other doesn't (that is exactly how the old
+// `collapsed && 'mb-1'` shipped: `mb-1` is not one of `ROW_TOKENS`, so its presence on only
+// the collapsed branch was invisible to a "contains" assertion). This pulls out just the
+// margin/padding/height/width/gap utilities — the ones that can move or resize a row — and
+// requires the two states to carry the *same set*, so an asymmetric one is caught regardless
+// of which side it landed on. It deliberately ignores non-geometry classes (e.g. QueueRow's
+// expanded-only `relative text-left`), which don't move anything.
+const GEOMETRY_CLASS_RE = /^-?(?:m|p)[trblxy]?-|^(?:h|w)-|^gap(?:-[xy])?-|^inset(?:-[xy])?-/;
+
+function geometryTokens(className: string): string[] {
+  return className.split(/\s+/).filter((t) => GEOMETRY_CLASS_RE.test(t)).sort();
+}
+
 describe('Sidebar parity (specs/0069 W1)', () => {
   it('renders the same icon column, in the same order, in both states', () => {
     sidebarState.isCollapsed = false;
@@ -172,6 +202,25 @@ describe('Sidebar parity (specs/0069 W1)', () => {
           `collapsed "${slot}" row missing "${token}"`,
         ).toContain(token);
       }
+    }
+  });
+
+  it("gives every slot's row the same box-model classes in both states (no asymmetric mb-1/pl/h-8)", () => {
+    sidebarState.isCollapsed = false;
+    const expanded = render(<Sidebar />);
+    const expandedRows = rowClassesBySlot(expanded.container);
+    expanded.unmount();
+
+    sidebarState.isCollapsed = true;
+    const collapsed = render(<Sidebar />);
+    const collapsedRows = rowClassesBySlot(collapsed.container);
+
+    const slots = Object.keys(expandedRows);
+    expect(slots.length).toBeGreaterThan(5);
+    for (const slot of slots) {
+      expect(geometryTokens(collapsedRows[slot] ?? ''), `"${slot}" row geometry differs between states`).toEqual(
+        geometryTokens(expandedRows[slot] ?? ''),
+      );
     }
   });
 
