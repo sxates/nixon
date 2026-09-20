@@ -19,6 +19,18 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 ## [Unreleased]
 
+### Changed
+
+- **Opening the sidebar no longer rearranges it.** The icons stay exactly where they are,
+  at the size the collapsed rail shows them; expanding just widens the panel and reveals the
+  labels. The reel mark now stays put too, rather than being swapped for the wordmark, and
+  the line above Settings is gone.
+- **Import audio moved** out of the sidebar's navigation and into the All meetings header,
+  where an imported recording actually lands. Dropping an audio file onto the window works
+  from anywhere, as it always has.
+- **The "update ready" indicator is a restart symbol**, not a second amber lamp identical to
+  the queue's directly below it.
+
 ### Fixed
 
 - **macOS notifications work.** Nixon has offered to alert you before a meeting starts, and
@@ -48,6 +60,11 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
   **Send a test** button.
 - **A banner when a recording starts and stops** — but only while Nixon is behind another
   window, where it is the one sign that the recording is running.
+- **Restarting to update now asks first**, and says what it is about to do: which version you
+  are on, which one you are getting, and that Nixon will close and reopen. It used to happen
+  on the click, with no warning.
+- **Nixon tells you when it has updated.** The first time you open the new version it shows
+  what changed, once.
 
 ### Internal
 
