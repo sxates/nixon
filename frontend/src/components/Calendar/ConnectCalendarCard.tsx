@@ -29,8 +29,9 @@ export function ConnectCalendarCard({
   onDismiss,
 }: {
   title: string;
-  /** Omitted where the card has no dismiss affordance (the Upcoming section's card;
-   *  Today's nudge passes one, specs/0069 W4). */
+  /** Optional: when absent, the card renders with no dismiss control. Both current
+   *  callers (Today's nudge, the Upcoming section's card) pass one; the omitted case is
+   *  exercised by this component's own tests, not by production code. */
   onDismiss?: () => void;
 }) {
   const router = useRouter();
