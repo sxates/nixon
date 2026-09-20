@@ -117,6 +117,7 @@ const Sidebar: React.FC = () => {
           type="button"
           onClick={toggleCollapse}
           aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          title={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           aria-expanded={!isCollapsed}
           className={cn(
             SIDEBAR_ROW,
@@ -184,7 +185,8 @@ function WalnutCheek() {
   return <span aria-hidden className="absolute inset-y-0 left-0 z-10 w-1.5 bg-walnut" />;
 }
 
-/** The ⊙—⊙ reel mark: the wordmark's stand-in on the collapsed rail. */
+/** The ⊙—⊙ reel mark. Renders in both states — collapsed it stands alone; expanded it sits
+ *  beside the NIXON label rather than being swapped out for it. */
 function NixonMark() {
   return (
     <svg

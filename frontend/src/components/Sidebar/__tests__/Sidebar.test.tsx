@@ -1,6 +1,7 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import { SIDEBAR_ROW } from '@/components/Sidebar/row';
 
 // ---- Mocks ---------------------------------------------------------------
 // The sidebar's own provider pulls in Tauri IPC + sonner; the component only needs
@@ -126,6 +127,22 @@ function slotOrder(container: HTMLElement): string[] {
   );
 }
 
+// The slot span's own className is the hardcoded `SIDEBAR_ICON_SLOT` constant, so comparing
+// it against itself can never fail (review finding, fix round 1). What actually carries
+// `SIDEBAR_ROW` — and so is where a stray `h-8`/`mb-1`/`pl-5` would come back — is the row
+// element the slot lives in (the `<button>`/`<div>` one level up). Keying by slot name makes
+// a mismatch name the offending row instead of just diffing two opaque arrays.
+function rowClassesBySlot(container: HTMLElement): Record<string, string> {
+  const rows: Record<string, string> = {};
+  container.querySelectorAll('[data-sidebar-slot]').forEach((el) => {
+    const slot = el.getAttribute('data-sidebar-slot') as string;
+    rows[slot] = el.parentElement?.className ?? '';
+  });
+  return rows;
+}
+
+const ROW_TOKENS = SIDEBAR_ROW.split(' ');
+
 describe('Sidebar parity (specs/0069 W1)', () => {
   it('renders the same icon column, in the same order, in both states', () => {
     sidebarState.isCollapsed = false;
@@ -153,6 +170,31 @@ describe('Sidebar parity (specs/0069 W1)', () => {
         (el) => el.className,
       ),
     ).toEqual(cls);
+  });
+
+  it("gives every slot's ROW the shared row classes, in both states", () => {
+    sidebarState.isCollapsed = false;
+    const expanded = render(<Sidebar />);
+    const expandedRows = rowClassesBySlot(expanded.container);
+    expanded.unmount();
+
+    sidebarState.isCollapsed = true;
+    const collapsed = render(<Sidebar />);
+    const collapsedRows = rowClassesBySlot(collapsed.container);
+
+    const slots = Object.keys(expandedRows);
+    expect(slots.length).toBeGreaterThan(5);
+    for (const slot of slots) {
+      for (const token of ROW_TOKENS) {
+        expect(expandedRows[slot].split(/\s+/), `expanded "${slot}" row missing "${token}"`).toContain(
+          token,
+        );
+        expect(
+          (collapsedRows[slot] ?? '').split(/\s+/),
+          `collapsed "${slot}" row missing "${token}"`,
+        ).toContain(token);
+      }
+    }
   });
 
   it('shows the reel mark in both states and NIXON only when expanded', () => {
