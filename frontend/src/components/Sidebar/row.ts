@@ -1,22 +1,30 @@
 /**
- * The sidebar's row geometry, in one place (owner feedback 2026-09-19).
+ * The sidebar's row geometry, in one place (specs/0069 W1).
  *
- * Every row in the expanded panel — the hamburger/wordmark bar, the nav destinations,
- * Import audio, Update, Queue and Settings — had grown its own left inset (`pl-3`, `pl-5`,
- * `px-3`) and its own leading element (a 14px glyph, an 8px lamp, an 18px hamburger). The
- * icons landed in three different columns and the labels in four.
+ * Expanded and collapsed used to be two layouts: the rail centred a 16px glyph in a 64px
+ * column on `h-10` rows, while the panel put a 14px glyph at x=27px on `h-8` rows — so
+ * opening the sidebar moved every icon left and up and shrank it. They now share one
+ * contract, and the only difference between the states is the panel's width and whether
+ * labels render.
  *
- * Two constants fix that: rows share [`SIDEBAR_ROW`] for their padding and gap, and every
- * leading element — glyph or lamp — sits inside an [`SIDEBAR_ICON_SLOT`] box of the glyph's
- * own width. A lamp is then centred in the same column a glyph occupies, and because the
- * slot is a fixed width, every label starts at the same x no matter what precedes it.
+ * The row itself has NO padding. The icon column is exactly the collapsed rail's width, so
+ * a glyph sits at x=32px either way; a `pl-*` here would push the collapsed glyph off
+ * centre, and a `pr-*` would make a collapsed row wider than the rail. The right inset
+ * belongs to [`SIDEBAR_LABEL`], which exists only when expanded.
  */
 
-/** Padding + gap shared by every full-width row in the expanded sidebar. */
-export const SIDEBAR_ROW = 'flex items-center gap-2.5 pl-5 pr-3.5';
+/** Height, alignment and full width shared by every sidebar row. No padding — see above. */
+export const SIDEBAR_ROW = 'flex h-10 w-full items-center';
 
 /**
- * The leading-icon column: exactly as wide as a `DeckIcon` (14px, the deck chrome size), so a
- * narrower mark (the 8px lamp) centres in it instead of dragging its label leftwards.
+ * The leading-icon column: the collapsed rail's full width (`w-16` = 64px), so every
+ * leading element — a glyph, the reel mark, a lamp, the DEV badge — is centred on the same
+ * x in both states.
  */
-export const SIDEBAR_ICON_SLOT = 'flex w-3.5 flex-none items-center justify-center';
+export const SIDEBAR_ICON_SLOT = 'flex w-16 flex-none items-center justify-center';
+
+/** The label beside the slot. Rendered only when expanded; carries the row's right inset. */
+export const SIDEBAR_LABEL = 'u-section-label min-w-0 flex-1 truncate pr-3.5 text-left';
+
+/** Glyph size, in px: the rail's 16, now used in both states. */
+export const SIDEBAR_GLYPH = 16;
