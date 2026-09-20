@@ -2,6 +2,7 @@
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { getVersion } from '@tauri-apps/api/app';
+import { toast } from 'sonner';
 import {
   Dialog,
   DialogContent,
@@ -53,9 +54,27 @@ export function RestartConfirmProvider({ children }: { children: React.ReactNode
   }, []);
 
   const request = useCallback(() => {
-    if (!canRestart) return;
+    if (!canRestart) {
+      // Review finding, fix round 2: a refused request used to fail in total silence — the
+      // in-UI buttons are `disabled` so this only fires from the tray (which has no web
+      // layer of its own to put a dialog in), in the narrow window where the menu item was
+      // built while `Stopped` but a recording started, or an install is already running, by
+      // the time the click lands. Before `RestartConfirmContext` existed the same click
+      // reached `install_and_restart`, whose refusal surfaced under the sidebar row and in
+      // About via `update-install-refused` — this keeps that "something happened" promise
+      // without a round trip through Rust, reusing the recording copy verbatim
+      // (`UpdateRow.tsx`'s popover).
+      if (isRecording) {
+        toast.error("Finish the recording first — Nixon won't restart mid-take.");
+      } else if (updates?.busy) {
+        toast.error('Nixon is already installing an update.');
+      } else {
+        toast.error('No update is ready to install.');
+      }
+      return;
+    }
     setOpen(true);
-  }, [canRestart]);
+  }, [canRestart, isRecording, updates?.busy]);
 
   // The tray item (tray.rs, "install_update") emits this instead of installing.
   useEffect(() => {
