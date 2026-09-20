@@ -56,6 +56,11 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
   now says what happened (specs/0066).
 - Release notes in Settings → About render as formatted text instead of one bullet per
   line with the `###` marks still showing, and the About page is centred (specs/0066).
+- **While a summary is being written, the deck rewinds.** The Summary tab used to show a
+  small spinning circle inherited from the app Nixon was forked from; it now shows the
+  reels turning backwards at rewind speed — the machine going back over a tape it already
+  has. It can't be mistaken for a recording in progress, which turns the other way, and it
+  holds still if you've asked macOS to reduce motion (specs/0066).
 - **REC is readable while a recording is on hold.** It used to lose its red background and
   keep white text, which read as "off, but oddly". A held recording now shows a normal key
   with a red icon and red REC legend, and the lamp blinks slowly — still recording, paused
