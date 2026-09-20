@@ -40,12 +40,15 @@ const REMEMBERED: usize = 64;
 
 /// Register the categories. Idempotent — macOS replaces the whole set each call.
 pub fn register_categories() {
-    // Foreground: it is about to start recording, and a recording that begins with no
-    // visible sign of it is worse than one extra window coming forward.
+    // NOT `.foreground`, deliberately. Pressing this opens the call, and Zoom takes the
+    // screen; activating Nixon on top of it would cover the meeting you just joined and
+    // make you switch back — an interaction, for a button whose whole point is that there
+    // is no interaction. The recording announces itself instead with the "Recording
+    // started" banner, which fires precisely because Nixon is not frontmost.
     let join_and_record = action(
         ACTION_JOIN_AND_RECORD,
         "Join & Record",
-        UNNotificationActionOptions::Foreground,
+        UNNotificationActionOptions::empty(),
     );
 
     let meeting = UNNotificationCategory::categoryWithIdentifier_actions_intentIdentifiers_options(
@@ -57,6 +60,8 @@ pub fn register_categories() {
 
     let prep = UNNotificationCategory::categoryWithIdentifier_actions_intentIdentifiers_options(
         &NSString::from_str(CATEGORY_PREP),
+        // `.foreground` here, unlike the recording actions: Prep's entire purpose is to
+        // put the meeting's prep in front of you.
         &NSArray::from_retained_slice(&[action(
             ACTION_PREP,
             "Prep",
@@ -68,10 +73,11 @@ pub fn register_categories() {
 
     let record = UNNotificationCategory::categoryWithIdentifier_actions_intentIdentifiers_options(
         &NSString::from_str(CATEGORY_RECORD),
+        // Same reasoning as Join & Record: start recording, stay out of the way.
         &NSArray::from_retained_slice(&[action(
             ACTION_RECORD,
             "Record",
-            UNNotificationActionOptions::Foreground,
+            UNNotificationActionOptions::empty(),
         )]),
         &NSArray::from_slice(&[]),
         UNNotificationCategoryOptions::empty(),

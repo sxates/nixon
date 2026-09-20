@@ -7,6 +7,9 @@ import { Button } from "./ui/button"
 import { Switch } from "./ui/switch"
 import { SettingsGroup, SettingsNote, SettingsRow, SettingsSection } from "./ui/settings"
 import { CATEGORY_MEETING, CATEGORY_PREP, notify } from "@/lib/osNotification"
+import { joinAndRecord } from "@/lib/calendar"
+import { useRecordingState } from "@/contexts/RecordingStateContext"
+import { useSidebar } from "@/components/Sidebar/SidebarProvider"
 
 export interface DevFlags { fixtures: boolean; no_audio: boolean; fake_downloads: boolean; reset_onboarding: boolean; control: boolean }
 interface SeedReport { meetings: number; people: number; segments: number; failed: number }
@@ -23,6 +26,8 @@ function formatReport(r: SeedReport): string {
 
 /** specs/0059 — rendered only when the debug-only `dev_get_flags` command exists. */
 export function DeveloperSettings() {
+  const { isRecording } = useRecordingState()
+  const { handleRecordingToggle } = useSidebar()
   const [flags, setFlags] = useState<DevFlags | null>(null)
   const [skipAudio, setSkipAudio] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -57,7 +62,15 @@ export function DeveloperSettings() {
       category: starting ? CATEGORY_MEETING : CATEGORY_PREP,
       id: "dev-test-meeting",
       onPrep: () => toast.success("Prep pressed", { description: "The delegate routed the press back into Nixon." }),
-      onJoinAndRecord: () => toast.success("Join & Record pressed", { description: "The delegate routed the press back into Nixon." }),
+      // The REAL path, not a toast: this is the half that has to work without the user
+      // touching Nixon, so the probe has to exercise it rather than stand in for it.
+      // No zoomUrl, so nothing is launched — only the recording half runs.
+      onJoinAndRecord: () =>
+        void joinAndRecord(
+          { id: `dev-probe-${Date.now()}`, title: "Dev probe meeting", zoomUrl: null, startsAt: new Date().toISOString() },
+          isRecording,
+          handleRecordingToggle,
+        ),
       onOpen: () => toast.success("Banner tapped", { description: "Default action routed back into Nixon." }),
     })
     if (!sent) toast.error("Could not send the alert", { description: "Check Settings → General → Notifications." })
@@ -85,7 +98,7 @@ export function DeveloperSettings() {
         />
         <SettingsRow
           label="Test the meeting alerts"
-          description="Fires the real banners. Put another window in front first, then press the button or tap the banner — each toasts here, which proves the delegate routed the press back into the app (specs/0068)."
+          description="Fires the real banners. Put another window in front first. Prep and the body tap toast here; Starting now runs the REAL Join & Record path (no Zoom link, so only the recording half) — it will start an actual recording in this debug profile."
           control={
             <div className="flex items-center gap-2">
               <Button size="sm" variant="secondary" onClick={() => testAlert(false)}>

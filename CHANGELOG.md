@@ -35,8 +35,9 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 - **Meeting alerts you can act on without opening Nixon.** The alert five minutes before a
   meeting carries a **Prep** button that opens that meeting's Prep tab — five minutes out,
   what you want is to remember what the meeting is for, not to join it yet.
-- **A second alert as the meeting actually starts**, carrying **Join & Record**: it opens
-  the call *and* starts a recording filed against that meeting. Five minutes of warning is
+- **A second alert as the meeting actually starts**, carrying **Join & Record**: one press
+  opens the call *and* starts a recording filed against that meeting, with Nixon staying
+  where it is — you are not sent to another window to press record again. Five minutes of warning is
   the wrong amount when you get absorbed in something else, so this one replaces the earlier
   banner rather than adding to it. It stays quiet if you are already recording, and offers
   plain **Record** when the meeting has no link to join.
