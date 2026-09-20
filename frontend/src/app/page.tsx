@@ -22,7 +22,7 @@
  * under `components/Today/`. This page is click routing + composition.
  */
 
-import { Suspense, useCallback, useMemo } from 'react';
+import { Suspense, useCallback, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
@@ -46,12 +46,14 @@ import { TodayToolbar } from '@/components/Today/TodayToolbar';
 import { DayTimeline } from '@/components/Today/DayTimeline';
 import { WeekView } from '@/components/Today/WeekView';
 import { ConnectCalendarNudge } from '@/components/Today/ConnectCalendarNudge';
+import { AddMeetingDialog } from '@/components/Today/AddMeetingDialog';
 
 function HomeView() {
   const router = useRouter();
   const { isRecording } = useRecordingState();
-  const { handleNewNote, handleRecordingToggle, activeRecordingMeetingId } = useSidebar();
+  const { handleRecordingToggle, activeRecordingMeetingId } = useSidebar();
   const { currentMeetingId, meetingTitle } = useTranscripts();
+  const [addOpen, setAddOpen] = useState(false);
 
   const {
     items,
@@ -65,6 +67,7 @@ function HomeView() {
     weekDays,
     weekItems,
     weekLoaded,
+    refresh,
     goToDate,
     goPrev,
     goNext,
@@ -129,11 +132,6 @@ function HomeView() {
     return parts.join(' · ');
   }, [viewMode, viewDate, visibleItems, weekItems, weekDays, weekRangeLabel, weekHasToday]);
 
-  const handleRecord = useCallback(() => {
-    sessionStorage.setItem('autoStartRecording', 'true');
-    router.push('/record');
-  }, [router]);
-
   // Explicit Join & Record (the live-meeting button) — opens Zoom + starts recording.
   // Kept separate from the body click so viewing a meeting never auto-joins it.
   const handleJoin = useCallback(
@@ -196,13 +194,14 @@ function HomeView() {
       transition={{ duration: 0.25, ease: 'easeOut' }}
       className="flex h-page flex-col bg-background"
     >
-      {/* Header — greeting + day summary, ⌘K search, Ask AI, New note, Record. */}
-      <TodayHeader
-        now={now}
-        daySummary={daySummary}
-        isRecording={isRecording}
-        onNewNote={() => void handleNewNote()}
-        onRecord={handleRecord}
+      {/* Header — greeting + day summary, ⌘K search, Ask AI, Add meeting. */}
+      <TodayHeader now={now} daySummary={daySummary} onAddMeeting={() => setAddOpen(true)} />
+
+      <AddMeetingDialog
+        open={addOpen}
+        onOpenChange={setAddOpen}
+        defaultDateKey={viewDate}
+        onSaved={() => void refresh()}
       />
 
       {/* Toolbar — date nav + Day/Week toggle + quick actions; fixed above the scroll region. */}

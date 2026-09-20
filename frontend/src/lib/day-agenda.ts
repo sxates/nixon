@@ -51,7 +51,7 @@ export interface DayAgendaItem {
   title: string;
   startTime: string; // ISO-8601
   endTime: string | null; // ISO-8601
-  source: 'calendar' | 'recording';
+  source: 'calendar' | 'recording' | 'manual';
   zoomUrl: string | null;
   /** First ~5 attendees; full count in `attendeeCount`. */
   attendees: AgendaAttendee[];
@@ -76,6 +76,12 @@ export interface DayAgendaItem {
    * or when a stale same-session cache entry predates the field.
    */
   seriesKey?: string | null;
+  /**
+   * The manual row's Nixon-minted event id (`nixon-manual:{uuid}`), specs/0069 W3.
+   * Set only for `source: 'manual'` items; `null`/absent for calendar events and
+   * ad-hoc recordings.
+   */
+  calendarEventId?: string | null;
 }
 
 /**
@@ -264,4 +270,43 @@ export function attendeeLabel(a: AgendaAttendee): string {
   const email = a.email?.trim() || (name?.includes('@') ? name : null);
   if (email) return email.split('@')[0];
   return 'Guest';
+}
+
+// ---------------------------------------------------------------------------
+// Manual meetings (specs/0069 W3) — a meeting added inside Nixon, no calendar
+// event behind it.
+// ---------------------------------------------------------------------------
+
+/** specs/0069 W3 — a meeting added inside Nixon (no calendar event behind it). */
+export interface ManualMeetingInput {
+  title: string;
+  startsAt: string;
+  endsAt: string | null;
+  joinUrl: string | null;
+}
+
+export async function createManualMeeting(input: ManualMeetingInput): Promise<string> {
+  return invoke<string>('api_create_manual_meeting', {
+    title: input.title,
+    startsAt: input.startsAt,
+    endsAt: input.endsAt,
+    joinUrl: input.joinUrl,
+  });
+}
+
+export async function updateManualMeeting(
+  meetingId: string,
+  input: ManualMeetingInput,
+): Promise<void> {
+  await invoke('api_update_manual_meeting', {
+    meetingId,
+    title: input.title,
+    startsAt: input.startsAt,
+    endsAt: input.endsAt,
+    joinUrl: input.joinUrl,
+  });
+}
+
+export async function deleteManualMeeting(meetingId: string): Promise<void> {
+  await invoke('api_delete_manual_meeting', { meetingId });
 }
