@@ -19,6 +19,16 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 ## [Unreleased]
 
+### Fixed
+
+- **On the collapsed sidebar, the update lamp now opens a panel instead of restarting the
+  app.** Clicking that amber dot — which sits right above the queue's own amber dot, with no
+  label to tell them apart — used to relaunch Nixon and install the update on the spot. It
+  refused mid-recording, but clicking a light to find out what it means should never be the
+  same gesture as "restart now". It opens a flyout describing the update, with Restart as a
+  separate, labelled button inside it.
+
+
 _(nothing yet)_
 
 ## [0.6.0] - 2026-09-19

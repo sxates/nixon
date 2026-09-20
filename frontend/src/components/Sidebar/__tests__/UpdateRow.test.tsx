@@ -1,5 +1,5 @@
 import React from 'react';
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import type { UpdateStatus } from '@/contexts/UpdateStatusContext';
 
@@ -76,6 +76,63 @@ describe('UpdateRow (specs/0058)', () => {
     status = { state: 'ready', version: '0.3.0', notes: '', last_checked: null };
     isRecording = false;
     render(<UpdateRow collapsed />);
-    expect(screen.getByRole('button', { name: 'Restart to update to 0.3.0' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Update status — Nixon 0.3.0 ready' })).toBeInTheDocument();
+  });
+});
+
+// specs/0066, owner report: on the collapsed rail this lamp sits directly above the Queue's
+// own amber lamp with no label, and its entire click handler was `install()`. Clicking a dot
+// to find out what it is restarted the app. Identifying and acting are separate gestures now.
+describe('UpdateRow collapsed — the lamp explains, it does not act', () => {
+  beforeEach(() => {
+    install.mockClear();
+    error = null;
+  });
+
+  it('never installs on the click that opens it', async () => {
+    status = { state: 'ready', version: '0.3.0', notes: '', last_checked: null };
+    isRecording = false;
+    render(<UpdateRow collapsed />);
+
+    fireEvent.click(screen.getByRole('button', { name: /update status/i }));
+
+    expect(install).not.toHaveBeenCalled();
+    expect(await screen.findByText('Nixon 0.3.0 ready')).toBeInTheDocument();
+  });
+
+  it('installs only from the labelled action inside the flyout', async () => {
+    status = { state: 'ready', version: '0.3.0', notes: '', last_checked: null };
+    isRecording = false;
+    render(<UpdateRow collapsed />);
+
+    fireEvent.click(screen.getByRole('button', { name: /update status/i }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Restart to update' }));
+
+    expect(install).toHaveBeenCalled();
+  });
+
+  it('says why it will not restart mid-recording, rather than hiding it in a tooltip', async () => {
+    status = { state: 'ready', version: '0.3.0', notes: '', last_checked: null };
+    isRecording = true;
+    render(<UpdateRow collapsed />);
+
+    fireEvent.click(screen.getByRole('button', { name: /update status/i }));
+
+    const restart = await screen.findByRole('button', { name: 'Restart to update' });
+    expect(restart).toBeDisabled();
+    expect(screen.getByText(/Finish the recording first/)).toBeInTheDocument();
+    fireEvent.click(restart);
+    expect(install).not.toHaveBeenCalled();
+  });
+
+  it('reports progress without offering a restart that is not ready', async () => {
+    status = { state: 'downloading', version: '0.3.0', received: 42, total: 100 };
+    isRecording = false;
+    render(<UpdateRow collapsed />);
+
+    fireEvent.click(screen.getByRole('button', { name: /update status/i }));
+
+    expect(await screen.findByText('Downloading 0.3.0 · 42%')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Restart to update' })).toBeNull();
   });
 });
