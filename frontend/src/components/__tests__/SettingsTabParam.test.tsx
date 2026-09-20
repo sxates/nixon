@@ -35,9 +35,10 @@ import SettingsPage from '@/app/settings/page';
 
 describe('settings ?tab= (specs/0060)', () => {
   it('opens the requested tab', async () => {
-    searchParamsMock.mockReturnValue(new URLSearchParams('tab=templates'));
+    // specs/0067 folded Templates into Summary — a template is how a summary is shaped.
+    searchParamsMock.mockReturnValue(new URLSearchParams('tab=calendar'));
     render(<SettingsPage />);
-    const tab = await screen.findByRole('tab', { name: /templates/i });
+    const tab = await screen.findByRole('tab', { name: /calendar/i });
     expect(tab).toHaveAttribute('data-state', 'active');
   });
 

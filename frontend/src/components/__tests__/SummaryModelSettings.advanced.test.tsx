@@ -1,7 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 
-// specs/0067 W1 — the Summary tab stops asking which model to use. Nixon already decides
+// specs/0067 (revised) — the Summary tab states the model and reveals the picker in
+// place. The global "advanced options" switch this first shipped behind was rejected in
+// review: a control on one tab changing what other tabs show is invisible from where you
+// operate it.
+//
+// Originally: the Summary tab stops asking which model to use. Nixon already decides
 // (`database/commands.rs` writes `recommend_summary_model(ram)` as the default on first
 // run), so the menu was asking a question the app had answered, in names — "Qwen 3.5 2B",
 // "gemma3:4b" — that mean nothing to anyone who is not already an AI hobbyist.
@@ -15,9 +20,8 @@ vi.mock('@/components/ModelSettingsModal', () => ({
   ModelSettingsModal: () => <div data-testid="model-picker">picker</div>,
 }));
 
-let showAdvanced = false;
 vi.mock('@/contexts/ConfigContext', () => ({
-  useConfig: () => ({ isAutoSummary: true, toggleIsAutoSummary: vi.fn(), showAdvanced }),
+  useConfig: () => ({ isAutoSummary: true, toggleIsAutoSummary: vi.fn() }),
 }));
 
 import { SummaryModelSettings } from '@/components/SummaryModelSettings';
@@ -43,7 +47,6 @@ function arrange({ provider, model }: { provider: string; model: string }) {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  showAdvanced = false;
 });
 
 describe('Summary model — resolved by default (specs/0067 W1)', () => {
@@ -55,9 +58,7 @@ describe('Summary model — resolved by default (specs/0067 W1)', () => {
     // `builtin_ai_list_models` answers), so wait for the content, not the element —
     // `findByTestId` alone passes the moment the placeholder appears and loses the race
     // under load.
-    await waitFor(() =>
-      expect(screen.getByTestId('resolved-summary-model')).toHaveTextContent('Qwen 3.5 4B'),
-    );
+    await waitFor(() => expect(screen.getByTestId('resolved-value')).toHaveTextContent('Qwen 3.5 4B'));
     expect(screen.queryByTestId('model-picker')).toBeNull();
   });
 
@@ -65,28 +66,30 @@ describe('Summary model — resolved by default (specs/0067 W1)', () => {
     arrange({ provider: 'builtin-ai', model: 'qwen3.5:4b' });
     render(<SummaryModelSettings />);
 
-    await waitFor(() =>
-      expect(screen.getByTestId('resolved-summary-model')).toHaveTextContent('Qwen 3.5 4B'),
-    );
-    expect(screen.getByTestId('resolved-summary-model').textContent).not.toMatch(/High Quality/);
+    await waitFor(() => expect(screen.getByTestId('resolved-value')).toHaveTextContent('Qwen 3.5 4B'));
+    expect(screen.getByTestId('resolved-value').textContent).not.toMatch(/High Quality/);
   });
 
-  it('brings the picker back when advanced options are on', async () => {
-    showAdvanced = true;
+  it('reveals the picker in place when you click Change', async () => {
     arrange({ provider: 'builtin-ai', model: 'qwen3.5:4b' });
     render(<SummaryModelSettings />);
 
-    expect(await screen.findByTestId('model-picker')).toBeInTheDocument();
-    expect(screen.queryByTestId('resolved-summary-model')).toBeNull();
+    fireEvent.click(await screen.findByRole('button', { name: /change/i }));
+
+    expect(screen.getByTestId('model-picker')).toBeInTheDocument();
+    expect(screen.queryByTestId('resolved-value')).toBeNull();
   });
 
   // The rule that keeps this from becoming a support question: someone running a model
   // they chose — or a cloud provider — must keep seeing the control, switch or no switch.
-  it('keeps the picker for a model the user chose themselves', async () => {
+  it('keeps the picker open, with no way to collapse it, for a model the user chose', async () => {
     arrange({ provider: 'builtin-ai', model: 'qwen3.5:2b' }); // recommendation is 4b
     render(<SummaryModelSettings />);
 
     expect(await screen.findByTestId('model-picker')).toBeInTheDocument();
+    // No Change button to press, because there is nothing to reveal — and nothing that
+    // could hide a choice this user made.
+    expect(screen.queryByRole('button', { name: /change/i })).toBeNull();
   });
 
   it('keeps the picker for a cloud provider', async () => {

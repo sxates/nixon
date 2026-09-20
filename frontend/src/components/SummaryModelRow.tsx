@@ -1,35 +1,28 @@
 'use client';
 
 /**
- * The Summary tab's resolved model row (specs/0067 W1).
+ * The human name of the summary model in use (specs/0067).
  *
- * What it replaces: a provider menu plus four built-in models whose names — "Qwen 3.5 2B",
- * "gemma3:4b" — are not a choice a normal user can make. Nixon already made it. On first
- * run `database/commands.rs` writes `recommend_summary_model(ram)` as the default config,
- * so the menu was asking a question the app had already answered, in vocabulary only an AI
- * hobbyist reads.
- *
- * This row says what is in use and why, and nothing else. The full controls come back via
- * Settings → General → "Show advanced options", or on their own if the configured model is
- * not the recommended one (`isAdvancedRowVisible`) — a choice someone made deliberately
- * must not vanish behind a switch they have never touched.
+ * Nixon picks the model from the machine's RAM on first run, so the Summary tab states it
+ * rather than asking. The ids it is picked by — `qwen3.5:4b`, `gemma3:1b` — are not names
+ * anyone outside the hobby reads, so this resolves them through the catalogue the backend
+ * already exposes and strips the marketing parenthetical.
  */
 
 import { useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { SettingsGroup, SettingsRow } from '@/components/ui/settings';
 
 interface BuiltInModel {
   name: string;
   display_name: string;
 }
 
-/** Strips the marketing parenthetical: "Qwen 3.5 4B (High Quality)" → "Qwen 3.5 4B". */
+/** "Qwen 3.5 4B (High Quality)" → "Qwen 3.5 4B". */
 function plainName(displayName: string): string {
   return displayName.replace(/\s*\([^)]*\)\s*$/, '').trim();
 }
 
-export function SummaryModelRow({ model }: { model: string }) {
+export function SummaryModelName({ model }: { model: string }) {
   const [label, setLabel] = useState<string | null>(null);
 
   useEffect(() => {
@@ -47,17 +40,5 @@ export function SummaryModelRow({ model }: { model: string }) {
     };
   }, [model]);
 
-  return (
-    <SettingsGroup>
-      <SettingsRow
-        label="Summary model"
-        description="Chosen to suit this Mac's memory. Summaries are written here, on your machine — nothing is sent anywhere."
-        control={
-          <span className="u-section-label text-[11px] text-engrave" data-testid="resolved-summary-model">
-            {label ?? '…'}
-          </span>
-        }
-      />
-    </SettingsGroup>
-  );
+  return <>{label ?? '…'}</>;
 }

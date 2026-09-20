@@ -5,8 +5,8 @@ import { invoke } from '@tauri-apps/api/core';
 import { safeListen } from '@/lib/safe-listen';
 import { toast } from 'sonner';
 import { ModelConfig, ModelSettingsModal } from '@/components/ModelSettingsModal';
-import { SummaryModelRow } from '@/components/SummaryModelRow';
-import { isAdvancedRowVisible } from '@/components/AdvancedOptionsSettings';
+import { SummaryModelName } from '@/components/SummaryModelRow';
+import { ResolvedSettingRow } from '@/components/ResolvedSettingRow';
 import { SummaryLanguageSettings } from '@/components/SummaryLanguageSettings';
 import { Switch } from './ui/switch';
 import { useConfig } from '@/contexts/ConfigContext';
@@ -25,7 +25,7 @@ export function SummaryModelSettings({ refetchTrigger }: SummaryModelSettingsPro
     ollamaEndpoint: null
   });
 
-  const { isAutoSummary, toggleIsAutoSummary, showAdvanced } = useConfig();
+  const { isAutoSummary, toggleIsAutoSummary } = useConfig();
 
   // specs/0067 W1 — what Nixon would pick for this Mac, so the tab can tell "the default,
   // applied" apart from "a choice this user made". Null while it loads, and on failure:
@@ -42,11 +42,12 @@ export function SummaryModelSettings({ refetchTrigger }: SummaryModelSettingsPro
     };
   }, []);
 
+  // Not the recommended model — a cloud provider, or one the user picked — means the
+  // controls stay open: a deliberate choice must never be behind a disclosure.
   const isRecommended =
     modelConfig.provider === 'builtin-ai' &&
     recommendedModel !== null &&
     modelConfig.model === recommendedModel;
-  const showModelControls = isAdvancedRowVisible({ showAdvanced, isRecommended });
 
   // Reusable fetch function
   const fetchModelConfig = useCallback(async () => {
@@ -136,18 +137,19 @@ export function SummaryModelSettings({ refetchTrigger }: SummaryModelSettingsPro
         title="Summary model"
         description="The AI model that writes your meeting summaries. A local model keeps everything on this Mac."
       >
-        {showModelControls ? (
-          <SettingsGroup className="py-4">
-            <ModelSettingsModal
-              modelConfig={modelConfig}
-              setModelConfig={setModelConfig}
-              onSave={handleSaveModelConfig}
-              skipInitialFetch={true}
-            />
-          </SettingsGroup>
-        ) : (
-          <SummaryModelRow model={modelConfig.model} />
-        )}
+        <ResolvedSettingRow
+          label="Summary model"
+          description="Chosen to suit this Mac's memory. Summaries are written here, on your machine — nothing is sent anywhere."
+          value={<SummaryModelName model={modelConfig.model} />}
+          locked={!isRecommended}
+        >
+          <ModelSettingsModal
+            modelConfig={modelConfig}
+            setModelConfig={setModelConfig}
+            onSave={handleSaveModelConfig}
+            skipInitialFetch={true}
+          />
+        </ResolvedSettingRow>
       </SettingsSection>
 
       <SettingsSection

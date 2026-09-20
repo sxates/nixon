@@ -3,10 +3,7 @@ import { Switch } from '@/components/ui/switch';
 import ZoomMuteGateToggle from '@/components/ZoomMuteGateToggle';
 import { invoke } from '@tauri-apps/api/core';
 import { DeviceSelection, SelectedDevices } from '@/components/DeviceSelection';
-import { LanguageSelection } from '@/components/LanguageSelection';
 import { SaveLocationRow } from '@/components/SaveLocationRow';
-import { Button } from '@/components/ui/button';
-import { ClearVoiceprintsDialog } from '@/components/ClearVoiceprintsDialog';
 import {
   applyRetentionChoice,
   retentionChoiceFromPreferences,
@@ -87,18 +84,6 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
   const [saving, setSaving] = useState(false);
   const [showRecordingNotification, setShowRecordingNotification] = useState(true);
   const [zoomAutoDetect, setZoomAutoDetect] = useState(true);
-  // Speaker diarization (specs/0010). Opt-in / default OFF.
-  const [diarizationEnabled, setDiarizationEnabled] = useState(false);
-  // Live (during-recording) diarization sub-toggle (specs/0011, P3-B). Default off;
-  // visually subordinate to / gated by the main diarization-enabled setting above.
-  const [liveDiarizationEnabled, setLiveDiarizationEnabled] = useState(false);
-  // Voiceprint consent controls (specs/0016 1c, ADR-0007). `storeOthers` is the
-  // off-by-default global opt-in to persist *other people's* voiceprints; `selfEnroll`
-  // is the device-owner ("You") self-enroll, on by default. Both live in
-  // DiarizationSettings and are only meaningful when diarization is enabled.
-  const [storeOthersVoiceprints, setStoreOthersVoiceprints] = useState(false);
-  const [selfEnrollVoiceprint, setSelfEnrollVoiceprint] = useState(true);
-  const [clearVoiceprintsOpen, setClearVoiceprintsOpen] = useState(false);
   // Owner emails (specs/0018) moved to Settings → General (OwnerEmailSettings),
   // and notification controls now live only on the General tab.
 
@@ -153,50 +138,6 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
     loadZoomAutoDetect();
   }, []);
 
-  // Load speaker diarization preference (default off; specs/0010).
-  useEffect(() => {
-    const loadDiarizationEnabled = async () => {
-      try {
-        const enabled = await invoke<boolean>('api_get_diarization_enabled');
-        setDiarizationEnabled(enabled);
-      } catch (error) {
-        console.error('Failed to load diarization preference:', error);
-      }
-    };
-    loadDiarizationEnabled();
-  }, []);
-
-  // Load live diarization preference (default off; specs/0011, P3-B).
-  useEffect(() => {
-    const loadLiveDiarizationEnabled = async () => {
-      try {
-        const enabled = await invoke<boolean>('api_get_live_diarization_enabled');
-        setLiveDiarizationEnabled(enabled);
-      } catch (error) {
-        console.error('Failed to load live diarization preference:', error);
-      }
-    };
-    loadLiveDiarizationEnabled();
-  }, []);
-
-  // Load the two voiceprint-consent toggles (specs/0016 1c). Both come back in a
-  // single DTO: storeOthers (default false) + selfEnroll (default true).
-  useEffect(() => {
-    const loadVoiceprintSettings = async () => {
-      try {
-        const dto = await invoke<{
-          storeOthersVoiceprints: boolean;
-          selfEnrollVoiceprint: boolean;
-        }>('api_get_voiceprint_settings');
-        setStoreOthersVoiceprints(!!dto.storeOthersVoiceprints);
-        setSelfEnrollVoiceprint(!!dto.selfEnrollVoiceprint);
-      } catch (error) {
-        console.error('Failed to load voiceprint settings:', error);
-      }
-    };
-    loadVoiceprintSettings();
-  }, []);
-
   const handleZoomAutoDetectToggle = async (enabled: boolean) => {
     const previous = zoomAutoDetect;
     setZoomAutoDetect(enabled);
@@ -206,62 +147,6 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
     } catch (error) {
       console.error('Failed to save Zoom auto-detect preference:', error);
       setZoomAutoDetect(previous); // revert on failure
-      toast.error('Failed to save preference');
-    }
-  };
-
-  const handleDiarizationToggle = async (enabled: boolean) => {
-    const previous = diarizationEnabled;
-    setDiarizationEnabled(enabled);
-    try {
-      await invoke('api_set_diarization_enabled', { enabled });
-      toast.success('Preference saved');
-    } catch (error) {
-      console.error('Failed to save diarization preference:', error);
-      setDiarizationEnabled(previous); // revert on failure
-      toast.error('Failed to save preference');
-    }
-  };
-
-  const handleLiveDiarizationToggle = async (enabled: boolean) => {
-    const previous = liveDiarizationEnabled;
-    setLiveDiarizationEnabled(enabled);
-    try {
-      await invoke('api_set_live_diarization_enabled', { enabled });
-      toastSaved('live-diarization');
-    } catch (error) {
-      console.error('Failed to save live diarization preference:', error);
-      setLiveDiarizationEnabled(previous); // revert on failure
-      toast.error('Failed to save preference');
-    }
-  };
-
-  // Global opt-in to store *other people's* voiceprints (ADR-0007 §2). Off by default;
-  // turning it off doesn't delete already-stored samples (that's "clear all" / per-person
-  // opt-out) — it only blocks future enrollment of non-owner people.
-  const handleStoreOthersToggle = async (enabled: boolean) => {
-    const previous = storeOthersVoiceprints;
-    setStoreOthersVoiceprints(enabled);
-    try {
-      await invoke('api_set_store_others_voiceprints', { enabled });
-      toast.success('Preference saved');
-    } catch (error) {
-      console.error('Failed to save voiceprint setting:', error);
-      setStoreOthersVoiceprints(previous); // revert on failure
-      toast.error('Failed to save preference');
-    }
-  };
-
-  // Device-owner ("You") self-enroll (ADR-0007 §3). On by default.
-  const handleSelfEnrollToggle = async (enabled: boolean) => {
-    const previous = selfEnrollVoiceprint;
-    setSelfEnrollVoiceprint(enabled);
-    try {
-      await invoke('api_set_self_enroll_voiceprint', { enabled });
-      toast.success('Preference saved');
-    } catch (error) {
-      console.error('Failed to save self-enroll setting:', error);
-      setSelfEnrollVoiceprint(previous); // revert on failure
       toast.error('Failed to save preference');
     }
   };
@@ -508,111 +393,7 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
         <ZoomMuteGateToggle />
       </SettingsSection>
 
-      <SettingsSection
-        title="Transcription language"
-        description="The single global language preference used for every transcript."
-      >
-        <SettingsGroup className="py-4">
-          <LanguageSelection />
-        </SettingsGroup>
-      </SettingsSection>
 
-      <SettingsSection
-        title="Speaker labels"
-        description="Who said what. Diarization runs on-device after the meeting; voiceprints never leave this Mac."
-      >
-        <SettingsGroup>
-          {/* Speaker diarization (specs/0010) — opt-in, default off. */}
-          <SettingsRow
-            label="Speaker diarization"
-            description="Label who spoke in the transcript. Runs on-device after the meeting and downloads a small model (~108 MB) the first time."
-            control={
-              <Switch
-                checked={diarizationEnabled}
-                onCheckedChange={handleDiarizationToggle}
-                aria-label="Speaker diarization"
-              />
-            }
-          />
-
-          {/* Live speaker labels (specs/0011, P3-B) and the expected-count override are
-              sub-settings of the enable above: they only exist once it is on. */}
-          {diarizationEnabled && (
-            <SettingsRow
-              label="Label speakers live while recording"
-              description="Shows provisional numbered labels while you record. Names are matched when the recording ends."
-              control={
-                <Switch
-                  checked={liveDiarizationEnabled}
-                  onCheckedChange={handleLiveDiarizationToggle}
-                  aria-label="Label speakers live while recording"
-                />
-              }
-            />
-          )}
-
-          {/* Voice identification / voiceprints (specs/0016 1c, ADR-0007). Only meaningful
-              when diarization is on, since cross-meeting voice memory is built from
-              diarized speakers. The global "store others" gate is OFF by default. */}
-          {diarizationEnabled && (
-            <SettingsRow
-              label="Store voiceprints for other people"
-              description={
-                <>
-                  Off by default. Storing other people&apos;s voiceprints is opt-in because it
-                  is biometric data. When on, Nixon remembers other people&apos;s voices to
-                  suggest names automatically in future meetings. When off, names still suggest
-                  within a single meeting, but no cross-meeting voice memory is kept for others.
-                  Voiceprints stay on this Mac either way.
-                </>
-              }
-              control={
-                <Switch
-                  checked={storeOthersVoiceprints}
-                  onCheckedChange={handleStoreOthersToggle}
-                  aria-label="Store voiceprints for other people"
-                />
-              }
-            />
-          )}
-
-          {diarizationEnabled && (
-            <SettingsRow
-              label="Recognize my own voice across meetings"
-              description={
-                <>
-                  Learns your voice (the microphone channel) so &quot;You&quot; is labeled
-                  reliably in every meeting. Stored only on this Mac.
-                </>
-              }
-              control={
-                <Switch
-                  checked={selfEnrollVoiceprint}
-                  onCheckedChange={handleSelfEnrollToggle}
-                  aria-label="Recognize my own voice across meetings"
-                />
-              }
-            />
-          )}
-
-          {/* Destructive: wipe the entire gallery. Last row of the section. */}
-          {diarizationEnabled && (
-            <SettingsRow
-              label="Clear all voiceprints"
-              description="Delete every stored voice sample. People and their names are kept; Nixon just re-learns voices from scratch."
-              control={
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={() => setClearVoiceprintsOpen(true)}
-                >
-                  Clear all
-                </Button>
-              }
-            />
-          )}
-        </SettingsGroup>
-      </SettingsSection>
 
       <SettingsSection
         title="Audio storage"
@@ -677,10 +458,6 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
         )}
       </SettingsSection>
 
-      <ClearVoiceprintsDialog
-        open={clearVoiceprintsOpen}
-        onOpenChange={setClearVoiceprintsOpen}
-      />
     </div>
   );
 }

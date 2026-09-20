@@ -95,8 +95,10 @@ async function renderSettings() {
   render(<RecordingSettings />);
   // Loading skeleton clears once get_recording_preferences resolves.
   await screen.findByText('Transcribe in real time during recording');
-  // Let the other mount-time useEffects (diarization, live-diarization, etc.) settle.
-  await waitFor(() => expect(screen.getByText('Label speakers live while recording')).toBeInTheDocument());
+  // Let the remaining mount-time effects settle. This used to anchor on "Label speakers
+  // live while recording", which specs/0067 moved to the Transcription tab — the last
+  // section on this tab is Audio storage, so wait for that instead.
+  await waitFor(() => expect(screen.getByText('Delete audio recordings')).toBeInTheDocument());
 }
 
 beforeEach(() => {
@@ -105,7 +107,10 @@ beforeEach(() => {
 });
 
 describe('RecordingSettings — start-time-only setting notices (spec 0051 WS3)', () => {
-  it('shows the "next recording" notice for all three start-time-only settings while a recording is active', async () => {
+  // specs/0067 moved "Label speakers live while recording" to the Transcription tab, so
+  // its half of this guarantee now lives in SpeakerSettings.test.tsx. The rule is the
+  // same in both places: a change made mid-meeting says it applies to the NEXT recording.
+  it('shows the "next recording" notice for the start-time-only settings while a recording is active', async () => {
     useSidebarMock.mockReturnValue({ activeRecordingMeetingId: 'meeting-123' });
     await renderSettings();
 
@@ -118,10 +123,6 @@ describe('RecordingSettings — start-time-only setting notices (spec 0051 WS3)'
     await waitFor(() => expect(toastInfo).toHaveBeenCalledTimes(2));
     expect(toastInfo.mock.calls[1][1]?.description).toMatch(/already under way/i);
 
-    fireEvent.click(switchForLabel('Label speakers live while recording'));
-    await waitFor(() => expect(toastInfo).toHaveBeenCalledTimes(3));
-    expect(toastInfo.mock.calls[2][1]?.description).toMatch(/after this meeting ends/i);
-
     // None of these should have fallen through to the plain toast.
     expect(toastSuccess).not.toHaveBeenCalled();
   });
@@ -131,17 +132,12 @@ describe('RecordingSettings — start-time-only setting notices (spec 0051 WS3)'
     await renderSettings();
 
     // live-transcription and low-power keep their own state-dependent description —
-    // that's the regression coverage below. This test just confirms no toast.info fires
-    // and live-diarization (which never had a description) stays bare.
+    // that's the regression coverage below. This test just confirms no toast.info fires.
     fireEvent.click(switchForLabel('Transcribe in real time during recording'));
     await waitFor(() => expect(toastSuccess).toHaveBeenCalledTimes(1));
 
     fireEvent.click(switchForLabel('Low Power Mode on battery'));
     await waitFor(() => expect(toastSuccess).toHaveBeenCalledTimes(2));
-
-    fireEvent.click(switchForLabel('Label speakers live while recording'));
-    await waitFor(() => expect(toastSuccess).toHaveBeenCalledTimes(3));
-    expect(toastSuccess.mock.calls[2]).toEqual(['Preference saved']);
 
     expect(toastInfo).not.toHaveBeenCalled();
   });
@@ -193,26 +189,6 @@ describe('RecordingSettings — start-time-only setting notices (spec 0051 WS3)'
 
     expect(toastInfo).not.toHaveBeenCalled();
   });
-
-  it("treats the 'intro-call' placeholder id as no active recording", async () => {
-    useSidebarMock.mockReturnValue({ activeRecordingMeetingId: 'intro-call' });
-    await renderSettings();
-
-    fireEvent.click(switchForLabel('Label speakers live while recording'));
-    await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith('Preference saved'));
-    expect(toastInfo).not.toHaveBeenCalled();
-  });
-
-  it('does NOT add a notice to Speaker diarization even during an active recording (negative case)', async () => {
-    useSidebarMock.mockReturnValue({ activeRecordingMeetingId: 'meeting-123' });
-    await renderSettings();
-
-    // Speaker diarization feeds the post-meeting pass — it must stay on the plain
-    // toast even mid-recording, unlike the three start-time-only settings above.
-    fireEvent.click(switchForLabel('Speaker diarization'));
-    await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith('Preference saved'));
-    expect(toastInfo).not.toHaveBeenCalled();
-  });
 });
 
 describe('RecordingSettings — settings hygiene (specs/0061 W6)', () => {
@@ -243,24 +219,6 @@ describe('RecordingSettings — settings hygiene (specs/0061 W6)', () => {
     expect(screen.queryByLabelText('Expected number of speakers')).not.toBeInTheDocument();
     expect(screen.queryByText('Expected number of speakers')).not.toBeInTheDocument();
     expect(invokeMock).not.toHaveBeenCalledWith('api_get_expected_speaker_count', expect.anything());
-  });
-
-  it('describes live speaker labels with the corrected, honest copy', async () => {
-    await renderSettings();
-    expect(
-      screen.getByText(
-        'Shows provisional numbered labels while you record. Names are matched when the recording ends.',
-      ),
-    ).toBeInTheDocument();
-  });
-
-  it('explains that storing other voiceprints is opt-in biometric data', async () => {
-    await renderSettings();
-    expect(
-      screen.getByText(
-        "Off by default. Storing other people's voiceprints is opt-in because it is biometric data. When on, Nixon remembers other people's voices to suggest names automatically in future meetings. When off, names still suggest within a single meeting, but no cross-meeting voice memory is kept for others. Voiceprints stay on this Mac either way.",
-      ),
-    ).toBeInTheDocument();
   });
 
   it('shows both "Open folder" and "Change…" for the save location', async () => {

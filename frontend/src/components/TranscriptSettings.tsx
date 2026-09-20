@@ -8,8 +8,7 @@ import {
     SettingsRow,
     SettingsSection,
 } from './ui/settings';
-import { isAdvancedRowVisible } from './AdvancedOptionsSettings';
-import { useConfig } from '@/contexts/ConfigContext';
+import { ResolvedSettingRow } from './ResolvedSettingRow';
 import { Eye, EyeOff, Lock, Unlock } from 'lucide-react';
 
 /** Mirrors `config.rs::DEFAULT_PARAKEET_MODEL`; the engine+model Nixon ships with. */
@@ -51,11 +50,10 @@ export function TranscriptSettings({ transcriptModelConfig, setTranscriptModelCo
     // same corpus, and the engine built for the live path), so a user running that sees one
     // row saying so. Anything else — Whisper, a cloud provider, a hand-picked Parakeet
     // model — keeps its controls whether or not advanced options are on.
-    const { showAdvanced } = useConfig();
     const isDefaultEngine =
         transcriptModelConfig.provider === 'parakeet' &&
         transcriptModelConfig.model === DEFAULT_PARAKEET_MODEL;
-    const showEngineControls = isAdvancedRowVisible({ showAdvanced, isRecommended: isDefaultEngine });
+
 
     // Sync uiProvider when backend config changes (e.g., after model selection or initial load)
     useEffect(() => {
@@ -130,22 +128,12 @@ export function TranscriptSettings({ transcriptModelConfig, setTranscriptModelCo
                 title="Transcript model"
                 description="Which engine turns meeting audio into text. Every option runs entirely on this Mac."
             >
-                {!showEngineControls ? (
-                    <SettingsGroup>
-                        <SettingsRow
-                            label="Engine"
-                            description="Parakeet, running on this Mac. It keeps up with live audio and is the most accurate of the on-device engines on meeting recordings."
-                            control={
-                                <span
-                                    className="u-section-label text-[11px] text-engrave"
-                                    data-testid="resolved-transcript-engine"
-                                >
-                                    Parakeet
-                                </span>
-                            }
-                        />
-                    </SettingsGroup>
-                ) : (
+                <ResolvedSettingRow
+                    label="Engine"
+                    description="Parakeet, running on this Mac. It keeps up with live audio and was the most accurate of the on-device engines on real meeting recordings."
+                    value="Parakeet"
+                    locked={!isDefaultEngine}
+                >
                 <SettingsGroup>
                     <SettingsRow
                         label="Engine"
@@ -240,38 +228,38 @@ export function TranscriptSettings({ transcriptModelConfig, setTranscriptModelCo
                         />
                     )}
                 </SettingsGroup>
+                {uiProvider === 'localWhisper' && (
+                    <SettingsSection
+                        title="Whisper models"
+                        description="Download a model to use it. Larger models are more accurate and slower."
+                    >
+                        <SettingsGroup className="py-4">
+                            <ModelManager
+                                selectedModel={transcriptModelConfig.provider === 'localWhisper' ? transcriptModelConfig.model : undefined}
+                                onModelSelect={handleWhisperModelSelect}
+                                autoSave={true}
+                            />
+                        </SettingsGroup>
+                    </SettingsSection>
                 )}
+
+                {uiProvider === 'parakeet' && (
+                    <SettingsSection
+                        title="Parakeet models"
+                        description="Download a model to use it. Runs in real time on Apple Silicon."
+                    >
+                        <SettingsGroup className="py-4">
+                            <ParakeetModelManager
+                                selectedModel={transcriptModelConfig.provider === 'parakeet' ? transcriptModelConfig.model : undefined}
+                                onModelSelect={handleParakeetModelSelect}
+                                autoSave={true}
+                            />
+                        </SettingsGroup>
+                    </SettingsSection>
+                )}
+                </ResolvedSettingRow>
             </SettingsSection>
 
-            {showEngineControls && uiProvider === 'localWhisper' && (
-                <SettingsSection
-                    title="Whisper models"
-                    description="Download a model to use it. Larger models are more accurate and slower."
-                >
-                    <SettingsGroup className="py-4">
-                        <ModelManager
-                            selectedModel={transcriptModelConfig.provider === 'localWhisper' ? transcriptModelConfig.model : undefined}
-                            onModelSelect={handleWhisperModelSelect}
-                            autoSave={true}
-                        />
-                    </SettingsGroup>
-                </SettingsSection>
-            )}
-
-            {showEngineControls && uiProvider === 'parakeet' && (
-                <SettingsSection
-                    title="Parakeet models"
-                    description="Download a model to use it. Runs in real time on Apple Silicon."
-                >
-                    <SettingsGroup className="py-4">
-                        <ParakeetModelManager
-                            selectedModel={transcriptModelConfig.provider === 'parakeet' ? transcriptModelConfig.model : undefined}
-                            onModelSelect={handleParakeetModelSelect}
-                            autoSave={true}
-                        />
-                    </SettingsGroup>
-                </SettingsSection>
-            )}
         </div>
     );
 }
