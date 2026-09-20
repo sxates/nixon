@@ -13,6 +13,7 @@ import { RecordingPermissionsSettings } from '@/components/RecordingPermissionsS
 import { CalendarSettings } from '@/components/CalendarSettings';
 import { OwnerEmailSettings } from '@/components/OwnerEmailSettings';
 import { SummaryModelSettings } from '@/components/SummaryModelSettings';
+import { SummaryModelSection } from '@/components/SummaryModelSection';
 import { TemplateSettings } from '@/components/TemplateSettings';
 import { DeveloperSettings } from '@/components/DeveloperSettings';
 import { About } from '@/components/About';
@@ -172,19 +173,23 @@ function SettingsPageContent() {
             <RecordingSettings />
           </TabsContent>
           <TabsContent value="Transcriptionmodels" className="space-y-8">
+            {/* Language and speakers moved here from Recordings (specs/0067): they describe
+                what a transcript says and who said it. They come FIRST — the engine is the
+                one thing on this tab nobody should need to touch, so it sits at the bottom
+                rather than leading with a decision we already made for them. */}
+            <SpeakerSettings />
             <TranscriptSettings
               transcriptModelConfig={transcriptModelConfig}
               setTranscriptModelConfig={setTranscriptModelConfig}
             />
-            {/* Language and speakers moved here from Recordings (specs/0067): they describe
-                what a transcript says and who said it. */}
-            <SpeakerSettings />
           </TabsContent>
           <TabsContent value="summaryModels" className="space-y-8">
             <SummaryModelSettings />
             {/* A template is how a summary is shaped, so it belongs to this subject rather
                 than a tab of its own (owner, specs/0067). */}
             <TemplateSettings />
+            {/* Last: the model is the one thing here nobody should need to choose. */}
+            <SummaryModelSection />
           </TabsContent>
           <TabsContent value="developer" className="space-y-8">
             <DeveloperSettings />

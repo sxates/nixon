@@ -15,16 +15,11 @@ const { invokeMock } = vi.hoisted(() => ({ invokeMock: vi.fn() }));
 vi.mock('@tauri-apps/api/core', () => ({ invoke: invokeMock }));
 vi.mock('@/lib/safe-listen', () => ({ safeListen: vi.fn().mockReturnValue(() => {}) }));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
-vi.mock('@/components/SummaryLanguageSettings', () => ({ SummaryLanguageSettings: () => null }));
 vi.mock('@/components/ModelSettingsModal', () => ({
   ModelSettingsModal: () => <div data-testid="model-picker">picker</div>,
 }));
 
-vi.mock('@/contexts/ConfigContext', () => ({
-  useConfig: () => ({ isAutoSummary: true, toggleIsAutoSummary: vi.fn() }),
-}));
-
-import { SummaryModelSettings } from '@/components/SummaryModelSettings';
+import { SummaryModelSection } from '@/components/SummaryModelSection';
 
 /** Backend responses for one scenario. */
 function arrange({ provider, model }: { provider: string; model: string }) {
@@ -49,10 +44,10 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-describe('Summary model — resolved by default (specs/0067 W1)', () => {
+describe('Summary model — resolved, and last on the tab (specs/0067)', () => {
   it('shows what is in use instead of a picker, when the recommendation is in use', async () => {
     arrange({ provider: 'builtin-ai', model: 'qwen3.5:4b' });
-    render(<SummaryModelSettings />);
+    render(<SummaryModelSection />);
 
     // The row renders before its label resolves (it shows "…" until
     // `builtin_ai_list_models` answers), so wait for the content, not the element —
@@ -64,7 +59,7 @@ describe('Summary model — resolved by default (specs/0067 W1)', () => {
 
   it('drops the marketing parenthetical from the model name', async () => {
     arrange({ provider: 'builtin-ai', model: 'qwen3.5:4b' });
-    render(<SummaryModelSettings />);
+    render(<SummaryModelSection />);
 
     await waitFor(() => expect(screen.getByTestId('resolved-value')).toHaveTextContent('Qwen 3.5 4B'));
     expect(screen.getByTestId('resolved-value').textContent).not.toMatch(/High Quality/);
@@ -72,7 +67,7 @@ describe('Summary model — resolved by default (specs/0067 W1)', () => {
 
   it('reveals the picker in place when you click Change', async () => {
     arrange({ provider: 'builtin-ai', model: 'qwen3.5:4b' });
-    render(<SummaryModelSettings />);
+    render(<SummaryModelSection />);
 
     fireEvent.click(await screen.findByRole('button', { name: /change/i }));
 
@@ -84,7 +79,7 @@ describe('Summary model — resolved by default (specs/0067 W1)', () => {
   // they chose — or a cloud provider — must keep seeing the control, switch or no switch.
   it('keeps the picker open, with no way to collapse it, for a model the user chose', async () => {
     arrange({ provider: 'builtin-ai', model: 'qwen3.5:2b' }); // recommendation is 4b
-    render(<SummaryModelSettings />);
+    render(<SummaryModelSection />);
 
     expect(await screen.findByTestId('model-picker')).toBeInTheDocument();
     // No Change button to press, because there is nothing to reveal — and nothing that
@@ -94,7 +89,7 @@ describe('Summary model — resolved by default (specs/0067 W1)', () => {
 
   it('keeps the picker for a cloud provider', async () => {
     arrange({ provider: 'anthropic', model: 'claude-3-5-sonnet' });
-    render(<SummaryModelSettings />);
+    render(<SummaryModelSection />);
 
     expect(await screen.findByTestId('model-picker')).toBeInTheDocument();
   });
@@ -107,7 +102,7 @@ describe('Summary model — resolved by default (specs/0067 W1)', () => {
       if (cmd === 'builtin_ai_get_recommended_model') return Promise.reject('no');
       return Promise.resolve(undefined);
     });
-    render(<SummaryModelSettings />);
+    render(<SummaryModelSection />);
 
     // Unknown recommendation means we cannot claim the default is in use, so show the
     // controls rather than hide a setting we cannot vouch for.
