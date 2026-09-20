@@ -347,6 +347,13 @@
     // means "no override, follow the global default". Args: { meetingId }.
     api_get_meeting_processing_mode: () => null,
 
+    // updater/commands.rs `api_take_update_receipt` -> Option<UpdateReceipt>; null means
+    // "no update just happened", which is the normal case for a screenshot run — the
+    // generic fallback below would answer `[]` instead (no word of this command's name
+    // is in OBJECT_SHAPED_WORDS), and UpdatedNotice.tsx treated that truthy `[]` as a
+    // receipt, throwing on `receipt.notes.trim()` (specs/0069 W6/task 8).
+    api_take_update_receipt: () => null,
+
     // audio/retention.rs `api_meeting_audio_available` -> bool. Args: { meetingId }.
     api_meeting_audio_available: () => true,
 

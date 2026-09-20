@@ -37,4 +37,13 @@ describe('UpdatedNotice (specs/0069 W6)', () => {
     await waitFor(() => expect(invoke).toHaveBeenCalled());
     expect(container.querySelector('[role="dialog"]')).toBeNull();
   });
+
+  it('ignores a malformed payload instead of throwing (specs/0069 task 8)', async () => {
+    // This is the honest case: a shots-mock fixture gap once made a real invoke resolve
+    // an array here, which is truthy, and crashed the whole app shell on `.notes.trim()`.
+    invoke.mockResolvedValue([]);
+    const { container } = render(<UpdatedNotice />);
+    await waitFor(() => expect(invoke).toHaveBeenCalledWith('api_take_update_receipt'));
+    expect(container.querySelector('[role="dialog"]')).toBeNull();
+  });
 });

@@ -16,6 +16,22 @@ interface UpdateReceipt {
   notes: string;
 }
 
+/** `invoke` only promises the type it's told, not the shape that actually arrives — a
+ *  mismatched mock, a stale build, or a future backend change can hand this an array or a
+ *  partial object. "No notice" is the right response to a payload this doesn't understand;
+ *  a crash across the whole app shell (this is mounted in every route via AppShell) is not
+ *  (specs/0069 task 8: a missing shots-mock fixture answered `[]`, which is truthy, and
+ *  `receipt.notes.trim()` threw on every non-onboarding screenshot). */
+function isUpdateReceipt(value: unknown): value is UpdateReceipt {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    !Array.isArray(value) &&
+    typeof (value as { version: unknown }).version === 'string' &&
+    typeof (value as { notes: unknown }).notes === 'string'
+  );
+}
+
 /**
  * The first launch after an in-app update (specs/0069 W6).
  *
@@ -35,7 +51,7 @@ export function UpdatedNotice() {
     let cancelled = false;
     invoke<UpdateReceipt | null>('api_take_update_receipt')
       .then((r) => {
-        if (cancelled || !r) return;
+        if (cancelled || !isUpdateReceipt(r)) return;
         setReceipt(r);
         setOpen(true);
       })
