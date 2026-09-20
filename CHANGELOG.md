@@ -23,31 +23,25 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 - **A summary is now written automatically when a recording stops.** This was off by
   default and had to be found in Settings first. If you turned it off deliberately, it
-  stays off (specs/0066).
+  stays off.
 - **Import audio is no longer a beta feature.** It is an ordinary part of the app: the
   sidebar button has lost its BETA tag, and there is no switch to turn it on first. The
-  Beta section of Settings is gone with it, since that was the only feature in it
-  (specs/0066).
-- Two settings are removed (specs/0066). **Expected number of speakers** is no longer
-  needed — Nixon sizes a meeting from the audio itself, and a number set here used to
-  override that for good. **System Audio Backend** offered a second capture path that
-  needed BlackHole and reverted itself on the next launch; system audio always uses the
-  Core Audio tap now.
-- The "connect your calendar" prompts name **Google Calendar** as well as the Mac's, and
-  their **Connect** button now takes you to Settings → Calendar, scrolled to the calendar
-  choice. Previously they named only macOS Calendar, and Connect asked for macOS calendar
-  permission on the spot — which, if the answer was no, could only tell you to go and find
-  a setting for yourself (specs/0066).
-- The sidebar's **Home** is now **Today**, and the New recording / New note buttons are gone
-  from it — both are on the Today header, and recording has the REC key (specs/0064 W5).
-- The **Queue** moved from the transport rail into the sidebar, below Settings. Expanded it
-  shows the lamp, the count and what is running; collapsed it is just the lamp. It opens the
-  same panel as before (specs/0064 W5).
-- On the transport rail, the timer and level meter now sit together in one fixed block to the
-  left of the meeting title, so a long or renamed title no longer shoves them sideways, and
-  REC/HOLD/STOP moved to the right-hand end (specs/0064 W6).
-- Search and Ask AI on the Today header are no longer more rounded than New note and Record
-  (specs/0064 W5).
+  Beta section of Settings is gone with it, since that was the only feature in it.
+- **Two settings are removed.** *Expected number of speakers* is no longer needed — Nixon
+  sizes a meeting from the audio itself, and a number set here used to override that for
+  good. *System Audio Backend* offered a second capture path that needed BlackHole and
+  reverted itself on the next launch; system audio always uses the Core Audio tap now.
+- The **"connect your calendar" prompts** name Google Calendar as well as the Mac's, and
+  their Connect button takes you straight to Settings → Calendar. Previously they named
+  only macOS Calendar, and Connect asked for calendar permission on the spot — which, if
+  the answer was no, could only tell you to go and find a setting for yourself.
+- **UI enhancements throughout the app.** The sidebar (Home is now **Today**, and the queue
+  lives there rather than in the footer), the transport rail (the timer and level meter hold
+  still while the meeting title changes, and REC/HOLD/STOP sit together at the right), and
+  the meeting page (a full-width header, a proper participants grid, speakers ordered by
+  share of talk, and a shorter Summary toolbar). Plus smaller touches: REC stays readable
+  while a recording is on hold, release notes in Settings → About render as formatted text,
+  and the deck rewinds while a summary is being written.
 
 ### Fixed
 
@@ -55,42 +49,18 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
   could quietly do nothing: a retry the app refused — because that work was already running,
   or the task had already been cleared — was thrown away without a word, and a refused
   speaker-identification retry even reported success while the row vanished. Every refusal
-  now says what happened (specs/0066).
-- Release notes in Settings → About render as formatted text instead of one bullet per
-  line with the `###` marks still showing, and the About page is centred (specs/0066).
-- **While a summary is being written, the deck rewinds.** The Summary tab used to show a
-  small spinning circle inherited from the app Nixon was forked from; it now shows the
-  reels turning backwards at rewind speed — the machine going back over a tape it already
-  has. It can't be mistaken for a recording in progress, which turns the other way, and it
-  holds still if you've asked macOS to reduce motion (specs/0066).
-- **REC is readable while a recording is on hold.** It used to lose its red background and
-  keep white text, which read as "off, but oddly". A held recording now shows a normal key
-  with a red icon and red REC legend, and the lamp blinks slowly — still recording, paused
-  (specs/0064 W6).
-- The Summary tab's row of buttons is down to the ones that get used: **Regenerate Summary**,
-  the template picker, and a **…** menu holding Copy, Summary language, AI Model and Re-think
-  structure. Save lives in that menu too, and jumps back out as a button the moment you have
-  unsaved edits (specs/0064 W3).
-- The participants list is a proper grid — four columns at full width — instead of a ragged
-  wrap. The hover actions no longer linger after the pointer leaves, and no longer push the
-  names apart while they are hidden (specs/0064 W4).
-- The **Speakers** box is one box instead of a box inside a box, and its channels are ordered
-  by share of talk, so whoever spoke most is CH 1 (specs/0064 W4).
-- A meeting's title and back button span the window like every other screen's header, instead
-  of being squeezed into the width of the text column below them (specs/0064 W4).
-- A speaker Nixon already recognizes is now **named automatically** instead of offering a
+  now says what happened.
+- **A speaker Nixon already recognizes is named automatically**, instead of offering a
   "Looks like …" button for you to click. That covers a well-trained voiceprint and a voice
   it has recognized across several previous meetings, and it now happens when you open an
   older meeting too — not only at the moment the meeting was first analyzed, which is why
   confident matches used to keep asking forever. A name applied this way is renamed like any
-  other (specs/0064 W2).
-
-- Prep notes now follow a meeting that gets **rescheduled**. Moving a meeting to another day
+  other.
+- **Prep notes now follow a meeting that gets rescheduled.** Moving a meeting to another day
   used to leave your prep behind on a meeting that had quietly disappeared, and the new time
   showed up as a blank one; the prep now moves with the meeting, keeping its notes, its brief
   and its link to previous occurrences. For a macOS Calendar meeting the notes move once the
-  old time is confirmed empty, so a recurring series' other occurrences always keep their own
-  (specs/0064 W1).
+  old time is confirmed empty, so a recurring series' other occurrences always keep their own.
 
 ### Internal
 
