@@ -23,12 +23,6 @@ beforeEach(() => {
           { name: 'Built-in Microphone', device_type: 'Input' },
           { name: 'Built-in Output', device_type: 'Output' },
         ]);
-      case 'get_available_audio_backends':
-        return Promise.resolve(['screencapturekit']);
-      case 'get_current_audio_backend':
-        return Promise.resolve('screencapturekit');
-      case 'get_audio_backend_info':
-        return Promise.resolve([]);
       default:
         return Promise.resolve(undefined);
     }
@@ -36,6 +30,23 @@ beforeEach(() => {
 });
 
 describe('DeviceSelection (specs/0061 W6 — dead Test Mic removed)', () => {
+  // specs/0066 W1 — the System Audio Backend picker is gone. It did not merely duplicate
+  // a default: choosing ScreenCaptureKit routed system audio down the legacy CPAL path
+  // (the one that needs BlackHole), and the choice was overwritten on the next load
+  // anyway. Capture is pinned to the Core Audio tap.
+  it('offers no audio-backend picker', async () => {
+    render(
+      <DeviceSelection
+        selectedDevices={{ micDevice: null, systemDevice: null }}
+        onDeviceChange={vi.fn()}
+      />,
+    );
+    await waitFor(() => expect(screen.getByText('Microphone')).toBeInTheDocument());
+    expect(screen.queryByText(/backend/i)).not.toBeInTheDocument();
+    expect(invokeMock).not.toHaveBeenCalledWith('get_audio_backend_info');
+    expect(invokeMock).not.toHaveBeenCalledWith('get_current_audio_backend');
+  });
+
   it('never renders "Test Mic" or "Stop Test" text', async () => {
     render(
       <DeviceSelection

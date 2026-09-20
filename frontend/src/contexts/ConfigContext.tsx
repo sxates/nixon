@@ -151,18 +151,21 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
   const [showConfidenceIndicator, setShowConfidenceIndicator] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('showConfidenceIndicator');
-      return saved !== null ? saved === 'true' : true;
+      return saved !== null ? saved === 'true' : false;
     }
     return true;
   });
 
   // Summary configs
+  // Default ON (specs/0066 W1, owner request). A summary when the recording stops is the
+  // expected behaviour, not an opt-in; anyone who turned it off has the key stored and
+  // keeps that choice, since only an ABSENT key falls through to the default.
   const [isAutoSummary, setisAutoSummary] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('isAutoSummary');
-      return saved !== null ? saved === 'true' : false
+      return saved !== null ? saved === 'true' : true
     }
-    return false;
+    return true;
   });
 
   // Beta features state (localStorage)

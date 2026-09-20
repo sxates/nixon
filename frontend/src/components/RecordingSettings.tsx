@@ -92,10 +92,6 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
   // Live (during-recording) diarization sub-toggle (specs/0011, P3-B). Default off;
   // visually subordinate to / gated by the main diarization-enabled setting above.
   const [liveDiarizationEnabled, setLiveDiarizationEnabled] = useState(false);
-  // Expected speaker count override (specs/0011 accuracy gate). Empty string = Auto
-  // (let clustering decide); a number forces exactly that many speakers — the most
-  // reliable fix when Auto over-/under-clusters.
-  const [expectedSpeakerCount, setExpectedSpeakerCount] = useState<string>('');
   // Voiceprint consent controls (specs/0016 1c, ADR-0007). `storeOthers` is the
   // off-by-default global opt-in to persist *other people's* voiceprints; `selfEnroll`
   // is the device-owner ("You") self-enroll, on by default. Both live in
@@ -183,19 +179,6 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
     loadLiveDiarizationEnabled();
   }, []);
 
-  // Load the expected-speaker-count override (null = Auto; specs/0011).
-  useEffect(() => {
-    const loadExpectedSpeakerCount = async () => {
-      try {
-        const count = await invoke<number | null>('api_get_expected_speaker_count');
-        setExpectedSpeakerCount(count != null ? String(count) : '');
-      } catch (error) {
-        console.error('Failed to load expected speaker count:', error);
-      }
-    };
-    loadExpectedSpeakerCount();
-  }, []);
-
   // Load the two voiceprint-consent toggles (specs/0016 1c). Both come back in a
   // single DTO: storeOthers (default false) + selfEnroll (default true).
   useEffect(() => {
@@ -249,24 +232,6 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
     } catch (error) {
       console.error('Failed to save live diarization preference:', error);
       setLiveDiarizationEnabled(previous); // revert on failure
-      toast.error('Failed to save preference');
-    }
-  };
-
-  // Persist the expected-speaker-count override on blur (specs/0011). Empty or a
-  // non-positive value clears the override (Auto); a positive integer forces that
-  // many speakers. Backend normalizes 0 → Auto.
-  const handleExpectedSpeakerCountCommit = async () => {
-    const trimmed = expectedSpeakerCount.trim();
-    const parsed = trimmed === '' ? null : Number.parseInt(trimmed, 10);
-    const count = parsed != null && Number.isFinite(parsed) && parsed >= 1 ? parsed : null;
-    // Reflect the normalized value back into the field.
-    setExpectedSpeakerCount(count != null ? String(count) : '');
-    try {
-      await invoke('api_set_expected_speaker_count', { count });
-      toast.success('Preference saved');
-    } catch (error) {
-      console.error('Failed to save expected speaker count:', error);
       toast.error('Failed to save preference');
     }
   };
@@ -581,28 +546,6 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
                   checked={liveDiarizationEnabled}
                   onCheckedChange={handleLiveDiarizationToggle}
                   aria-label="Label speakers live while recording"
-                />
-              }
-            />
-          )}
-
-          {diarizationEnabled && (
-            <SettingsRow
-              label="Expected number of speakers"
-              htmlFor="expected-speaker-count"
-              description="Leave blank to detect automatically. If labels split one person into several (or merge several into one), set the exact number of people who spoke to force that many speakers."
-              control={
-                <input
-                  id="expected-speaker-count"
-                  type="number"
-                  min={1}
-                  max={50}
-                  inputMode="numeric"
-                  placeholder="Auto"
-                  value={expectedSpeakerCount}
-                  onChange={(e) => setExpectedSpeakerCount(e.target.value)}
-                  onBlur={handleExpectedSpeakerCountCommit}
-                  className="w-20 rounded-md border border-input bg-background px-2 py-1 text-sm"
                 />
               }
             />

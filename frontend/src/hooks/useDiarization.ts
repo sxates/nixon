@@ -62,7 +62,7 @@ interface DiarizationCompletePayload {
    *  - "calendar" → seeded from the linked calendar event's remote attendees
    *  - "auto"     → audio-derived cap (specs/0050): ad-hoc / distribution-list invite
    */
-  speakerCountSource?: 'manual' | 'calendar' | 'auto';
+  speakerCountSource?: 'calendar' | 'auto';
   /** The count we seeded into the clusterer (manual/calendar); null for auto. */
   seededSpeakerCount?: number | null;
 }

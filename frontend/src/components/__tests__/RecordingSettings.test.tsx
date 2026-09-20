@@ -78,10 +78,6 @@ function mockInvokeResponses() {
         return Promise.resolve(false);
       case 'get_audio_devices':
         return Promise.resolve([]);
-      case 'get_audio_backend_info':
-        return Promise.resolve([]);
-      case 'get_current_audio_backend':
-        return Promise.resolve('coreaudio');
       default:
         return Promise.resolve(undefined);
     }
@@ -239,6 +235,16 @@ describe('RecordingSettings — settings hygiene (specs/0061 W6)', () => {
     ).toBeInTheDocument();
   });
 
+  // specs/0066 W1 — the expected-speaker override is gone. The audio-derived seed
+  // (specs/0050) sizes a meeting now, and a control whose stored value outranked every
+  // derived bound is exactly what should not be left lying around.
+  it('offers no expected-speaker-count override', async () => {
+    await renderSettings();
+    expect(screen.queryByLabelText('Expected number of speakers')).not.toBeInTheDocument();
+    expect(screen.queryByText('Expected number of speakers')).not.toBeInTheDocument();
+    expect(invokeMock).not.toHaveBeenCalledWith('api_get_expected_speaker_count', expect.anything());
+  });
+
   it('describes live speaker labels with the corrected, honest copy', async () => {
     await renderSettings();
     expect(
@@ -290,10 +296,6 @@ describe('RecordingSettings — settings hygiene (specs/0061 W6)', () => {
           return Promise.resolve(false);
         case 'get_audio_devices':
           return Promise.resolve([]);
-        case 'get_audio_backend_info':
-          return Promise.resolve([]);
-        case 'get_current_audio_backend':
-          return Promise.resolve('coreaudio');
         case 'select_recording_folder':
           return Promise.resolve('/tmp/chosen-folder');
         case 'set_recording_preferences':
@@ -343,10 +345,6 @@ describe('RecordingSettings — settings hygiene (specs/0061 W6)', () => {
           return Promise.resolve(false);
         case 'get_audio_devices':
           return Promise.resolve([]);
-        case 'get_audio_backend_info':
-          return Promise.resolve([]);
-        case 'get_current_audio_backend':
-          return Promise.resolve('coreaudio');
         case 'select_recording_folder':
           return Promise.resolve(null);
         default:

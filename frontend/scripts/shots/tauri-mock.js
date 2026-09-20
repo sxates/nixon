@@ -224,18 +224,6 @@
     // no-op is fine — the demo never reloads the page to observe persistence).
     set_notification_settings: () => undefined,
 
-    // audio/recording_preferences.rs `get_audio_backend_info` -> Vec<BackendInfo>
-    // (AudioBackendSelector.tsx, under Settings → Recordings). The "_info" suffix
-    // trips the {}-shaped-word heuristic below even though this is a Vec — {}.map
-    // crashes the whole app (settings-recordings shot). Real macOS id/name/description.
-    get_audio_backend_info: () => ([
-      { id: 'screencapturekit', name: 'ScreenCaptureKit', description: "Apple's ScreenCaptureKit framework - Higher level API with good compatibility" },
-      { id: 'coreaudio', name: 'Core Audio', description: 'Direct Core Audio API - Lower latency, more control over audio pipeline' },
-    ]),
-
-    // audio/recording_preferences.rs `get_current_audio_backend` -> String.
-    get_current_audio_backend: () => 'coreaudio',
-
     // meetings/commands.rs `api_get_meetings` -> Vec<Meeting>.
     api_get_meetings: () => MEETINGS.map(meetingRow),
 

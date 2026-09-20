@@ -23,13 +23,12 @@ pub struct DiarizationSettings {
     /// `false`, preserving v0.4.0 behaviour on upgrade.
     #[serde(default)]
     pub live_diarization_enabled: bool,
-    /// User-provided **expected number of speakers** for this account's meetings
-    /// (specs/0011 accuracy gate). When `Some(n)` with `n >= 1`, diarization runs
-    /// in *Fixed* mode and forces sherpa to exactly `n` clusters — the most
-    /// reliable quality lever, and the recommended escape hatch when Auto
-    /// over-/under-clusters. `None` (the default) keeps Auto mode (clustering
-    /// decides via the tuned threshold). Older settings files lack this field, so
-    /// it `serde`-defaults to `None`, preserving Auto behaviour on upgrade.
+    /// Vestigial (specs/0066 W1). This was the "Expected number of speakers" override,
+    /// a `Fixed(n)` tier that outranked every derived bound. The control is gone and
+    /// nothing reads this any more — it stays only so an existing settings file still
+    /// deserializes, and so a count someone set long ago cannot keep forcing clusters
+    /// with no way to clear it. Sizing is the roster/calendar ceiling plus the
+    /// audio-derived seed (specs/0050).
     #[serde(default)]
     pub expected_speaker_count: Option<u32>,
     /// **Global** opt-in to store *other people's* voiceprints (specs/0016 1c,
@@ -67,28 +66,13 @@ fn default_true() -> bool {
     true
 }
 
-impl DiarizationSettings {
-    /// Map the persisted [`expected_speaker_count`](Self::expected_speaker_count)
-    /// to a [`SpeakerCount`] mode for the diarizer. `Some(n>=1)` → `Fixed(n)`;
-    /// `None`/`Some(0)` → `Auto`.
-    pub fn speaker_count(&self) -> crate::diarization::SpeakerCount {
-        use crate::diarization::SpeakerCount;
-        match self.expected_speaker_count {
-            Some(n) if n >= 1 => SpeakerCount::Fixed(n),
-            _ => SpeakerCount::Auto,
-        }
-    }
-}
-
 /// How the diarization speaker count was decided, surfaced to the frontend on the
 /// `diarization-complete` event so the meeting view can show the basis (e.g.
 /// "Estimated 9 speakers from calendar"). Serialized as the lowercase variant name
-/// (`"manual"|"calendar"|"auto"`) on the wire.
+/// (`"calendar"|"auto"`) on the wire.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum SpeakerCountSource {
-    /// The user explicitly set an expected speaker count in Settings (Fixed).
-    Manual,
     /// Seeded from the linked calendar event's remote attendees (Fixed, estimate).
     Calendar,
     /// Auto-clustering with the specs/0050 audio-derived cap (`AtMost(n_audio)`),
@@ -102,7 +86,6 @@ impl SpeakerCountSource {
     /// The wire string for the `speakerCountSource` IPC field.
     pub fn as_str(self) -> &'static str {
         match self {
-            SpeakerCountSource::Manual => "manual",
             SpeakerCountSource::Calendar => "calendar",
             SpeakerCountSource::Auto => "auto",
         }
@@ -112,11 +95,11 @@ impl SpeakerCountSource {
 /// Resolve the diarization speaker count by precedence, returning both the
 /// [`SpeakerCount`] mode and *how* it was chosen ([`SpeakerCountSource`]).
 ///
-/// Precedence (specs/0011 calendar-seed; specs/0017 count-as-MAX):
-/// 1. **Manual override wins** — if the user set `expected_speaker_count` to
-///    `Some(n>=1)` in `settings` → `Fixed(n)` / [`SpeakerCountSource::Manual`].
-///    The user stated an *exact* number, so this stays `Fixed` (forces exactly n).
-/// 2. **Else, calendar/roster-seed** — count the *remote* attendees in
+/// Precedence (specs/0011 calendar-seed; specs/0017 count-as-MAX). The manual
+/// "Expected number of speakers" override used to sit above all of this and force
+/// `Fixed(n)`; specs/0066 W1 removed it, so the audio- and roster-derived bounds are
+/// now the whole story:
+/// 1. **Calendar/roster-seed** — count the *remote* attendees in
 ///    `calendar_attendees` (everyone EXCLUDING the current user, since diarization
 ///    only clusters the system channel; the local user is the mic channel and is
 ///    assigned separately). If `remote_count >= 1` → `AtMost(remote_count)` /
@@ -126,7 +109,7 @@ impl SpeakerCountSource {
 ///    merges down to *at most* `n` clusters, so a 10-invited / 4-spoke meeting is
 ///    never force-split to 10; it still caps unbounded Auto over-counting on long
 ///    calls (e.g. a 90-min/~10-person call auto-clustered to 27).
-/// 3. **Else** (ad-hoc, or a distribution-list invite with no reliable ceiling) —
+/// 2. **Else** (ad-hoc, or a distribution-list invite with no reliable ceiling) —
 ///    `Auto` / [`SpeakerCountSource::Auto`]. specs/0050's audio seed then caps it at
 ///    `AtMost(n_audio)` in the diarization pass (superseding specs/0048's fixed default
 ///    cap, which would wrongly cap a genuine large ad-hoc meeting below the audio count).
@@ -137,19 +120,11 @@ impl SpeakerCountSource {
 /// lookup failed, access was denied, or no event matched — all of which fall
 /// through to Auto).
 pub fn resolve_speaker_count(
-    settings: &DiarizationSettings,
     calendar_attendees: &[crate::calendar::eventkit::Attendee],
 ) -> (crate::diarization::SpeakerCount, SpeakerCountSource) {
     use crate::diarization::SpeakerCount;
 
-    // 1. Manual override wins (unchanged behaviour).
-    if let Some(n) = settings.expected_speaker_count {
-        if n >= 1 {
-            return (SpeakerCount::Fixed(n), SpeakerCountSource::Manual);
-        }
-    }
-
-    // 2. Calendar/roster-seed from remote attendees — a CLEAN invite only (specs/0050).
+    // 1. Calendar/roster-seed from remote attendees — a CLEAN invite only (specs/0050).
     //    A distribution-list invite is one entry for many people, so the count is
     //    unreliable and would produce a too-low `AtMost` that force-merges real speakers;
     //    when a DL is present we fall through to Auto and let the audio seed
@@ -262,19 +237,6 @@ mod tests {
     use super::*;
     use crate::diarization::SpeakerCount;
 
-    #[test]
-    fn expected_count_maps_to_speaker_mode() {
-        let mut s = DiarizationSettings::default();
-        // Default = Auto.
-        assert!(matches!(s.speaker_count(), SpeakerCount::Auto));
-        // 0 normalizes to Auto (meaningless fixed count).
-        s.expected_speaker_count = Some(0);
-        assert!(matches!(s.speaker_count(), SpeakerCount::Auto));
-        // A real count forces Fixed(n).
-        s.expected_speaker_count = Some(10);
-        assert!(matches!(s.speaker_count(), SpeakerCount::Fixed(10)));
-    }
-
     use crate::calendar::eventkit::Attendee;
 
     /// Build an attendee for the precedence tests.
@@ -292,60 +254,58 @@ mod tests {
         }
     }
 
+    /// specs/0066 W1: a settings file written while the "Expected number of speakers"
+    /// control existed still carries the count, and it must be inert — a value someone
+    /// set once, with the control now gone, would otherwise force clusters forever with
+    /// no way to clear it. The resolver no longer takes the settings at all, so the
+    /// compiler enforces this; the test pins the round-trip plus the resulting sizing.
     #[test]
-    fn manual_override_wins_over_calendar() {
-        let s = DiarizationSettings {
-            expected_speaker_count: Some(3),
-            ..DiarizationSettings::default()
-        };
-        // Even with a big calendar, the manual count wins.
+    fn a_leftover_expected_count_no_longer_forces_anything() {
+        let json = r#"{"diarization_enabled":true,"live_diarization_enabled":false,"expected_speaker_count":3}"#;
+        let s: DiarizationSettings = serde_json::from_str(json).expect("parse settings");
+        assert_eq!(s.expected_speaker_count, Some(3), "the field still parses");
+
+        // Two remote attendees seed the ceiling; the leftover 3 cannot reach the decision.
         let attendees = vec![attendee(false), attendee(false), attendee(true)];
-        let (count, source) = resolve_speaker_count(&s, &attendees);
-        assert!(matches!(count, SpeakerCount::Fixed(3)));
-        assert_eq!(source, SpeakerCountSource::Manual);
+        let (count, source) = resolve_speaker_count(&attendees);
+        assert!(matches!(count, SpeakerCount::AtMost(2)));
+        assert_eq!(source, SpeakerCountSource::Calendar);
     }
 
     #[test]
     fn calendar_seeds_remote_count_excluding_self() {
-        let s = DiarizationSettings::default(); // no manual override
-                                                // 10 total attendees including self → 9 remote → AtMost(9) (specs/0017: cap,
-                                                // not a forced count — not everyone invited speaks).
+        // 10 total attendees including self → 9 remote → AtMost(9) (specs/0017: cap,
+        // not a forced count — not everyone invited speaks).
         let mut attendees = vec![attendee(true)]; // the current user
         attendees.extend(std::iter::repeat_with(|| attendee(false)).take(9));
-        let (count, source) = resolve_speaker_count(&s, &attendees);
+        let (count, source) = resolve_speaker_count(&attendees);
         assert!(matches!(count, SpeakerCount::AtMost(9)));
         assert_eq!(source, SpeakerCountSource::Calendar);
     }
 
     #[test]
-    fn zero_manual_falls_through_to_calendar() {
-        let s = DiarizationSettings {
-            expected_speaker_count: Some(0), // meaningless manual → fall through
-            ..DiarizationSettings::default()
-        };
+    fn one_remote_attendee_caps_at_one() {
         let attendees = vec![attendee(false), attendee(true)];
-        let (count, source) = resolve_speaker_count(&s, &attendees);
+        let (count, source) = resolve_speaker_count(&attendees);
         // specs/0017: calendar branch is now an upper bound.
         assert!(matches!(count, SpeakerCount::AtMost(1)));
         assert_eq!(source, SpeakerCountSource::Calendar);
     }
 
     #[test]
-    fn no_manual_no_remote_attendees_is_auto() {
+    fn no_remote_attendees_is_auto() {
         // specs/0050: an unknown-size meeting (only the current user as attendee →
         // 0 remote) resolves to Auto; the audio seed caps it at AtMost(n_audio) in the
         // diarization pass (reverts specs/0048's harmful fixed default cap).
-        let s = DiarizationSettings::default();
-        let (count, source) = resolve_speaker_count(&s, &[attendee(true)]);
+        let (count, source) = resolve_speaker_count(&[attendee(true)]);
         assert!(matches!(count, SpeakerCount::Auto));
         assert_eq!(source, SpeakerCountSource::Auto);
     }
 
     #[test]
-    fn no_manual_empty_calendar_is_auto() {
+    fn an_empty_calendar_is_auto() {
         // specs/0050: ad-hoc meeting (no roster, no linked calendar event) → Auto.
-        let s = DiarizationSettings::default();
-        let (count, source) = resolve_speaker_count(&s, &[]);
+        let (count, source) = resolve_speaker_count(&[]);
         assert!(matches!(count, SpeakerCount::Auto));
         assert_eq!(source, SpeakerCountSource::Auto);
     }
@@ -355,20 +315,18 @@ mod tests {
         // specs/0050: a distribution-list invite under-counts (1 entry = many people),
         // so we must NOT produce a tight AtMost that would force-merge real speakers —
         // fall through to Auto and let the audio seed decide.
-        let s = DiarizationSettings::default();
         let dl = Attendee {
             is_distribution_list: true,
             ..attendee(false)
         };
         let attendees = vec![attendee(true), dl, attendee(false)];
-        let (count, source) = resolve_speaker_count(&s, &attendees);
+        let (count, source) = resolve_speaker_count(&attendees);
         assert!(matches!(count, SpeakerCount::Auto));
         assert_eq!(source, SpeakerCountSource::Auto);
     }
 
     #[test]
     fn source_wire_strings_are_stable() {
-        assert_eq!(SpeakerCountSource::Manual.as_str(), "manual");
         assert_eq!(SpeakerCountSource::Calendar.as_str(), "calendar");
         assert_eq!(SpeakerCountSource::Auto.as_str(), "auto");
     }
@@ -379,7 +337,9 @@ mod tests {
         let json = r#"{"diarization_enabled":true,"live_diarization_enabled":false}"#;
         let s: DiarizationSettings = serde_json::from_str(json).expect("parse legacy settings");
         assert_eq!(s.expected_speaker_count, None);
-        assert!(matches!(s.speaker_count(), SpeakerCount::Auto));
+        let (count, source) = resolve_speaker_count(&[]);
+        assert!(matches!(count, SpeakerCount::Auto));
+        assert_eq!(source, SpeakerCountSource::Auto);
     }
 
     #[test]

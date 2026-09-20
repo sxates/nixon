@@ -205,10 +205,6 @@ pub fn invoke_handler() -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Sen
         audio::recording_preferences::get_default_recordings_folder_path,
         audio::recording_preferences::open_recordings_folder,
         audio::recording_preferences::select_recording_folder,
-        audio::recording_preferences::get_available_audio_backends,
-        audio::recording_preferences::get_current_audio_backend,
-        audio::recording_preferences::set_audio_backend,
-        audio::recording_preferences::get_audio_backend_info,
         // Audio retention (specs/0029 WS7.1): lets the UI probe whether a meeting
         // still has audio on disk (vs removed by the retention sweep).
         audio::retention::api_meeting_audio_available,
@@ -329,8 +325,6 @@ pub fn invoke_handler() -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Sen
         diarization::commands::api_get_live_diarization_enabled,
         diarization::commands::api_set_live_diarization_enabled,
         // Expected-speaker-count override (specs/0011 accuracy gate)
-        diarization::commands::api_get_expected_speaker_count,
-        diarization::commands::api_set_expected_speaker_count,
         // Speaker labeling + calendar association (specs/0010 P2)
         diarization::commands::api_rename_speaker,
         diarization::commands::api_merge_speakers,

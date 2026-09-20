@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { RefreshCw, Mic, Speaker } from 'lucide-react';
-import { AudioBackendSelector } from './AudioBackendSelector';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 
@@ -175,13 +174,6 @@ export function DeviceSelection({ selectedDevices, onDeviceChange, disabled = fa
 
           {outputDevices.length === 0 && (
             <p className="text-xs text-muted-foreground">No system audio devices found</p>
-          )}
-
-          {/* Backend Selection - available on all platforms */}
-          {!disabled && (
-            <div className="pt-3 border-t border-border">
-              <AudioBackendSelector disabled={disabled} />
-            </div>
           )}
         </div>
       </div>
