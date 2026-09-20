@@ -17,6 +17,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { toast } from 'sonner';
 import { getDayAgenda, type DayAgendaItem } from './day-agenda';
+import { getGoogleCalendarStatus } from './googleCalendar';
 
 /** macOS EventKit authorization status, mirrored from the backend. */
 export type CalendarAccessStatus =
@@ -52,6 +53,24 @@ export async function getCalendarAccessStatus(): Promise<CalendarAccessStatus> {
     console.warn('[calendar] getCalendarAccessStatus failed:', err);
     return 'notDetermined';
   }
+}
+
+/**
+ * Whether Nixon has a calendar at all (specs/0069 W4).
+ *
+ * `getCalendarAccessStatus()` is EventKit ONLY, and Today used it alone to decide whether
+ * to nag about connecting a calendar — so a user who connected Google and never granted
+ * EventKit was told forever to connect the calendar they had already connected. Nixon uses
+ * one source at a time; either one counts.
+ */
+export async function isAnyCalendarConnected(): Promise<boolean> {
+  const [eventkit, google] = await Promise.all([
+    getCalendarAccessStatus().catch(() => 'denied' as CalendarAccessStatus),
+    getGoogleCalendarStatus()
+      .then((s) => s.connected)
+      .catch(() => false),
+  ]);
+  return eventkit === 'authorized' || google;
 }
 
 /**

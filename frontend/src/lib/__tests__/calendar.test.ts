@@ -1,10 +1,15 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
   consumePendingJoinMeeting,
   findAgendaItemForOccurrence,
+  isAnyCalendarConnected,
   peekPendingJoinMeeting,
 } from '@/lib/calendar';
 import type { DayAgendaItem } from '@/lib/day-agenda';
+
+vi.mock('@tauri-apps/api/core', () => ({
+  invoke: vi.fn(),
+}));
 
 // Must match the private key in lib/calendar.ts (stashPendingJoinMeeting is not
 // exported, so the test writes the sessionStorage entry the recorder consumes).
@@ -146,5 +151,35 @@ describe('findAgendaItemForOccurrence', () => {
     const recording = item({ source: 'recording', meetingId: 'meeting-1' });
     expect(findAgendaItemForOccurrence([recording], ref)).toBeNull();
     expect(findAgendaItemForOccurrence([], ref)).toBeNull();
+  });
+});
+
+// specs/0069 W4 — fix for users with Google Calendar connected being nagged forever
+// about connecting EventKit. Nixon uses one source at a time; either one counts.
+describe('isAnyCalendarConnected', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('is connected when EventKit is authorized', async () => {
+    const { invoke } = await import('@tauri-apps/api/core');
+    (invoke as any).mockImplementation(async (cmd: string) =>
+      cmd === 'api_get_calendar_access_status' ? 'authorized' : { connected: false },
+    );
+    await expect(isAnyCalendarConnected()).resolves.toBe(true);
+  });
+
+  it('is connected when only Google is (specs/0069 W4)', async () => {
+    const { invoke } = await import('@tauri-apps/api/core');
+    (invoke as any).mockImplementation(async (cmd: string) =>
+      cmd === 'api_get_calendar_access_status' ? 'notDetermined' : { connected: true },
+    );
+    await expect(isAnyCalendarConnected()).resolves.toBe(true);
+  });
+
+  it('is not connected when neither is, and never throws', async () => {
+    const { invoke } = await import('@tauri-apps/api/core');
+    (invoke as any).mockRejectedValue(new Error('no backend'));
+    await expect(isAnyCalendarConnected()).resolves.toBe(false);
   });
 });
