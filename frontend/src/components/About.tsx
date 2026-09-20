@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { getVersion } from '@tauri-apps/api/app';
 import { useOptionalUpdateStatus, describeStatus } from '@/contexts/UpdateStatusContext';
-import { useRecordingState } from '@/contexts/RecordingStateContext';
 import { SettingsNote } from '@/components/ui/settings';
 import { AnswerMarkdown } from '@/components/AskAI/AnswerMarkdown';
+import { RestartToUpdateButton } from '@/components/Updates/RestartToUpdateButton';
 
 // specs/0058 Task 5 — the update status line + Check for updates / Restart to
 // update controls. Provider-tolerant: renders nothing when the app-wide
@@ -22,9 +22,7 @@ function UpdatesBlockContent({
     busy,
     error,
     checkNow,
-    install,
 }: NonNullable<ReturnType<typeof useOptionalUpdateStatus>>) {
-    const { isRecording } = useRecordingState();
     const ready = status.state === 'ready';
     const notes = ready ? status.notes.trim() : '';
     return (
@@ -33,15 +31,10 @@ function UpdatesBlockContent({
                 <span className="text-sm text-muted-foreground">{describeStatus(status)}</span>
                 <div className="flex gap-2">
                     {ready && (
-                        <button
-                            type="button"
-                            onClick={() => install()}
-                            disabled={busy || isRecording}
-                            title={isRecording ? 'Finish the recording first' : undefined}
-                            className="rounded-[3px] border border-border bg-key px-2.5 py-1 text-xs text-foreground hover:bg-key/80 disabled:opacity-50"
-                        >
-                            Restart to update
-                        </button>
+                        <RestartToUpdateButton
+                            label="Restart to update"
+                            className="px-2.5 py-1 text-xs"
+                        />
                     )}
                     <button
                         type="button"

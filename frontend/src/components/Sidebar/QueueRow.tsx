@@ -11,7 +11,8 @@ import { buildQueueView } from '@/lib/transport/queue-view';
 import { cn } from '@/lib/utils';
 import { LampDot } from '@/components/Transport/LampDot';
 import { QueuePanel } from '@/components/Transport/QueuePanel';
-import { SIDEBAR_ICON_SLOT, SIDEBAR_ROW } from './row';
+import { IconSlot } from './SidebarRow';
+import { SIDEBAR_ROW } from './row';
 
 /**
  * The background-work queue, in the sidebar below Settings (specs/0064 W5).
@@ -55,24 +56,29 @@ export function QueueRow({ collapsed = false }: { collapsed?: boolean }) {
             type="button"
             aria-label={`Queue ${view.count} — ${line}`}
             title={`Queue ${view.count} — ${line}`}
-            className="mb-1 flex h-10 w-full items-center justify-center transition-colors hover:bg-key focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            data-sidebar-row
+            className={cn(SIDEBAR_ROW, 'transition-colors hover:bg-key focus:outline-none focus-visible:ring-2 focus-visible:ring-ring')}
           >
-            <LampDot tone={view.lamp} label="Queue" decorative />
+            <IconSlot name="queue">
+              <LampDot tone={view.lamp} label="Queue" decorative />
+            </IconSlot>
           </button>
         ) : (
           <button
             type="button"
-            className={cn(SIDEBAR_ROW, 'relative h-8 w-full text-left transition-colors hover:bg-key focus:outline-none focus-visible:ring-2 focus-visible:ring-ring')}
+            data-sidebar-row
+            className={cn(SIDEBAR_ROW, 'relative text-left transition-colors hover:bg-key focus:outline-none focus-visible:ring-2 focus-visible:ring-ring')}
           >
             {/* The lamp is narrower than a glyph, so it rides in the shared icon column —
                 otherwise "Queue" would start left of every other label. */}
-            <span className={SIDEBAR_ICON_SLOT}>
+            <IconSlot name="queue">
               <LampDot tone={view.lamp} label="Queue" decorative />
-            </span>
+            </IconSlot>
             <span className="u-section-label text-engrave">Queue {view.count}</span>
             {/* One line, always — a wrapping status line would shift the settings row below
-                it every time a stage name changed. */}
-            <span className="min-w-0 flex-1 truncate text-right text-[11px] text-muted-foreground">
+                it every time a stage name changed. `SIDEBAR_LABEL` is for the label; this
+                trailing status line keeps its own right inset. */}
+            <span className="min-w-0 flex-1 truncate pr-3.5 text-right text-[11px] text-muted-foreground">
               {line}
             </span>
           </button>

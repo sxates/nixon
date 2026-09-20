@@ -275,6 +275,32 @@ async fn install_staged<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
         .await
         .map_err(|e| format!("Update install task failed: {e}"))?
         .map_err(|e| e.to_string())?;
+    // specs/0069 W6 — leave the incoming version a note saying what it is. Best-effort:
+    // a failed write costs the "what's new" dialog, never the install the user just asked
+    // for. Scoped so the lock is released before the process is replaced.
+    //
+    // Review finding, fix round 2: `update.install(bytes)` above has already replaced the
+    // installed bundle, and `app.restart()` below is the point of no return — an `.unwrap()`
+    // on a poisoned mutex here would panic in that exact window, turning a missing "what's
+    // new" dialog into a lost install. `.ok()` keeps the same "best-effort" contract: a
+    // poisoned lock just means no notes, same as a missing `staged_notes()`.
+    {
+        let notes = app
+            .state::<UpdaterState>()
+            .core
+            .lock()
+            .ok()
+            .and_then(|core| core.staged_notes().map(str::to_string))
+            .unwrap_or_default();
+        let receipt = super::receipt::UpdateReceipt {
+            version: version.clone(),
+            notes,
+            installed_at: chrono::Utc::now(),
+        };
+        if let Err(e) = super::receipt::write(&receipt) {
+            log::warn!("updater: could not record the update receipt (continuing): {e}");
+        }
+    }
     log::info!("updater: installed {version}; restarting");
     app.restart();
 }

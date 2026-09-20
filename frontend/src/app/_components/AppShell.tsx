@@ -11,6 +11,7 @@ import NotificationPermissionBootstrap from '@/components/NotificationPermission
 import CalendarAlerts from '@/components/Calendar/CalendarAlerts'
 import VoiceprintRetractionListener from '@/components/People/VoiceprintRetractionListener'
 import PermissionsModal from '@/components/PermissionsModal'
+import { UpdatedNotice } from '@/components/Updates/UpdatedNotice'
 
 interface AppShellProps {
   showOnboarding: boolean
@@ -67,6 +68,8 @@ export function AppShell({ showOnboarding, onOnboardingComplete, children }: App
       {/* Relaunch recovery — prompt to resume a crash-interrupted
           recording, one at a time (spec 0037) */}
       <ResumeRecordingPrompt />
+      {/* First launch after an in-app update — says what changed, once (specs/0069 W6) */}
+      <UpdatedNotice />
     </div>
   )
 }

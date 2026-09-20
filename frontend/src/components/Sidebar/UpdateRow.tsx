@@ -1,28 +1,38 @@
 'use client';
 
 import React from 'react';
+import { Download, RotateCw } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
-import { LampDot } from '@/components/Transport/LampDot';
-import { SIDEBAR_ICON_SLOT, SIDEBAR_ROW } from './row';
+import { DeckIcon } from '@/components/ui/deck-icon';
+import { IconSlot } from './SidebarRow';
+import { SIDEBAR_GLYPH, SIDEBAR_ROW } from './row';
 import { useOptionalUpdateStatus } from '@/contexts/UpdateStatusContext';
 import { useRecordingState } from '@/contexts/RecordingStateContext';
+import { RestartToUpdateButton } from '@/components/Updates/RestartToUpdateButton';
 
 /**
  * specs/0058 — the quiet "an update is here" row in the sidebar footer. Hidden unless a
- * download is in flight or a verified payload is staged. Restart is disabled while a
- * recording runs (the backend refuses too; this just explains why). A refused install —
- * from here or from the tray — is shown under the row, so the reason is not confined to
+ * download is in flight or a verified payload is staged. A refused install — from here, the
+ * tray, or Settings > About — is shown under the row, so the reason is not confined to
  * Settings > About.
  *
- * **Collapsed, the lamp opens a flyout; it does not install** (specs/0066, owner report).
- * It used to be a button whose entire click handler was `install()` — so on the icon rail,
- * where the lamp sits directly above the Queue's own amber lamp and carries no label, one
- * click on a dot you were trying to *identify* restarted the app. The recording guard did
- * hold, but "clicking to find out what this is" should never be the same gesture as
- * "relaunch now", and a restart is not undoable. Expanded and collapsed now agree: the row
- * says what is happening, and Restart is a distinct, labelled action.
+ * **specs/0069 W5** — Restart now goes through `RestartToUpdateButton`, which asks the
+ * app-wide confirmation instead of installing directly (see `RestartConfirmContext`), and the
+ * indicator is a download/restart glyph rather than an amber `LampDot`. The lamp was
+ * identical to the Queue's own amber lamp 40px below it on the collapsed rail — two unlabelled
+ * dots, no way to tell "an update is ready" from "background work is running" apart, and the
+ * whole click handler used to be `install()` with no warning before the restart. See
+ * `UpdateGlyph` below.
  */
+function UpdateGlyph({ ready }: { ready: boolean }) {
+  return (
+    <span data-restart-glyph={ready ? 'ready' : 'downloading'} className="text-brand">
+      <DeckIcon icon={ready ? RotateCw : Download} size={SIDEBAR_GLYPH} />
+    </span>
+  );
+}
+
 export function UpdateRow({ collapsed = false }: { collapsed?: boolean }) {
   const updates = useOptionalUpdateStatus();
   const { isRecording } = useRecordingState();
@@ -37,8 +47,6 @@ export function UpdateRow({ collapsed = false }: { collapsed?: boolean }) {
     : percent === null
       ? `Downloading ${status.version}`
       : `Downloading ${status.version} · ${percent}%`;
-  const disabled = isRecording || updates.busy;
-  const title = isRecording ? 'Finish the recording first' : undefined;
 
   if (collapsed) {
     return (
@@ -48,28 +56,18 @@ export function UpdateRow({ collapsed = false }: { collapsed?: boolean }) {
             type="button"
             title={line}
             aria-label={`Update status — ${line}`}
-            className="mb-1 flex h-10 w-full items-center justify-center transition-colors hover:bg-key focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            data-sidebar-row
+            className={cn(SIDEBAR_ROW, 'transition-colors hover:bg-key focus:outline-none focus-visible:ring-2 focus-visible:ring-ring')}
           >
-            <LampDot tone="amber" label={line} decorative pulse={!ready} />
+            <IconSlot name="update">
+              <UpdateGlyph ready={ready} />
+            </IconSlot>
           </button>
         </PopoverTrigger>
         <PopoverContent side="right" align="end" aria-label="Update" className="w-72 border-border bg-popover p-3">
           <p className="u-section-label text-[9px]">Update</p>
           <p className="mt-1 text-xs text-foreground">{line}</p>
-          {ready && (
-            <button
-              type="button"
-              onClick={() => updates.install()}
-              disabled={disabled}
-              className={cn(
-                'u-section-label mt-3 w-full rounded-[3px] border border-border bg-key px-2 py-1 text-[9px] text-foreground transition-colors',
-                'hover:bg-key/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                'disabled:cursor-default disabled:opacity-50 disabled:hover:bg-key',
-              )}
-            >
-              Restart to update
-            </button>
-          )}
+          {ready && <RestartToUpdateButton label="Restart to update" className="mt-3 w-full px-2 py-1" />}
           {/* Said out loud, not hidden in a `title`: on the icon rail there is no row text
               to explain why the button is dead. */}
           {ready && isRecording && (
@@ -85,29 +83,25 @@ export function UpdateRow({ collapsed = false }: { collapsed?: boolean }) {
 
   return (
     <div>
-      <div className={cn(SIDEBAR_ROW, 'h-8')}>
-        <span className={SIDEBAR_ICON_SLOT}>
-          <LampDot tone="amber" label={line} decorative pulse={!ready} />
-        </span>
-        <span className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground">{line}</span>
-        {ready && (
-          <button
-            type="button"
-            onClick={() => updates.install()}
-            disabled={disabled}
-            title={title}
-            className={cn(
-              'u-section-label rounded-[3px] border border-border bg-key px-2 py-0.5 text-[9px] text-foreground transition-colors',
-              'hover:bg-key/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-              'disabled:cursor-default disabled:opacity-50 disabled:hover:bg-key',
-            )}
-          >
-            Restart
-          </button>
-        )}
+      <div data-sidebar-row className={SIDEBAR_ROW}>
+        <IconSlot name="update">
+          <UpdateGlyph ready={ready} />
+        </IconSlot>
+        {/* The right inset belongs to the trailing content, not the row itself — matching
+            `QueueRow`'s own trailing status span (`QueueRow.tsx`). The row div stays
+            `SIDEBAR_ROW`-only so its className matches the collapsed variant's, slot for
+            slot; without this wrapper the `RestartToUpdateButton` sat flush against the
+            panel's border while every other row stopped `pr-3.5` short (review finding,
+            fix round 2). */}
+        <div className="flex min-w-0 flex-1 items-center gap-2 pr-3.5">
+          <span className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground">{line}</span>
+          {ready && <RestartToUpdateButton />}
+        </div>
       </div>
       {updates.error && (
-        <p className="truncate pb-1 pl-3 pr-2 text-[11px] text-record-ink" title={updates.error}>
+        // Aligned to where labels start (the `w-16` icon column), not the old `pl-5` from
+        // before the shared row geometry (specs/0069 W1).
+        <p className="truncate pb-1 pl-16 pr-3.5 text-[11px] text-record-ink" title={updates.error}>
           {updates.error}
         </p>
       )}

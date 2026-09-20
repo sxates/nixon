@@ -7,6 +7,7 @@
 
 pub mod commands;
 pub mod driver;
+pub mod receipt;
 pub mod settings;
 pub mod state;
 pub mod verify;
@@ -18,12 +19,16 @@ use std::time::Duration;
 
 use tauri::{AppHandle, Emitter, Manager, Runtime};
 
+pub use receipt::UpdateReceipt;
 pub use state::{InstallRefusal, UpdateStatus, UpdaterCore};
 
 pub const EVENT_NAME: &str = "update-status";
 /// Emitted when an install attempt is refused, so the refusal is visible wherever the
 /// user asked for it — the tray as well as Settings > About.
 pub const EVENT_INSTALL_REFUSED: &str = "update-install-refused";
+/// specs/0069 W5 — the tray asks the window to confirm rather than restarting behind the
+/// user's back. The tray menu has no dialog of its own, and a restart is not undoable.
+pub const EVENT_CONFIRM_RESTART: &str = "update-confirm-restart";
 /// Dev builds set this to switch the whole feature off (loop, commands, toggle).
 const DISABLE_VAR: &str = "NIXON_DISABLE_UPDATER";
 /// The message both commands return while that kill switch is on.
