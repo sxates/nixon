@@ -50,6 +50,7 @@ function SettingsPageContent() {
       ? (requestedTab as string)
       : 'general';
 
+
   // Probed once: a release build's `dev_get_flags` does not exist, so the tab never shows.
   const [devToolsAvailable, setDevToolsAvailable] = useState(false);
   useEffect(() => {
@@ -59,6 +60,21 @@ function SettingsPageContent() {
   }, []);
 
   const [activeTab, setActiveTab] = useState(initialTab);
+
+  // A deep link can name a section as well as a tab (`#calendar`, specs/0066). The tab
+  // strip already handles `?tab=`; this scrolls the named section into view once its
+  // content has mounted, so Today's "Connect" lands on the calendar choice rather than at
+  // the top of General. `requestAnimationFrame` because the TabsContent for the requested
+  // tab is not in the DOM on the first paint.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const id = window.location.hash.slice(1);
+    if (!id) return;
+    const frame = requestAnimationFrame(() => {
+      document.getElementById(id)?.scrollIntoView({ block: 'start', behavior: 'auto' });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [activeTab]);
 
   // Load saved transcript configuration on mount
   useEffect(() => {

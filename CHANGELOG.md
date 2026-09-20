@@ -33,9 +33,11 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
   override that for good. **System Audio Backend** offered a second capture path that
   needed BlackHole and reverted itself on the next launch; system audio always uses the
   Core Audio tap now.
-- The "connect your calendar" prompts mention **Google Calendar** as well as the Mac's,
-  and offer a way to get to it — previously they named only macOS Calendar, and the
-  Google connection could be found only by going to Settings yourself (specs/0066).
+- The "connect your calendar" prompts name **Google Calendar** as well as the Mac's, and
+  their **Connect** button now takes you to Settings → Calendar, scrolled to the calendar
+  choice. Previously they named only macOS Calendar, and Connect asked for macOS calendar
+  permission on the spot — which, if the answer was no, could only tell you to go and find
+  a setting for yourself (specs/0066).
 - The sidebar's **Home** is now **Today**, and the New recording / New note buttons are gone
   from it — both are on the Today header, and recording has the REC key (specs/0064 W5).
 - The **Queue** moved from the transport rail into the sidebar, below Settings. Expanded it

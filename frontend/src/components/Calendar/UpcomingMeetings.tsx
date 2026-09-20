@@ -18,7 +18,6 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { Video, CircleDot } from 'lucide-react';
-import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { ConnectCalendarCard } from '@/components/Calendar/ConnectCalendarCard';
 import { useRecordingState } from '@/contexts/RecordingStateContext';
@@ -28,7 +27,6 @@ import {
   type UpcomingMeeting,
   getCalendarAccessStatus,
   getUpcomingMeetings,
-  requestCalendarAccess,
   openZoomMeeting,
   joinAndRecord,
   formatClockTime,
@@ -99,7 +97,6 @@ export default function UpcomingMeetings() {
   const [status, setStatus] = useState<CalendarAccessStatus | null>(null);
   const [meetings, setMeetings] = useState<UpcomingMeeting[]>([]);
   const [dismissed, setDismissed] = useState(false);
-  const [connecting, setConnecting] = useState(false);
 
   // Read the sticky "dismissed the connect prompt" flag once on mount.
   useEffect(() => {
@@ -133,38 +130,6 @@ export default function UpcomingMeetings() {
     };
   }, [refresh]);
 
-  const handleConnect = useCallback(async () => {
-    setConnecting(true);
-    try {
-      const before = await getCalendarAccessStatus();
-      console.log('[UpcomingMeetings] handleConnect: status before =', before);
-
-      const granted = await requestCalendarAccess();
-      console.log('[UpcomingMeetings] handleConnect: requestCalendarAccess() =', granted);
-
-      await refresh(); // pick up the new status (and meetings if granted)
-
-      const after = await getCalendarAccessStatus();
-      console.log('[UpcomingMeetings] handleConnect: status after refresh =', after);
-
-      if (!granted && after !== 'authorized') {
-        toast.error('Calendar access not granted', {
-          description:
-            'You can grant access in System Settings → Privacy & Security → Calendars.',
-        });
-      }
-    } catch (err) {
-      // requestCalendarAccess/refresh swallow IPC errors and return safe
-      // defaults, so reaching here is unexpected — surface it rather than fail
-      // silently.
-      console.error('[UpcomingMeetings] handleConnect failed:', err);
-      toast.error('Could not connect calendar', {
-        description: err instanceof Error ? err.message : String(err),
-      });
-    } finally {
-      setConnecting(false);
-    }
-  }, [refresh]);
 
   const handleDismiss = useCallback(() => {
     setDismissed(true);
@@ -201,8 +166,6 @@ export default function UpcomingMeetings() {
   return (
     <ConnectCalendarCard
       title="Connect your calendar to see upcoming meetings"
-      connecting={connecting}
-      onConnect={() => void handleConnect()}
       onDismiss={handleDismiss}
     />
   );
