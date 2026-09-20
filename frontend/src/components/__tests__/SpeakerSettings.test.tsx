@@ -15,7 +15,14 @@ const { useSidebarMock, toastInfo, toastSuccess } = vi.hoisted(() => ({
 vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn() }));
 vi.mock('sonner', () => ({ toast: { info: toastInfo, success: toastSuccess, error: vi.fn() } }));
 vi.mock('@/components/Sidebar/SidebarProvider', () => ({ useSidebar: useSidebarMock }));
-vi.mock('@/components/LanguageSelection', () => ({ LanguageSelection: () => <div /> }));
+vi.mock('@/components/LanguageSelection', () => ({
+  LanguageSelection: () => <div data-testid="language-selection" />,
+}));
+
+let provider = 'parakeet';
+vi.mock('@/contexts/ConfigContext', () => ({
+  useConfig: () => ({ transcriptModelConfig: { provider } }),
+}));
 vi.mock('@/components/ClearVoiceprintsDialog', () => ({ ClearVoiceprintsDialog: () => null }));
 
 import { invoke } from '@tauri-apps/api/core';
@@ -39,6 +46,7 @@ async function renderSettings() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  provider = 'parakeet';
   useSidebarMock.mockReturnValue({ activeRecordingMeetingId: null });
   invokeMock.mockImplementation((cmd: string) => {
     switch (cmd) {
@@ -111,5 +119,28 @@ describe('SpeakerSettings — copy (specs/0061 W6, moved by 0067)', () => {
   it('explains that storing other voiceprints is opt-in biometric data', async () => {
     await renderSettings();
     expect(screen.getByText(/biometric data/i)).toBeInTheDocument();
+  });
+});
+
+// specs/0067 — the transcription-language control is shown only where it does something.
+// `parakeet_provider.rs` takes the language, logs that Parakeet does not support it, and
+// transcribes anyway; the UI still spent a dropdown and three explanatory blocks saying so.
+describe('SpeakerSettings — transcription language', () => {
+  it('is absent on the default engine, which ignores it', async () => {
+    await renderSettings();
+    expect(screen.queryByTestId('language-selection')).toBeNull();
+    expect(screen.queryByText('Transcription language')).toBeNull();
+  });
+
+  it('appears for Whisper, which honours it', async () => {
+    provider = 'localWhisper';
+    await renderSettings();
+    expect(screen.getByTestId('language-selection')).toBeInTheDocument();
+  });
+
+  it('appears for a cloud provider too', async () => {
+    provider = 'deepgram';
+    await renderSettings();
+    expect(screen.getByTestId('language-selection')).toBeInTheDocument();
   });
 });

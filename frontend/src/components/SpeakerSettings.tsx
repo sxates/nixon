@@ -22,6 +22,7 @@ import { Button } from './ui/button';
 import { ClearVoiceprintsDialog } from '@/components/ClearVoiceprintsDialog';
 import { LanguageSelection } from '@/components/LanguageSelection';
 import { useSidebar } from '@/components/Sidebar/SidebarProvider';
+import { useConfig } from '@/contexts/ConfigContext';
 import { noticeForSetting } from '@/lib/recording-settings-notices';
 import {
   SettingsGroup,
@@ -30,6 +31,22 @@ import {
 } from './ui/settings';
 
 export function SpeakerSettings() {
+  /**
+   * Transcription language is shown only for engines that honour it (specs/0067).
+   *
+   * On the default engine it controls nothing: `parakeet_provider.rs` takes the language,
+   * logs "Parakeet doesn't support language preference … yet", and transcribes anyway.
+   * The UI reflected that by filtering the menu down to Auto — and then still spent a
+   * dropdown, a "Parakeet language support" note, a Current: line and an accuracy warning
+   * saying so. Four blocks of text for a setting with no effect.
+   *
+   * Whisper and the cloud providers do use it, and the app's own advice there is to pick a
+   * specific language for best accuracy — so the control stays for them rather than being
+   * deleted outright, which would strand anyone transcribing in a language Whisper needs
+   * told about.
+   */
+  const { transcriptModelConfig } = useConfig();
+  const engineUsesLanguage = transcriptModelConfig.provider !== 'parakeet';
   // Same rule Recording settings uses: a change made mid-meeting applies to the NEXT
   // recording, and the toast has to say so instead of claiming it took effect now.
   const { activeRecordingMeetingId } = useSidebar();
@@ -159,14 +176,16 @@ export function SpeakerSettings() {
 
   return (
     <div className="space-y-8">
-      <SettingsSection
-        title="Transcription language"
-        description="The single global language preference used for every transcript."
-      >
-        <SettingsGroup className="py-4">
-          <LanguageSelection />
-        </SettingsGroup>
-      </SettingsSection>
+      {engineUsesLanguage && (
+        <SettingsSection
+          title="Transcription language"
+          description="The single global language preference used for every transcript."
+        >
+          <SettingsGroup className="py-4">
+            <LanguageSelection />
+          </SettingsGroup>
+        </SettingsSection>
+      )}
 
       <SettingsSection
         title="Speaker labels"
