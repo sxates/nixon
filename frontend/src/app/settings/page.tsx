@@ -11,6 +11,7 @@ import { PreferenceSettings } from '@/components/PreferenceSettings';
 import { RecordingPermissionsSettings } from '@/components/RecordingPermissionsSettings';
 import { CalendarSettings } from '@/components/CalendarSettings';
 import { OwnerEmailSettings } from '@/components/OwnerEmailSettings';
+import { AdvancedOptionsSettings } from '@/components/AdvancedOptionsSettings';
 import { SummaryModelSettings } from '@/components/SummaryModelSettings';
 import { TemplateSettings } from '@/components/TemplateSettings';
 import { DeveloperSettings } from '@/components/DeveloperSettings';
@@ -148,6 +149,8 @@ function SettingsPageContent() {
             {/* Owner addresses (specs/0018) — auto-filled with the Google account
                 email when Google Calendar connects (specs/0032). */}
             <OwnerEmailSettings />
+            {/* Last in General: it governs what the other tabs show (specs/0067 W0). */}
+            <AdvancedOptionsSettings />
           </TabsContent>
           <TabsContent value="recording" className="space-y-8">
             <RecordingSettings />

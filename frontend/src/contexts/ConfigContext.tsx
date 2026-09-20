@@ -74,6 +74,18 @@ interface ConfigContextType {
   isAutoSummary: boolean;
   toggleIsAutoSummary: (checked: boolean) => void;
 
+  /**
+   * "Show advanced options" (specs/0067). Off by default: settings that Nixon can decide
+   * for you — which transcription engine, which summary model — show one resolved row
+   * instead of a menu. On, every control that existed before is back, in place.
+   *
+   * A section whose current value is NOT the recommended one must show its controls
+   * regardless of this flag. Hiding a setting someone deliberately chose is how a
+   * simplification turns into a support question.
+   */
+  showAdvanced: boolean;
+  toggleShowAdvanced: (checked: boolean) => void;
+
   // Provider-specific API key hints: masked display values ("••••1234") or
   // null when unconfigured — raw keys never reach the webview (0030 WS2)
   providerApiKeys: {
@@ -163,6 +175,14 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
       return saved !== null ? saved === 'true' : true
     }
     return true;
+  });
+
+  // specs/0067 — off by default; only an explicit opt-in turns the expert controls back on.
+  const [showAdvanced, setShowAdvanced] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('showAdvancedSettings') === 'true';
+    }
+    return false;
   });
 
   // Preference settings state (lazy loaded)
@@ -381,6 +401,13 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
+  const toggleShowAdvanced = useCallback((checked: boolean) => {
+    setShowAdvanced(checked);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('showAdvancedSettings', checked.toString());
+    }
+  }, []);
+
   // Update individual provider API key
   const updateProviderApiKey = useCallback((provider: string, apiKey: string | null) => {
     setProviderApiKeys(prev => ({ ...prev, [provider]: apiKey }));
@@ -463,6 +490,8 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
     setModelConfig,
     isAutoSummary,
     toggleIsAutoSummary,
+    showAdvanced,
+    toggleShowAdvanced,
     providerApiKeys,
     updateProviderApiKey,
     transcriptModelConfig,
@@ -485,6 +514,8 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
     modelConfig,
     isAutoSummary,
     toggleIsAutoSummary,
+    showAdvanced,
+    toggleShowAdvanced,
     providerApiKeys,
     updateProviderApiKey,
     transcriptModelConfig,

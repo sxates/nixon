@@ -5,6 +5,8 @@ import { invoke } from '@tauri-apps/api/core';
 import { safeListen } from '@/lib/safe-listen';
 import { toast } from 'sonner';
 import { ModelConfig, ModelSettingsModal } from '@/components/ModelSettingsModal';
+import { SummaryModelRow } from '@/components/SummaryModelRow';
+import { isAdvancedRowVisible } from '@/components/AdvancedOptionsSettings';
 import { SummaryLanguageSettings } from '@/components/SummaryLanguageSettings';
 import { Switch } from './ui/switch';
 import { useConfig } from '@/contexts/ConfigContext';
@@ -23,7 +25,28 @@ export function SummaryModelSettings({ refetchTrigger }: SummaryModelSettingsPro
     ollamaEndpoint: null
   });
 
-  const { isAutoSummary, toggleIsAutoSummary } = useConfig();
+  const { isAutoSummary, toggleIsAutoSummary, showAdvanced } = useConfig();
+
+  // specs/0067 W1 — what Nixon would pick for this Mac, so the tab can tell "the default,
+  // applied" apart from "a choice this user made". Null while it loads, and on failure:
+  // unknown recommendation means fall back to showing the controls rather than hiding a
+  // setting we cannot vouch for.
+  const [recommendedModel, setRecommendedModel] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    invoke<string>('builtin_ai_get_recommended_model')
+      .then((name) => !cancelled && setRecommendedModel(name))
+      .catch(() => !cancelled && setRecommendedModel(null));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const isRecommended =
+    modelConfig.provider === 'builtin-ai' &&
+    recommendedModel !== null &&
+    modelConfig.model === recommendedModel;
+  const showModelControls = isAdvancedRowVisible({ showAdvanced, isRecommended });
 
   // Reusable fetch function
   const fetchModelConfig = useCallback(async () => {
@@ -113,14 +136,18 @@ export function SummaryModelSettings({ refetchTrigger }: SummaryModelSettingsPro
         title="Summary model"
         description="The AI model that writes your meeting summaries. A local model keeps everything on this Mac."
       >
-        <SettingsGroup className="py-4">
-          <ModelSettingsModal
-            modelConfig={modelConfig}
-            setModelConfig={setModelConfig}
-            onSave={handleSaveModelConfig}
-            skipInitialFetch={true}
-          />
-        </SettingsGroup>
+        {showModelControls ? (
+          <SettingsGroup className="py-4">
+            <ModelSettingsModal
+              modelConfig={modelConfig}
+              setModelConfig={setModelConfig}
+              onSave={handleSaveModelConfig}
+              skipInitialFetch={true}
+            />
+          </SettingsGroup>
+        ) : (
+          <SummaryModelRow model={modelConfig.model} />
+        )}
       </SettingsSection>
 
       <SettingsSection

@@ -8,7 +8,12 @@ import {
     SettingsRow,
     SettingsSection,
 } from './ui/settings';
+import { isAdvancedRowVisible } from './AdvancedOptionsSettings';
+import { useConfig } from '@/contexts/ConfigContext';
 import { Eye, EyeOff, Lock, Unlock } from 'lucide-react';
+
+/** Mirrors `config.rs::DEFAULT_PARAKEET_MODEL`; the engine+model Nixon ships with. */
+const DEFAULT_PARAKEET_MODEL = 'parakeet-tdt-0.6b-v3-int8';
 import { ModelManager } from './WhisperModelManager';
 import { ParakeetModelManager } from './ParakeetModelManager';
 
@@ -40,6 +45,17 @@ export function TranscriptSettings({ transcriptModelConfig, setTranscriptModelCo
     const [isApiKeyLocked, setIsApiKeyLocked] = useState<boolean>(true);
     const [isLockButtonVibrating, setIsLockButtonVibrating] = useState<boolean>(false);
     const [uiProvider, setUiProvider] = useState<TranscriptModelProps['provider']>(transcriptModelConfig.provider);
+
+    // specs/0067 W2 — the engine picker is an expert control. Parakeet on its default model
+    // is what Nixon ships and what the WER comparison backed (17.6% vs 20.6% against the
+    // same corpus, and the engine built for the live path), so a user running that sees one
+    // row saying so. Anything else — Whisper, a cloud provider, a hand-picked Parakeet
+    // model — keeps its controls whether or not advanced options are on.
+    const { showAdvanced } = useConfig();
+    const isDefaultEngine =
+        transcriptModelConfig.provider === 'parakeet' &&
+        transcriptModelConfig.model === DEFAULT_PARAKEET_MODEL;
+    const showEngineControls = isAdvancedRowVisible({ showAdvanced, isRecommended: isDefaultEngine });
 
     // Sync uiProvider when backend config changes (e.g., after model selection or initial load)
     useEffect(() => {
@@ -112,8 +128,24 @@ export function TranscriptSettings({ transcriptModelConfig, setTranscriptModelCo
         <div className="space-y-8">
             <SettingsSection
                 title="Transcript model"
-                description="Which engine turns meeting audio into text. Both options run entirely on this Mac."
+                description="Which engine turns meeting audio into text. Every option runs entirely on this Mac."
             >
+                {!showEngineControls ? (
+                    <SettingsGroup>
+                        <SettingsRow
+                            label="Engine"
+                            description="Parakeet, running on this Mac. It keeps up with live audio and is the most accurate of the on-device engines on meeting recordings."
+                            control={
+                                <span
+                                    className="u-section-label text-[11px] text-engrave"
+                                    data-testid="resolved-transcript-engine"
+                                >
+                                    Parakeet
+                                </span>
+                            }
+                        />
+                    </SettingsGroup>
+                ) : (
                 <SettingsGroup>
                     <SettingsRow
                         label="Engine"
@@ -208,9 +240,10 @@ export function TranscriptSettings({ transcriptModelConfig, setTranscriptModelCo
                         />
                     )}
                 </SettingsGroup>
+                )}
             </SettingsSection>
 
-            {uiProvider === 'localWhisper' && (
+            {showEngineControls && uiProvider === 'localWhisper' && (
                 <SettingsSection
                     title="Whisper models"
                     description="Download a model to use it. Larger models are more accurate and slower."
@@ -225,7 +258,7 @@ export function TranscriptSettings({ transcriptModelConfig, setTranscriptModelCo
                 </SettingsSection>
             )}
 
-            {uiProvider === 'parakeet' && (
+            {showEngineControls && uiProvider === 'parakeet' && (
                 <SettingsSection
                     title="Parakeet models"
                     description="Download a model to use it. Runs in real time on Apple Silicon."
