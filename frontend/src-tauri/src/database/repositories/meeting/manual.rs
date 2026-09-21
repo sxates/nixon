@@ -304,4 +304,45 @@ mod tests {
             "nixon-manual:abc"
         ));
     }
+
+    /// specs/0069 W3 acceptance criteria — the real adoption path: a manual entry's prep
+    /// row is found by `find_scheduled_for_occurrence` even when the recording begins on a
+    /// DIFFERENT UTC day than the row's stored `created_at`. `a_manual_id_names_one_occurrence`
+    /// above only pins the id-classification helper in isolation; this pins the thing that
+    /// actually decides adoption (`MeetingsRepository::find_scheduled_for_occurrence`,
+    /// called from `promote_scheduled_to_recorded`'s caller at record start).
+    #[tokio::test]
+    async fn a_manual_entrys_prep_row_is_found_across_a_utc_day_boundary() {
+        let pool = memory_db().await;
+        let id = MeetingsRepository::create_manual_scheduled(
+            &pool,
+            "Call with Sam",
+            dt("2026-09-20T23:30:00Z"),
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+        let (event_id,): (String,) =
+            sqlx::query_as("SELECT calendar_event_id FROM meetings WHERE id = ?")
+                .bind(&id)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+
+        // The recording actually starts just after midnight UTC — a different calendar
+        // day than the row's stored `created_at` above.
+        let found = MeetingsRepository::find_scheduled_for_occurrence(
+            &pool,
+            &event_id,
+            dt("2026-09-21T00:05:00Z"),
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            found.as_deref(),
+            Some(id.as_str()),
+            "resolved by id alone, across the UTC day boundary"
+        );
+    }
 }

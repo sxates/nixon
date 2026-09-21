@@ -705,4 +705,47 @@ mod tests {
             "only the recorded, content-bearing occurrence qualifies"
         );
     }
+
+    /// specs/0069 W3 Risks — a manual entry (specs/0069) titled like an existing series
+    /// picks up title-matched carryover exactly like any other same-titled ad-hoc recording
+    /// (the WS4 additive union). Exercises the same lookup `api_get_prep` performs: the
+    /// manual row's own effective series key (nothing pins a fresh manual entry to a series)
+    /// plus its title and occurrence start.
+    #[tokio::test]
+    async fn a_manual_entrys_title_matches_a_prior_series_occurrence() {
+        let pool = memory_db().await;
+        let prior = recorded_with_summary(&pool, "Weekly Sync", "2026-06-01T10:00:00Z", None).await;
+
+        let manual_id = MeetingsRepository::create_manual_scheduled(
+            &pool,
+            "Weekly Sync",
+            dt("2026-06-08T10:00:00Z"),
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+        let meta = MeetingsRepository::get_meeting_metadata(&pool, &manual_id)
+            .await
+            .unwrap()
+            .unwrap();
+        let series_key = MeetingsRepository::resolve_effective_series_key(&pool, &manual_id)
+            .await
+            .unwrap();
+        assert_eq!(
+            series_key, None,
+            "a fresh manual entry has no series affiliation of its own"
+        );
+
+        let found = MeetingsRepository::find_prior_series_occurrences(
+            &pool,
+            series_key.as_deref(),
+            &meta.title,
+            meta.created_at.0,
+            10,
+        )
+        .await
+        .unwrap();
+        assert_eq!(found, vec![prior], "title arm alone surfaces the prior occurrence");
+    }
 }
