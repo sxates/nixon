@@ -42,6 +42,19 @@ pub struct MeetingModel {
     #[serde(default)]
     #[sqlx(default)]
     pub processing_mode: Option<String>,
+    /// Manual-entry occurrence end (specs/0069b review fix 2) — set only for a
+    /// Nixon-minted manual scheduled row (`calendar_event_id` prefixed
+    /// `nixon-manual:`); NULL everywhere else. `#[sqlx(default)]` so legacy
+    /// explicit-column SELECTs that predate the column still decode.
+    #[serde(default)]
+    #[sqlx(default)]
+    pub scheduled_end_at: Option<DateTimeUtc>,
+    /// Manual-entry join link (specs/0069b review fix 2) — same scope as
+    /// `scheduled_end_at`. `#[sqlx(default)]` so legacy explicit-column SELECTs
+    /// still decode.
+    #[serde(default)]
+    #[sqlx(default)]
+    pub join_url: Option<String>,
 }
 
 /// Raw row for the enriched meeting-list query (`get_meetings_enriched`).

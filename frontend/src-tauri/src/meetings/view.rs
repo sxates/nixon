@@ -77,6 +77,20 @@ pub struct MeetingDetails {
     /// Linked EventKit calendar event id (specs/0015); `None` for ad-hoc/notes-only meetings.
     #[serde(rename = "calendarEventId", skip_serializing_if = "Option::is_none")]
     pub calendar_event_id: Option<String>,
+    /// Scheduled occurrence end (specs/0069b review fix 2). Meaningful only for a manual
+    /// scheduled entry (see `is_manual_entry`); `None` for every other origin.
+    #[serde(rename = "scheduledEndAt", skip_serializing_if = "Option::is_none")]
+    pub scheduled_end_at: Option<String>,
+    /// Join link for the occurrence (specs/0069 W3), carried through so the meeting page's
+    /// edit affordance can seed it. Same scope as `scheduled_end_at`.
+    #[serde(rename = "joinUrl", skip_serializing_if = "Option::is_none")]
+    pub join_url: Option<String>,
+    /// True when `calendar_event_id` is a Nixon-minted manual entry (the
+    /// `nixon-manual:` prefix — see `database::repositories::meeting::is_manual_event_id`).
+    /// Exposed as a field rather than the raw prefix so the frontend never needs its own
+    /// copy of that string literal (specs/0069b review fix 2).
+    #[serde(rename = "isManualEntry")]
+    pub is_manual_entry: bool,
     pub transcripts: Vec<MeetingTranscript>,
 }
 
@@ -154,6 +168,24 @@ pub struct MeetingMetadata {
         skip_serializing_if = "Option::is_none"
     )]
     pub reel_number: Option<i64>,
+    /// Scheduled occurrence end (specs/0069b review fix 2) — this is the DTO the
+    /// meeting-details page actually renders from (`api_get_meeting_metadata`), so this
+    /// is where the edit dialog's fields must live, not `MeetingDetails` alone. Meaningful
+    /// only for a manual scheduled entry; `None` for every other origin.
+    #[serde(
+        rename = "scheduledEndAt",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub scheduled_end_at: Option<String>,
+    /// Join link for the occurrence (specs/0069 W3), same scope as `scheduled_end_at`.
+    #[serde(rename = "joinUrl", default, skip_serializing_if = "Option::is_none")]
+    pub join_url: Option<String>,
+    /// True when `calendar_event_id` is a Nixon-minted manual entry (specs/0069b review
+    /// fix 2) — see `MeetingDetails::is_manual_entry` for why this is a field rather than
+    /// a raw prefix check.
+    #[serde(rename = "isManualEntry", default)]
+    pub is_manual_entry: bool,
 }
 
 /// Paginated transcripts response with total count

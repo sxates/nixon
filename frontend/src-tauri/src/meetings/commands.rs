@@ -282,6 +282,12 @@ pub async fn api_get_meeting_metadata<R: Runtime>(
                     log_warn!("Could not compute reel number for {}: {}", meeting_id, e);
                     None
                 });
+            let is_manual_entry = meeting
+                .calendar_event_id
+                .as_deref()
+                .map(crate::database::repositories::meeting::is_manual_event_id)
+                .unwrap_or(false);
+
             Ok(MeetingMetadata {
                 id: meeting.id,
                 title: meeting.title,
@@ -292,6 +298,9 @@ pub async fn api_get_meeting_metadata<R: Runtime>(
                 calendar_event_id: meeting.calendar_event_id,
                 calendar_series_key: meeting.calendar_series_key,
                 reel_number,
+                scheduled_end_at: meeting.scheduled_end_at.map(|dt| dt.0.to_rfc3339()),
+                join_url: meeting.join_url,
+                is_manual_entry,
             })
         }
         Ok(None) => {

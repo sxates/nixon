@@ -158,6 +158,13 @@ export interface MeetingMetadata {
   // Archival reel ordinal (spec 0057): 1-based position in the non-scheduled set,
   // oldest first. Absent for 'scheduled' placeholders and on legacy DTOs.
   reelNumber?: number;
+  // specs/0069b review fix 2 — manual-entry occurrence end + join link, meaningful only
+  // when isManualEntry is true. Absent/null for every other origin.
+  scheduledEndAt?: string | null;
+  joinUrl?: string | null;
+  // True when this row is a Nixon-minted manual entry (`nixon-manual:` calendar_event_id
+  // prefix). Backend-computed so the frontend never duplicates that prefix check.
+  isManualEntry?: boolean;
 }
 
 export interface PaginatedTranscriptsResponse {
