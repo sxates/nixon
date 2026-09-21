@@ -152,7 +152,7 @@ export function AddMeetingDialog({
       await onSaved();
     } catch (error) {
       console.error('Failed to save manual meeting:', error);
-      toast.error('Could not add the meeting', {
+      toast.error(isEdit ? 'Could not save the meeting' : 'Could not add the meeting', {
         description: error instanceof Error ? error.message : String(error),
       });
     } finally {
