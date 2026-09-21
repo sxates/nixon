@@ -30,6 +30,12 @@ vi.mock('@/lib/calendar', () => ({
   joinAndRecord: joinAndRecordMock,
   openZoomMeeting: openZoomMeetingMock,
   resolveOccurrenceJoinUrl: resolveOccurrenceJoinUrlMock,
+  // Real implementation (not a mock): the manual-entry startsAt tests below assert on
+  // its actual now-vs-scheduled behavior, not just that it was called. Mirrors
+  // lib/calendar.ts's `resolveRecordingStartsAt` exactly — see the sabotage check in
+  // that test for proof this isn't a decorative copy.
+  resolveRecordingStartsAt: (scheduledStartsAt: string, now: Date) =>
+    now.getTime() < new Date(scheduledStartsAt).getTime() ? now.toISOString() : scheduledStartsAt,
   formatRelativeStart: () => 'in 5m',
   // 0 so the open-call → resume settle delay collapses to the next tick in tests.
   JOIN_AND_RECORD_DELAY_MS: 0,
@@ -146,6 +152,48 @@ describe('ScheduledRecordControl — start mode (scheduled occurrence)', () => {
     fireEvent.click(button);
     expect(joinAndRecordMock).toHaveBeenCalledTimes(1);
     expect(armResumeRecordingMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('ScheduledRecordControl — manual entries bypass the T-5 window (specs/0069b followup)', () => {
+  it('shows the Record button for a manual entry days out, unlike a calendar-backed one', async () => {
+    const farFuture = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(); // 3 days out
+
+    // Calendar-backed (default isManualEntry: false): 3 days out is well outside the
+    // T-5 window, so no button renders.
+    const { unmount } = renderControl({ startsAt: farFuture });
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+    unmount();
+
+    // Same far-future start, but a manual entry: the button is there anyway.
+    renderControl({ startsAt: farFuture, isManualEntry: true });
+    expect(await screen.findByRole('button', { name: /start & record/i })).toBeInTheDocument();
+  });
+
+  it('sends now (not the far-future scheduled start) when recording a manual entry early', async () => {
+    // Far enough out that the test cannot pass by proximity to "now".
+    const farFuture = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString();
+    renderControl({ startsAt: farFuture, isManualEntry: true });
+
+    const button = await screen.findByRole('button', { name: /start & record/i });
+    const beforeClick = Date.now();
+    fireEvent.click(button);
+
+    expect(joinAndRecordMock).toHaveBeenCalledTimes(1);
+    const sentStartsAt = joinAndRecordMock.mock.calls[0][0].startsAt as string;
+    expect(sentStartsAt).not.toBe(farFuture);
+    expect(Math.abs(new Date(sentStartsAt).getTime() - beforeClick)).toBeLessThan(5000);
+  });
+
+  it('sends the scheduled start for a manual entry once it has already passed', async () => {
+    const past = new Date(Date.now() - 60_000).toISOString(); // started a minute ago
+    renderControl({ startsAt: past, isManualEntry: true });
+
+    const button = await screen.findByRole('button', { name: /start & record/i });
+    fireEvent.click(button);
+
+    expect(joinAndRecordMock).toHaveBeenCalledTimes(1);
+    expect(joinAndRecordMock.mock.calls[0][0].startsAt).toBe(new Date(past).toISOString());
   });
 });
 

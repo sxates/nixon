@@ -18,9 +18,12 @@
  *
  * Layout is deliberately lightweight (a header chip + button, not a full-width banner):
  *  - The record button shows from T-5 onward (and stays for a call that starts late).
+ *    **Manual entries** (`isManualEntry`) skip this window entirely — the button is
+ *    always there, however far out the entry's date/time is (specs/0069b followup):
+ *    unlike a calendar event, the time is the user's own choice, not an invite's.
  *  - The countdown chip is shown while the meeting is upcoming or recently started, and
  *    HIDDEN once it's well in the past (> 1h ago) — a stale scheduled row shouldn't shout
- *    "Started 579m ago"; it just keeps the button.
+ *    "Started 579m ago"; it just keeps the button. Unaffected by `isManualEntry`.
  *  - Continue mode hides entirely once > 1h past start — the "…" menu's "Continue
  *    recording" item covers late appends; the header button is the false-start retry.
  */
@@ -34,6 +37,7 @@ import {
   joinAndRecord,
   openZoomMeeting,
   resolveOccurrenceJoinUrl,
+  resolveRecordingStartsAt,
   formatRelativeStart,
   JOIN_AND_RECORD_DELAY_MS,
 } from '@/lib/calendar';
@@ -53,6 +57,7 @@ export function ScheduledRecordControl({
   origin,
   hasTranscripts,
   folderPath,
+  isManualEntry = false,
 }: {
   /** The meeting row id — continue mode resumes INTO this row (specs/0037). */
   meetingId: string;
@@ -69,6 +74,13 @@ export function ScheduledRecordControl({
   hasTranscripts: boolean;
   /** The row's recording folder, if any — required by the specs/0037 resume path. */
   folderPath: string | null;
+  /**
+   * True for a `nixon-manual:` entry (backend-computed, specs/0069b). Manual entries
+   * bypass the T-5 `canRecord` window — always own the button — and, when recorded
+   * before their scheduled time, date the row to `now` instead (see
+   * {@link resolveRecordingStartsAt}). Calendar-linked meetings are unaffected.
+   */
+  isManualEntry?: boolean;
 }) {
   const router = useRouter();
   const { handleRecordingToggle } = useSidebar();
@@ -126,7 +138,9 @@ export function ScheduledRecordControl({
     origin === 'recorded' && (hasTranscripts || !!folderPath) ? 'continue' : 'start';
 
   const msUntil = start.getTime() - now.getTime();
-  const canRecord = msUntil <= JOIN_WINDOW_MS; // T-5 onward, incl. after start
+  // Manual entries always own the button (specs/0069b followup) — the T-5 window only
+  // applies to calendar-linked meetings, whose time isn't the user's to choose.
+  const canRecord = isManualEntry || msUntil <= JOIN_WINDOW_MS; // T-5 onward, incl. after start
   const showCountdown = msUntil > -STALE_AFTER_MS; // hidden once > 1h past
 
   // Continue mode is a header convenience for the around-the-meeting retry; once the
@@ -147,15 +161,19 @@ export function ScheduledRecordControl({
   const onStartRecord = () => {
     // Bind the recording to this calendar event so it keeps the roster, opening the
     // call first when the event has a join link (Zoom/Teams/Meet — we record system
-    // audio regardless of platform; no link just records). `startsAt` is re-emitted
-    // as strict RFC3339 so `api_create_meeting` dates the row to the occurrence
-    // instead of silently falling back to now (specs/0041 WS3 timestamp hygiene).
+    // audio regardless of platform; no link just records). For a calendar-linked
+    // meeting, `startsAt` is re-emitted as strict RFC3339 so `api_create_meeting`
+    // dates the row to the occurrence instead of silently falling back to now
+    // (specs/0041 WS3 timestamp hygiene). For a manual entry recorded ahead of its
+    // own scheduled time, `resolveRecordingStartsAt` sends `now` instead — otherwise
+    // `redate_scheduled_meeting` would file the recording under a day that hasn't
+    // happened yet (specs/0069b followup).
     void joinAndRecord(
       {
         id: calendarEventId,
         title,
         zoomUrl: joinUrl,
-        startsAt: start.toISOString(),
+        startsAt: isManualEntry ? resolveRecordingStartsAt(startsAt, now) : start.toISOString(),
         seriesKey,
       },
       isRecording,

@@ -1,5 +1,6 @@
 //! The meetings repository, split by concern (specs/0042 WS4):
 //! - [`crud`]: single-row create/read/update/delete.
+//! - [`manual`]: manually added meetings (specs/0069 W3).
 //! - [`scheduled`]: the `scheduled`-origin prep-placeholder lifecycle (specs/0036, 0064 W1).
 //! - [`query`]: list shaping, enriched/status rows, pagination, title-based suggestion.
 //! - [`series`]: recurring-series keys, manual links, and prior-occurrence matching.
@@ -8,10 +9,12 @@
 //! importing from `crate::database::repositories::meeting`.
 
 mod crud;
+mod manual;
 mod query;
 mod scheduled;
 mod series;
 
+pub use manual::{is_manual_event_id, MANUAL_EVENT_PREFIX};
 pub use query::{normalize_title, RecentPersonMeeting};
 pub use scheduled::{is_per_occurrence_event_id, ScheduledResolution};
 pub use series::SeriesLinkedMeeting;

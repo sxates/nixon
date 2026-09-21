@@ -7,6 +7,8 @@ import { Summary } from '@/types';
 import { useSidebar } from '@/components/Sidebar/SidebarProvider';
 import { MeetingIdentityHeader } from '@/components/MeetingDetails/MeetingIdentityHeader';
 import { DeleteMeetingDialog } from '@/components/MeetingDetails/DeleteMeetingDialog';
+import { AddMeetingDialog } from '@/components/Today/AddMeetingDialog';
+import { localDateKey } from '@/lib/today-timeline';
 import { ParticipantsPanel } from '@/components/Participants/ParticipantsPanel';
 import { ScheduledRecordControl } from '@/components/MeetingDetails/ScheduledRecordControl';
 import { MeetingOptionsMenu } from '@/components/MeetingDetails/MeetingOptionsMenu';
@@ -135,6 +137,23 @@ export default function PageContent({
   const handleMeetingDeleted = async () => {
     await refetchMeetings();
     router.push('/');
+  };
+
+  // Edit date/time for a manual entry (specs/0069b review fix 2). Only offered while the
+  // row is still a prep placeholder (`origin === 'scheduled'`) — `api_update_manual_meeting`
+  // refuses once it's been recorded, matching the backend's own gate, and at that point
+  // its title/date belong to the meeting page's normal editing (title inline, not this).
+  // `isManualEntry` is backend-computed (calendar_event_id's `nixon-manual:` prefix) so no
+  // prefix literal lives here.
+  const canEditManualMeeting = meeting.isManualEntry === true && meeting.origin === 'scheduled';
+  const [isEditManualDialogOpen, setIsEditManualDialogOpen] = useState(false);
+
+  const handleManualMeetingSaved = async () => {
+    // Reloads meeting metadata (title/created_at/scheduledEndAt/joinUrl) so the edited
+    // time is visible without a reload, and refreshes the sidebar's list in case the
+    // title changed too.
+    await onRefetchTranscripts?.();
+    await onMeetingUpdated?.();
   };
 
   // Continue recording (specs/0037): resume capture INTO this same meeting (same id +
@@ -329,12 +348,14 @@ export default function PageContent({
                 voices={voices}
               />
             </div>
-            {/* Calendar-linked meeting: a compact countdown chip + record button bound to
-                this event (specs/0038 feedback, reworked specs/0041 WS3). For a scheduled
-                occurrence it's "Join & record" / "Start & record" (opens the call when the
-                event has a link); for an already-recorded occurrence (false start) it
-                becomes "Continue recording" via the specs/0037 resume path — same meeting
-                row, never a duplicate. Sits inline next to the "…" menu. */}
+            {/* Calendar-linked (or manual) meeting: a compact countdown chip + record button
+                bound to this event (specs/0038 feedback, reworked specs/0041 WS3). For a
+                scheduled occurrence it's "Join & record" / "Start & record" (opens the call
+                when the event has a link); for an already-recorded occurrence (false start)
+                it becomes "Continue recording" via the specs/0037 resume path — same meeting
+                row, never a duplicate. Sits inline next to the "…" menu. `isManualEntry`
+                lifts the T-5 window entirely for a manually added entry (specs/0069b
+                followup) — its date/time is the user's own choice, not an invite's. */}
             {meeting.calendarEventId && (isScheduled || isRecorded) && (
               <ScheduledRecordControl
                 meetingId={meeting.id}
@@ -345,11 +366,14 @@ export default function PageContent({
                 origin={isScheduled ? 'scheduled' : 'recorded'}
                 hasTranscripts={(totalCount ?? meeting.transcripts?.length ?? 0) > 0}
                 folderPath={meeting.folder_path ?? null}
+                isManualEntry={meeting.isManualEntry === true}
               />
             )}
             <MeetingOptionsMenu
               canContinueRecording={canContinueRecording}
               onContinueRecording={handleContinueRecording}
+              canEditManualMeeting={canEditManualMeeting}
+              onEditManualMeeting={() => setIsEditManualDialogOpen(true)}
               onDelete={() => setIsDeleteDialogOpen(true)}
             />
           </div>
@@ -366,6 +390,26 @@ export default function PageContent({
             meetingTitle={meetingData.meetingTitle}
             onDeleted={handleMeetingDeleted}
           />
+
+          {/* specs/0069b review fix 2 — same dialog the Today timeline uses to add/edit a
+              manual meeting, in its `editing` mode. `created_at` carries the occurrence
+              START for a scheduled row (never a creation timestamp), so that's what seeds
+              `startsAt` here, exactly as the Today timeline reads it. */}
+          {canEditManualMeeting && (
+            <AddMeetingDialog
+              open={isEditManualDialogOpen}
+              onOpenChange={setIsEditManualDialogOpen}
+              defaultDateKey={localDateKey(new Date(meeting.created_at))}
+              editing={{
+                meetingId: meeting.id,
+                title: meetingData.meetingTitle,
+                startsAt: meeting.created_at,
+                endsAt: meeting.scheduledEndAt ?? null,
+                joinUrl: meeting.joinUrl ?? null,
+              }}
+              onSaved={handleManualMeetingSaved}
+            />
+          )}
 
           {/* Participant roster (specs/0017) — the invited/known people for this
               meeting, seeded from the calendar event and hand-curatable. Distinct

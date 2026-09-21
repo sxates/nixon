@@ -11,6 +11,8 @@ import {
   layoutTimeline,
   itemVisualState,
   canJoinItem,
+  canEditManualItem,
+  canRecordManualItem,
   dayLabel,
   type TimelineBounds,
   type TimelineContext,
@@ -29,6 +31,9 @@ interface DayTimelineProps {
   onSelect: (item: DayAgendaItem) => void;
   onJoin: (item: DayAgendaItem) => void;
   onHide: (item: DayAgendaItem) => void;
+  onEdit: (item: DayAgendaItem) => void;
+  onDelete: (item: DayAgendaItem) => void;
+  onRecord: (item: DayAgendaItem) => void;
 }
 
 /**
@@ -46,6 +51,9 @@ export function DayTimeline({
   onSelect,
   onJoin,
   onHide,
+  onEdit,
+  onDelete,
+  onRecord,
 }: DayTimelineProps) {
   // Only the today view carries a now-line, so only it stretches the grid to the current
   // hour; a navigated day fits just its own items (specs/0038 WS4).
@@ -126,9 +134,14 @@ export function DayTimeline({
               !item.meetingId &&
               ctx.recordingThisId !== item.id
             }
+            canEdit={canEditManualItem(item)}
+            canRecord={canRecordManualItem(item, ctx)}
             onSelect={onSelect}
             onJoin={onJoin}
             onHide={onHide}
+            onEdit={onEdit}
+            onDelete={onDelete}
+            onRecord={onRecord}
           />
         ))}
 

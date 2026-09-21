@@ -1,6 +1,6 @@
 'use client';
 
-import { MoreHorizontal, EyeOff } from 'lucide-react';
+import { MoreHorizontal, EyeOff, Pencil, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -20,8 +20,12 @@ export const LANE_GAP_PX = 6; // horizontal gap between side-by-side (overlappin
  * (see `barClass`) rather than by a coloured glow. The one panel that differs is a
  * calendar event that was never recorded — a dashed outline over nothing, because
  * there is no tape.
+ *
+ * Exported (specs/0069 W4 fix round 1) so `DayList` paints the SAME per-state chrome —
+ * notably the dashed/transparent "no tape" treatment for `past-unrecorded` — instead of
+ * a single hardcoded style that silently drifts from the grid's.
  */
-function blockClasses(state: TimelineVisualState): string {
+export function blockClasses(state: TimelineVisualState): string {
   switch (state) {
     case 'past-unrecorded':
       return 'border-dashed border-border/70 bg-transparent text-muted-foreground';
@@ -40,8 +44,12 @@ function blockClasses(state: TimelineVisualState): string {
   }
 }
 
-/** The 3px spine down the left edge — the block's state colour. `null` = no tape, no bar. */
-function barClass(state: TimelineVisualState): string | null {
+/**
+ * The 3px spine down the left edge — the block's state colour. `null` = no tape, no bar.
+ * Exported so the List presentation (`DayList`, specs/0069 W4) paints the SAME spine
+ * rather than re-deriving its own state→colour mapping.
+ */
+export function barClass(state: TimelineVisualState): string | null {
   switch (state) {
     case 'recording':
       return 'bg-record';
@@ -102,9 +110,16 @@ interface TimelineBlockProps {
   canJoin: boolean;
   /** Unrecorded calendar item — offer "Hide from timeline" (specs/0026 + 0041 WS5). */
   canHide: boolean;
+  /** A manual, unrecorded entry (specs/0069 W3) — offer Edit/Delete in the menu. */
+  canEdit: boolean;
+  /** A manual, unrecorded entry with nothing else recording — offer the Record button. */
+  canRecord: boolean;
   onSelect: (item: DayAgendaItem) => void;
   onJoin: (item: DayAgendaItem) => void;
   onHide: (item: DayAgendaItem) => void;
+  onEdit: (item: DayAgendaItem) => void;
+  onDelete: (item: DayAgendaItem) => void;
+  onRecord: (item: DayAgendaItem) => void;
 }
 
 export function TimelineBlock({
@@ -116,9 +131,14 @@ export function TimelineBlock({
   laneCount,
   canJoin,
   canHide,
+  canEdit,
+  canRecord,
   onSelect,
   onJoin,
   onHide,
+  onEdit,
+  onDelete,
+  onRecord,
 }: TimelineBlockProps) {
   const start = new Date(item.startTime);
   const validStart = !Number.isNaN(start.getTime());
@@ -175,10 +195,22 @@ export function TimelineBlock({
           >
             Join &amp; record
           </Button>
+        ) : canRecord ? (
+          <Button
+            variant="brand"
+            size="xs"
+            onClick={(e) => {
+              e.stopPropagation();
+              onRecord(item);
+            }}
+            className={`flex-shrink-0 ${compact ? 'h-5 px-2 text-[10.5px]' : ''}`}
+          >
+            Record
+          </Button>
         ) : (
           <StateChip state={state} />
         )}
-        {canHide && (
+        {(canHide || canEdit) && (
           /* Hover ⋯ menu (house idiom: All-meetings row options). The wrapper stops
              click/keyboard propagation so opening the menu never routes the block. */
           <span
@@ -198,10 +230,27 @@ export function TimelineBlock({
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem onSelect={() => onHide(item)}>
-                  <EyeOff className="mr-2 h-4 w-4" />
-                  Hide from timeline
-                </DropdownMenuItem>
+                {canEdit && (
+                  <>
+                    <DropdownMenuItem onSelect={() => onEdit(item)}>
+                      <Pencil className="mr-2 h-4 w-4" />
+                      Edit
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onSelect={() => onDelete(item)}
+                      className="text-destructive focus:text-destructive"
+                    >
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      Delete
+                    </DropdownMenuItem>
+                  </>
+                )}
+                {canHide && (
+                  <DropdownMenuItem onSelect={() => onHide(item)}>
+                    <EyeOff className="mr-2 h-4 w-4" />
+                    Hide from timeline
+                  </DropdownMenuItem>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
           </span>

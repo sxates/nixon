@@ -30,6 +30,9 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
   from anywhere, as it always has.
 - **The "update ready" indicator is a restart symbol**, not a second amber lamp identical to
   the queue's directly below it.
+- **Today's header is one button.** Record is gone from it: the transport rail's REC key is
+  always on screen and ⌘⇧R still works from anywhere. New note is gone too. In their place
+  is **Add meeting**.
 
 ### Fixed
 
@@ -41,9 +44,22 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
   whether Nixon could send you notifications: Nixon never asked it. Notifications are now
   built directly on the macOS framework, so the permission is real, the banners appear when
   Nixon is behind another window, and they stay in Notification Center.
+- **Connecting Google Calendar now counts as connecting a calendar.** Today asked only macOS
+  Calendar whether it had access, so anyone using Google — which Nixon has supported as a
+  first-class source for months — was told to connect a calendar forever, with no way to
+  dismiss it. It now recognises either source, and the prompt can be dismissed for good.
 
 ### Added
 
+- **Add a meeting to your day inside Nixon.** A call that is not on your calendar — or that
+  is not on a calendar at all — can be put on Today with a title, a time and an optional
+  join link. Nixon opens it as soon as you add it, so you can start writing prep straight
+  away, and you can change its time or title later from the meeting itself. Record it
+  whenever you are ready — there is no waiting for the clock to catch up — and the prep you
+  wrote comes with it: it becomes that meeting's recording rather than a second, empty one.
+- **A List view for Today**, alongside Day and Week. If you have not connected a calendar,
+  Nixon opens on it — your day as a simple list of what you have added and what you have
+  recorded, instead of an empty hour grid.
 - **Meeting alerts you can act on without opening Nixon.** The alert five minutes before a
   meeting carries a **Prep** button that opens that meeting's Prep tab — five minutes out,
   what you want is to remember what the meeting is for, not to join it yet.

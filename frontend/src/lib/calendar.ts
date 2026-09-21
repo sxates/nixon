@@ -17,6 +17,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { toast } from 'sonner';
 import { getDayAgenda, type DayAgendaItem } from './day-agenda';
+import { getGoogleCalendarStatus } from './googleCalendar';
 
 /** macOS EventKit authorization status, mirrored from the backend. */
 export type CalendarAccessStatus =
@@ -52,6 +53,24 @@ export async function getCalendarAccessStatus(): Promise<CalendarAccessStatus> {
     console.warn('[calendar] getCalendarAccessStatus failed:', err);
     return 'notDetermined';
   }
+}
+
+/**
+ * Whether Nixon has a calendar at all (specs/0069 W4).
+ *
+ * `getCalendarAccessStatus()` is EventKit ONLY, and Today used it alone to decide whether
+ * to nag about connecting a calendar — so a user who connected Google and never granted
+ * EventKit was told forever to connect the calendar they had already connected. Nixon uses
+ * one source at a time; either one counts.
+ */
+export async function isAnyCalendarConnected(): Promise<boolean> {
+  const [eventkit, google] = await Promise.all([
+    getCalendarAccessStatus().catch(() => 'denied' as CalendarAccessStatus),
+    getGoogleCalendarStatus()
+      .then((s) => s.connected)
+      .catch(() => false),
+  ]);
+  return eventkit === 'authorized' || google;
 }
 
 /**
@@ -447,6 +466,27 @@ export async function seedMeetingParticipants(meetingId: string): Promise<void> 
  *   - A second Join & Record click on the same event during the pre-record delay is
  *     a no-op (no duplicate row).
  */
+/**
+ * Decide what `JoinAndRecordEvent.startsAt` should be for a meeting whose Record
+ * button is available before its scheduled start has arrived (manual entries,
+ * specs/0069b followup: the T-5 window is lifted for them so Record is always
+ * there). `api_create_meeting` calls `redate_scheduled_meeting` on whatever
+ * `startsAt` it's given before promoting the row, so threading the future
+ * scheduled start through unconditionally would file a just-made recording
+ * under a day that hasn't happened yet.
+ *
+ * Recording ahead of the scheduled start → dates the row to `now`. Recording at
+ * or after it → keeps dating to the scheduled start (a late join is still dated
+ * to the event's slot, matching Join & Record's calendar behavior, specs/0015).
+ * Originally the Today surface's `handleRecordManual` fix (f8037b9); shared here
+ * so the meeting-details page's always-on manual Record button (specs/0069b
+ * followup) can't drift from it.
+ */
+export function resolveRecordingStartsAt(scheduledStartsAt: string, now: Date): string {
+  const scheduledStart = new Date(scheduledStartsAt);
+  return now.getTime() < scheduledStart.getTime() ? now.toISOString() : scheduledStartsAt;
+}
+
 export async function joinAndRecord(
   event: JoinAndRecordEvent,
   isRecording: boolean,

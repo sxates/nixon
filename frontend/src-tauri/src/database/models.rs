@@ -42,6 +42,19 @@ pub struct MeetingModel {
     #[serde(default)]
     #[sqlx(default)]
     pub processing_mode: Option<String>,
+    /// Manual-entry occurrence end (specs/0069b review fix 2) — set only for a
+    /// Nixon-minted manual scheduled row (`calendar_event_id` prefixed
+    /// `nixon-manual:`); NULL everywhere else. `#[sqlx(default)]` so legacy
+    /// explicit-column SELECTs that predate the column still decode.
+    #[serde(default)]
+    #[sqlx(default)]
+    pub scheduled_end_at: Option<DateTimeUtc>,
+    /// Manual-entry join link (specs/0069b review fix 2) — same scope as
+    /// `scheduled_end_at`. `#[sqlx(default)]` so legacy explicit-column SELECTs
+    /// still decode.
+    #[serde(default)]
+    #[sqlx(default)]
+    pub join_url: Option<String>,
 }
 
 /// Raw row for the enriched meeting-list query (`get_meetings_enriched`).
@@ -94,6 +107,23 @@ pub struct MeetingStatusRow {
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::Type)]
 #[sqlx(transparent)]
 pub struct DateTimeUtc(pub DateTime<Utc>);
+
+/// A manually added meeting's `scheduled`-origin row (specs/0069 W3).
+///
+/// `calendar_event_id` is the Nixon-minted id (`nixon-manual:{uuid}`), not the meeting's
+/// own `id` — later callers (e.g. record-start adoption via `joinAndRecord`) match on
+/// `calendarEventId`, so this field must be selected alongside the row's own `id` or a
+/// manual entry would mint a second meeting on record instead of adopting this prep row.
+#[derive(Debug, Clone, FromRow)]
+pub struct ManualScheduledRow {
+    pub id: String,
+    pub title: String,
+    /// The occurrence START, as for every scheduled row.
+    pub created_at: DateTimeUtc,
+    pub scheduled_end_at: Option<DateTimeUtc>,
+    pub join_url: Option<String>,
+    pub calendar_event_id: String,
+}
 
 impl From<NaiveDateTime> for DateTimeUtc {
     fn from(naive: NaiveDateTime) -> Self {

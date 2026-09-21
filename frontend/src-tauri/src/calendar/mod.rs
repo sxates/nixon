@@ -28,6 +28,7 @@ pub mod commands;
 pub mod day_agenda;
 pub mod eventkit;
 pub mod google;
+pub mod manual_items;
 pub mod zoom_link;
 
 /// Which calendar source is active (specs/0032, single-active-source model):

@@ -154,6 +154,25 @@ pub struct MeetingMetadata {
         skip_serializing_if = "Option::is_none"
     )]
     pub reel_number: Option<i64>,
+    /// Scheduled occurrence end (specs/0069b review fix 2) — this is the DTO the
+    /// meeting-details page actually renders from (`api_get_meeting_metadata`), so this
+    /// is where the edit dialog's fields must live, not `MeetingDetails` alone. Meaningful
+    /// only for a manual scheduled entry; `None` for every other origin.
+    #[serde(
+        rename = "scheduledEndAt",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub scheduled_end_at: Option<String>,
+    /// Join link for the occurrence (specs/0069 W3), same scope as `scheduled_end_at`.
+    #[serde(rename = "joinUrl", default, skip_serializing_if = "Option::is_none")]
+    pub join_url: Option<String>,
+    /// True when `calendar_event_id` is a Nixon-minted manual entry (specs/0069b review
+    /// fix 2). A field rather than a raw `nixon-manual:` prefix check so the identity
+    /// check lives in one place (`is_manual_event_id`) instead of being scattered through
+    /// the frontend.
+    #[serde(rename = "isManualEntry", default)]
+    pub is_manual_entry: bool,
 }
 
 /// Paginated transcripts response with total count

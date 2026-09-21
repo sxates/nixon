@@ -192,7 +192,8 @@ export function itemVisualState(item: DayAgendaItem, ctx: TimelineContext): Time
 
 export type ItemRoute =
   | { kind: 'return' } // this is the live recording → return to /record
-  | { kind: 'open'; meetingId: string } // recorded → /meeting-details
+  | { kind: 'open'; meetingId: string; tab?: 'prep' } // recorded → /meeting-details (`tab`
+  //   set only for an unrecorded manual entry, whose Prep tab opens directly)
   | {
       // an unrecorded calendar occurrence (upcoming, happening-now, or past) → ensure a
       // scheduled row, open its Prep tab. Join & Record is a separate explicit button, not
@@ -204,6 +205,17 @@ export type ItemRoute =
       occurrenceStart: string;
     }
   | { kind: 'none' }; // nothing actionable
+
+/**
+ * URL for an `{ kind: 'open' }` route (specs/0069b followup). The one spot that turns
+ * that route shape into an actual path, so a clicked timeline item and a freshly
+ * created manual meeting land on the identical URL — `tab: 'prep'` for an unrecorded
+ * manual entry, no `tab` otherwise — instead of two call sites hand-building the string
+ * and drifting apart.
+ */
+export function openMeetingUrl(meetingId: string, tab?: 'prep'): string {
+  return tab ? `/meeting-details?id=${meetingId}&tab=${tab}` : `/meeting-details?id=${meetingId}`;
+}
 
 function prepRoute(item: DayAgendaItem): ItemRoute {
   return {
@@ -227,6 +239,16 @@ function prepRoute(item: DayAgendaItem): ItemRoute {
 export function routeForItem(item: DayAgendaItem, ctx: TimelineContext): ItemRoute {
   const { recordingThisId } = ctx;
   if (recordingThisId && item.id === recordingThisId) return { kind: 'return' };
+
+  // A manual entry's `meetingId` is set from the moment it's created — it IS a
+  // meeting row, not something the click has to ensure into existence — so the
+  // `item.meetingId` branch below would otherwise fire immediately and open its
+  // (empty) details instead of letting you prep it. Route to Prep directly (no
+  // `api_ensure_scheduled_meeting` round-trip) until it's actually been recorded, at
+  // which point it falls through to the ordinary details route (specs/0069 W3).
+  if (item.source === 'manual' && item.meetingId && !item.status.recorded) {
+    return { kind: 'open', meetingId: item.meetingId, tab: 'prep' };
+  }
 
   // Anything already recorded → its details.
   if (item.meetingId) return { kind: 'open', meetingId: item.meetingId };
@@ -253,6 +275,38 @@ export function canJoinItem(item: DayAgendaItem, ctx: TimelineContext): boolean 
     isRecordingThis: false,
     anyRecordingInProgress: isRecording,
   });
+}
+
+/**
+ * Whether a timeline item can be edited or deleted in place (specs/0069 W3): a
+ * manually added entry (no calendar event, no recording behind it) that hasn't been
+ * recorded yet. The backend refuses to edit/delete a manual row once it's been
+ * recorded — "edit it from the meeting page instead" — so the menu shouldn't offer
+ * an action it knows will be rejected.
+ */
+export function canEditManualItem(item: DayAgendaItem): boolean {
+  return item.source === 'manual' && !item.status.recorded;
+}
+
+/**
+ * Whether a timeline item should show an explicit "Record" button (specs/0069 W3): a
+ * manual entry, not yet recorded, with no recording already in progress anywhere.
+ *
+ * No phase gate (fix round 2, specs/0069 followup a): this used to require the "now"
+ * phase, which left an entry scheduled more than `PRE_START_GRACE_MS` out with NO way to
+ * record it against its own row — the only visible affordance was the transport rail's
+ * REC key, which creates an unrelated ad-hoc meeting and strands the entry's prep. The
+ * gate existed because pressing Record threaded the entry's *scheduled* start through
+ * `joinAndRecord` unconditionally, and the backend (`meetings/commands.rs`) calls
+ * `redate_scheduled_meeting` to that occurrence before promoting the row — recording a
+ * future entry would have re-dated it forward and filed the recording under a day that
+ * hasn't happened yet. `handleRecordManual` (in `page.tsx`) now sends the actual `now`
+ * as the start when recording early, and only the scheduled start once it has passed
+ * (matching Join & Record's calendar behavior, specs/0015) — so recording early can no
+ * longer misdate the row, and a manual entry can offer Record from the moment it exists.
+ */
+export function canRecordManualItem(item: DayAgendaItem, ctx: TimelineContext): boolean {
+  return item.source === 'manual' && !item.status.recorded && !ctx.isRecording;
 }
 
 // ---------------------------------------------------------------------------

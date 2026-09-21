@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { Sparkles } from 'lucide-react';
+import { Plus, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { SearchMeetingsButton } from '@/components/CommandPalette/SearchMeetingsButton';
 import { ProcessMeetingsButton } from '@/components/DeferredBacklog/ProcessMeetingsButton';
@@ -19,13 +19,11 @@ interface TodayHeaderProps {
   now: Date;
   /** Summary line under the greeting — reflects the day (or week) in view. */
   daySummary: string;
-  isRecording: boolean;
-  onNewNote: () => void;
-  onRecord: () => void;
+  onAddMeeting: () => void;
 }
 
-/** Today header — greeting + day summary, ⌘K search, Ask AI, New note, Record. */
-export function TodayHeader({ now, daySummary, isRecording, onNewNote, onRecord }: TodayHeaderProps) {
+/** Today header — greeting + day summary, ⌘K search, Ask AI, Add meeting. */
+export function TodayHeader({ now, daySummary, onAddMeeting }: TodayHeaderProps) {
   const router = useRouter();
   return (
     <PageHeader
@@ -44,18 +42,9 @@ export function TodayHeader({ now, daySummary, isRecording, onNewNote, onRecord 
             <span>Ask AI</span>
           </button>
           <ProcessMeetingsButton />
-          <Button variant="outline" onClick={onNewNote} className="gap-2">
-            <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40" aria-hidden="true" />
-            New note
-          </Button>
-          <Button variant="brand" onClick={onRecord} className="gap-2" disabled={isRecording}>
-            <span className="h-2 w-2 rounded-full bg-brand-foreground" aria-hidden="true" />
-            {isRecording ? 'Recording…' : 'Record'}
-            {!isRecording && (
-              <kbd className="ml-1 rounded bg-brand-foreground/20 px-1.5 py-0.5 font-mono text-[10px] font-medium tracking-wide">
-                ⌘⇧R
-              </kbd>
-            )}
+          <Button variant="brand" onClick={onAddMeeting} className="gap-2">
+            <Plus className="h-[13px] w-[13px]" aria-hidden="true" />
+            Add meeting
           </Button>
         </>
       }

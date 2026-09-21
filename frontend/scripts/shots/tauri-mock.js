@@ -25,6 +25,10 @@
 //     the restart/download glyph instead of rendering nothing (specs/0069 review, fix
 //     round 2: no route staged one, so the restart glyph — and the row-geometry fix next
 //     to it — appeared in no screenshot at all). Omit for the normal no-update case.
+//   calendar=none — force EventKit to "not determined" (Google is already disconnected
+//     in every fixture) so a route can capture the genuine no-calendar-connected state:
+//     Today defaults to List, and the connect-calendar nudge shows above it (specs/0069
+//     W4). Omit for the normal "EventKit authorized" case every other route assumes.
 (function () {
   const q = new URLSearchParams(location.search);
 
@@ -43,6 +47,7 @@
   }
 
   const updateParam = q.get('update');
+  const calendarParam = q.get('calendar');
 
   // --- Fixture dataset (src-tauri/fixtures/demo), embedded verbatim. ---
   const PEOPLE = [{"id":"person-maya","display_name":"Maya Okafor","email":"maya@halden.example","role":null},{"id":"person-tomas","display_name":"Tomas Lindqvist","email":"tomas@halden.example","role":null},{"id":"person-ines","display_name":"Inès Marchetti","email":"ines@halden.example","role":null},{"id":"person-rafael","display_name":"Rafael Duarte","email":"rafael@halden.example","role":null},{"id":"person-sun","display_name":"Sun Ji-woo","email":"sun@halden.example","role":null},{"id":"person-dele","display_name":"Dele Adeyemi","email":"dele@halden.example","role":null},{"id":"person-greta","display_name":"Greta Voss","email":"greta@halden.example","role":null}];
@@ -342,8 +347,24 @@
         seriesKey: null,
       })),
 
-    // calendar/commands.rs `api_get_calendar_access_status` -> String. No args.
-    api_get_calendar_access_status: () => 'authorized',
+    // calendar/commands.rs `api_get_calendar_access_status` -> String. No args. The
+    // `calendar=none` route flag (see the URL-params doc above) forces "not determined"
+    // so a route can capture the genuine no-calendar-connected state.
+    api_get_calendar_access_status: () => (calendarParam === 'none' ? 'notDetermined' : 'authorized'),
+
+    // calendar/google/commands.rs `api_google_calendar_status` -> GoogleCalendarStatusDto
+    // ({ configured, connected, email, lastSyncedAt, calendars }). Declared explicitly
+    // rather than left to the generic OBJECT_SHAPED_WORDS fallback below — that fallback
+    // happens to answer any command whose name contains the word "status" with `{}`,
+    // which happened to decode as connected:false too, but by accident (specs/0069b
+    // review fix). No fixture ever seeds a Google account, so always disconnected.
+    api_google_calendar_status: () => ({
+      configured: false,
+      connected: false,
+      email: null,
+      lastSyncedAt: null,
+      calendars: [],
+    }),
 
     // diarization/commands.rs `api_diarization_status` -> Option<DiarizationRunStatus>;
     // null means "no run this session" (src/hooks/useDiarization.ts). Args: { meetingId }.

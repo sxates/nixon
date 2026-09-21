@@ -5,6 +5,7 @@
 pub mod calendar_range;
 pub mod commands;
 pub mod discard;
+pub mod manual_commands;
 pub mod view;
 
 pub use commands::*;

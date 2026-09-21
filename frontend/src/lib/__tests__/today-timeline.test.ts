@@ -10,6 +10,8 @@ import {
   itemVisualState,
   routeForItem,
   canJoinItem,
+  canEditManualItem,
+  canRecordManualItem,
   assignLanes,
   layoutTimeline,
   hourLabel,
@@ -58,6 +60,26 @@ const ctx = (over: Partial<TimelineContext> = {}): TimelineContext => ({
   recordingThisId: null,
   ...over,
 });
+
+/** specs/0069 W3 — a manually added timeline entry (no calendar event behind it). */
+function manualItem(
+  partial: Partial<DayAgendaItem> & { id?: string; recorded?: boolean } = {},
+): DayAgendaItem {
+  const { recorded, id = 'meeting-1', ...rest } = partial;
+  return item({
+    id,
+    source: 'manual',
+    meetingId: id,
+    calendarEventId: `nixon-manual:${id}`,
+    status: {
+      recorded: !!recorded,
+      transcribed: false,
+      summarized: false,
+      speakersIdentified: false,
+    },
+    ...rest,
+  });
+}
 
 describe('timelineBounds', () => {
   it('defaults to the 8–18 window when everything fits (and now is inside)', () => {
@@ -287,6 +309,76 @@ describe('routeForItem', () => {
     const now = new Date(2026, 6, 4, 16, 0);
     const it = item({ id: 'evt-past', startTime: iso(9), endTime: iso(10) });
     expect(routeForItem(it, ctx({ now }))).toMatchObject({ kind: 'prep', calendarEventId: 'evt-past' });
+  });
+
+  it('opens a manual entry on its Prep tab, not its details (specs/0069 W3)', () => {
+    const now = new Date(2026, 6, 4, 9, 0);
+    const it = manualItem({ id: 'meeting-1', startTime: iso(14) });
+    expect(routeForItem(it, ctx({ now }))).toEqual({
+      kind: 'open',
+      meetingId: 'meeting-1',
+      tab: 'prep',
+    });
+  });
+
+  it('opens a manual entry that has been recorded on its details (specs/0069 W3)', () => {
+    const now = new Date(2026, 6, 4, 9, 0);
+    const it = manualItem({ id: 'meeting-1', recorded: true });
+    expect(routeForItem(it, ctx({ now }))).toEqual({ kind: 'open', meetingId: 'meeting-1' });
+  });
+});
+
+describe('canEditManualItem (specs/0069 W3)', () => {
+  it('is true for an unrecorded manual entry', () => {
+    expect(canEditManualItem(manualItem())).toBe(true);
+  });
+
+  it('is false once the entry has been recorded — the backend refuses the edit', () => {
+    expect(canEditManualItem(manualItem({ recorded: true }))).toBe(false);
+  });
+
+  it('is false for a calendar event (nothing to edit — it belongs to the calendar)', () => {
+    expect(canEditManualItem(item({ source: 'calendar' }))).toBe(false);
+  });
+});
+
+describe('canRecordManualItem (specs/0069 W3, fix round 1 Finding 1; gate dropped in followup a)', () => {
+  // The default manualItem() runs 10:00–11:00 (from item()'s defaults).
+  const nowDuring = new Date(2026, 6, 4, 10, 30); // inside the window
+  const nowBefore = new Date(2026, 6, 4, 9, 0); // well before start
+
+  it('is true for an unrecorded manual entry in its "now" window when nothing else is recording', () => {
+    expect(canRecordManualItem(manualItem(), ctx({ now: nowDuring }))).toBe(true);
+  });
+
+  it('is true for a manual entry that has not started yet (fix round 2, followup a)', () => {
+    // No phase gate any more: `handleRecordManual` now sends `now` (not the future
+    // scheduled start) as `startsAt` when recording early, so there's no more
+    // `redate_scheduled_meeting`-into-the-future risk this used to guard against. The
+    // only affordance without this button was the transport rail's REC key, which
+    // creates an unrelated ad-hoc meeting and strands the entry's prep.
+    expect(canRecordManualItem(manualItem(), ctx({ now: nowBefore }))).toBe(true);
+  });
+
+  it('is true well outside the old pre-start grace window too', () => {
+    // Starts at 14:00; 13:00 is an hour early — well past the old 5-minute grace.
+    const it2 = manualItem({ startTime: iso(14), endTime: iso(15) });
+    const now = new Date(2026, 6, 4, 13, 0);
+    expect(canRecordManualItem(it2, ctx({ now }))).toBe(true);
+  });
+
+  it('is false once the entry has been recorded', () => {
+    expect(canRecordManualItem(manualItem({ recorded: true }), ctx({ now: nowDuring }))).toBe(false);
+  });
+
+  it('is false while another recording is in progress', () => {
+    expect(canRecordManualItem(manualItem(), ctx({ now: nowDuring, isRecording: true }))).toBe(
+      false,
+    );
+  });
+
+  it('is false for a calendar event even if unrecorded and in its "now" window', () => {
+    expect(canRecordManualItem(item({ source: 'calendar' }), ctx({ now: nowDuring }))).toBe(false);
   });
 });
 

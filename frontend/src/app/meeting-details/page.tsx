@@ -37,6 +37,12 @@ interface MeetingDetailsResponse {
   calendarSeriesKey?: string | null;
   // Archival reel ordinal (specs/0057) — the identity line's "REEL 0412" handle.
   reelNumber?: number;
+  // specs/0069b review fix 2 — manual-entry occurrence end + join link (edit dialog
+  // seed) and whether this row is a manual entry at all. Backend-computed; see
+  // MeetingMetadata in @/types for the prefix-check rationale.
+  scheduledEndAt?: string | null;
+  joinUrl?: string | null;
+  isManualEntry?: boolean;
 }
 
 function MeetingDetailsContent() {
@@ -278,6 +284,9 @@ function MeetingDetailsContent() {
         calendarEventId: metadata.calendarEventId, // scheduled-meeting record binding (specs/0036)
         calendarSeriesKey: metadata.calendarSeriesKey,
         reelNumber: metadata.reelNumber, // specs/0057 — reel label + identity line
+        scheduledEndAt: metadata.scheduledEndAt, // specs/0069b review fix 2 — edit dialog seed
+        joinUrl: metadata.joinUrl,
+        isManualEntry: metadata.isManualEntry,
       });
 
       // Sync with sidebar context

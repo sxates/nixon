@@ -216,7 +216,7 @@ impl MeetingsRepository {
         }
 
         let meeting: Option<MeetingModel> =
-            sqlx::query_as("SELECT id, title, created_at, updated_at, folder_path, origin, calendar_event_id, title_manually_set, template_id, calendar_series_key, processing_mode FROM meetings WHERE id = ?")
+            sqlx::query_as("SELECT id, title, created_at, updated_at, folder_path, origin, calendar_event_id, title_manually_set, template_id, calendar_series_key, processing_mode, scheduled_end_at, join_url FROM meetings WHERE id = ?")
                 .bind(meeting_id)
                 .fetch_optional(pool)
                 .await?;
@@ -523,7 +523,67 @@ async fn delete_meeting_with_transaction(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::database::repositories::meeting::test_support::memory_db;
+    use crate::database::repositories::meeting::test_support::{dt, memory_db};
+
+    /// specs/0069b review fix 2 — `get_meeting_metadata` (the `MeetingModel` read that
+    /// backs `MeetingMetadata`, the DTO the meeting-details page actually renders from)
+    /// must carry `scheduled_end_at`/`join_url`, and `calendar_event_id` must classify
+    /// correctly under `is_manual_event_id` (what `api_get_meeting_metadata` uses to
+    /// compute `is_manual_entry`): `true` for a manual entry, `false` for a
+    /// calendar-backed scheduled row and for a plain recorded meeting.
+    #[tokio::test]
+    async fn get_meeting_metadata_reports_manual_entry_and_its_schedule_fields() {
+        let pool = memory_db().await;
+
+        let manual_id = MeetingsRepository::create_manual_scheduled(
+            &pool,
+            "Call with Sam",
+            dt("2026-09-20T15:00:00Z"),
+            Some(dt("2026-09-20T15:30:00Z")),
+            Some("https://zoom.us/j/1"),
+        )
+        .await
+        .unwrap();
+        let manual = MeetingsRepository::get_meeting_metadata(&pool, &manual_id)
+            .await
+            .unwrap()
+            .expect("manual meeting exists");
+        assert!(crate::database::repositories::meeting::is_manual_event_id(
+            manual.calendar_event_id.as_deref().unwrap_or("")
+        ));
+        assert_eq!(manual.join_url.as_deref(), Some("https://zoom.us/j/1"));
+        assert!(manual.scheduled_end_at.is_some());
+
+        sqlx::query(
+            "INSERT INTO meetings (id, title, created_at, updated_at, origin, calendar_event_id) \
+             VALUES ('m-cal', 'From the calendar', ?1, ?1, 'scheduled', 'gcal:cal/evt_1')",
+        )
+        .bind(dt("2026-09-20T10:00:00Z"))
+        .execute(&pool)
+        .await
+        .unwrap();
+        let calendar_scheduled = MeetingsRepository::get_meeting_metadata(&pool, "m-cal")
+            .await
+            .unwrap()
+            .expect("calendar-backed meeting exists");
+        assert!(
+            !crate::database::repositories::meeting::is_manual_event_id(
+                calendar_scheduled.calendar_event_id.as_deref().unwrap_or("")
+            ),
+            "a calendar-backed scheduled row is not a manual entry"
+        );
+        assert_eq!(calendar_scheduled.join_url, None);
+        assert!(calendar_scheduled.scheduled_end_at.is_none());
+
+        let recorded_id = MeetingsRepository::create_meeting(&pool, None, None, None, None, None)
+            .await
+            .unwrap();
+        let recorded = MeetingsRepository::get_meeting_metadata(&pool, &recorded_id)
+            .await
+            .unwrap()
+            .expect("recorded meeting exists");
+        assert!(recorded.calendar_event_id.is_none());
+    }
 
     /// specs/0029 WS4.3: per-meeting template persistence (the specs/0020 slice).
     #[tokio::test]

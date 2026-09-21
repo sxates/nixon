@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 
 // specs/0057 Task 6 — the timeline block stopped being a glowing rounded card and
 // became a transport-log panel: a hairline `rounded-[3px]` panel whose STATE is
@@ -35,9 +35,14 @@ function renderBlock(state: TimelineVisualState, canJoin = false) {
       laneCount={1}
       canJoin={canJoin}
       canHide={false}
+      canEdit={false}
+      canRecord={false}
       onSelect={vi.fn()}
       onJoin={vi.fn()}
       onHide={vi.fn()}
+      onEdit={vi.fn()}
+      onDelete={vi.fn()}
+      onRecord={vi.fn()}
     />,
   );
   return container;
@@ -100,5 +105,86 @@ describe('TimelineBlock chip text (specs/0057 Task 6)', () => {
   it('a joinable block offers Join & record as a brand button', () => {
     renderBlock('now-joinable', true);
     expect(screen.getByRole('button', { name: 'Join & record' }).className).toContain('bg-brand');
+  });
+});
+
+describe('TimelineBlock manual entry actions (specs/0069 W3)', () => {
+  const manualItem: DayAgendaItem = {
+    ...item,
+    id: 'meeting-1',
+    source: 'manual',
+    meetingId: 'meeting-1',
+    calendarEventId: 'nixon-manual:meeting-1',
+  };
+
+  it('shows a Record button (not Join & record) for a manual, unrecorded entry', () => {
+    const onRecord = vi.fn();
+    const onSelect = vi.fn();
+    render(
+      <TimelineBlock
+        item={manualItem}
+        state="upcoming"
+        top={0}
+        height={60}
+        lane={0}
+        laneCount={1}
+        canJoin={false}
+        canHide={false}
+        canEdit
+        canRecord
+        onSelect={onSelect}
+        onJoin={vi.fn()}
+        onHide={vi.fn()}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+        onRecord={onRecord}
+      />,
+    );
+    const recordButton = screen.getByRole('button', { name: 'Record' });
+    fireEvent.click(recordButton);
+    // The button stops propagation, same treatment as Join & Record — clicking it
+    // must never also fire the block's own onSelect (which would route to Prep).
+    expect(onRecord).toHaveBeenCalledWith(manualItem);
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it('offers Edit and Delete in the ⋯ menu for a manual, unrecorded entry', async () => {
+    const onEdit = vi.fn();
+    const onDelete = vi.fn();
+    render(
+      <TimelineBlock
+        item={manualItem}
+        state="upcoming"
+        top={0}
+        height={60}
+        lane={0}
+        laneCount={1}
+        canJoin={false}
+        canHide={false}
+        canEdit
+        canRecord={false}
+        onSelect={vi.fn()}
+        onJoin={vi.fn()}
+        onHide={vi.fn()}
+        onEdit={onEdit}
+        onDelete={onDelete}
+        onRecord={vi.fn()}
+      />,
+    );
+
+    const trigger = screen.getByRole('button', { name: 'Event options' });
+    trigger.focus();
+    fireEvent.keyDown(trigger, { key: 'Enter' });
+    fireEvent.click(await screen.findByText('Edit'));
+    expect(onEdit).toHaveBeenCalledWith(manualItem);
+
+    trigger.focus();
+    fireEvent.keyDown(trigger, { key: 'Enter' });
+    fireEvent.click(await screen.findByText('Delete'));
+    expect(onDelete).toHaveBeenCalledWith(manualItem);
+
+    // Never "Hide from timeline" — deleting a manual row is the way to get rid of
+    // it, not hiding it (it isn't a calendar event to dismiss).
+    expect(screen.queryByText('Hide from timeline')).not.toBeInTheDocument();
   });
 });
