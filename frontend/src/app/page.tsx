@@ -31,7 +31,7 @@ import { useRecordingState } from '@/contexts/RecordingStateContext';
 import { useTranscripts } from '@/contexts/TranscriptContext';
 import { useSidebar } from '@/components/Sidebar/SidebarProvider';
 import type { DayAgendaItem } from '@/lib/day-agenda';
-import { joinAndRecord } from '@/lib/calendar';
+import { joinAndRecord, resolveRecordingStartsAt } from '@/lib/calendar';
 import {
   routeForItem,
   localDateKey,
@@ -167,11 +167,9 @@ function HomeView() {
   //
   // `startsAt` (fix round 2, specs/0069 followup a): `canRecordManualItem` no longer
   // requires the entry's scheduled start to have arrived, so pressing Record early must
-  // NOT thread the future scheduled start through — `api_create_meeting` would
-  // `redate_scheduled_meeting` the row to that future occurrence before promoting it,
-  // filing the recording you just made under a day that hasn't happened yet. Send the
-  // actual `now` when recording ahead of schedule; once the scheduled start has passed,
-  // keep dating to it, matching Join & Record's calendar behavior (specs/0015).
+  // NOT thread the future scheduled start through — see `resolveRecordingStartsAt`'s
+  // doc comment for why. Shared with the meeting-details page's manual Record button
+  // (specs/0069b followup) so the now-vs-scheduled decision has exactly one implementation.
   const handleRecordManual = useCallback(
     (item: DayAgendaItem) => {
       const calendarEventId = item.calendarEventId;
@@ -183,8 +181,7 @@ function HomeView() {
         toast.error('Could not start recording for this meeting');
         return;
       }
-      const scheduledStart = new Date(item.startTime);
-      const startsAt = now.getTime() < scheduledStart.getTime() ? now.toISOString() : item.startTime;
+      const startsAt = resolveRecordingStartsAt(item.startTime, now);
       void joinAndRecord(
         {
           id: calendarEventId,

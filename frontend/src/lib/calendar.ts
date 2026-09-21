@@ -466,6 +466,27 @@ export async function seedMeetingParticipants(meetingId: string): Promise<void> 
  *   - A second Join & Record click on the same event during the pre-record delay is
  *     a no-op (no duplicate row).
  */
+/**
+ * Decide what `JoinAndRecordEvent.startsAt` should be for a meeting whose Record
+ * button is available before its scheduled start has arrived (manual entries,
+ * specs/0069b followup: the T-5 window is lifted for them so Record is always
+ * there). `api_create_meeting` calls `redate_scheduled_meeting` on whatever
+ * `startsAt` it's given before promoting the row, so threading the future
+ * scheduled start through unconditionally would file a just-made recording
+ * under a day that hasn't happened yet.
+ *
+ * Recording ahead of the scheduled start → dates the row to `now`. Recording at
+ * or after it → keeps dating to the scheduled start (a late join is still dated
+ * to the event's slot, matching Join & Record's calendar behavior, specs/0015).
+ * Originally the Today surface's `handleRecordManual` fix (f8037b9); shared here
+ * so the meeting-details page's always-on manual Record button (specs/0069b
+ * followup) can't drift from it.
+ */
+export function resolveRecordingStartsAt(scheduledStartsAt: string, now: Date): string {
+  const scheduledStart = new Date(scheduledStartsAt);
+  return now.getTime() < scheduledStart.getTime() ? now.toISOString() : scheduledStartsAt;
+}
+
 export async function joinAndRecord(
   event: JoinAndRecordEvent,
   isRecording: boolean,

@@ -348,12 +348,14 @@ export default function PageContent({
                 voices={voices}
               />
             </div>
-            {/* Calendar-linked meeting: a compact countdown chip + record button bound to
-                this event (specs/0038 feedback, reworked specs/0041 WS3). For a scheduled
-                occurrence it's "Join & record" / "Start & record" (opens the call when the
-                event has a link); for an already-recorded occurrence (false start) it
-                becomes "Continue recording" via the specs/0037 resume path — same meeting
-                row, never a duplicate. Sits inline next to the "…" menu. */}
+            {/* Calendar-linked (or manual) meeting: a compact countdown chip + record button
+                bound to this event (specs/0038 feedback, reworked specs/0041 WS3). For a
+                scheduled occurrence it's "Join & record" / "Start & record" (opens the call
+                when the event has a link); for an already-recorded occurrence (false start)
+                it becomes "Continue recording" via the specs/0037 resume path — same meeting
+                row, never a duplicate. Sits inline next to the "…" menu. `isManualEntry`
+                lifts the T-5 window entirely for a manually added entry (specs/0069b
+                followup) — its date/time is the user's own choice, not an invite's. */}
             {meeting.calendarEventId && (isScheduled || isRecorded) && (
               <ScheduledRecordControl
                 meetingId={meeting.id}
@@ -364,6 +366,7 @@ export default function PageContent({
                 origin={isScheduled ? 'scheduled' : 'recorded'}
                 hasTranscripts={(totalCount ?? meeting.transcripts?.length ?? 0) > 0}
                 folderPath={meeting.folder_path ?? null}
+                isManualEntry={meeting.isManualEntry === true}
               />
             )}
             <MeetingOptionsMenu
