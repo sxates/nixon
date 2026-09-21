@@ -19,38 +19,23 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 ## [Unreleased]
 
-### Changed
-
-- **Opening the sidebar no longer rearranges it.** The icons stay exactly where they are,
-  at the size the collapsed rail shows them; expanding just widens the panel and reveals the
-  labels. The reel mark now stays put too, rather than being swapped for the wordmark, and
-  the line above Settings is gone.
-- **Import audio moved** out of the sidebar's navigation and into the All meetings header,
-  where an imported recording actually lands. Dropping an audio file onto the window works
-  from anywhere, as it always has.
-- **The "update ready" indicator is a restart symbol**, not a second amber lamp identical to
-  the queue's directly below it.
-- **Today's header is one button.** Record is gone from it: the transport rail's REC key is
-  always on screen and ⌘⇧R still works from anywhere. New note is gone too. In their place
-  is **Add meeting**.
-
-### Fixed
-
-- **macOS notifications work.** Nixon has offered to alert you before a meeting starts, and
-  when it spots a call you might want to record, since well before this release — and not
-  one of those alerts could ever reach you. The notification library it used has no action
-  buttons on macOS, reported permission as granted without ever asking the system, and
-  delivered through an interface Apple retired years ago. That is why macOS never asked
-  whether Nixon could send you notifications: Nixon never asked it. Notifications are now
-  built directly on the macOS framework, so the permission is real, the banners appear when
-  Nixon is behind another window, and they stay in Notification Center.
-- **Connecting Google Calendar now counts as connecting a calendar.** Today asked only macOS
-  Calendar whether it had access, so anyone using Google — which Nixon has supported as a
-  first-class source for months — was told to connect a calendar forever, with no way to
-  dismiss it. It now recognises either source, and the prompt can be dismissed for good.
-
 ### Added
 
+- **Join and start recording in one click.** When a meeting starts, Nixon sends an alert
+  carrying **Join & Record**: one press opens the call *and* starts a recording filed
+  against that meeting, without switching to Nixon to press record. When the meeting has no
+  link to join it offers plain **Record**, and it stays quiet while you are already
+  recording.
+- **A heads-up five minutes before**, carrying **Prep** — it opens that meeting's Prep tab,
+  because five minutes out what you want is to remember what the meeting is for, not to
+  join it yet.
+- **Record straight from the "meeting detected" alert** when Nixon spots a call you might
+  want to capture, instead of only bringing Nixon forward.
+- **A banner when a recording starts and stops**, while Nixon is behind another window —
+  the one clear sign that the recording is running.
+- **Notification settings** in Settings → General: whether macOS is letting Nixon notify
+  you, a way to grant it, a route into System Settings, and a **Send a test** button. macOS
+  will ask your permission the first time Nixon has something to tell you.
 - **Add a meeting to your day inside Nixon.** A call that is not on your calendar — or that
   is not on a calendar at all — can be put on Today with a title, a time and an optional
   join link. Nixon opens it as soon as you add it, so you can start writing prep straight
@@ -60,27 +45,28 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 - **A List view for Today**, alongside Day and Week. If you have not connected a calendar,
   Nixon opens on it — your day as a simple list of what you have added and what you have
   recorded, instead of an empty hour grid.
-- **Meeting alerts you can act on without opening Nixon.** The alert five minutes before a
-  meeting carries a **Prep** button that opens that meeting's Prep tab — five minutes out,
-  what you want is to remember what the meeting is for, not to join it yet.
-- **A second alert as the meeting actually starts**, carrying **Join & Record**: one press
-  opens the call *and* starts a recording filed against that meeting, with Nixon staying
-  where it is — you are not sent to another window to press record again. Five minutes of warning is
-  the wrong amount when you get absorbed in something else, so this one replaces the earlier
-  banner rather than adding to it. It stays quiet if you are already recording, and offers
-  plain **Record** when the meeting has no link to join.
-- **A Record button on the "meeting detected" alert**, which starts the recording from the
-  banner instead of only bringing Nixon forward.
-- **Settings → General → Notifications** now shows whether macOS is letting Nixon notify
-  you, with a way to grant it, a way into System Settings if you have turned it off, and a
-  **Send a test** button.
-- **A banner when a recording starts and stops** — but only while Nixon is behind another
-  window, where it is the one sign that the recording is running.
-- **Restarting to update now asks first**, and says what it is about to do: which version you
-  are on, which one you are getting, and that Nixon will close and reopen. It used to happen
-  on the click, with no warning.
+- **Restarting to update asks first**, and says what it is about to do: which version you
+  are on, which one you are getting, and that Nixon will close and reopen.
 - **Nixon tells you when it has updated.** The first time you open the new version it shows
   what changed, once.
+
+### Changed
+
+- **The sidebar keeps its layout when you open it.** The icons stay exactly where they are,
+  at the size the collapsed rail shows them; expanding widens the panel and reveals the
+  labels. The reel mark stays put, beside the NIXON wordmark.
+- **Import audio lives in the All meetings header**, where an imported recording lands.
+  Dropping an audio file onto the window works from anywhere, as it always has.
+- **The update indicator is a restart symbol**, so it reads at a glance as "relaunch to
+  update" rather than as another status lamp.
+- **Today's header is one button — Add meeting.** Recording stays where it always is: the
+  transport rail's REC key, and ⌘⇧R from anywhere.
+
+### Fixed
+
+- **Today recognises Google Calendar as your calendar.** If Google is your source, Today
+  treats you as connected instead of asking you to connect one — and the prompt can be
+  dismissed for good.
 
 ### Internal
 
