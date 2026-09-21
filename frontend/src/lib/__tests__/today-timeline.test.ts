@@ -342,26 +342,28 @@ describe('canEditManualItem (specs/0069 W3)', () => {
   });
 });
 
-describe('canRecordManualItem (specs/0069 W3, fix round 1 Finding 1)', () => {
+describe('canRecordManualItem (specs/0069 W3, fix round 1 Finding 1; gate dropped in followup a)', () => {
   // The default manualItem() runs 10:00–11:00 (from item()'s defaults).
-  const nowDuring = new Date(2026, 6, 4, 10, 30); // inside the window → "now"
-  const nowBefore = new Date(2026, 6, 4, 9, 0); // well before start → "upcoming"
+  const nowDuring = new Date(2026, 6, 4, 10, 30); // inside the window
+  const nowBefore = new Date(2026, 6, 4, 9, 0); // well before start
 
   it('is true for an unrecorded manual entry in its "now" window when nothing else is recording', () => {
     expect(canRecordManualItem(manualItem(), ctx({ now: nowDuring }))).toBe(true);
   });
 
-  it('is false for a manual entry that has not started yet — mirrors canJoinItem\'s phase gate', () => {
-    // Recording now would `redate_scheduled_meeting` this row to a future occurrence
-    // (meetings/commands.rs) before promoting it — filing today's recording under a day
-    // that hasn't happened yet. Same gate Join & Record already applies to calendar events.
-    expect(canRecordManualItem(manualItem(), ctx({ now: nowBefore }))).toBe(false);
+  it('is true for a manual entry that has not started yet (fix round 2, followup a)', () => {
+    // No phase gate any more: `handleRecordManual` now sends `now` (not the future
+    // scheduled start) as `startsAt` when recording early, so there's no more
+    // `redate_scheduled_meeting`-into-the-future risk this used to guard against. The
+    // only affordance without this button was the transport rail's REC key, which
+    // creates an unrelated ad-hoc meeting and strands the entry's prep.
+    expect(canRecordManualItem(manualItem(), ctx({ now: nowBefore }))).toBe(true);
   });
 
-  it('is true inside the pre-start grace window, same as canJoinItem', () => {
-    // Starts at 14:00; PRE_START_GRACE_MS opens "now" 5 minutes early.
+  it('is true well outside the old pre-start grace window too', () => {
+    // Starts at 14:00; 13:00 is an hour early — well past the old 5-minute grace.
     const it2 = manualItem({ startTime: iso(14), endTime: iso(15) });
-    const now = new Date(2026, 6, 4, 13, 57);
+    const now = new Date(2026, 6, 4, 13, 0);
     expect(canRecordManualItem(it2, ctx({ now }))).toBe(true);
   });
 

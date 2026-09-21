@@ -66,6 +66,11 @@ const manualItem = {
   calendarEventId: 'nixon-manual:meeting-1',
 };
 
+// Mutable so individual tests can move "now" relative to the manual item's 15:00–15:30
+// window (fix round 2, specs/0069 followup a: `handleRecordManual`'s `startsAt` choice
+// depends on whether `now` is before or after the scheduled start). Reset in beforeEach.
+let mockNow = new Date('2026-09-20T15:10:00.000Z');
+
 // `useDayAgenda` is mocked directly (rather than driven through `invoke`) so the test
 // stays focused on the click → `joinAndRecord` wiring in `handleRecordManual`, not on
 // the agenda-loading hook (covered elsewhere).
@@ -75,10 +80,10 @@ vi.mock('@/hooks/useDayAgenda', () => ({
     visibleItems: [manualItem],
     calendarStatus: 'granted',
     loaded: true,
-    // Inside the manual item's 15:00–15:30 window — Record is phase-gated (fix round 1
-    // Finding 1), same as Join & Record, so `now` must land in the item's "now" window
-    // for the button to render at all.
-    now: new Date('2026-09-20T15:10:00.000Z'),
+    // canRecordManualItem no longer phase-gates Record (fix round 2), so this only
+    // matters for the startsAt tests below — it can sit anywhere relative to the
+    // manual item's window and Record still renders.
+    now: mockNow,
     viewDate: '2026-09-20',
     viewMode: 'day',
     viewIsToday: true,
@@ -118,6 +123,7 @@ beforeEach(() => {
     return Promise.resolve(undefined);
   });
   window.sessionStorage.clear();
+  mockNow = new Date('2026-09-20T15:10:00.000Z');
 });
 
 describe('recording a manual entry (specs/0069 W3)', () => {
@@ -184,6 +190,49 @@ describe('edit → close → add (specs/0069 W3, fix round 1 Finding 2)', () => 
     expect(invokeMock).not.toHaveBeenCalledWith(
       'api_update_manual_meeting',
       expect.anything(),
+    );
+  });
+});
+
+describe('handleRecordManual startsAt (fix round 2, specs/0069 followup a)', () => {
+  // The manual item is scheduled 15:00–15:30 UTC.
+
+  it('offers Record on a manual entry scheduled well in the future (no phase gate)', async () => {
+    mockNow = new Date('2026-09-20T14:00:00.000Z'); // an hour before the 15:00 start
+    render(<Home />);
+    expect(await screen.findByRole('button', { name: 'Record' })).toBeInTheDocument();
+  });
+
+  it('sends roughly now — not the future scheduled start — as startedAt when recording early', async () => {
+    mockNow = new Date('2026-09-20T14:00:00.000Z'); // an hour before the 15:00 start
+    render(<Home />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Record' }));
+
+    await waitFor(() => {
+      const call = invokeMock.mock.calls.find(([cmd]) => cmd === 'api_create_meeting');
+      expect(call).toBeDefined();
+    });
+    const call = invokeMock.mock.calls.find(([cmd]) => cmd === 'api_create_meeting');
+    const startedAt = (call?.[1] as { startedAt?: string } | undefined)?.startedAt;
+    expect(startedAt).toBeTruthy();
+    // NOT the item's scheduled 15:00 start.
+    expect(startedAt).not.toBe(manualItem.startTime);
+    // Within a few seconds of the mocked "now".
+    expect(Math.abs(new Date(startedAt as string).getTime() - mockNow.getTime())).toBeLessThan(5000);
+  });
+
+  it('sends the scheduled start as startedAt once it has already passed', async () => {
+    mockNow = new Date('2026-09-20T16:00:00.000Z'); // 30 min after the window ended
+    render(<Home />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Record' }));
+
+    await waitFor(() =>
+      expect(invokeMock).toHaveBeenCalledWith(
+        'api_create_meeting',
+        expect.objectContaining({ startedAt: manualItem.startTime }),
+      ),
     );
   });
 });

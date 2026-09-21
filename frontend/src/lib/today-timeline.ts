@@ -281,21 +281,21 @@ export function canEditManualItem(item: DayAgendaItem): boolean {
  * Whether a timeline item should show an explicit "Record" button (specs/0069 W3): a
  * manual entry, not yet recorded, with no recording already in progress anywhere.
  *
- * Gated to the "now" phase — the SAME `itemPhase` check `canJoinItem` uses (including
- * its pre-start grace) — deliberately, not merely for visual consistency: pressing
- * Record threads `item.startTime` through `joinAndRecord` as `startedAt`, and the
- * backend (`meetings/commands.rs`) calls `redate_scheduled_meeting` to that occurrence
- * BEFORE promoting the row to recorded. Recording a future manual entry wouldn't just
- * show a stale date — it would re-date the row forward and file the recording you just
- * made under a day that hasn't happened yet, sorting it ahead of "now" in every
- * date-keyed view. A calendar event can't do this because Join & Record is already
- * phase-gated; a manual entry must not be the one affordance that can. Recording right
- * now regardless of any scheduled slot is still one press away via the transport
- * rail's REC key — it just isn't filed against a future date.
+ * No phase gate (fix round 2, specs/0069 followup a): this used to require the "now"
+ * phase, which left an entry scheduled more than `PRE_START_GRACE_MS` out with NO way to
+ * record it against its own row — the only visible affordance was the transport rail's
+ * REC key, which creates an unrelated ad-hoc meeting and strands the entry's prep. The
+ * gate existed because pressing Record threaded the entry's *scheduled* start through
+ * `joinAndRecord` unconditionally, and the backend (`meetings/commands.rs`) calls
+ * `redate_scheduled_meeting` to that occurrence before promoting the row — recording a
+ * future entry would have re-dated it forward and filed the recording under a day that
+ * hasn't happened yet. `handleRecordManual` (in `page.tsx`) now sends the actual `now`
+ * as the start when recording early, and only the scheduled start once it has passed
+ * (matching Join & Record's calendar behavior, specs/0015) — so recording early can no
+ * longer misdate the row, and a manual entry can offer Record from the moment it exists.
  */
 export function canRecordManualItem(item: DayAgendaItem, ctx: TimelineContext): boolean {
-  if (item.source !== 'manual' || item.status.recorded || ctx.isRecording) return false;
-  return itemPhase(item, ctx.now, ctx.recordingThisId) === 'now';
+  return item.source === 'manual' && !item.status.recorded && !ctx.isRecording;
 }
 
 // ---------------------------------------------------------------------------

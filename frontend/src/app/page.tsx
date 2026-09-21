@@ -164,6 +164,14 @@ function HomeView() {
   // instead of a second, empty meeting appearing beside it. The manual item's own `id`
   // IS its meeting id (not its event id) — passing that instead would match nothing and
   // silently create that second meeting, so this refuses rather than guess.
+  //
+  // `startsAt` (fix round 2, specs/0069 followup a): `canRecordManualItem` no longer
+  // requires the entry's scheduled start to have arrived, so pressing Record early must
+  // NOT thread the future scheduled start through — `api_create_meeting` would
+  // `redate_scheduled_meeting` the row to that future occurrence before promoting it,
+  // filing the recording you just made under a day that hasn't happened yet. Send the
+  // actual `now` when recording ahead of schedule; once the scheduled start has passed,
+  // keep dating to it, matching Join & Record's calendar behavior (specs/0015).
   const handleRecordManual = useCallback(
     (item: DayAgendaItem) => {
       const calendarEventId = item.calendarEventId;
@@ -175,19 +183,21 @@ function HomeView() {
         toast.error('Could not start recording for this meeting');
         return;
       }
+      const scheduledStart = new Date(item.startTime);
+      const startsAt = now.getTime() < scheduledStart.getTime() ? now.toISOString() : item.startTime;
       void joinAndRecord(
         {
           id: calendarEventId,
           title: item.title,
           zoomUrl: item.zoomUrl,
-          startsAt: item.startTime,
+          startsAt,
           seriesKey: null,
         },
         isRecording,
         handleRecordingToggle,
       );
     },
-    [isRecording, handleRecordingToggle],
+    [isRecording, handleRecordingToggle, now],
   );
 
   const handleEditManual = useCallback((item: DayAgendaItem) => setEditingItem(item), []);
