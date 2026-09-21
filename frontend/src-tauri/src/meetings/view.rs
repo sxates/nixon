@@ -168,8 +168,9 @@ pub struct MeetingMetadata {
     #[serde(rename = "joinUrl", default, skip_serializing_if = "Option::is_none")]
     pub join_url: Option<String>,
     /// True when `calendar_event_id` is a Nixon-minted manual entry (specs/0069b review
-    /// fix 2) — see `MeetingDetails::is_manual_entry` for why this is a field rather than
-    /// a raw prefix check.
+    /// fix 2). A field rather than a raw `nixon-manual:` prefix check so the identity
+    /// check lives in one place (`is_manual_event_id`) instead of being scattered through
+    /// the frontend.
     #[serde(rename = "isManualEntry", default)]
     pub is_manual_entry: bool,
 }
