@@ -76,16 +76,15 @@ _(nothing yet)_
 
 _Not shown in release notes or the in-app updater (see `release.sh`)._
 
-- specs/0068 replaces the specs/0008 notification path with a native
+- Replaces the previous notification path with a native
   `UNUserNotificationCenter` layer (`notifications/macos/`, objc2-user-notifications 0.3):
   capability gate, authorization, delivery, and a `define_class!` delegate that emits
   `notification-action`. The bundle gate matters — `currentNotificationCenter` raises an
   uncaught `NSInternalInconsistencyException` outside an `.app`, so `tauri dev` would abort;
   `bundle_gate_holds` covers it and was sabotage-verified.
-- Deletes the 0008 module it replaces (`manager`/`settings`/`system`/`types`/`commands`,
+- Deletes the module it replaces (`manager`/`settings`/`system`/`types`/`commands`,
   ~1,500 lines, 14 registered commands of which the frontend called two) and drops
   `tauri-plugin-notification` and `@tauri-apps/plugin-notification`. Net −413 lines.
-- specs/0067 W3 is superseded: it assumed the action-button plumbing already existed.
 - macOS 26 renders one notification action as a button and hides two or more behind an
   "Options" menu, whatever the notification style; `NSUserNotificationAlertStyle` is
   ignored. Hence one action per category, and two alerts carrying different ones. Measured
@@ -135,15 +134,15 @@ _Not shown in release notes or the in-app updater (see `release.sh`)._
   have argued for deleting the better engine. Parakeet 17.6% vs Whisper medium-q5_0 20.6%;
   against Whisper's actual default (large-v3-turbo) it is 17.6% vs 14.7%, with Whisper also
   faster on this hardware — the default stays Parakeet on size, streaming design and the
-  fact that every figure comes from one M3 Ultra (specs/0067).
+  fact that every figure comes from one M3 Ultra.
 - `patchRecordingPreferences` read-modify-writes the recording-preferences store. Every
   caller used to save the whole object from state loaded at mount, which was safe until
-  devices and recording behaviour ended up on different tabs (specs/0067).
+  devices and recording behaviour ended up on different tabs.
 - A saved summary no longer needs a `transcript_chunks` row to be readable, which is why
-  every `--demo` meeting showed "No Summary Generated Yet" (specs/0066).
+  every `--demo` meeting showed "No Summary Generated Yet".
 - README requirements now state measured hardware expectations: peak memory per summary
   model, model download sizes, ~250 MB per recorded hour, and that a base M1 summarises an
-  hour-long meeting in about a minute (specs/0066).
+  hour-long meeting in about a minute.
 
 ## [0.6.0] - 2026-09-19
 
@@ -191,24 +190,23 @@ _Not shown in release notes or the in-app updater (see `release.sh`)._
 - Tauri copies `templates/*.json` into `target/<profile>/templates/` and never prunes, so a
   template deleted from source kept being served by dev builds — the Psychiatric Session
   template was still listed as hidden two specs after its removal. `build.rs` now deletes
-  staged templates the source dir no longer has (specs/0066).
+  staged templates the source dir no longer has.
 - `tests/import_audio.rs` runs a real file through the whole import path (model-gated,
   skips without a Whisper model). Writing it found that `get_or_init_whisper` never did the
-  "or init" half, so import failed where live transcription self-healed (specs/0066).
+  "or init" half, so import failed where live transcription self-healed.
 - The screenshot mock now rejects debug-only commands (`dev_get_flags` and friends) instead
-  of resolving everything, so shots show the release build's UI (specs/0066).
+  of resolving everything, so shots show the release build's UI.
 - A saved summary no longer has to have a `transcript_chunks` row to be readable.
   `get_summary_data_for_meeting` joined that table, which is written only by the summary
   *generation* path — so a summary that arrived any other way was invisible to the app
   holding it. Every meeting in the demo dataset was in that state, which is why `--demo`
   showed five meetings with no summaries. No real meeting is affected (a generated summary
-  always writes chunks; checked against a production profile), so this is dev-visible only
-  (specs/0066).
+  always writes chunks; checked against a production profile), so this is dev-visible only.
 - The README's real-window screenshots are regenerated for the release: the debug-only
   Developer tab is hidden during captures (`data-dev-only` + the existing `data-shot`
   mechanism), the meeting routes wait long enough for their content, and the stale
-  TapeCounter ignore rect — left pointing at the old rail layout by specs/0064 — moved to
-  where the counter actually is (specs/0066).
+  TapeCounter ignore rect — left pointing at the old rail layout — moved to
+  where the counter actually is.
 
 ## [0.5.0] - 2026-09-18
 
@@ -260,7 +258,7 @@ _Not shown in release notes or the in-app updater (see `release.sh`)._
   files now share a single shrinking *excess* budget, so a small justified addition is
   possible without a refactor first, and splitting a large file now reduces the budget rather
   than merely being permitted. `scripts/file-size-allowlist.txt` is replaced by
-  `scripts/file-size-tracked.txt` plus `scripts/file-size-budget.txt` (specs/0065).
+  `scripts/file-size-tracked.txt` plus `scripts/file-size-budget.txt`.
 - The orphaned prep-only retry path (`api_llm_activity_retry` and its unused frontend half)
   is deleted; `llm_activity::retry::retry_task` is the only retry path.
 
@@ -312,10 +310,10 @@ _Not shown in release notes or the in-app updater (see `release.sh`)._
 _Not shown in release notes or the in-app updater (see `release.sh`)._
 
 - Dev-only fixture seeding (`--demo`), onboarding harness (`--onboarding`) and a Developer
-  section in Settings › Beta; debug builds only (specs/0059).
+  section in Settings › Beta; debug builds only.
 - Screenshot pipeline: `pnpm shots` (headless, both themes), `pnpm shots:diff` (contact
   sheet), `pnpm shots:real` (real window via a debug-only control listener); README
-  screenshots (specs/0060).
+  screenshots.
 - The headless screenshot mock is generated from the fixture dataset (`pnpm shots:mock`).
 - A `--demo` profile is now fully synthetic. The fixture seeder re-seeded meetings and
   people but left the Google Calendar cache alone, so a connected account's real events,
@@ -323,12 +321,11 @@ _Not shown in release notes or the in-app updater (see `release.sh`)._
   real screenshot run. The demo seed now also clears the cached events, attendee photos,
   dismissed events and briefs (and resets the sync tokens so the next non-demo launch
   does a full re-sync), and calendar sync is suppressed at source while the demo dataset
-  is active. The connected account is kept, so no re-authentication is needed
-  (specs/0059, specs/0060).
+  is active. The connected account is kept, so no re-authentication is needed.
 - `pnpm shots:real` can capture the live-recording screen again: the debug control
   listener started recordings through the explicit-devices path with no devices, which
   could only ever fail with "No audio streams could be created". It now uses the same
-  default-device resolution a recording started from the UI uses (specs/0060).
+  default-device resolution a recording started from the UI uses.
 
 ## [0.3.1] - 2026-09-16
 
@@ -461,13 +458,13 @@ _Not shown in release notes or the in-app updater (see `release.sh`)._
 - Rebrand touched script names (`dev-nixon.sh`, `upgrade-nixon.sh`), DMG/app bundle names,
   and the Google OAuth build variables (`NIXON_GOOGLE_CLIENT_ID` /
   `NIXON_GOOGLE_CLIENT_SECRET` in the gitignored `.env.google`). The bundle identifier
-  `ai.vinyl.app` is unchanged (specs/0057).
+  `ai.vinyl.app` is unchanged.
 - The backend `recording-level` event gains `mic` / `sys` `{ rms, peak }` objects alongside
   the unchanged mixed pair (the rail ladder still reads the mix). The live meter feed moved
-  out of `audio/pipeline.rs` into a unit-tested `audio/live_meter.rs` (specs/0057 §3.2).
+  out of `audio/pipeline.rs` into a unit-tested `audio/live_meter.rs`.
 - 0 VU now sits at -18 dBFS (EBU R68 alignment) on both the needles and the rail ladder; the
   mic path is loudness-normalised to -23 LUFS. The previous 0 VU = 0 dBFS calibration
-  parked CH1 MIC at the -20 stop during normal speech (specs/0057).
+  parked CH1 MIC at the -20 stop during normal speech.
 - Geometry pass: `rounded-full` / `rounded-xl` / `rounded-2xl` become `rounded-[3px]`
   (`rounded-[2px]` for tiny tags) throughout. The Action Items status filter now uses the
   shared `SegmentedControl` instead of a hand-rolled pill row.
