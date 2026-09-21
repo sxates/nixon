@@ -114,12 +114,9 @@ _Not shown in release notes or the in-app updater (see `release.sh`)._
 
 ### Fixed
 
-- **On the collapsed sidebar, the update lamp now opens a panel instead of restarting the
-  app.** Clicking that amber dot — which sits right above the queue's own amber dot, with no
-  label to tell them apart — used to relaunch Nixon and install the update on the spot. It
-  refused mid-recording, but clicking a light to find out what it means should never be the
-  same gesture as "restart now". It opens a flyout describing the update, with Restart as a
-  separate, labelled button inside it.
+- **Clicking the collapsed sidebar's update lamp opens a panel describing the update**, with
+  Restart as its own labelled button inside it — checking what the light means is never the
+  same click as installing the update.
 - A person's name no longer wraps onto a second line on their page while the rest of the
   row sits empty.
 
@@ -159,9 +156,7 @@ _Not shown in release notes or the in-app updater (see `release.sh`)._
   good. *System Audio Backend* offered a second capture path that needed BlackHole and
   reverted itself on the next launch; system audio always uses the Core Audio tap now.
 - The **"connect your calendar" prompts** name Google Calendar as well as the Mac's, and
-  their Connect button takes you straight to Settings → Calendar. Previously they named
-  only macOS Calendar, and Connect asked for calendar permission on the spot — which, if
-  the answer was no, could only tell you to go and find a setting for yourself.
+  their Connect button takes you straight to Settings → Calendar to finish connecting.
 - **UI enhancements throughout the app.** The sidebar (Home is now **Today**, and the queue
   lives there rather than in the footer), the transport rail (the timer and level meter hold
   still while the meeting title changes, and REC/HOLD/STOP sit together at the right), and
@@ -172,22 +167,18 @@ _Not shown in release notes or the in-app updater (see `release.sh`)._
 
 ### Fixed
 
-- **Retry in the Queue now works, or tells you why it can't.** Clicking it on a failed item
-  could quietly do nothing: a retry the app refused — because that work was already running,
-  or the task had already been cleared — was thrown away without a word, and a refused
-  speaker-identification retry even reported success while the row vanished. Every refusal
-  now says what happened.
+- **Retry in the Queue now tells you what happened.** If a retry can't run — because that
+  work is already in progress, or the task has already been cleared — you get a clear
+  message instead of the row silently vanishing.
 - **A speaker Nixon already recognizes is named automatically**, instead of offering a
-  "Looks like …" button for you to click. That covers a well-trained voiceprint and a voice
-  it has recognized across several previous meetings, and it now happens when you open an
-  older meeting too — not only at the moment the meeting was first analyzed, which is why
-  confident matches used to keep asking forever. A name applied this way is renamed like any
-  other.
-- **Prep notes now follow a meeting that gets rescheduled.** Moving a meeting to another day
-  used to leave your prep behind on a meeting that had quietly disappeared, and the new time
-  showed up as a blank one; the prep now moves with the meeting, keeping its notes, its brief
-  and its link to previous occurrences. For a macOS Calendar meeting the notes move once the
-  old time is confirmed empty, so a recurring series' other occurrences always keep their own.
+  "Looks like …" button to click. That covers a well-trained voiceprint and a voice
+  recognized across several previous meetings, and it applies whenever you open the meeting
+  — including older ones you're revisiting, not just the moment it was first analyzed. A name
+  applied this way is renamed like any other.
+- **Prep notes now follow a meeting that gets rescheduled** — moving a meeting to another day
+  keeps its notes, its brief, and its link to previous occurrences. For a macOS Calendar
+  meeting the notes move once the old time is confirmed empty, so a recurring series' other
+  occurrences keep their own.
 
 ### Internal
 
@@ -220,46 +211,41 @@ _Not shown in release notes or the in-app updater (see `release.sh`)._
 ### Added
 
 - While a recording is running, the transport rail's title is a link back to it — click it
-  from any screen to land on the recording (specs/0063 W1).
-- Diarization passes, automatic background summary runs (the post-diarization re-summarize,
-  or a summary retried from the Queue), and post-stop transcription status now appear in
-  the Queue panel while they run (specs/0063 W3).
+  from any screen to land on the recording.
+- **The Queue panel now shows what's running in the background** — diarization, automatic
+  summaries, and post-recording transcription — so you can see the work in progress and
+  check back on it later.
 
 ### Changed
 
-- The Prep tab is reordered and simplified (specs/0063 W4): your prep notes are now at the
-  **top**, above the brief and the carried-over items, so the one part of the tab you write
-  is the first thing you reach. The brief renders flat — no card around it — with its
-  sources on a single muted "From" line, and "Link previous meeting…" / "Regenerate" are now
-  icon buttons with tooltips instead of two labelled buttons crowding the heading.
+- **The Prep tab is reordered and simplified**: your prep notes are now at the **top**,
+  above the brief and the carried-over items, so the one part of the tab you write is the
+  first thing you reach. The brief renders flat, with its sources on a single muted "From"
+  line, and "Link previous meeting…" / "Regenerate" are icon buttons with tooltips instead
+  of two labelled buttons.
 - Carried-over open items in the Prep tab can be **checked off in place**, instead of being
   read-only. A checked item stays visible, struck through, until you leave the tab, and the
-  Prep count badge updates as you go (specs/0063 W4).
-- The duplicate queue popover on Today is removed. Its "Processing…" button now opens the
-  transport rail's Queue panel instead (specs/0063 W3).
+  Prep count badge updates as you go.
+- The duplicate queue popover on Today is removed — its "Processing…" button now opens the
+  transport rail's Queue panel instead.
 
 ### Fixed
 
 - Renaming a meeting from the record header now updates the transport rail and the meetings
-  list immediately, instead of leaving the old name in the footer for the rest of the session
-  (specs/0063 W1).
-- The REC/HOLD/STOP keys no longer sit so tight that the glyph touches the lamp bar above it,
-  and a lit key now lights its whole face — REC is cream on red, HOLD is dark on amber — so
-  "armed" is unmistakable in both themes. Previously only a 4px bar lit, and on the light
-  theme it lit in a brown dark enough to read as unlit (specs/0063 W2).
-- The Queue's "Retry" stage label was misleading — it was plain text, not a button. The label
-  now reads "Failed", and every failed row shows a real Retry button (or Dismiss for
-  non-retryable tasks) that works. Failed deferred backlog meetings and failed background AI
-  work (summaries, extractions, prep briefs, diarization) can now be retried from the Queue
-  (specs/0063 W3).
+  list immediately.
+- The REC/HOLD/STOP keys have more breathing room above the lamp bar, and a lit key now
+  lights its whole face — REC is cream on red, HOLD is dark on amber — so "armed" is
+  unmistakable in both themes.
+- **Failed items in the Queue show a "Failed" label with a real Retry button** (or Dismiss,
+  for tasks that can't be retried) — covering deferred backlog meetings and failed
+  background AI work like summaries, extractions, prep briefs, and diarization.
 - A background summary run (the post-diarization re-summarize, or a summary retried from
-  the Queue) that generates successfully but then fails to save now shows as "Failed" in
-  the Queue instead of being silently logged (specs/0063 W3).
-- A summary you cancel is now recorded as skipped rather than as a success (specs/0063 W3).
+  the Queue) that generates successfully but fails to save now shows as "Failed" in the
+  Queue instead of being silently logged.
+- A summary you cancel is recorded as skipped rather than as a success.
 - The automatic summary that runs after a recording stops now appears in the Queue while it
   works, so it stays visible if you navigate away from the meeting — and if it fails, it can
-  be retried from there. Previously it was only ever visible as inline progress on the meeting
-  page, and vanished the moment you left (specs/0063 W3).
+  be retried from there.
 
 ### Internal
 
@@ -278,47 +264,55 @@ _Not shown in release notes or the in-app updater (see `release.sh`)._
 
 ### Added
 
+- **Editable transcript text.** Click a line's pencil to correct it inline — a saved edit
+  is marked and stays searchable, and if the save fails, your edit stays in the editor
+  instead of being lost. Re-transcribing warns you how many manually-edited lines it's
+  about to replace, or shows a general warning if that count isn't available.
+- **Click a speaker's row in a meeting's channel strip** to filter the transcript to that
+  speaker and jump to their first line — click again to clear the filter. If Nixon has
+  consolidated several detected voices into one person, the filter covers all of them, not
+  just one.
+- A "Change…" folder picker next to "Open folder" in Recording settings, so where new
+  recordings are saved can be changed without leaving the app — existing meetings keep
+  their own already-saved folder.
+
+### Changed
+
+- Reassigning a transcript line to "You" now works even in a meeting that never diarized
+  an owner track — "You" always appears as a reassignment option. A non-owner speaker left
+  with no lines after a correction or merge, and no stored voiceprint, is removed instead
+  of lingering in the speaker panel.
+- The speaker legend's channel strip fits six rows before it needs to scroll.
+- "Summarize automatically when a meeting ends" is a single toggle under Summary —
+  Recording settings points to it instead of duplicating it. Live speaker labels in
+  Recording settings are described as provisional numbered placeholders that get real
+  names once the recording ends.
+- The Speakers section on a meeting page is boxed like Participants, with its title inside
+  the box.
+
+### Fixed
+
+- A meeting pinned to a summary template that no longer exists — a built-in removed in an
+  update, or a deleted custom template — now falls back to the default template instead of
+  failing to generate a summary.
+
+### Removed
+
+- The "Test Mic" audio-level monitor and the "File format" row are gone from Recording
+  settings — neither did anything you could act on.
+- The Psychiatric Session built-in summary template. Meetings already pinned to it fall
+  back to the default template.
+
+### Internal
+
+_Not shown in release notes or the in-app updater (see `release.sh`)._
+
 - Dev-only fixture seeding (`--demo`), onboarding harness (`--onboarding`) and a Developer
   section in Settings › Beta; debug builds only (specs/0059).
 - Screenshot pipeline: `pnpm shots` (headless, both themes), `pnpm shots:diff` (contact
   sheet), `pnpm shots:real` (real window via a debug-only control listener); README
   screenshots (specs/0060).
-- Editable transcript text: click a line's pencil to correct it inline. A saved edit is
-  marked `edited` and stays searchable (the correction re-indexes for full-text search); a
-  failed save keeps the editor open with what you typed instead of discarding it.
-  Re-transcribing now warns how many manually-edited lines it will replace, or — if that
-  count can't be fetched — shows a generic warning rather than silently reading as "no
-  edits at risk" (specs/0061 W5).
-- Click a speaker's row in a meeting's channel strip to filter the transcript to that
-  speaker and jump to their first line; click the row again to clear the filter. When
-  diarization over-splits one person into several speaker keys later assigned to the same
-  person, the legend shows them as one consolidated row — clicking it filters and jumps
-  across every one of those underlying keys, not just the row's primary key (specs/0061
-  W4).
-- A "Change…" folder picker next to "Open folder" in Recording settings, so where new
-  recordings are saved can be changed without leaving the app; existing meetings keep
-  their own already-saved folder (specs/0061 W6).
-
-### Changed
-
 - The headless screenshot mock is generated from the fixture dataset (`pnpm shots:mock`).
-- Reassigning a transcript line to "You" now works even in a meeting that never diarized
-  an owner track — the owner's speaker row is created on demand, and "You" always appears
-  as a reassignment option. A non-owner speaker left with zero lines after a correction or
-  merge, and with no stored voiceprint, is pruned instead of lingering in the speaker panel
-  (specs/0061 W4).
-- The speaker legend's channel strip fits six rows before it needs to scroll (specs/0061
-  W4).
-- "Summarize automatically when a meeting ends" is now a single toggle, under Summary;
-  Recording settings previously duplicated it as a second switch and now just points to
-  the one under Summary. A few Recording settings rows also read more honestly about what
-  they do — e.g. live speaker labels are described as provisional numbered placeholders
-  that get real names once the recording ends, not live names (specs/0061 W6).
-- The Speakers section on a meeting page is boxed like Participants, with its title inside
-  the box (specs/0064 item 4).
-
-### Fixed
-
 - A `--demo` profile is now fully synthetic. The fixture seeder re-seeded meetings and
   people but left the Google Calendar cache alone, so a connected account's real events,
   attendee names and attendee photos rendered straight through it — and into the first
@@ -331,19 +325,6 @@ _Not shown in release notes or the in-app updater (see `release.sh`)._
   listener started recordings through the explicit-devices path with no devices, which
   could only ever fail with "No audio streams could be created". It now uses the same
   default-device resolution a recording started from the UI uses (specs/0060).
-
-- A meeting pinned to a summary template id that no longer resolves — a built-in removed in
-  an app update, or a deleted custom template — now falls back to the default template
-  (with a logged warning) instead of having its summary generation marked failed
-  (specs/0061 W6).
-
-### Removed
-
-- The dead "Test Mic" audio-level monitor and the "File format" row from Recording
-  settings — neither did anything a user could act on (specs/0061 W6).
-- The Psychiatric Session built-in summary template (specs/0061 W6). Meetings already
-  pinned to it fall back to the default template at generation time — see Fixed, above,
-  for the general-case guarantee this also relies on.
 
 ## [0.3.1] - 2026-09-16
 
@@ -367,28 +348,33 @@ _Not shown in release notes or the in-app updater (see `release.sh`)._
 
 ### Changed
 
-- **Canvas feedback pass (owner, 2026-09-15).** Record header: the PEAK / MIC GATE lamps
-  are gone (the rail carries both states), the template / mode / participants controls sit
-  under the meeting title, and the back control is the same unboxed chevron as meeting
-  details. Meeting details: the typed reel-label card is removed — the engraved identity
-  line now carries the reel number, date, time, length, source and voice count — and the
-  back button hangs in the left gutter at wide widths so the title aligns with the content
-  below. Speaker names in the channel strip and people in the participants row are plain
-  text with their edit / remove affordances on hover only. The record red is a hotter lamp
-  colour in both themes; red text uses a new `record-ink` shade that keeps AA contrast.
+- **Refined the record and meeting-details screens.** The PEAK / MIC GATE lamps are gone
+  from the record header — the transport rail already carries both states — the template,
+  mode, and participants controls sit under the meeting title, and the back control is the
+  same plain chevron used on meeting details. On a meeting's detail page, the reel card is
+  gone in favor of a single identity line carrying the reel number, date, time, length,
+  source, and voice count, and at wide widths the back button sits in the left gutter so
+  the title lines up with the content below it. Speaker names in the channel strip and
+  people in the participants row show their edit/remove controls only on hover. The record
+  red is a brighter lamp color in both themes, with a new red text shade for better
+  contrast.
 
-- **Settings pages speak one visual language.** Every tab (General, Recordings,
-  Transcription, Summary, Templates, Beta) is now built from a shared set of primitives
-  in `frontend/src/components/ui/settings.tsx` — an engraved caps section header with a
-  one-line purpose, a `rounded-[3px]` group card of ruled rows, and one row shape for
-  every setting: name, description, control on the right. This replaces the three
-  vocabularies that had grown side by side (the ruled row, the old shadcn
-  `p-6 shadow-sm` card with an `h3 text-lg font-semibold`, and ad-hoc bare labels), the
-  `u-section-label` engraved style misused as a row label, and the odd-styled
-  "Loading…" placeholder boxes. Sections within each tab are ordered the way a new user
-  meets them — what is captured, how it behaves, where it is stored, destructive
-  cleanup last — and the Transcription tab's emoji (⚡/🏠/☁️ in the model picker) are
-  gone; the options now read "Parakeet (recommended)" and "Local Whisper".
+- **Every Settings tab now looks and behaves the same way** — one section-header style,
+  one card style, one row layout for every setting (name, description, control on the
+  right), ordered the way you'd meet them: what's captured, how it behaves, where it's
+  stored, with destructive options last. Loading states show a proper placeholder instead
+  of an oddly-styled box, and the Transcription tab's model picker drops its emoji icons;
+  options now read "Parakeet (recommended)" and "Local Whisper".
+
+### Internal
+
+_Not shown in release notes or the in-app updater (see `release.sh`)._
+
+- Settings pages are now built from a shared set of primitives in
+  `frontend/src/components/ui/settings.tsx`, replacing three vocabularies that had grown
+  side by side (the ruled row, the old shadcn `p-6 shadow-sm` card, and ad-hoc bare
+  labels) and the `u-section-label` engraved style misused as a row label. Canvas feedback
+  pass incorporated design review feedback from 2026-09-15.
 
 ## [0.1.0] - 2026-09-14
 
@@ -399,33 +385,26 @@ carried forward unchanged; the entries below are what is new relative to Vinyl 1
 
 ### Changed
 
-- **Rebrand: Vinyl → Nixon** (specs/0057). Product name, window/tray/notification titles,
-  onboarding and settings copy, script names (`dev-nixon.sh`, `upgrade-nixon.sh`), DMG/app
-  bundle names, and the Google OAuth build variables (`NIXON_GOOGLE_CLIENT_ID` /
-  `NIXON_GOOGLE_CLIENT_SECRET` in the gitignored `.env.google`). The bundle identifier
-  `ai.vinyl.app` is unchanged, so existing data and permissions carry over untouched.
+- **Rebrand: Vinyl → Nixon.** New product name throughout — window, tray, and notification
+  titles, onboarding and settings copy, and the app icon. Your existing data and
+  permissions carry over untouched.
 - **Recordings folder**: fresh installs use `~/Movies/nixon-recordings/`. An install that has
   `~/Movies/meetily-recordings/` keeps writing there for as long as that folder exists.
-- **Two-channel VU on the record page** (specs/0057 §3.2). The single mixed needle is now
-  **CH1 MIC** and **CH2 SYS**, each reading its own clean pre-mix channel, so you can see
-  at a glance whether it is you or the far side that is hot or silent. The backend
-  `recording-level` event gains `mic` / `sys` `{ rms, peak }` objects alongside the
-  unchanged mixed pair (the rail ladder still reads the mix); the PEAK lamp latches on
-  whichever channel clips. The live meter feed moved out of `audio/pipeline.rs` into a
-  unit-tested `audio/live_meter.rs`.
-- **VU calibration**: 0 VU now sits at -18 dBFS (EBU R68 alignment) on both the needles
-  and the rail ladder. The mic path is loudness-normalised to -23 LUFS, so the previous
-  0 VU = 0 dBFS face parked CH1 MIC at the -20 stop during normal speech.
+- **Two-channel VU on the record page.** The single mixed needle is now **CH1 MIC** and
+  **CH2 SYS**, each reading its own channel, so you can see at a glance whether it's you or
+  the far side that's hot or silent. The PEAK lamp latches on whichever channel clips.
+- **VU calibration.** The needles and rail ladder are recalibrated so normal speech reads
+  near the middle of the meter instead of low and quiet-looking.
 - New app icon: two-reel silhouette on charcoal with an amber REC lamp.
 - **Theme: "Faceplate" (light) / "Deck" (dark)** replaces Warm Editorial. Follows the
   macOS appearance by default; Settings → General → Appearance overrides it. Fonts are now
   Archivo / Archivo Narrow / IBM Plex Sans / IBM Plex Mono / Courier Prime.
-- **Transport rail** (specs/0057 Phase C): one persistent bottom rail on every screen carries
-  REC / HOLD / STOP, the reels, the tape counter, a level ladder, and the single **Queue** for
-  deferred processing and background AI. The floating recording pill, the global recording bar,
-  the sidebar AI-activity row and the backlog pill are gone.
-- **VU meter** with real needle ballistics on the Record screen, plus PEAK and MIC GATE lamps
-  (the Zoom mute gate is finally visible). The spectrometer strip is retired.
+- **Transport rail.** One persistent bottom rail on every screen carries REC / HOLD / STOP,
+  the reels, the tape counter, a level ladder, and a single **Queue** for deferred
+  processing and background AI — replacing the floating recording pill, the global
+  recording bar, the sidebar AI-activity row, and the backlog pill.
+- **VU meter** with real needle ballistics on the Record screen, plus PEAK and MIC GATE
+  lamps, so the Zoom mute gate is visible at a glance. The spectrometer strip is retired.
 - **Channel strip**: the speaker list on a meeting shows CH numbers, talk time and share of
   talk; CH 1 is always you.
 - **Sidebar**: an icon rail with a collapse/expand toggle, an engraved "NIXON" wordmark, and
@@ -440,47 +419,65 @@ carried forward unchanged; the entries below are what is new relative to Vinyl 1
   position markers, matching the rest of the machine-panel language.
 - **Tray**: plain text labels (no emoji) and monochrome template icons that reflect
   recording state, so the menu bar icon itself communicates idle/recording/paused.
-- **Geometry pass ("nothing is a pill")**: chips, badges, capsule buttons, tags, and
-  oversized cards across the app move from `rounded-full` / `rounded-xl` / `rounded-2xl` to
-  the machine-panel's sharp `rounded-[3px]` (or `rounded-[2px]` for tiny tags). Circles are
-  now reserved for things that are actually round — avatars, status dots/lamps, spinners,
-  progress tracks, and icon pucks. The Action Items status filter is now the shared
-  `SegmentedControl` instead of a hand-rolled pill row.
+- **Geometry pass ("nothing is a pill").** Chips, badges, buttons, tags, and cards across
+  the app move from fully-rounded to the machine-panel's sharp corners. Circles are now
+  reserved for things that are actually round — avatars, status dots/lamps, spinners,
+  progress tracks, and icon pucks.
 
 ### Fixed
 
-- **Theme no longer freezes at the server value after hydration.** The provider reads the
-  stored preference in a layout effect instead of at state init, so Deck users no longer
-  get light-skinned toasts and a mis-checked Appearance radio until a reload.
-- **Tray → Start recording** routed to Today, where nothing consumed the start; it now lands
-  on the recorder, and the tray no longer flips to "Starting…" before the recorder has
-  agreed to start (a missing STT model used to strand it there).
-
-- New recordings are written to the folder shown in Settings (the persisted preference), not
-  to a folder guessed from disk state; this closes the "Access denied … outside the app's
-  allowed data directories" path after a folder rename or machine migration.
-- The mic-permission probe (`getUserMedia`) no longer runs against Nixon's own recording
-  session — it uses a private, isolated stream so it can't interfere with an in-progress
-  capture.
-- People and Meetings-list pages fetch their full data set once instead of re-issuing the
-  same "list everything" query per row/card.
+- **Theme now applies immediately**, without a reload — Deck users no longer briefly see
+  light-skinned toasts or a mis-checked Appearance radio after opening the app.
+- **Tray → Start recording now lands on the recorder**, instead of just opening Today. The
+  tray no longer shows "Starting…" if a missing transcription model stops the recording
+  from beginning.
+- **New recordings always go to the folder shown in Settings.** This fixes an "Access
+  denied" error that could show up after renaming the recordings folder or moving to a new
+  machine.
+- Checking microphone permission no longer risks interfering with a recording already in
+  progress.
+- People and the meetings list load faster — each page fetches its data once instead of
+  re-querying per row.
 - The channel strip's talk-time percentages keep the last good value across a transient
-  zero-duration tick instead of flashing to 0%/NaN.
+  zero-duration tick instead of flashing to 0%.
+- The 8-slot speaker/avatar color palette is deterministic and collision-checked, so
+  reused colors past 8 speakers are consistent instead of degrading unpredictably.
+- Settings → Appearance: the theme swatches are keyboard-navigable with the arrow keys.
+- A dark-mode style leak that could affect other note editors elsewhere in the app is
+  fixed.
+- The sidebar's walnut cheek strip no longer gets painted over by a nav row's hover
+  highlight.
+- The reel label card's shadow is softer, and screen readers no longer announce it twice
+  (it duplicates the identity line above it).
+
+### Internal
+
+_Not shown in release notes or the in-app updater (see `release.sh`)._
+
+- Rebrand touched script names (`dev-nixon.sh`, `upgrade-nixon.sh`), DMG/app bundle names,
+  and the Google OAuth build variables (`NIXON_GOOGLE_CLIENT_ID` /
+  `NIXON_GOOGLE_CLIENT_SECRET` in the gitignored `.env.google`). The bundle identifier
+  `ai.vinyl.app` is unchanged (specs/0057).
+- The backend `recording-level` event gains `mic` / `sys` `{ rms, peak }` objects alongside
+  the unchanged mixed pair (the rail ladder still reads the mix). The live meter feed moved
+  out of `audio/pipeline.rs` into a unit-tested `audio/live_meter.rs` (specs/0057 §3.2).
+- 0 VU now sits at -18 dBFS (EBU R68 alignment) on both the needles and the rail ladder; the
+  mic path is loudness-normalised to -23 LUFS. The previous 0 VU = 0 dBFS calibration
+  parked CH1 MIC at the -20 stop during normal speech (specs/0057).
+- Geometry pass: `rounded-full` / `rounded-xl` / `rounded-2xl` become `rounded-[3px]`
+  (`rounded-[2px]` for tiny tags) throughout. The Action Items status filter now uses the
+  shared `SegmentedControl` instead of a hand-rolled pill row.
+- The theme provider reads the stored preference in a layout effect instead of at state
+  init, fixing the freeze-at-server-value bug after hydration.
+- The mic-permission probe (`getUserMedia`) now uses a private, isolated stream instead of
+  running against Nixon's own recording session.
 - A stale transcription-error event listener that outlived its owning component is torn
   down on unmount.
-- The 8-slot speaker/avatar color palette is deterministic and collision-checked (was
-  silently degrading to fewer distinguishable colors past 8 speakers).
-- Settings → Appearance: the theme swatches are keyboard-navigable with the arrow keys
-  (were mouse-only).
 - The BlockNote summary editor's dark-mode override is scoped to `.summary-doc
-  .bn-container` — it no longer bleeds into unrelated BlockNote instances.
-- The sidebar's walnut cheek strip no longer gets painted over by a nav row's hover
-  background (`z-10`).
-- The reel label card's shadow softened to `shadow-[0_1px_2px_rgba(40,30,20,0.08)]` to
-  match the mockup, and it is marked `aria-hidden` (it duplicates the accessible identity
-  line above it, so it no longer double-announces to screen readers).
+  .bn-container` so it no longer bleeds into unrelated BlockNote instances.
+- The reel label card's shadow is `shadow-[0_1px_2px_rgba(40,30,20,0.08)]` to match the
+  mockup, and it is marked `aria-hidden` (it duplicates the accessible identity line above
+  it).
 - The tray now logs a warning instead of silently swallowing a failed icon update.
-
-### Removed
-
-- The `/design-preview` prototype page and the unmounted `RecordingStatusBar` component.
+- The `/design-preview` prototype page and the unmounted `RecordingStatusBar` component are
+  deleted.
