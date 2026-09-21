@@ -77,20 +77,6 @@ pub struct MeetingDetails {
     /// Linked EventKit calendar event id (specs/0015); `None` for ad-hoc/notes-only meetings.
     #[serde(rename = "calendarEventId", skip_serializing_if = "Option::is_none")]
     pub calendar_event_id: Option<String>,
-    /// Scheduled occurrence end (specs/0069b review fix 2). Meaningful only for a manual
-    /// scheduled entry (see `is_manual_entry`); `None` for every other origin.
-    #[serde(rename = "scheduledEndAt", skip_serializing_if = "Option::is_none")]
-    pub scheduled_end_at: Option<String>,
-    /// Join link for the occurrence (specs/0069 W3), carried through so the meeting page's
-    /// edit affordance can seed it. Same scope as `scheduled_end_at`.
-    #[serde(rename = "joinUrl", skip_serializing_if = "Option::is_none")]
-    pub join_url: Option<String>,
-    /// True when `calendar_event_id` is a Nixon-minted manual entry (the
-    /// `nixon-manual:` prefix — see `database::repositories::meeting::is_manual_event_id`).
-    /// Exposed as a field rather than the raw prefix so the frontend never needs its own
-    /// copy of that string literal (specs/0069b review fix 2).
-    #[serde(rename = "isManualEntry")]
-    pub is_manual_entry: bool,
     pub transcripts: Vec<MeetingTranscript>,
 }
 
