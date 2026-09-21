@@ -19,6 +19,10 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 ## [Unreleased]
 
+_(nothing yet)_
+
+## [0.8.0] - 2026-09-20
+
 ### Added
 
 - **Join and start recording in one click.** When a meeting starts, Nixon sends an alert
