@@ -1,0 +1,24 @@
+[
+  {
+    "id": "demo-07",
+    "title": "1:1 with Tomas",
+    "days_ago": 0,
+    "time_of_day": "15:30",
+    "duration_minutes": 30
+  },
+  {
+    "id": "demo-08",
+    "title": "Roadmap review with Greta",
+    "days_ago": 0,
+    "time_of_day": "16:30",
+    "duration_minutes": 45
+  },
+  {
+    "id": "demo-09",
+    "title": "Vendor call — connector supplier",
+    "days_ago": 0,
+    "time_of_day": "17:15",
+    "duration_minutes": 30,
+    "join_url": "https://zoom.us/j/5550142839"
+  }
+]

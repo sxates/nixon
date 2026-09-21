@@ -8,9 +8,12 @@ use anyhow::{Context, Result};
 use chrono::{DateTime, Local, NaiveTime, TimeZone, Utc};
 use sqlx::SqlitePool;
 
-use super::dataset::{Dataset, FixtureMeeting};
+use super::dataset::{Dataset, FixtureManualMeeting, FixtureMeeting};
 use crate::action_items::diff::{content_key, stable_text_fingerprint, ResolvedCandidate};
+use crate::aggregation::engine::SourceMeeting;
+use crate::aggregation::scope::AggregationScope;
 use crate::database::repositories::action_item::ActionItemsRepository;
+use crate::database::repositories::ask_ai_history::AskAiHistoryRepository;
 use crate::database::repositories::meeting_note::MeetingNotesRepository;
 use crate::database::repositories::meeting_participant::MeetingParticipantsRepository;
 use crate::database::repositories::speaker::SpeakersRepository;
@@ -139,14 +142,133 @@ pub async fn remove_meeting_rows(pool: &SqlitePool, meeting_id: &str) -> Result<
 
 /// `days_ago` + `time_of_day` in the machine's local zone, returned as UTC.
 pub fn started_at(m: &FixtureMeeting, now: DateTime<Utc>) -> DateTime<Utc> {
-    let t = NaiveTime::parse_from_str(&m.time_of_day, "%H:%M")
+    started_at_raw(m.days_ago, &m.time_of_day, now)
+}
+
+/// Shared by [`started_at`] and manual-meeting seeding: `days_ago` + `time_of_day`
+/// (`"HH:MM"`, falling back to noon on a bad string) in the machine's local zone,
+/// returned as UTC.
+fn started_at_raw(days_ago: u32, time_of_day: &str, now: DateTime<Utc>) -> DateTime<Utc> {
+    let t = NaiveTime::parse_from_str(time_of_day, "%H:%M")
         .unwrap_or_else(|_| NaiveTime::from_hms_opt(12, 0, 0).unwrap());
-    let day = now.with_timezone(&Local).date_naive() - chrono::Duration::days(m.days_ago as i64);
+    let day = now.with_timezone(&Local).date_naive() - chrono::Duration::days(days_ago as i64);
     Local
         .from_local_datetime(&day.and_time(t))
         .single()
         .unwrap_or_else(|| Local.from_utc_datetime(&day.and_time(t)))
         .with_timezone(&Utc)
+}
+
+/// Seeds the manually-added-meeting fixtures (specs/0069 W3) as `scheduled`-origin rows
+/// with a Nixon-minted `calendar_event_id`, exactly the shape
+/// `MeetingsRepository::create_manual_scheduled` writes — except the id and event id are
+/// the fixture's own stable id rather than a fresh UUID, so re-seeding lands the same rows
+/// every time instead of piling up random ones. These are never inserted through
+/// `seed_all`/[`insert_meeting_row`]: they carry no transcript and don't participate in its
+/// per-meeting rollback bookkeeping. Called from `mod.rs::run_seed` after `seed_all`, so it
+/// always runs against a freshly wiped `meetings` table.
+pub async fn seed_manual_meetings(
+    pool: &SqlitePool,
+    manual: &[FixtureManualMeeting],
+    now: DateTime<Utc>,
+) -> Result<u32> {
+    let mut n = 0u32;
+    for m in manual {
+        let start = started_at_raw(m.days_ago, &m.time_of_day, now);
+        let end = start + chrono::Duration::minutes(m.duration_minutes as i64);
+        let event_id = format!(
+            "{}{}",
+            crate::database::repositories::meeting::MANUAL_EVENT_PREFIX,
+            m.id
+        );
+        sqlx::query(
+            "INSERT INTO meetings \
+             (id, title, created_at, updated_at, origin, calendar_event_id, scheduled_end_at, join_url) \
+             VALUES (?, ?, ?, ?, 'scheduled', ?, ?, ?)",
+        )
+        .bind(&m.id)
+        .bind(&m.title)
+        .bind(start.to_rfc3339())
+        .bind(now.to_rfc3339())
+        .bind(&event_id)
+        .bind(end.to_rfc3339())
+        .bind(&m.join_url)
+        .execute(pool)
+        .await
+        .with_context(|| format!("insert manual scheduled row for {}", m.id))?;
+        n += 1;
+    }
+    Ok(n)
+}
+
+/// Seeds one example completed Ask-AI run into `ask_ai_history`, through the exact
+/// repository write the real success path uses
+/// (`aggregation::commands::api_ask_ai_run` → `AskAiHistoryRepository::insert`) — so the
+/// `/ask` screenshot shows the app's own citation-chip and sources-list rendering, not a
+/// hand-shaped stand-in. Cites recorded fixture meetings by their SEEDED `created_at`
+/// (`seed::started_at`, not the fixture's raw `days_ago`/`time_of_day`), matching what the
+/// real pipeline would have written for the same run. Must run AFTER `seed_all` — the ids
+/// it cites only exist once that's inserted them.
+pub async fn seed_ask_ai_history_example(
+    pool: &SqlitePool,
+    ds: &Dataset,
+    now: DateTime<Utc>,
+) -> Result<()> {
+    let source = |id: &str, title: &str, cited: bool| -> Result<SourceMeeting> {
+        let m = ds
+            .meetings
+            .iter()
+            .find(|m| m.id == id)
+            .with_context(|| format!("ask-ai history example: no fixture meeting {id}"))?;
+        Ok(SourceMeeting {
+            meeting_id: id.to_string(),
+            title: title.to_string(),
+            created_at: started_at(m, now).to_rfc3339(),
+            cited,
+        })
+    };
+    // [M#] markers below are 1-indexed into this list (the Rust engine's own numbering) —
+    // demo-01 stays last and uncited, mirroring "searched but not cited" in a real run.
+    let sources = vec![
+        source("demo-04", "Firmware standup", true)?,
+        source("demo-06", "Design review — enclosure v3", true)?,
+        source("demo-03", "Sensor line steerco", true)?,
+        source("demo-01", "Product sync — Q4 firmware", false)?,
+    ];
+    let answer_markdown = "The September 25 firmware freeze is still on track, but two \
+        risks are worth watching.\n\n\
+        - **Rev C hardware.** Tomas is waiting on rev C boards to characterize sleep-mode \
+        current draw; Inès is targeting Friday but has slipped before, so the team will \
+        borrow a board from the Q4 firmware bench if it slips again. Flash usage on the \
+        C-series is also at 91% after the new fault-code table — dropping this cycle's \
+        diagnostic logging changes and stripping verbose calibration strings should bring \
+        it back under 85%. [M1]\n\
+        - **Enclosure tooling.** The v3 enclosure design is approved pending a seam-seal \
+        test due Thursday. The resulting tool insert change eats most of this quarter's \
+        mechanical contingency budget on top of the existing 10-12 week anodizing lead \
+        time, leaving no slack for a second design pass. [M2]\n\
+        - **Firmware architecture.** Aegis firmware sharing the Vantage codebase behind a \
+        new hardware-abstraction layer is de-risked and roughly three weeks out; it \
+        doesn't block the freeze. [M3]\n\n\
+        Nothing here currently threatens the freeze date itself, but the enclosure tooling \
+        has the least room to slip.";
+    let scope_json = serde_json::to_string(&AggregationScope::default())
+        .context("serialize the example ask-ai scope")?;
+    let sources_json =
+        serde_json::to_string(&sources).context("serialize the example ask-ai sources")?;
+
+    AskAiHistoryRepository::insert(
+        pool,
+        "What's currently blocking the Q4 firmware freeze?",
+        &scope_json,
+        answer_markdown,
+        &sources_json,
+        Some("builtin-ai"),
+        Some("qwen3.5:2b"),
+    )
+    .await
+    .context("insert example ask-ai history row")?;
+    Ok(())
 }
 
 /// specs/0059 controller ruling (Task 4 review, fix round 1): the parent spec requires
@@ -329,4 +451,87 @@ async fn seed_meeting_rest(
         .await?;
     }
     Ok(m.segments.len() as u32)
+}
+
+#[cfg(test)]
+mod manual_tests {
+    use super::*;
+    use crate::database::repositories::meeting::test_support::memory_db;
+    use crate::database::repositories::meeting::{is_manual_event_id, MeetingsRepository};
+
+    fn fixture(id: &str, title: &str, time_of_day: &str, duration_minutes: u32) -> FixtureManualMeeting {
+        FixtureManualMeeting {
+            id: id.into(),
+            title: title.into(),
+            days_ago: 0,
+            time_of_day: time_of_day.into(),
+            duration_minutes,
+            join_url: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn seeds_manual_entries_as_scheduled_rows_with_a_stable_nixon_event_id() {
+        let pool = memory_db().await;
+        let now = chrono::Utc::now();
+        let manual = vec![fixture("demo-07", "1:1 with Tomas", "15:30", 30)];
+
+        let n = seed_manual_meetings(&pool, &manual, now).await.unwrap();
+        assert_eq!(n, 1);
+
+        let (title, origin, event_id): (String, String, String) = sqlx::query_as(
+            "SELECT title, origin, calendar_event_id FROM meetings WHERE id = 'demo-07'",
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(title, "1:1 with Tomas");
+        assert_eq!(origin, "scheduled");
+        assert!(is_manual_event_id(&event_id));
+        assert_eq!(event_id, "nixon-manual:demo-07");
+    }
+
+    #[tokio::test]
+    async fn re_seeding_is_idempotent_because_wipe_clears_the_table_first() {
+        let pool = memory_db().await;
+        let now = chrono::Utc::now();
+        let manual = vec![fixture("demo-07", "1:1 with Tomas", "15:30", 30)];
+
+        seed_manual_meetings(&pool, &manual, now).await.unwrap();
+        wipe(&pool).await.unwrap();
+        seed_manual_meetings(&pool, &manual, now).await.unwrap();
+
+        let (n,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM meetings WHERE id = 'demo-07'")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(n, 1, "a stable id means re-seeding never piles up duplicates");
+    }
+
+    #[tokio::test]
+    async fn a_seeded_manual_entry_is_a_real_day_agenda_row() {
+        // Exercises the SAME repository read the Today agenda uses
+        // (`calendar::day_agenda::api_get_day_agenda`), proving the seeded row isn't just a
+        // plausible-looking INSERT but actually surfaces as an upcoming, unrecorded entry.
+        let pool = memory_db().await;
+        let now = chrono::Utc::now();
+        let manual = vec![fixture("demo-08", "Roadmap review with Greta", "16:30", 45)];
+        seed_manual_meetings(&pool, &manual, now).await.unwrap();
+
+        let start = now
+            .with_timezone(&chrono::Local)
+            .date_naive()
+            .and_hms_opt(0, 0, 0)
+            .unwrap()
+            .and_local_timezone(chrono::Local)
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+        let end = start + chrono::Duration::days(1);
+        let rows = MeetingsRepository::get_manual_scheduled_between(&pool, start, end)
+            .await
+            .unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].id, "demo-08");
+        assert!(rows[0].scheduled_end_at.is_some());
+    }
 }

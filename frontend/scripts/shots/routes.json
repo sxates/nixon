@@ -283,7 +283,7 @@
   },
   {
     "name": "ask",
-    "route": "/ask",
+    "route": "/ask?historyId=latest",
     "ignore": [
       {
         "x": 338,

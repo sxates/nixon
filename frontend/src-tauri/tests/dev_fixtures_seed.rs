@@ -14,12 +14,13 @@ async fn seeds_embedded_dataset_and_is_idempotent() {
     let r1 = seed::seed_all(db.pool(), &ds, &HashMap::new(), now)
         .await
         .unwrap();
-    assert_eq!(r1.meetings, 5);
+    // specs/0069c demo-day polish: a 6th recorded fixture (demo-06) joined the original 5.
+    assert_eq!(r1.meetings, 6);
     assert_eq!(r1.people, 7);
-    // specs/0059 Ruling 1: the embedded dataset has 846 segments.
+    // specs/0059 Ruling 1: the embedded dataset had 846 segments; demo-06 added ~46 more.
     assert!(
         r1.segments > 700,
-        "expected ~846 segments, got {}",
+        "expected ~890 segments, got {}",
         r1.segments
     );
 
@@ -27,7 +28,7 @@ async fn seeds_embedded_dataset_and_is_idempotent() {
         .fetch_one(db.pool())
         .await
         .unwrap();
-    assert_eq!(n_meet, 5);
+    assert_eq!(n_meet, 6);
     let (id,): (String,) =
         sqlx::query_as("SELECT id FROM meetings WHERE title LIKE 'Product sync%'")
             .fetch_one(db.pool())
@@ -100,12 +101,12 @@ async fn seeds_embedded_dataset_and_is_idempotent() {
     let r2 = seed::seed_all(db.pool(), &ds, &HashMap::new(), now)
         .await
         .unwrap();
-    assert_eq!(r2.meetings, 5);
+    assert_eq!(r2.meetings, 6);
     let (n_meet2,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM meetings")
         .fetch_one(db.pool())
         .await
         .unwrap();
-    assert_eq!(n_meet2, 5);
+    assert_eq!(n_meet2, 6);
     let (n_people,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM people")
         .fetch_one(db.pool())
         .await
@@ -184,7 +185,7 @@ async fn seed_all_continues_past_a_failing_meeting() {
         .await
         .unwrap();
     assert_eq!(report.failed, 1);
-    assert_eq!(report.meetings, 5);
+    assert_eq!(report.meetings, 6);
 
     // the ORIGINAL demo-02 rows must survive untouched.
     let (n_meet,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM meetings WHERE id='demo-02'")

@@ -1,0 +1,96 @@
+{
+  "id": "demo-06",
+  "title": "Design review — enclosure v3",
+  "days_ago": 0,
+  "time_of_day": "11:00",
+  "duration_seconds": 600,
+  "template_id": "standard_meeting",
+  "participants": [
+    "person-rafael",
+    "person-sun"
+  ],
+  "speakers": [
+    {
+      "key": "local",
+      "display_name": "You",
+      "is_local": true
+    },
+    {
+      "key": "spk_0",
+      "display_name": "Rafael Duarte",
+      "person_id": "person-rafael"
+    },
+    {
+      "key": "spk_1",
+      "display_name": "Sun Ji-woo",
+      "person_id": "person-sun"
+    }
+  ],
+  "segments": [
+    { "id": "seg_1", "speaker": "local", "channel": "microphone", "start": 0.0, "end": 3.4, "text": "Okay, let's look at v3 of the enclosure." },
+    { "id": "seg_2", "speaker": "local", "channel": "microphone", "start": 3.7, "end": 8.9, "text": "Rafael, walk us through what changed since the review two weeks ago." },
+    { "id": "seg_3", "speaker": "spk_0", "channel": "system", "start": 9.6, "end": 20.1, "text": "Sure. Biggest change is we moved the antenna cutout to the top edge instead of the side, so it doesn't fight with the BLE ground plane anymore." },
+    { "id": "seg_4", "speaker": "spk_0", "channel": "system", "start": 20.4, "end": 28.7, "text": "We also thickened the two screw bosses that were cracking during drop testing, from 1.8 millimeters to 2.4." },
+    { "id": "seg_5", "speaker": "local", "channel": "microphone", "start": 29.5, "end": 32.0, "text": "Did the thicker bosses fix the cracking?" },
+    { "id": "seg_6", "speaker": "spk_0", "channel": "system", "start": 32.6, "end": 41.3, "text": "Ran ten drop cycles on the new geometry yesterday, zero cracks. Previous rev was cracking on cycle four or five pretty reliably." },
+    { "id": "seg_7", "speaker": "local", "channel": "microphone", "start": 42.0, "end": 43.2, "text": "Good, that's a real fix then." },
+    { "id": "seg_8", "speaker": "spk_1", "channel": "system", "start": 44.0, "end": 53.8, "text": "From the ops side, the thicker boss adds about four grams per unit, which is trivial, but it does bump the wall thickness enough that our current tool can't just be revised, we'd need a new insert." },
+    { "id": "seg_9", "speaker": "local", "channel": "microphone", "start": 54.5, "end": 56.9, "text": "How much does a new insert cost us in time?" },
+    { "id": "seg_10", "speaker": "spk_1", "channel": "system", "start": 57.5, "end": 66.2, "text": "Tool shop quoted three weeks for the insert change, on top of whatever the anodizing lead time ends up being." },
+    { "id": "seg_11", "speaker": "local", "channel": "microphone", "start": 67.0, "end": 71.4, "text": "Right, and that anodizing lead time is still ten to twelve weeks once the tool's locked, correct?" },
+    { "id": "seg_12", "speaker": "spk_1", "channel": "system", "start": 72.0, "end": 76.5, "text": "That's what the supplier quoted last week, yes. Nothing's moved on that." },
+    { "id": "seg_13", "speaker": "local", "channel": "microphone", "start": 77.2, "end": 84.0, "text": "Okay. Sun, does the insert delay plus anodizing still fit inside the schedule slack you mentioned at steerco?" },
+    { "id": "seg_14", "speaker": "spk_1", "channel": "system", "start": 84.8, "end": 94.6, "text": "Barely. If the insert change starts this week we land right at the edge of the launch date, no room for a second design pass." },
+    { "id": "seg_15", "speaker": "spk_1", "channel": "system", "start": 95.0, "end": 101.3, "text": "So whatever we approve today needs to actually be final, not another iteration." },
+    { "id": "seg_16", "speaker": "local", "channel": "microphone", "start": 102.0, "end": 105.5, "text": "Understood. Rafael, is there anything in v3 you're still not confident about?" },
+    { "id": "seg_17", "speaker": "spk_0", "channel": "system", "start": 106.2, "end": 118.4, "text": "One thing — the gasket channel around the seam. I widened it slightly to make assembly easier, but I haven't verified the IP54 seal still holds with the wider channel." },
+    { "id": "seg_18", "speaker": "local", "channel": "microphone", "start": 119.1, "end": 122.6, "text": "That seems like something we need to know before we lock the tool." },
+    { "id": "seg_19", "speaker": "spk_0", "channel": "system", "start": 123.3, "end": 131.9, "text": "Agreed. I can print a resin sample of just the seam geometry and run the water spray test on it, that doesn't need the full tool." },
+    { "id": "seg_20", "speaker": "local", "channel": "microphone", "start": 132.6, "end": 135.0, "text": "How long does that take?" },
+    { "id": "seg_21", "speaker": "spk_0", "channel": "system", "start": 135.6, "end": 141.8, "text": "Print's a day, test is a couple hours. I could have an answer by Thursday." },
+    { "id": "seg_22", "speaker": "spk_1", "channel": "system", "start": 142.5, "end": 149.7, "text": "Thursday works, that's still before we'd need to release the insert change to the tool shop." },
+    { "id": "seg_23", "speaker": "local", "channel": "microphone", "start": 150.4, "end": 156.0, "text": "Okay, so we hold the tool release until the seal test comes back, but everything else in v3 is approved as-is." },
+    { "id": "seg_24", "speaker": "spk_0", "channel": "system", "start": 156.8, "end": 158.4, "text": "That works for me." },
+    { "id": "seg_25", "speaker": "local", "channel": "microphone", "start": 159.0, "end": 165.3, "text": "What about the vent for the pressure sensor port, did that move with the antenna cutout?" },
+    { "id": "seg_26", "speaker": "spk_0", "channel": "system", "start": 166.0, "end": 176.8, "text": "No, the vent's untouched, still on the bottom face away from the antenna. It's the same Gore membrane part we used on the Vantage line." },
+    { "id": "seg_27", "speaker": "local", "channel": "microphone", "start": 177.5, "end": 178.9, "text": "Good, no new qualification needed there." },
+    { "id": "seg_28", "speaker": "spk_1", "channel": "system", "start": 179.6, "end": 189.2, "text": "Right, that part's already on our approved vendor list from Vantage, so procurement doesn't need a new supplier audit." },
+    { "id": "seg_29", "speaker": "local", "channel": "microphone", "start": 190.0, "end": 196.4, "text": "Let's talk finish. Rafael, for the trade show units, are we still doing bead-blast instead of anodized?" },
+    { "id": "seg_30", "speaker": "spk_0", "channel": "system", "start": 197.1, "end": 206.5, "text": "Yes, that decision from steerco still stands. Bead-blast units don't touch the anodizing queue at all, so we can have demo units in about three weeks regardless of the tool insert timeline." },
+    { "id": "seg_31", "speaker": "spk_1", "channel": "system", "start": 207.2, "end": 213.6, "text": "That's the piece that decouples the trade show from the certification units, which is the whole point." },
+    { "id": "seg_32", "speaker": "local", "channel": "microphone", "start": 214.3, "end": 216.0, "text": "Good, let's keep that plan." },
+    { "id": "seg_33", "speaker": "local", "channel": "microphone", "start": 216.7, "end": 223.5, "text": "One more thing — color. Marketing asked if we could do the demo units in the darker gray instead of the current silver." },
+    { "id": "seg_34", "speaker": "spk_0", "channel": "system", "start": 224.2, "end": 231.0, "text": "Bead-blast takes a dye fine, I can get a couple of darker gray samples anodized separately just to check the color match." },
+    { "id": "seg_35", "speaker": "local", "channel": "microphone", "start": 231.8, "end": 233.2, "text": "Do that, thanks." },
+    { "id": "seg_36", "speaker": "local", "channel": "microphone", "start": 234.0, "end": 240.6, "text": "Sun, anything on the ops side I'm missing before we lock this?" },
+    { "id": "seg_37", "speaker": "spk_1", "channel": "system", "start": 241.3, "end": 251.9, "text": "Just a heads up that the insert change eats most of our contingency budget for this quarter, so if anything else on the mechanical side slips we won't have room to absorb it." },
+    { "id": "seg_38", "speaker": "local", "channel": "microphone", "start": 252.6, "end": 258.0, "text": "Noted. Rafael, is there anything else in the pipeline that could touch the enclosure again?" },
+    { "id": "seg_39", "speaker": "spk_0", "channel": "system", "start": 258.7, "end": 268.4, "text": "Not that I know of. The connector debounce fix Tomas is doing is firmware only, doesn't change the connector footprint." },
+    { "id": "seg_40", "speaker": "local", "channel": "microphone", "start": 269.1, "end": 270.5, "text": "Good, that keeps us clean." },
+    { "id": "seg_41", "speaker": "local", "channel": "microphone", "start": 271.2, "end": 279.0, "text": "Okay, to summarize: v3 is approved pending the seam seal test, tool insert release holds until Thursday, bead-blast demo units start now." },
+    { "id": "seg_42", "speaker": "spk_1", "channel": "system", "start": 279.8, "end": 281.2, "text": "Agreed." },
+    { "id": "seg_43", "speaker": "spk_0", "channel": "system", "start": 281.9, "end": 283.4, "text": "Sounds right to me." },
+    { "id": "seg_44", "speaker": "local", "channel": "microphone", "start": 284.1, "end": 289.7, "text": "I'll let Tomas and Maya know the enclosure geometry is final so the diagnostic range testing can plan around it." },
+    { "id": "seg_45", "speaker": "spk_1", "channel": "system", "start": 290.4, "end": 292.0, "text": "Appreciate that." },
+    { "id": "seg_46", "speaker": "local", "channel": "microphone", "start": 292.7, "end": 294.2, "text": "Thanks both, good progress." }
+  ],
+  "summary_markdown": "## Key decisions\n\n- Enclosure v3 is approved with one open item: the widened gasket seam channel must pass a resin-sample water spray test (owner: Rafael, back by Thursday) before the tool insert change is released to the shop.\n- Demo units for the trade show continue on the bead-blasted (non-anodized) finish, decoupling them from both the anodizing queue and the tool insert timeline — units possible in about three weeks regardless.\n- Marketing's requested darker gray finish will be sampled on bead-blast units for a color-match check; no schedule impact.\n\n## What changed since the last review\n\nThe antenna cutout moved from the side face to the top edge to stop interfering with the BLE ground plane. The two screw bosses that cracked during drop testing were thickened from 1.8mm to 2.4mm — ten drop cycles on the new geometry produced zero cracks, versus reliable failures by cycle four or five on the previous rev. The pressure-sensor vent (Gore membrane, already qualified on the Vantage line) is unchanged.\n\n## Risks and schedule\n\nThe thicker screw boss requires a new tool insert (three-week shop quote) layered on top of the existing 10–12 week anodizing lead time once the tool is locked; Sun flagged this leaves no slack for a second design pass and consumes most of the quarter's mechanical contingency budget. Tomas's connector debounce fix is firmware-only and does not touch the enclosure.",
+  "notes_markdown": null,
+  "action_items": [
+    {
+      "description": "Print a resin sample of the seam geometry and run the water-spray seal test before releasing the tool insert change.",
+      "assignee": "person-rafael",
+      "due_hint": "by Thursday"
+    },
+    {
+      "description": "Sample the darker gray finish on bead-blast demo units for marketing's color-match check.",
+      "assignee": "person-rafael",
+      "due_hint": null
+    },
+    {
+      "description": "Tell Tomas and Maya the enclosure geometry is final so diagnostic-mode range testing can plan around it.",
+      "assignee": "self",
+      "due_hint": null
+    }
+  ]
+}

@@ -312,6 +312,21 @@ function AskPageContent() {
     setPhase('done');
   }, []);
 
+  // `?historyId=<id>` (or the sentinel `latest`) opens a specific history entry
+  // read-only on load — the screenshot pipeline's deep link into an already-answered
+  // Ask AI run, mirroring the meeting-details `?tab=` pattern. Applied at most once so
+  // it never fights a user's own click or typing afterward.
+  const historyDeepLinkAppliedRef = useRef(false);
+  useEffect(() => {
+    if (historyDeepLinkAppliedRef.current) return;
+    const wanted = searchParams.get('historyId');
+    if (!wanted || history.length === 0) return;
+    const entry = wanted === 'latest' ? history[0] : history.find((h) => h.id === wanted);
+    if (!entry) return;
+    historyDeepLinkAppliedRef.current = true;
+    viewHistoryEntry(entry);
+  }, [searchParams, history, viewHistoryEntry]);
+
   const deleteHistoryEntry = useCallback(
     async (id: string) => {
       try {

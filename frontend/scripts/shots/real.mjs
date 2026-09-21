@@ -63,6 +63,19 @@ async function main() {
   process.on('SIGTERM', onSignal('SIGTERM'));
 
   await c.send({ cmd: 'hide_dev_badge', value: true });
+  // Warm-up: the FIRST navigation into a `/meeting-details` route pays real cold-load
+  // costs (page-bundle compile, first-ever invoke round trips for meeting/summary/
+  // transcript/participants data, DB pool + template warm-up) that no `wait` value on
+  // the shot itself reliably budgets for — every later `/meeting-details` shot in the
+  // manifest is warm and renders correctly at the same `wait`. Reordering the manifest
+  // only relocates which shot eats this cost, so pay it once here, before any capture,
+  // using the same `ready` signal the per-shot loop already trusts, instead of guessing
+  // a bigger static `wait` for whichever entry happens to go first.
+  const firstMeetingDetails = shots.find((s) => s.entry.route.startsWith('/meeting-details'));
+  if (firstMeetingDetails) {
+    await c.send({ cmd: 'navigate', route: firstMeetingDetails.entry.route });
+    await c.send({ cmd: 'ready' });
+  }
   try {
     for (const shot of shots) {
       try {

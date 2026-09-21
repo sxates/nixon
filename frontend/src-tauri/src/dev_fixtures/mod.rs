@@ -97,6 +97,20 @@ pub async fn run_seed(app: &AppHandle, no_audio: bool) -> Result<seed::SeedRepor
     };
     let report = seed::seed_all(pool, &ds, &folders, now).await?;
 
+    // Manually-added-meeting fixtures (specs/0069 W3): upcoming, not-yet-recorded rows on
+    // Today with no calendar involved. Deliberately AFTER `seed_all`, which wipes the
+    // `meetings` table before it inserts — seeding these first would have them wiped again.
+    let manual_seeded = seed::seed_manual_meetings(pool, &ds.manual_meetings, now)
+        .await
+        .context("seed manual meetings")?;
+
+    // One example answered Ask-AI run, so the `/ask` screenshot shows a real question,
+    // answer and cited sources instead of an empty composer. Best-effort: a failure here
+    // must not sink the rest of a demo profile the developer is waiting on.
+    if let Err(e) = seed::seed_ask_ai_history_example(pool, &ds, now).await {
+        log::error!("[dev] seed ask-ai history example failed (non-fatal): {e:#}");
+    }
+
     // A seeded profile is post-onboarding unless --onboarding also asked for a reset.
     if !guard::DevFlags::from_env().reset_onboarding {
         let status = seeded_onboarding_status(now);
@@ -105,10 +119,11 @@ pub async fn run_seed(app: &AppHandle, no_audio: bool) -> Result<seed::SeedRepor
             .context("mark onboarding complete")?;
     }
     log::info!(
-        "[dev] seeded {} meetings, {} people, {} segments, {} failed",
+        "[dev] seeded {} meetings, {} people, {} segments, {} manual meetings, {} failed",
         report.meetings,
         report.people,
         report.segments,
+        manual_seeded,
         report.failed
     );
     Ok(report)

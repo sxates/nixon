@@ -67,19 +67,40 @@ pub struct FixtureMeeting {
     pub action_items: Vec<FixtureActionItem>,
 }
 
+/// A meeting the user added inside Nixon rather than one a recording produced — a
+/// `scheduled`-origin row with no transcript, seeded straight into the day timeline so
+/// Today shows upcoming, not-yet-recorded entries even with no calendar connected
+/// (specs/0069 W3; see `database/repositories/meeting/manual.rs`).
+#[derive(Debug, Clone, Deserialize)]
+pub struct FixtureManualMeeting {
+    pub id: String,
+    pub title: String,
+    /// Re-based at seed time: 0 = today, 1 = yesterday, …
+    pub days_ago: u32,
+    /// "HH:MM" local wall-clock start
+    pub time_of_day: String,
+    pub duration_minutes: u32,
+    #[serde(default)]
+    pub join_url: Option<String>,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct Dataset {
     pub people: Vec<FixturePerson>,
     pub meetings: Vec<FixtureMeeting>,
+    #[serde(default)]
+    pub manual_meetings: Vec<FixtureManualMeeting>,
 }
 
 const PEOPLE: &str = include_str!("../../fixtures/demo/people.json");
-const MEETINGS: [&str; 5] = [
+const MANUAL_MEETINGS: &str = include_str!("../../fixtures/demo/manual_meetings.json");
+const MEETINGS: [&str; 6] = [
     include_str!("../../fixtures/demo/meetings/01-product-sync.json"),
     include_str!("../../fixtures/demo/meetings/02-one-on-one.json"),
     include_str!("../../fixtures/demo/meetings/03-steerco.json"),
     include_str!("../../fixtures/demo/meetings/04-standup.json"),
     include_str!("../../fixtures/demo/meetings/05-unprocessed.json"),
+    include_str!("../../fixtures/demo/meetings/06-design-review.json"),
 ];
 
 pub fn load_embedded() -> Result<Dataset, String> {
@@ -91,7 +112,13 @@ pub fn load_embedded() -> Result<Dataset, String> {
             serde_json::from_str(raw).map_err(|e| format!("meeting file #{}: {e}", i + 1))?;
         meetings.push(m);
     }
-    Ok(Dataset { people, meetings })
+    let manual_meetings: Vec<FixtureManualMeeting> =
+        serde_json::from_str(MANUAL_MEETINGS).map_err(|e| format!("manual_meetings.json: {e}"))?;
+    Ok(Dataset {
+        people,
+        meetings,
+        manual_meetings,
+    })
 }
 
 /// Every rule the seeder relies on. Returns all violations, not just the first.
@@ -152,6 +179,23 @@ pub fn validate(ds: &Dataset) -> Result<(), Vec<String>> {
             }
         }
     }
+    // Manual entries land in the same `meetings` table (specs/0069 W3), so an id collision
+    // with a recorded meeting — or between two manual entries — would silently overwrite one
+    // insert with the other at seed time instead of failing loudly here.
+    for m in &ds.manual_meetings {
+        if !seen_ids.insert(m.id.as_str()) {
+            errs.push(format!("{}: duplicate meeting id", m.id));
+        }
+        if chrono::NaiveTime::parse_from_str(&m.time_of_day, "%H:%M").is_err() {
+            errs.push(format!(
+                "{}: bad time_of_day {}",
+                m.id, m.time_of_day
+            ));
+        }
+        if m.duration_minutes == 0 {
+            errs.push(format!("{}: duration_minutes must be nonzero", m.id));
+        }
+    }
     if errs.is_empty() {
         Ok(())
     } else {
@@ -197,15 +241,47 @@ mod tests {
                 notes_markdown: None,
                 action_items: vec![],
             }],
+            manual_meetings: vec![],
         }
     }
 
     #[test]
     fn embedded_dataset_loads_and_validates() {
         let ds = load_embedded().expect("embedded fixtures parse");
-        assert_eq!(ds.meetings.len(), 5);
+        assert_eq!(ds.meetings.len(), 6);
         assert_eq!(ds.people.len(), 7);
+        assert_eq!(ds.manual_meetings.len(), 3);
         validate(&ds).expect("embedded fixtures valid");
+    }
+
+    #[test]
+    fn validate_rejects_a_manual_id_that_collides_with_a_recorded_meeting() {
+        let mut ds = minimal();
+        ds.manual_meetings.push(FixtureManualMeeting {
+            id: "demo-01".into(),
+            title: "Dup".into(),
+            days_ago: 0,
+            time_of_day: "15:00".into(),
+            duration_minutes: 30,
+            join_url: None,
+        });
+        let errs = validate(&ds).unwrap_err();
+        assert!(errs.iter().any(|e| e.contains("duplicate meeting id")), "{errs:?}");
+    }
+
+    #[test]
+    fn validate_rejects_a_bad_manual_time_of_day() {
+        let mut ds = minimal();
+        ds.manual_meetings.push(FixtureManualMeeting {
+            id: "demo-99".into(),
+            title: "Bad time".into(),
+            days_ago: 0,
+            time_of_day: "not-a-time".into(),
+            duration_minutes: 30,
+            join_url: None,
+        });
+        let errs = validate(&ds).unwrap_err();
+        assert!(errs.iter().any(|e| e.contains("bad time_of_day")), "{errs:?}");
     }
 
     #[test]

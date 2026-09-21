@@ -81,6 +81,12 @@ node scripts/shots/real.mjs [--out DIR] [--only a,b] [--theme deck|faceplate] [-
   without a clean exit) or no dev app is running with `--demo`/`--control`, the connection
   fails with `dev-control.port is stale or Dev Nixon is not running with --demo/--control`.
 
+Before capturing anything, it pays the cold-load cost of the FIRST `/meeting-details`
+navigation once, up front (a throwaway `navigate` + `ready`, never captured) — that
+navigation compiles the page bundle and fires its first-ever invoke round trips, which is
+real latency no per-shot `wait` should have to guess at. Every `/meeting-details` shot in
+the manifest is warm by the time its own capture runs, regardless of manifest order.
+
 Requires `./dev-nixon.sh --demo` (or `--control`) already running — see "Control protocol"
 below — plus Screen Recording permission for the terminal process running this script, and
 Microphone/Audio Capture permission for the `record-live` shot. On `SIGINT`/`SIGTERM` it
