@@ -1,127 +1,114 @@
 # Nixon
 
-**Nixon is a local-first, on-device meeting assistant for macOS.** It records your
-meetings (system audio + mic — Zoom / Meet / Teams), transcribes them in real time,
-summarizes them, and organizes them for later reference.
+**A meeting assistant that stays on your Mac.**
 
-Privacy is the whole point: meeting audio, transcripts, and notes never leave your
-machine. The only outbound traffic is to a **you-chosen** LLM provider for
-summarization — and the default is a local model via Ollama, so everything can stay
-on-device. Nixon also checks GitHub for new versions in the background (no personal
-data is sent); this can be turned off in Settings.
+Nixon sits quietly beside your calls — Zoom, Meet, Teams, or anything else that makes
+sound — and writes down what was said, who said it, and what you agreed to. No bot joins
+your meeting. No recording is uploaded. Nothing leaves your machine.
 
-> Nixon is a hard fork of [meetily](https://github.com/Zackriya-Solutions/meeting-minutes)
-> v0.4.0 (MIT) and diverges substantially. See [`CHANGELOG.md`](CHANGELOG.md) for the
-> post-fork history.
+### [Download for macOS →](https://github.com/sxates/nixon/releases/latest)
 
-## Screenshots
+Apple Silicon, macOS 14.4 or later. Open the `.dmg` and drag Nixon to Applications.
 
-| Today | Recording |
+---
+
+## What it looks like
+
+| Your day | Recording |
 |---|---|
-| ![Today view](docs/screenshots/real/today.faceplate.png) | ![Live recording with VU meters](docs/screenshots/real/record-live.faceplate.png) |
+| ![Today view](docs/screenshots/real/today.faceplate.png) | ![Live recording](docs/screenshots/real/record-live.faceplate.png) |
 
-| Transcript with speakers | Summary |
+| Who said what | The summary |
 |---|---|
-| ![Transcript](docs/screenshots/real/meeting-transcript.faceplate.png) | ![Summary](docs/screenshots/real/meeting-summary.faceplate.png) |
+| ![Transcript with speakers](docs/screenshots/real/meeting-transcript.faceplate.png) | ![Summary](docs/screenshots/real/meeting-summary.faceplate.png) |
 
-| Ask AI | Settings |
+| Ask across every meeting | Settings |
 |---|---|
 | ![Ask AI](docs/screenshots/real/ask.faceplate.png) | ![Recording settings](docs/screenshots/real/settings-recordings.faceplate.png) |
 
-Deck (dark) variants live in [`docs/screenshots/real`](docs/screenshots/real). Every image is rendered from the fictional demo dataset (`./dev-nixon.sh --demo`).
+Dark-theme versions are in [`docs/screenshots/real`](docs/screenshots/real). The meetings
+shown are fictional.
 
-*Images are regenerated with `pnpm shots:real` from a terminal that has Screen Recording permission; see [`docs/screenshots/README.md`](docs/screenshots/README.md).*
+---
 
-## Features
+## What you get
 
-- **On-device transcription** — Whisper.cpp or NVIDIA Parakeet, real-time, with
-  Metal / CoreML acceleration on Apple Silicon.
-- **Notes-aware AI summaries** — a live notepad beside the transcript; your notes
-  ground the summary so it captures what *you* thought mattered. Runs on local
-  Ollama by default, or Anthropic Claude / OpenAI / Groq / OpenRouter / any
-  OpenAI-compatible endpoint.
-- **Speaker diarization** — label who said what, fully on-device; rename or merge
-  speakers and seed names from your calendar's attendee list.
-- **Calendar + Zoom** — reads your macOS Calendar to show your whole day's agenda,
-  with one-click **Join & Record**.
-- **Search & organization** — a meeting dashboard with full-text search.
+**Your notes, not just a transcript.** Write during the call as you normally would. Nixon
+uses what *you* wrote to shape the summary, so it reflects what mattered to you rather
+than an even-handed digest of everything anyone said. This is the part most meeting tools
+get wrong.
 
-## Requirements
+**Who said what.** Speakers are separated automatically, and naming them takes a couple of
+clicks — from the calendar invite where there is one. Nixon can also learn voices so it
+recognises the same people in later meetings; that is off until you switch it on.
 
-**Any Apple Silicon Mac running macOS 14.4 or later.** That includes the original M1 — the
-work is sized to the machine rather than gated on a recent one. (14.4 is where the Core
-Audio process tap arrives, which is what lets Nixon capture system and Zoom audio without
-BlackHole. Intel Macs are not supported.)
+**Walk in prepared.** Before a recurring meeting, Nixon pulls together what happened last
+time and which of your action items are still open — so you are not scrolling back through
+notes in the thirty seconds before you join.
 
-You will also need to grant **microphone** and **audio-capture** permission, once.
+**One click to join and record.** When a meeting starts, Nixon offers to open the call and
+start recording together. Meetings you add yourself work the same way, and if there is no
+calendar involved at all you can still put a call on your day by hand.
 
-### What your hardware changes
+**Action items that outlive the meeting.** Everything Nixon picks up lands in one list
+across all your meetings, assigned and checkable, instead of being stranded in whichever
+set of notes you happened to write it in.
 
-Everything — transcription, speaker identification, summarization — runs on your Mac, so
-your hardware decides two things: which summary model Nixon picks, and how long you wait.
+**Ask questions across everything you have recorded.** "What did we decide about pricing?"
+— answered from your own meetings, with the sources cited so you can check.
 
-| Your Mac | Summary model | Hour-long meeting summarized in |
-|---|---|---|
-| 8 GB RAM | Qwen 3.5 2B (~1.8 GB in use) | about a minute on an M1, less on newer chips |
-| 16 GB RAM or more | Qwen 3.5 4B (~3.9 GB in use) | seconds to half a minute |
+**Find it later.** Full-text search across transcripts, notes and summaries, a directory
+of the people you meet with, and a browsable history of every recording.
 
-**RAM is what unlocks the better model.** Nixon checks how much you have on first run and
-picks for you — you never have to choose, though Settings → Summary will let you if you
-want to. 16 GB is the line, and crossing it buys summary quality rather than speed.
+**Bring in audio you already have.** Drop an existing recording onto the window and Nixon
+transcribes and summarizes it like anything else.
 
-**A faster chip buys time, not capability.** Every Apple Silicon generation transcribes
-faster than the meeting happens, so live transcripts keep up regardless; a quicker GPU
-mostly means the summary lands sooner after you stop recording.
+---
 
-**On an 8 GB Mac, watch what else is open.** Nixon's own footprint is modest, but it shares
-memory with your video-call app — which is by definition running during a meeting.
+## Private by design
 
-*(Memory figures are measured; the times are estimates scaled from a measured baseline, so
-treat them as the right order of magnitude rather than a benchmark.)*
+Your meeting audio, transcripts and notes are written to your own disk and are never
+uploaded. Transcription and speaker identification run entirely on your Mac.
 
-### Disk
+Summaries do too, by default — on first run Nixon downloads a local model sized to your
+machine and uses that. If you would rather use Claude, OpenAI or another provider, you
+can, and that is the only case where any part of a meeting leaves your Mac. It is your
+choice and it is off unless you make it.
 
-About **3 GB** for the models Nixon downloads the first time it needs them — speech
-recognition ~0.6 GB, speaker identification ~0.1 GB, summarization 1.2–2.6 GB depending on
-your RAM — plus roughly **250 MB per hour** of meetings you record. Recorded audio can be
-set to auto-delete after a number of days in Settings → Recordings.
+The one other thing Nixon talks to is GitHub, to check whether a new version exists. No
+personal data is sent, and you can turn it off in Settings.
 
-## Build & run (macOS / Metal)
+Full detail in [`PRIVACY_POLICY.md`](PRIVACY_POLICY.md).
 
-```bash
-cd frontend
-pnpm install
-./dev-nixon.sh      # dev build ("Dev Nixon"), isolated from production data
-./build-gpu.sh      # production build → ../target/release/bundle (.app + .dmg)
-./upgrade-nixon.sh  # rebuild + reinstall /Applications/Nixon.app, preserving data
-```
+---
 
-See [`CLAUDE.md`](CLAUDE.md) for the full architecture map and build notes.
+## What you need
 
-## Privacy
+**Any Apple Silicon Mac running macOS 14.4 or later** — including the original M1. Nixon
+sizes its work to your machine rather than demanding a recent one. Intel Macs are not
+supported, and 14.4 is the floor because it is where macOS gained the ability to capture
+another app's audio without extra software.
 
-Meeting audio, transcripts, and notes are stored locally and never transmitted.
-The only outbound traffic is to your chosen LLM provider for summarization; use the
-default local Ollama to keep everything on-device. Nixon also checks GitHub for new
-versions in the background (no personal data is sent); this can be turned off in
-Settings. See [`PRIVACY_POLICY.md`](PRIVACY_POLICY.md).
+You will be asked once for **microphone** and **audio-capture** permission.
 
-## Contributing
+**Disk:** about 3 GB for the models Nixon downloads the first time it needs them, plus
+roughly 250 MB per hour of recorded audio. Recordings can be set to delete themselves
+after a few days in Settings → Recordings.
 
-See [`CONTRIBUTING.md`](CONTRIBUTING.md).
+**Memory:** 8 GB is enough. With 16 GB or more Nixon automatically uses a larger, better
+summary model — it checks on first run and chooses for you.
+
+---
 
 ## License
 
-MIT — see [`LICENSE.md`](LICENSE.md). Nixon is a fork of meetily (also MIT); the
-original copyright notice is retained.
+MIT — see [`LICENSE.md`](LICENSE.md). Nixon is a fork of
+[meetily](https://github.com/Zackriya-Solutions/meeting-minutes) (also MIT) and retains
+the original copyright notice. Release history is in [`CHANGELOG.md`](CHANGELOG.md).
 
-## Acknowledgments
-
-- [meetily](https://github.com/Zackriya-Solutions/meeting-minutes) — the upstream
-  project Nixon forks.
-- Code borrowed from [Whisper.cpp](https://github.com/ggerganov/whisper.cpp),
-  [Screenpipe](https://github.com/mediar-ai/screenpipe), and
-  [transcribe-rs](https://crates.io/crates/transcribe-rs).
-- **NVIDIA** for the **Parakeet** model, and
-  [istupakov](https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx) for the
-  ONNX conversion.
+With thanks to [Whisper.cpp](https://github.com/ggerganov/whisper.cpp),
+[Screenpipe](https://github.com/mediar-ai/screenpipe) and
+[transcribe-rs](https://crates.io/crates/transcribe-rs), whose code Nixon borrows; to
+[sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) and the CAM++ embedding model behind
+speaker identification; and to **NVIDIA** for the **Parakeet** speech model with
+[istupakov](https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx)'s ONNX conversion.
