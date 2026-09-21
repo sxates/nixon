@@ -12,7 +12,7 @@ name: "CI Checks"
 # here and the `say`-synthesized audio-accuracy tests (vad_filter,
 # pipeline_integration) are environment-sensitive (their VAD thresholds vary by
 # macOS version) and run locally per CLAUDE.md, not as a CI gate. The end-to-end
-# transcription smoke test is a manual step — see CONTRIBUTING.md "Definition of
+# transcription smoke test is a manual step — see CLAUDE.md "Definition of
 # Done" gates 3-4. CI here proves the deterministic subset (lib unit tests +
 # db_lifecycle + diarization_persistence) plus lint/format/clippy stay green.
 
