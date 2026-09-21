@@ -43,8 +43,14 @@ interface AddMeetingDialogProps {
   defaultDateKey: string;
   /** Editing an existing entry; omitted when adding. */
   editing?: EditingMeeting;
-  /** Called after a successful create/update so the caller can refresh the agenda. */
-  onSaved: () => void | Promise<void>;
+  /**
+   * Called after a successful save. Carries the newly created meeting's id — and ONLY
+   * that: an edit's save calls this with no argument — so a caller can tell create and
+   * edit apart from the callback's own shape, not from tracking `editing` separately.
+   * That structure is what makes "only a create may navigate away" hold even if a
+   * future caller reuses this dialog without threading `editing` through by hand.
+   */
+  onSaved: (createdMeetingId?: string) => void | Promise<void>;
 }
 
 /** `HH:MM` from a `Date`'s LOCAL hour/minute (never UTC). */
@@ -144,12 +150,15 @@ export function AddMeetingDialog({
     try {
       if (isEdit && editing) {
         await updateManualMeeting(editing.meetingId, input);
+        toast.success('Meeting updated');
+        onOpenChange(false);
+        await onSaved();
       } else {
-        await createManualMeeting(input);
+        const createdMeetingId = await createManualMeeting(input);
+        toast.success('Meeting added');
+        onOpenChange(false);
+        await onSaved(createdMeetingId);
       }
-      toast.success(isEdit ? 'Meeting updated' : 'Meeting added');
-      onOpenChange(false);
-      await onSaved();
     } catch (error) {
       console.error('Failed to save manual meeting:', error);
       toast.error(isEdit ? 'Could not save the meeting' : 'Could not add the meeting', {

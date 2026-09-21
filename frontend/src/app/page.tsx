@@ -34,6 +34,7 @@ import type { DayAgendaItem } from '@/lib/day-agenda';
 import { joinAndRecord, resolveRecordingStartsAt } from '@/lib/calendar';
 import {
   routeForItem,
+  openMeetingUrl,
   localDateKey,
   parseLocalDateKey,
   dayLabel,
@@ -219,11 +220,7 @@ function HomeView() {
           router.push('/record');
           return;
         case 'open':
-          router.push(
-            route.tab
-              ? `/meeting-details?id=${route.meetingId}&tab=${route.tab}`
-              : `/meeting-details?id=${route.meetingId}`,
-          );
+          router.push(openMeetingUrl(route.meetingId, route.tab));
           return;
         case 'prep':
           try {
@@ -274,7 +271,19 @@ function HomeView() {
               }
             : undefined
         }
-        onSaved={() => void refresh()}
+        // specs/0069b followup — a fresh create carries its new id (see AddMeetingDialog's
+        // `onSaved`) and jumps straight to that meeting's Prep tab, the same place clicking
+        // it on the timeline would land (`routeForItem`'s manual-entry branch). Editing never
+        // carries an id, so it stays on Today. The create path skips `refresh()`: we're
+        // navigating away and unmounting this tree, so refreshing Today's now-stale agenda
+        // would be wasted work racing the navigation (and risks setting state after unmount).
+        onSaved={(createdMeetingId) => {
+          if (createdMeetingId) {
+            router.push(openMeetingUrl(createdMeetingId, 'prep'));
+            return;
+          }
+          void refresh();
+        }}
       />
 
       <DeleteManualMeetingDialog

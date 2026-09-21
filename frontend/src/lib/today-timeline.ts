@@ -206,6 +206,17 @@ export type ItemRoute =
     }
   | { kind: 'none' }; // nothing actionable
 
+/**
+ * URL for an `{ kind: 'open' }` route (specs/0069b followup). The one spot that turns
+ * that route shape into an actual path, so a clicked timeline item and a freshly
+ * created manual meeting land on the identical URL — `tab: 'prep'` for an unrecorded
+ * manual entry, no `tab` otherwise — instead of two call sites hand-building the string
+ * and drifting apart.
+ */
+export function openMeetingUrl(meetingId: string, tab?: 'prep'): string {
+  return tab ? `/meeting-details?id=${meetingId}&tab=${tab}` : `/meeting-details?id=${meetingId}`;
+}
+
 function prepRoute(item: DayAgendaItem): ItemRoute {
   return {
     kind: 'prep',
