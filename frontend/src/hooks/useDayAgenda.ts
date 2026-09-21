@@ -12,11 +12,7 @@ import {
   setItemDismissed,
   type DayAgendaItem,
 } from '@/lib/day-agenda';
-import {
-  getCalendarAccessStatus,
-  isAnyCalendarConnected,
-  type CalendarAccessStatus,
-} from '@/lib/calendar';
+import { isAnyCalendarConnected } from '@/lib/calendar';
 import {
   localDateKey,
   isTodayKey,
@@ -67,10 +63,9 @@ export function useDayAgenda() {
   const searchParams = useSearchParams();
 
   const [items, setItems] = useState<DayAgendaItem[]>(() => readCachedAgenda());
-  const [calendarStatus, setCalendarStatus] = useState<CalendarAccessStatus | null>(null);
   // Whether ANY calendar source is connected (EventKit or Google, specs/0069 W4) — null
-  // until the one-shot check below resolves. Distinct from `calendarStatus`, which is
-  // EventKit-only and drives the (separate) "Connect your calendar" nudge gate.
+  // until the one-shot check below resolves. Drives both the no-calendar 'list' default
+  // and the "Connect your calendar" nudge gate.
   const [calendarConnected, setCalendarConnected] = useState<boolean | null>(null);
   const [loaded, setLoaded] = useState(false);
   // Advances each minute so the now-line moves and phases (upcoming→now→past) re-classify.
@@ -137,9 +132,6 @@ export function useDayAgenda() {
   // a calendar-bearing read refreshes the cache. Navigated days (specs/0038 WS4) fetch
   // straight — the last-good cache is today-scoped, so we never merge another day into it.
   const refresh = useCallback(async () => {
-    const status = await getCalendarAccessStatus();
-    setCalendarStatus((prev) => (prev === 'authorized' && status !== 'authorized' ? prev : status));
-
     if (viewMode === 'week') {
       const agendas = await Promise.all(
         weekDays.map((d) => getDayAgenda(isTodayKey(d) ? undefined : d)),
@@ -162,12 +154,17 @@ export function useDayAgenda() {
         cacheAgenda(agenda);
         return agenda;
       }
-      // No calendar items this read — keep prior calendar rows, refresh recordings.
+      // No calendar items this read — keep prior calendar rows, refresh everything else.
+      // Manual entries (specs/0069 W3) come from our own DB, not EventKit, so — like
+      // recordings — they're reliable even on a read where the calendar side glitched;
+      // taking them from `agenda` (not the cache) also means an edit/delete of a manual
+      // row shows up immediately instead of showing stale cached content. Only calendar
+      // rows need the cache fallback, since only EventKit has this transient-empty mode.
       const cached = prev.length ? prev : readCachedAgenda();
       const keptCalendar = cached.filter((it) => it.source === 'calendar');
-      if (keptCalendar.length === 0) return agenda; // genuinely nothing but recordings
-      const freshRecordings = agenda.filter((it) => it.source === 'recording');
-      return [...keptCalendar, ...freshRecordings];
+      if (keptCalendar.length === 0) return agenda; // genuinely nothing but recordings/manual
+      const freshOther = agenda.filter((it) => it.source === 'recording' || it.source === 'manual');
+      return [...keptCalendar, ...freshOther];
     });
     setLoaded(true);
   }, [viewMode, viewDate, viewIsToday, weekDays]);
@@ -296,7 +293,6 @@ export function useDayAgenda() {
   return {
     items,
     visibleItems,
-    calendarStatus,
     calendarConnected,
     loaded,
     now,
