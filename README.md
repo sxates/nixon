@@ -16,17 +16,17 @@ Apple Silicon, macOS 14.4 or later. Open the `.dmg` and drag Nixon to Applicatio
 
 | Your day | Recording |
 |---|---|
-| ![Today view](docs/screenshots/real/today.faceplate.png) | ![Live recording](docs/screenshots/real/record-live.faceplate.png) |
+| ![Today view](docs/screenshots/real/today.deck.png) | ![Live recording](docs/screenshots/real/record-live.deck.png) |
 
 | Who said what | The summary |
 |---|---|
-| ![Transcript with speakers](docs/screenshots/real/meeting-transcript.faceplate.png) | ![Summary](docs/screenshots/real/meeting-summary.faceplate.png) |
+| ![Transcript with speakers](docs/screenshots/real/meeting-transcript.deck.png) | ![Summary](docs/screenshots/real/meeting-summary.deck.png) |
 
 | Ask across every meeting | Settings |
 |---|---|
-| ![Ask AI](docs/screenshots/real/ask.faceplate.png) | ![Recording settings](docs/screenshots/real/settings-recordings.faceplate.png) |
+| ![Ask AI](docs/screenshots/real/ask.deck.png) | ![Recording settings](docs/screenshots/real/settings-recordings.deck.png) |
 
-Dark-theme versions are in [`docs/screenshots/real`](docs/screenshots/real). The meetings
+Light-theme versions are in [`docs/screenshots/real`](docs/screenshots/real). The meetings
 shown are fictional.
 
 ---
