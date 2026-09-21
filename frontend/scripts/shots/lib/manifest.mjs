@@ -7,6 +7,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 export const DEFAULTS = { viewport: [1280, 860], themes: ['faceplate', 'deck'], wait: 1500 };
 const THEMES = new Set(['faceplate', 'deck']);
 const UPDATE_STATES = new Set(['ready', 'downloading']);
+const CALENDAR_STATES = new Set(['none']);
 
 export function loadManifest(path = join(here, '..', 'routes.json')) {
   const raw = JSON.parse(readFileSync(path, 'utf8'));
@@ -21,6 +22,7 @@ export function loadManifest(path = join(here, '..', 'routes.json')) {
     for (const t of themes) if (!THEMES.has(t)) throw new Error(`${e.name}: unknown theme ${t}`);
     if (e.onboardingStep !== undefined && !(e.onboardingStep >= 1 && e.onboardingStep <= 5)) throw new Error(`${e.name}: onboardingStep 1..5`);
     if (e.update !== undefined && !UPDATE_STATES.has(e.update)) throw new Error(`${e.name}: unknown update state ${e.update}`);
+    if (e.calendar !== undefined && !CALENDAR_STATES.has(e.calendar)) throw new Error(`${e.name}: unknown calendar state ${e.calendar}`);
     return { ...e, viewport: e.viewport ?? DEFAULTS.viewport, themes, wait: e.wait ?? DEFAULTS.wait, ignore: e.ignore ?? [] };
   });
 }
@@ -43,6 +45,10 @@ export function expand(entries, { headless = false } = {}) {
           // an update, rather than every route growing a restart glyph (build-mock.mjs
           // reads this to answer api_get_update_status).
           if (entry.update) u.searchParams.set('update', entry.update);
+          // specs/0069b review fix — a per-route flag so exactly one route captures the
+          // genuine no-calendar-connected state (build-mock.mjs reads this to answer
+          // api_get_calendar_access_status / api_google_calendar_status).
+          if (entry.calendar) u.searchParams.set('calendar', entry.calendar);
           return u.toString();
         },
       });
