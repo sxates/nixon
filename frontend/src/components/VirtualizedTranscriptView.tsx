@@ -89,6 +89,17 @@ export interface VirtualizedTranscriptViewProps {
      *  caller (TranscriptPanel) also surfaces a toast. Absent => no pencil/edit
      *  affordance on any row (e.g. while recording, or with no meetingId). */
     onEditText?: (id: string, text: string) => Promise<boolean>;
+
+    /**
+     * Is live transcription actually running? Defaults to `true`, so every existing call
+     * site is unchanged.
+     *
+     * specs/0071 W2 — the "Listening…" indicator below was gated on `isRecording` alone, so
+     * it pulsed away through a 27.8-second window in which the user had paused the
+     * transcript and VAD/STT were detached. The recording WAS running; the transcript was
+     * not. Those are different facts and the indicator only knew one of them.
+     */
+    liveTranscription?: boolean;
 }
 
 // Threshold for enabling virtualization (below this, use simple rendering)
@@ -115,6 +126,7 @@ export const VirtualizedTranscriptView: React.FC<VirtualizedTranscriptViewProps>
     unprocessed = false,
     onProcessNow,
     onEditText,
+    liveTranscription = true,
 }) => {
     // Create scroll ref first - shared between virtualizer and auto-scroll hook
     const scrollRef = useRef<HTMLDivElement>(null);
@@ -646,7 +658,9 @@ export const VirtualizedTranscriptView: React.FC<VirtualizedTranscriptViewProps>
                         </div>
                     )}
 
-                    {/* Listening indicator when recording */}
+                    {/* Recording indicator. specs/0071 W2 — it says which of the two
+                        things is happening, because "the recording stopped" is the fear a
+                        paused transcript creates and it is not what happened. */}
                     {!isStopping && isRecording && !isPaused && !isProcessing && segments.length > 0 && (
                         <motion.div
                             initial={{ opacity: 0 }}
@@ -654,8 +668,17 @@ export const VirtualizedTranscriptView: React.FC<VirtualizedTranscriptViewProps>
                             exit={{ opacity: 0 }}
                             className="flex items-center gap-2 mt-4 text-muted-foreground"
                         >
-                            <div className="w-2 h-2 bg-brand rounded-full animate-pulse"></div>
-                            <span className="text-sm">Listening...</span>
+                            <div
+                                className={cn(
+                                    'w-2 h-2 rounded-full',
+                                    liveTranscription ? 'bg-brand animate-pulse' : 'bg-muted-foreground/50',
+                                )}
+                            ></div>
+                            <span className="text-sm">
+                                {liveTranscription
+                                    ? 'Listening...'
+                                    : 'Transcript paused — audio is still recording'}
+                            </span>
                         </motion.div>
                     )}
                 </>
@@ -714,7 +737,9 @@ export const VirtualizedTranscriptView: React.FC<VirtualizedTranscriptViewProps>
                         </div>
                     )}
 
-                    {/* Listening indicator when recording */}
+                    {/* Recording indicator. specs/0071 W2 — it says which of the two
+                        things is happening, because "the recording stopped" is the fear a
+                        paused transcript creates and it is not what happened. */}
                     {!isStopping && isRecording && !isPaused && !isProcessing && segments.length > 0 && (
                         <motion.div
                             initial={{ opacity: 0 }}
@@ -722,8 +747,17 @@ export const VirtualizedTranscriptView: React.FC<VirtualizedTranscriptViewProps>
                             exit={{ opacity: 0 }}
                             className="flex items-center gap-2 mt-4 text-muted-foreground"
                         >
-                            <div className="w-2 h-2 bg-brand rounded-full animate-pulse"></div>
-                            <span className="text-sm">Listening...</span>
+                            <div
+                                className={cn(
+                                    'w-2 h-2 rounded-full',
+                                    liveTranscription ? 'bg-brand animate-pulse' : 'bg-muted-foreground/50',
+                                )}
+                            ></div>
+                            <span className="text-sm">
+                                {liveTranscription
+                                    ? 'Listening...'
+                                    : 'Transcript paused — audio is still recording'}
+                            </span>
                         </motion.div>
                     )}
                 </>

@@ -10,10 +10,12 @@ import { SpeakerFilterChip } from './SpeakerFilterChip';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { toast } from 'sonner';
+import { Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { UseSpeakersReturn } from '@/hooks/useSpeakers';
 import { useBacklog } from '@/contexts/DeferredBacklogProvider';
 import { isUnprocessedRecording } from '@/lib/processing-mode';
+import { isMeetingInFlight } from '@/lib/deferred-backlog';
 
 interface TranscriptPanelProps {
   transcripts: Transcript[];
@@ -140,7 +142,19 @@ export function TranscriptPanel({
     };
   }, [meetingId]);
 
-  const { enqueueMeeting } = useBacklog();
+  const { view: backlogView, enqueueMeeting } = useBacklog();
+
+  // specs/0071 W3 — is THIS meeting being processed right now?
+  //
+  // The reported symptom was 3 min 19 s of silence after pressing stop. The work was
+  // running and the stop path had already handed it to this same controller — but the page
+  // the user lands on said nothing, so the only visible state was a stale transcript with no
+  // hint that a better one was coming. The sidebar queue knew; the meeting did not. This file
+  // was already importing `useBacklog` and using only `enqueueMeeting`.
+  const isProcessingThisMeeting = isMeetingInFlight(backlogView.items, meetingId);
+  const backlogStage = meetingId
+    ? (backlogView.items.find((i) => i.meeting.id === meetingId)?.status ?? null)
+    : null;
 
   // specs/0041 WS7.2 — post-correction reconciliation. The view has already applied an
   // optimistic overlay (the server result is deterministic), so the transcript refetch
@@ -383,6 +397,26 @@ export function TranscriptPanel({
           onRefetchTranscripts={onRefetchTranscripts}
         />
       </div>
+
+      {/* specs/0071 W3 — this meeting is being processed right now. Stopping a meeting that
+          was deferred at any point queues a full repass (retranscribe, then summarize), which
+          on a short recording still took over three minutes — and nothing on this page said
+          so, so the stale transcript below looked like the final answer. */}
+      {isProcessingThisMeeting && (
+        <div
+          role="status"
+          className="mt-2 flex items-center gap-2 rounded-[3px] border border-brand/30 bg-brand/5 px-3 py-2"
+        >
+          <Loader2 size={14} aria-hidden="true" className="animate-spin text-brand" />
+          <p className="text-xs text-foreground">
+            {backlogStage === 'waiting'
+              ? 'Queued for processing — the transcript and summary will update when it runs.'
+              : backlogStage === 'summarizing'
+                ? 'Summarizing this meeting…'
+                : 'Re-transcribing this meeting — the transcript below will update when it finishes.'}
+          </p>
+        </div>
+      )}
 
       {/* specs/0061 W4 (task 3) — filter chip, above the list, only while filtered. */}
       {speakerFilterName && (

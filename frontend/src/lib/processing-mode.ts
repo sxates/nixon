@@ -147,16 +147,30 @@ export function effectiveLiveTranscription(
 
 /** Compact mode-chip label + battery-glyph decision (RecordingHeader). */
 export interface ModeChipDisplay {
-  label: 'Live' | 'Deferred';
+  label: 'Pause transcript' | 'Resume transcript';
   showBatteryGlyph: boolean;
 }
 
+/**
+ * What the chip's click will DO — not what mode the session is in.
+ *
+ * It used to read `Live` / `Deferred`, i.e. the current state, while clicking *left* that
+ * state. The owner read the word "Live" as "make it live", pressed it mid-meeting, and the
+ * transcript stopped (2026-09-21; specs/0071). That is the only reading a reasonable person
+ * takes from a button in a row where its two neighbours — Participants and the template
+ * picker — both do the thing written on them.
+ *
+ * The state the label used to carry now lives on the transport rail's status line, which
+ * already owns the session's state vocabulary ("On the reel" / "On hold" / "Mic muted") and
+ * is on screen on every route.
+ */
 export function modeChipDisplay(
   live: boolean,
   onBattery: boolean | null,
 ): ModeChipDisplay {
   return {
-    label: live ? 'Live' : 'Deferred',
+    label: live ? 'Pause transcript' : 'Resume transcript',
+    // Still the chip's business: it explains WHY the transcript is paused.
     showBatteryGlyph: !live && onBattery === true,
   };
 }

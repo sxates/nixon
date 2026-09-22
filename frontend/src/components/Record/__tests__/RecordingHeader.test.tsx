@@ -85,7 +85,11 @@ describe('RecordingHeader', () => {
   // Owner feedback 2026-09-21: "A better order: Participants, then Live, then Template" —
   // and the three used to be h-9 / h-9 / h-7, so the row stepped. Asserted on DOM order
   // rather than coordinates so it survives a restyle.
-  it('per-meeting controls run Participants → Live → Template, all the same height', () => {
+  //
+  // The middle control is found by its ACTION label since specs/0071 W1: it used to be
+  // named "Transcription mode: Live…", i.e. its own state, which is what made the owner
+  // press it expecting to go live.
+  it('per-meeting controls run Participants → transcript toggle → Template, same height', () => {
     mode.liveTranscription = true;
     renderHeader(true, {
       availableTemplates: [{ id: 't1', name: 'Standup', description: 'Short' }],
@@ -93,7 +97,7 @@ describe('RecordingHeader', () => {
     } as unknown as React.ComponentProps<typeof RecordingHeader>['templates']);
 
     const participants = screen.getByRole('button', { name: 'Participants' });
-    const live = screen.getByRole('button', { name: /Transcription mode/i });
+    const live = screen.getByRole('button', { name: 'Pause transcript' });
     const template = screen.getByRole('button', { name: /Standup/ });
 
     // compareDocumentPosition: FOLLOWING (0x04) means the argument comes after the node.

@@ -39,6 +39,17 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 ### Changed
 
+- **The transcript's pause button says what it will do.** The control on the recording header
+  used to be labelled with the mode you were already in — "Live" — so pressing it stopped the
+  transcript. It now reads **Pause transcript** while running and **Resume transcript** while
+  paused, and the state it used to carry is on the transport rail with everything else.
+- **Nothing claims to be listening when it isn't.** Pause the transcript and the transcript
+  area says so — and says that audio is still recording, which is the thing you actually want
+  to know. The rail says "Transcript paused" on every screen.
+- **A meeting tells you when it is being processed.** Stopping a meeting whose transcript was
+  paused at any point queues a full re-transcribe and a fresh summary; the meeting now shows
+  that it is queued, re-transcribing or summarizing, instead of showing an old transcript and
+  saying nothing for minutes.
 - **The meter in the footer follows the whole meeting.** It used to go dead whenever your
   mic was muted in Zoom, even though the other side of the call was still being recorded.
   Muting your mic now only changes the words next to it.
@@ -69,6 +80,20 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 ### Internal
 
+- Spec 0071 covers the follow-up from an owner recording on 2026-09-21: three of the four
+  reported faults were the app working as designed and failing to say so (the chip's label,
+  the "Listening" indicator, and a silent 3min19s `'process-now'` repass after stop). Root
+  causes established from the recording's own files.
+- The VAD now splits a speech run longer than 30s — Whisper's own encoder window — into
+  contiguous pieces at emission rather than handing over one oversized unit; an offline
+  re-pass had produced a single 108.7-second segment. Split at emission, not by cutting
+  mid-run, because `SpeechEnd` carries its own samples alongside the parallel accumulation
+  and reconciling the two is how 0046 and 0051 both got scrambled clocks. `vad_split.rs` is a
+  new module because `vad.rs` was at the size cap.
+- A recording logs every term behind its stored duration (elapsed / pauses / active). One
+  recording stored 68.85s for 114.6s of ffmpeg-measured audio; that is **not fixed** — the
+  mute gate is exonerated, `pause_recording` has only the HOLD caller, and the session's log
+  had been truncated, so this is the evidence the next occurrence needs.
 - Specs 0070 covers the four functional items of this batch (progressive speaker reveal,
   dismissed events reaching the notifier and the prep-brief generator, notification lifetime,
   the dev recordings root). The other eleven were presentation and were built without a spec.

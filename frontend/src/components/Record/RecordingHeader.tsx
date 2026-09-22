@@ -66,7 +66,10 @@ function ModeChip({ meetingId }: { meetingId: string }) {
       type="button"
       onClick={handleClick}
       disabled={enabling}
-      aria-label={`Transcription mode: ${label}. Click to switch to ${liveTranscription ? 'Deferred' : 'Live'}.`}
+      // The action, matching the visible label — a screen reader must hear the same thing an
+      // eye reads (specs/0071 W1). It used to announce the mode and then the switch, which is
+      // the same trap in longer form.
+      aria-label={label}
       // h-8 matches the template picker and the participants trigger beside it — the three
       // per-meeting controls used to be h-7 / h-9 / h-9 and visibly failed to line up
       // (owner feedback 2026-09-21).

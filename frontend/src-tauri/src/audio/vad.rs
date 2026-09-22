@@ -1,4 +1,6 @@
 use anyhow::{anyhow, Result};
+
+use super::vad_split::{split_long_segment, LONG_RUN_LOG_SECS};
 use log::{debug, info, warn};
 use silero_rs::{VadConfig, VadSession, VadTransition};
 use std::collections::VecDeque;
@@ -88,6 +90,9 @@ pub struct ContinuousVadProcessor {
     speech_start_sample: usize,
     // State tracking for smart logging
     last_logged_state: bool,
+    /// Whether the current speech run has already logged its "no end-of-speech yet" warning,
+    /// so a long run costs one line rather than one per chunk (specs/0071 W4).
+    logged_long_run: bool,
 }
 
 impl ContinuousVadProcessor {
@@ -157,6 +162,7 @@ impl ContinuousVadProcessor {
             speech_start_sample: 0,
             // Initialize state tracking
             last_logged_state: false,
+            logged_long_run: false,
         })
     }
 
@@ -253,7 +259,12 @@ impl ContinuousVadProcessor {
                 confidence: 0.8, // Estimated confidence for forced end
             };
 
-            self.speech_segments.push_back(segment);
+            // specs/0071 W4 — this is the site that produced the reported 108.7s unit: an
+            // offline re-pass feeds a whole file through with no real-time pacing, so the
+            // forced end at flush carries the entire unbroken run.
+            for piece in split_long_segment(segment, self.sample_rate as f64) {
+                self.speech_segments.push_back(piece);
+            }
             self.current_speech.clear();
             self.in_speech = false;
         }
@@ -267,12 +278,19 @@ impl ContinuousVadProcessor {
     }
 
     fn process_chunk(&mut self, chunk: &[f32]) -> Result<()> {
-        // Track accumulated speech buffer size to detect memory issues
-        let current_speech_size = self.current_speech.len();
-        if current_speech_size > 1_000_000 {
-            // More than ~62 seconds of accumulated speech at 16kHz
-            warn!("VAD: Accumulated speech buffer is large: {} samples ({:.1}s) - possible memory issue",
-                  current_speech_size, current_speech_size as f64 / 16000.0);
+        // A speech run this long means the VAD has not heard end-of-speech for minutes —
+        // continuously voiced audio, or a redemption window that never closes. The run is
+        // split into transcription-sized pieces at emission (`split_long_segment`), so this
+        // is no longer about memory; it is the signal that the audio is unusual. Logged once
+        // per run rather than once per chunk: the old version emitted 161 identical lines in
+        // a single second (specs/0071).
+        let current_speech_secs = self.current_speech.len() as f64 / self.sample_rate as f64;
+        if current_speech_secs > LONG_RUN_LOG_SECS && !self.logged_long_run {
+            self.logged_long_run = true;
+            warn!(
+                "VAD: {:.0}s of speech with no end-of-speech yet — audio may be continuously voiced",
+                current_speech_secs
+            );
         }
 
         let transitions = self
@@ -303,6 +321,7 @@ impl ContinuousVadProcessor {
                     self.speech_start_sample =
                         self.processed_samples + (timestamp_ms * 16000 / 1000);
                     self.current_speech.clear();
+                    self.logged_long_run = false;
                 }
                 VadTransition::SpeechEnd {
                     start_timestamp_ms,
@@ -353,7 +372,11 @@ impl ContinuousVadProcessor {
                             segment.samples.len()
                         );
 
-                        self.speech_segments.push_back(segment);
+                        // specs/0071 W4 — a run longer than the cap becomes several
+                        // contiguous segments rather than one oversized unit.
+                        for piece in split_long_segment(segment, self.sample_rate as f64) {
+                            self.speech_segments.push_back(piece);
+                        }
                     }
 
                     self.current_speech.clear();
@@ -757,3 +780,4 @@ mod tests {
         }
     }
 }
+

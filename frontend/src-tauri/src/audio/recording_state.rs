@@ -133,6 +133,38 @@ pub struct RecordingState {
     total_pause_duration: Mutex<std::time::Duration>,
 }
 
+/// The inputs behind a recording's stored duration (specs/0071 W5).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct DurationAccounting {
+    /// Wall clock since the recording started.
+    pub elapsed: f64,
+    /// Total time previously spent paused.
+    pub pauses: f64,
+    /// Time in the pause currently in progress, if any.
+    pub current_pause: f64,
+    /// What gets stored: `elapsed - pauses - current_pause`.
+    pub active: f64,
+}
+
+impl DurationAccounting {
+    /// One greppable line naming every term. `warn!` when the pause terms explain a
+    /// shortfall, because that is the case worth finding in a log nobody was watching.
+    pub fn log(&self, context: &str) {
+        let line = format!(
+            "recording duration accounting [{}]: elapsed={:.2}s pauses={:.2}s \
+             current_pause={:.2}s -> active={:.2}s (stored)",
+            context, self.elapsed, self.pauses, self.current_pause, self.active
+        );
+        // Any pause at all is worth flagging: the owner reported not having pressed HOLD, so
+        // a non-zero term here is itself the finding.
+        if self.pauses + self.current_pause > 0.5 {
+            log::warn!("{line} — pause time is being subtracted from the stored duration");
+        } else {
+            log::info!("{line}");
+        }
+    }
+}
+
 impl RecordingState {
     pub fn new() -> Arc<Self> {
         Arc::new(Self {
@@ -424,6 +456,53 @@ impl RecordingState {
         self.total_pause_duration.lock().unwrap().as_secs_f64()
     }
 
+    /// The duration that gets stored, having first logged every term behind it.
+    ///
+    /// One call rather than a log statement beside each `get_active_recording_duration()`:
+    /// the logging belongs to the number, and `recording_manager.rs` sits exactly on the
+    /// 800-line cap (specs/0065), so it cannot afford four lines per stop path for something
+    /// this mechanical.
+    pub fn duration_for_save(&self, context: &str) -> Option<f64> {
+        if let Some(acct) = self.duration_accounting() {
+            acct.log(context);
+        }
+        self.get_active_recording_duration()
+    }
+
+    /// Every input to [`Self::get_active_recording_duration`], so a wrong recorded duration
+    /// can be attributed instead of guessed at.
+    ///
+    /// specs/0071 W5. A recording on 2026-09-21 stored `duration_seconds: 68.85` for 114.6s
+    /// of audio (ffmpeg-measured on all three files). The arithmetic here is
+    /// `elapsed - pauses - current_pause`, so the 46-second shortfall is either a short
+    /// `elapsed` or ~46s that accrued as pause — and those have completely different causes.
+    /// It could not be told apart after the fact: the Zoom mute gate is exonerated (it gates
+    /// the mic and never pauses), `pause_recording` has only the HOLD caller, and the
+    /// session's log had been truncated past the recording.
+    ///
+    /// So this is deliberately NOT a fix. It is the evidence the next occurrence needs.
+    pub fn duration_accounting(&self) -> Option<DurationAccounting> {
+        self.recording_start.lock().unwrap().map(|start| {
+            let elapsed = start.elapsed().as_secs_f64();
+            let pauses = self.get_total_pause_duration();
+            let current_pause = if self.is_paused() {
+                self.pause_start
+                    .lock()
+                    .unwrap()
+                    .map(|p| p.elapsed().as_secs_f64())
+                    .unwrap_or(0.0)
+            } else {
+                0.0
+            };
+            DurationAccounting {
+                elapsed,
+                pauses,
+                current_pause,
+                active: elapsed - pauses - current_pause,
+            }
+        })
+    }
+
     pub fn get_current_pause_duration(&self) -> Option<f64> {
         if self.is_paused() {
             self.pause_start
@@ -546,5 +625,95 @@ mod mute_gate_tests {
             DeviceType::Microphone,
             "clearing the gate restores the microphone"
         );
+    }
+}
+
+#[cfg(test)]
+mod duration_accounting_tests {
+    use super::*;
+
+    // specs/0071 W5 — the arithmetic behind a recording's stored duration, made checkable.
+    // A recording stored 68.85s for 114.6s of audio and it could not be attributed after the
+    // fact; these pin what the reported terms mean so the log is readable when it matters.
+
+    fn acct(elapsed: f64, pauses: f64, current_pause: f64) -> DurationAccounting {
+        DurationAccounting {
+            elapsed,
+            pauses,
+            current_pause,
+            active: elapsed - pauses - current_pause,
+        }
+    }
+
+    #[test]
+    fn active_is_elapsed_minus_both_pause_terms() {
+        let a = acct(117.71, 0.0, 0.0);
+        assert!((a.active - 117.71).abs() < 1e-9, "no pauses: active is elapsed");
+
+        // The shape the reported bug would have had, if pauses were the cause.
+        let a = acct(117.71, 48.86, 0.0);
+        assert!((a.active - 68.85).abs() < 1e-2, "pauses are subtracted");
+
+        // A pause still in progress counts too.
+        let a = acct(100.0, 10.0, 5.0);
+        assert!((a.active - 85.0).abs() < 1e-9);
+    }
+
+    /// The whole point of the instrumentation: a clean recording and a pause-shortened one
+    /// must be distinguishable from their terms alone, without the audio file.
+    #[test]
+    fn the_terms_distinguish_a_short_elapsed_from_accrued_pauses() {
+        let short_elapsed = acct(68.85, 0.0, 0.0);
+        let paused = acct(117.71, 48.86, 0.0);
+
+        assert!((short_elapsed.active - paused.active).abs() < 1e-1, "same stored duration");
+        assert_ne!(
+            short_elapsed.elapsed.round(),
+            paused.elapsed.round(),
+            "but a different cause, visible in the terms"
+        );
+        assert_eq!(short_elapsed.pauses, 0.0);
+        assert!(paused.pauses > 0.0);
+    }
+
+    #[test]
+    fn accounting_is_none_outside_a_recording() {
+        let state = RecordingState::new();
+        assert!(
+            state.duration_accounting().is_none(),
+            "no recording_start instant means nothing to account for"
+        );
+    }
+
+    #[test]
+    fn accounting_matches_the_duration_that_gets_stored() {
+        let state = RecordingState::new();
+        state.start_recording().expect("start");
+        let stored = state.get_active_recording_duration().expect("a duration");
+        let acct = state.duration_accounting().expect("accounting");
+        // Both read the same clock a moment apart, so they agree to within the gap.
+        assert!(
+            (acct.active - stored).abs() < 0.5,
+            "the logged `active` must be the number that gets stored: {} vs {}",
+            acct.active,
+            stored
+        );
+        assert_eq!(acct.pauses, 0.0);
+        assert_eq!(acct.current_pause, 0.0);
+    }
+
+    #[test]
+    fn a_real_pause_shows_up_in_the_terms() {
+        let state = RecordingState::new();
+        state.start_recording().expect("start");
+        state.pause_recording().expect("pause");
+        let acct = state.duration_accounting().expect("accounting");
+        assert!(
+            acct.current_pause >= 0.0 && acct.pauses == 0.0,
+            "an in-progress pause is reported separately from completed ones"
+        );
+        state.resume_recording().expect("resume");
+        let acct = state.duration_accounting().expect("accounting");
+        assert_eq!(acct.current_pause, 0.0, "no pause in progress after resuming");
     }
 }

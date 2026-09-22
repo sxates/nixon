@@ -6,6 +6,7 @@ import { useSidebar } from '@/components/Sidebar/SidebarProvider';
 import { useTranscripts } from '@/contexts/TranscriptContext';
 import { useRecordingLevel } from '@/hooks/useRecordingLevel';
 import { useMicGate } from '@/hooks/useMicGate';
+import { useProcessingMode } from '@/hooks/useProcessingMode';
 import { cn } from '@/lib/utils';
 import { Reels } from './Reels';
 import { TapeCounter } from './TapeCounter';
@@ -18,8 +19,12 @@ export type TransportPhase = 'idle' | 'starting' | 'recording' | 'paused' | 'fin
  * table, reordered by specs/0064 W6 so the instruments hold still while titles change).
  *
  * The second line is the state vocabulary the whole app now shares — "Nothing on the reel" /
- * "On the reel" / "On hold" / "Finishing the reel" — so the rail never disagrees with itself
- * the way the old bar, pill and header trio did.
+ * "On the reel" / "On hold" / "Mic muted" / "Transcript paused" / "Finishing the reel" — so
+ * the rail never disagrees with itself the way the old bar, pill and header trio did.
+ *
+ * specs/0071 W1 added "Transcript paused". The rail is the only surface on screen on every
+ * route, so it is where a session state belongs; the record header's chip was carrying it in
+ * its own label, which meant the chip could not be labelled with what clicking it does.
  */
 export function TransportStatus({ phase, elapsedSeconds }: { phase: TransportPhase; elapsedSeconds: number }) {
   const { currentMeeting, activeRecordingMeetingId } = useSidebar();
@@ -27,6 +32,12 @@ export function TransportStatus({ phase, elapsedSeconds }: { phase: TransportPha
   // specs/0049 — while Zoom's own mute is on, the owner mic is gated in the backend; the
   // ladder must not imply we are still capturing the user's voice.
   const micMuted = useMicGate();
+  // specs/0071 W1 — the rail carries the session's STATE so the header's chip is free to
+  // carry the action. Live transcription being off needs to be visible on every route, not
+  // just the one screen with the chip on it: the reported bug was a 27.8s deferred window
+  // during which nothing anywhere said the transcript had stopped.
+  const { liveTranscription } = useProcessingMode();
+  const transcriptPaused = liveTranscription === false;
   const router = useRouter();
   const pathname = usePathname();
   // The rail is a way back to the live meeting from anywhere else. On /record there is
@@ -57,7 +68,12 @@ export function TransportStatus({ phase, elapsedSeconds }: { phase: TransportPha
             ? 'On hold'
             : micMuted
               ? 'Mic muted'
-              : 'On the reel';
+              : // Below "On hold" and "Mic muted" deliberately: both of those are about the
+                // AUDIO, and audio beats transcript — a paused recording is not transcribing
+                // either, and a muted mic is the more surprising fact of the two.
+                transcriptPaused
+                ? 'Transcript paused'
+                : 'On the reel';
   const tone = phase === 'paused' ? 'amber' : phase === 'idle' || phase === 'starting' ? 'dim' : 'normal';
   return (
     <div className="flex min-w-0 flex-1 items-center gap-3.5 px-5">
