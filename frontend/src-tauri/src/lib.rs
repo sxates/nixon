@@ -34,6 +34,7 @@ pub mod app_paths;
 pub mod audio;
 pub mod calendar;
 pub mod config;
+pub mod diagnostics;
 pub mod data_migration;
 pub mod database;
 pub mod dev_fixtures;

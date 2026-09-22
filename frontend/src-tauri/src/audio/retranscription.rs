@@ -723,6 +723,15 @@ pub async fn start_retranscription_command<R: Runtime>(
 ) -> Result<RetranscriptionStarted, String> {
     // Check if retranscription is already in progress (guard will be acquired in start_retranscription)
     if RETRANSCRIPTION_IN_PROGRESS.load(Ordering::SeqCst) {
+        // Logged, because this used to be the one silent exit from the whole pipeline: the
+        // caller's `invoke` rejects, the deferred backlog's wait reports 'error', and
+        // `processMeeting` abandons the meeting WITHOUT diarizing or summarizing — even
+        // though the retranscription it wanted is running perfectly well under whoever holds
+        // the guard. Nothing recorded that anywhere, which is exactly the shape of the
+        // 2026-09-21 report where a meeting retranscribed and then never summarized.
+        log::warn!(
+            "retranscription refused for {meeting_id}: another retranscription already in              progress — the caller will treat this as a failure"
+        );
         return Err("Retranscription already in progress".to_string());
     }
 

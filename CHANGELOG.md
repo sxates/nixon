@@ -75,6 +75,10 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
   the audio by hand — and the **Process now** button did nothing when you tried. Both went
   through the same broken check, which could never succeed for any meeting. Stopping now
   transcribes and summarizes on its own, the way a meeting you never paused always did.
+- **A meeting's length is recorded correctly.** The stored duration was taken after the
+  recording's clocks had already been cleared, so it fell back to the moment speech last
+  stopped — a meeting with quiet at the end, or a paused transcript, came out shorter than it
+  was (63 seconds recorded as a 67-second meeting; 69 for a 115-second one).
 - **Hiding a meeting on Today now actually hides it.** Clearing something off your day —
   lunch, a hold, anything you are not recording — no longer sends you a reminder to prep for
   it or to join it, and no longer spends a summary working out what it was about.
@@ -106,6 +110,20 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 - Log files were capped at the plugin's default 40 KB with `KeepOne`, which discards on
   rotation — smaller than one recording produces, so two investigations found the session
   they wanted already gone. Now 8 MB, keeping the last three.
+- `RecordingState::stop_recording` now captures the duration accounting before anything
+  clears it. `cleanup()` (via `stop_streams_only`) wipes `recording_start` and runs BEFORE
+  `save_recording_only` reads it, so the save got `None` and `recording_saver.rs:1299` fell
+  back to the last transcript segment's `audio_end_time`. That is the whole root cause of the
+  wrong durations, and it is now covered by tests that reproduce the stop path's ordering.
+  `recording_duration.rs` is a new module because `recording_state.rs` hit the size cap.
+- `api_log_frontend` + `lib/app-log.ts`: the frontend can write into the app log file. The
+  deferred-backlog drain sequences retranscribe → diarize → summarize entirely in TypeScript,
+  so none of its decisions were recorded anywhere — when a meeting retranscribed and then
+  never summarized, the log showed the Rust work succeeding and then nothing. Every drain step
+  and every wait result is now logged, as is `start_retranscription_command`'s
+  already-in-progress refusal, which was the one silent exit from the pipeline: the caller's
+  invoke rejects, the wait reports 'error', and the meeting is abandoned undiarized and
+  unsummarized while the work runs fine under whoever holds the guard.
 - A recording logs every term behind its stored duration (elapsed / pauses / active). One
   recording stored 68.85s for 114.6s of ffmpeg-measured audio; that is **not fixed** — the
   mute gate is exonerated, `pause_recording` has only the HOLD caller, and the session's log

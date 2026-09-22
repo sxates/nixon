@@ -33,6 +33,7 @@ import { safeListen } from '@/lib/safe-listen';
 import { useSidebar } from '@/components/Sidebar/SidebarProvider';
 import { useConfig } from '@/contexts/ConfigContext';
 import { retranscriptionProviderFor } from '@/lib/deferred-transcription';
+import { logInfo, logWarn } from '@/lib/app-log';
 import { resolveSummaryLanguage } from '@/lib/resolve-summary-language';
 import { DEFAULT_TEMPLATE_ID } from '@/hooks/meeting-details/useTemplates';
 import type { Transcript } from '@/types';
@@ -122,9 +123,14 @@ async function awaitMeetingCompletion(
       if (shouldAbort()) settle('aborted');
     }, WAIT_ABORT_POLL_MS);
     await start();
-    return await done;
+    const result = await done;
+    // Every wait reports how it ended. A 'complete' here and no further step in the log is
+    // what localises a stall to `processMeeting` rather than to the wait.
+    logInfo('backlog', `${completeEvent} wait for ${meetingId} -> ${result}`);
+    return result;
   } catch (error) {
     console.error(`[deferred-backlog] ${completeEvent} wait failed:`, error);
+    logWarn('backlog', `${completeEvent} wait threw for ${meetingId}: ${String(error)}`);
     return 'error';
   } finally {
     unlisteners.forEach((unlisten) => unlisten());
@@ -316,26 +322,50 @@ export function useDeferredBacklog(): UseDeferredBacklogReturn {
   const processMeeting = useCallback(
     async (m: DeferredMeeting): Promise<MeetingOutcome> => {
       const explicitlyDeferred = true; // backlog meetings are all defer-marked or sparse
+      const needsTranscribe = needsRetranscription(m.transcriptCount, explicitlyDeferred);
+      logInfo(
+        'backlog',
+        `processMeeting ${m.id}: transcriptCount=${m.transcriptCount} needsRetranscription=${needsTranscribe}`,
+      );
       // 1. Retranscribe when sparse or explicitly deferred.
-      if (needsRetranscription(m.transcriptCount, explicitlyDeferred)) {
+      if (needsTranscribe) {
         dispatch({ type: 'set-status', meetingId: m.id, status: 'transcribing' });
         const status = await runRetranscription(m);
-        if (status === 'aborted') return 'aborted'; // user stop; leave it as-is
+        if (status === 'aborted') {
+          logWarn('backlog', `${m.id}: aborted during retranscription — stopping here`);
+          return 'aborted'; // user stop; leave it as-is
+        }
         if (status !== 'complete') {
+          logWarn(
+            'backlog',
+            `${m.id}: retranscription returned '${status}' — no diarize, no summary`,
+          );
           dispatch({ type: 'set-status', meetingId: m.id, status: 'error' });
           return 'incomplete'; // marker stays on the backend; retried on a later pass
         }
       }
-      if (stopRef.current) return 'aborted';
+      if (stopRef.current) {
+        logWarn('backlog', `${m.id}: stop requested before diarization`);
+        return 'aborted';
+      }
 
       // 2. Diarize (best-effort — a timeout/error just skips it).
       dispatch({ type: 'set-status', meetingId: m.id, status: 'diarizing' });
-      if ((await runDiarization(m)) === 'aborted') return 'aborted';
-      if (stopRef.current) return 'aborted';
+      logInfo('backlog', `${m.id}: diarization step`);
+      if ((await runDiarization(m)) === 'aborted') {
+        logWarn('backlog', `${m.id}: aborted during diarization`);
+        return 'aborted';
+      }
+      if (stopRef.current) {
+        logWarn('backlog', `${m.id}: stop requested before summary`);
+        return 'aborted';
+      }
 
       // 3. Summarize.
       dispatch({ type: 'set-status', meetingId: m.id, status: 'summarizing' });
+      logInfo('backlog', `${m.id}: summary step`);
       const summary = await runSummary(m);
+      logInfo('backlog', `${m.id}: summary -> ${summary}`);
       if (summary === 'aborted') return 'aborted';
 
       // 4. Clear the pending marker.
@@ -355,7 +385,14 @@ export function useDeferredBacklog(): UseDeferredBacklogReturn {
   );
 
   const drain = useCallback(async (): Promise<void> => {
-    if (processingRef.current) return; // a drain is already running; it will pick up new items
+    if (processingRef.current) {
+      // Not benign: the caller's meeting is only picked up if the running drain's loop
+      // sees it. Worth a line, because "nothing happened" and "a drain was already
+      // running" look identical from outside.
+      logWarn('backlog', 'drain requested while one was already running');
+      return;
+    }
+    logInfo('backlog', `drain starting with ${itemsRef.current.length} item(s)`);
     processingRef.current = true;
     stopRef.current = false;
     dispatch({ type: 'processing-started' });
@@ -366,6 +403,7 @@ export function useDeferredBacklog(): UseDeferredBacklogReturn {
         const next = firstWaiting({ items: itemsRef.current, processing: false });
         if (!next) break;
         const outcome = await processMeeting(next.meeting);
+        logInfo('backlog', `${next.meeting.id}: processMeeting -> ${outcome}`);
         if (outcome === 'error' || outcome === 'incomplete') failedTitles.push(next.meeting.title);
       }
     } finally {
@@ -470,6 +508,7 @@ export function useDeferredBacklog(): UseDeferredBacklogReturn {
         // spec 0051 WS2: this used to return silently, dropping the meeting on the
         // floor with no trace. A notes-only meeting legitimately lands here.
         console.warn('[deferred-backlog] no folder_path for', meetingId);
+        logWarn('backlog', `enqueue refused ${meetingId}: no folder_path`);
         return { accepted: false, reason: 'no-folder-path' };
       }
       let transcriptCount = 0;
