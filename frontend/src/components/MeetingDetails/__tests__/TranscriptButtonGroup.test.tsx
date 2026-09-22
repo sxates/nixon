@@ -109,9 +109,65 @@ describe('TranscriptButtonGroup audio-availability gating (WS7.1)', () => {
       expect.stringMatching(/no audio recording available.*retention/i)
     );
 
-    // Audio-independent affordances stay usable: the transcript is still there.
-    expect(screen.getByRole('button', { name: /copy/i })).toBeEnabled();
-    expect(screen.getByRole('button', { name: /open folder/i })).toBeEnabled();
+    // Audio-independent affordances stay usable: the transcript is still there. They live
+    // in the `…` overflow since 2026-09-21 (owner feedback — they were sitting in front of
+    // the running pass), so reach them the way a user would.
+    await userEvent.click(screen.getByRole('button', { name: /more transcript actions/i }));
+    expect(await screen.findByRole('menuitem', { name: /^copy$/i })).not.toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+    expect(screen.getByRole('menuitem', { name: /open folder/i })).not.toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+  });
+
+  // Owner feedback 2026-09-21: mid-pass the bar read "Copy · Open folder · Identifying…
+  // 42% · Enhance". The two file-management affordances are now behind `…`, so the row
+  // shows only what you can act on.
+  it('keeps Copy and Open folder out of the front row entirely', async () => {
+    invoke.mockResolvedValue(true);
+    render(<TranscriptButtonGroup {...baseProps} />);
+    await waitFor(() => expect(invoke).toHaveBeenCalled());
+
+    expect(screen.queryByRole('button', { name: /^copy$/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /open folder/i })).toBeNull();
+    expect(screen.getByRole('button', { name: /more transcript actions/i })).toBeEnabled();
+  });
+
+  it('the overflow Copy is disabled when there is no transcript to copy', async () => {
+    invoke.mockResolvedValue(true);
+    render(<TranscriptButtonGroup {...baseProps} transcriptCount={0} />);
+    await waitFor(() => expect(invoke).toHaveBeenCalled());
+
+    await userEvent.click(screen.getByRole('button', { name: /more transcript actions/i }));
+    expect(await screen.findByRole('menuitem', { name: /^copy$/i })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+  });
+
+  it('the overflow actions call through to their handlers', async () => {
+    invoke.mockResolvedValue(true);
+    const onCopyTranscript = vi.fn();
+    const onOpenMeetingFolder = vi.fn().mockResolvedValue(undefined);
+    render(
+      <TranscriptButtonGroup
+        {...baseProps}
+        onCopyTranscript={onCopyTranscript}
+        onOpenMeetingFolder={onOpenMeetingFolder}
+      />,
+    );
+    await waitFor(() => expect(invoke).toHaveBeenCalled());
+
+    await userEvent.click(screen.getByRole('button', { name: /more transcript actions/i }));
+    await userEvent.click(await screen.findByRole('menuitem', { name: /^copy$/i }));
+    expect(onCopyTranscript).toHaveBeenCalled();
+
+    await userEvent.click(screen.getByRole('button', { name: /more transcript actions/i }));
+    await userEvent.click(await screen.findByRole('menuitem', { name: /open folder/i }));
+    expect(onOpenMeetingFolder).toHaveBeenCalled();
   });
 
   it('keeps both affordances enabled when audio is present', async () => {

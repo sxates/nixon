@@ -65,6 +65,16 @@ re-capture instead.
 4. `pnpm shots:real` — read every PNG in `docs/screenshots/real/` and reject any that shows a
    stale state (wrong tab, a stray DEV badge, an empty list); re-run with `--only <name>`
    for just those after fixing the cause.
+
+   **Then read the Settings tabs again, looking only for your own data.** The meetings are
+   fictional, but the Settings tabs render real machine and account state, and that is the
+   one place this set can leak. This step was in the list and was not done: `settings-recordings`
+   shipped the owner's home path (`/Users/<name>/Movies/meetily-recordings`) and
+   `settings-calendar` shipped their work email address — both committed to a public repo,
+   both deleted 2026-09-21. The dev build now writes to `nixon-recordings-dev` and the
+   Save location renders as `~/Movies/…`, so the path is fixed at the source; **the email
+   in Calendar → Your addresses is not**, and that tab must not be re-captured while a real
+   address is in it.
 5. Commit the refreshed `docs/screenshots/real/*.png` alongside the change. `release.sh`
    prints a non-blocking reminder, checked before the build, when that directory is missing
    or older than the *previous* release tag — comparing against the tag this run is about

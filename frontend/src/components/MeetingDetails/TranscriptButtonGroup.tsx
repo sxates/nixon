@@ -4,7 +4,13 @@ import { useState, useCallback, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { Button } from '@/components/ui/button';
 import { ButtonGroup } from '@/components/ui/button-group';
-import { Loader2 } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Loader2, MoreHorizontal } from 'lucide-react';
 import { RetranscribeDialog } from './RetranscribeDialog';
 import { useBacklog } from '@/contexts/DeferredBacklogProvider';
 import { useDiarization } from '@/hooks/useDiarization';
@@ -149,29 +155,6 @@ export function TranscriptButtonGroup({
   return (
     <div className="flex items-center justify-start gap-2">
       <ButtonGroup>
-        <Button
-          variant="outline"
-          size="xs"
-          onClick={() => {
-            onCopyTranscript();
-          }}
-          disabled={transcriptCount === 0}
-          title={transcriptCount === 0 ? 'No transcript available' : 'Copy Transcript'}
-        >
-          <span>Copy</span>
-        </Button>
-
-        <Button
-          size="xs"
-          variant="outline"
-          onClick={() => {
-            onOpenMeetingFolder();
-          }}
-          title="Open Recording Folder"
-        >
-          <span>Open folder</span>
-        </Button>
-
         {meetingId && (
           <Button
             size="xs"
@@ -263,6 +246,36 @@ export function TranscriptButtonGroup({
             <span>Enhance</span>
           </Button>
         )}
+
+        {/* Copy and Open folder moved in here on owner feedback 2026-09-21: they were the
+            first two buttons on the bar, so while a pass was running the row read
+            "Copy · Open folder · Identifying… 42% · Enhance" — two file-management
+            affordances sitting in front of the one thing actually happening. Same `…`
+            pattern (and position) as SummaryToolbar, so the two document tabs now share
+            one shape. */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="outline"
+              size="xs"
+              aria-label="More transcript actions"
+              title="More transcript actions"
+            >
+              <MoreHorizontal size={14} />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem
+              onSelect={() => onCopyTranscript()}
+              disabled={transcriptCount === 0}
+            >
+              Copy
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => void onOpenMeetingFolder()}>
+              Open folder
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </ButtonGroup>
 
       {meetingId && meetingFolderPath && (

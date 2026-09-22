@@ -7,8 +7,17 @@ import { render, screen, fireEvent } from '@testing-library/react';
 // colour per state and the engraved chip text are the contract this pins down.
 
 import type { DayAgendaItem } from '@/lib/day-agenda';
-import type { TimelineVisualState } from '@/lib/today-timeline';
+import type { TimelineContext, TimelineVisualState } from '@/lib/today-timeline';
 import { TimelineBlock } from '@/components/Today/TimelineBlock';
+
+// The block used to take `canHide`/`canEdit` as booleans; since 2026-09-21 the Hide/Edit/
+// Delete gate lives in the shared `AgendaRowMenu`, which derives it from the item + this
+// context — so the grid, the list and the week view can't disagree about what a row offers.
+const ctx: TimelineContext = {
+  now: new Date('2026-09-13T15:30:00.000Z'),
+  isRecording: false,
+  recordingThisId: null,
+};
 
 const item: DayAgendaItem = {
   id: 'evt-1',
@@ -34,9 +43,8 @@ function renderBlock(state: TimelineVisualState, canJoin = false) {
       lane={0}
       laneCount={1}
       canJoin={canJoin}
-      canHide={false}
-      canEdit={false}
       canRecord={false}
+      ctx={ctx}
       onSelect={vi.fn()}
       onJoin={vi.fn()}
       onHide={vi.fn()}
@@ -129,9 +137,8 @@ describe('TimelineBlock manual entry actions (specs/0069 W3)', () => {
         lane={0}
         laneCount={1}
         canJoin={false}
-        canHide={false}
-        canEdit
         canRecord
+        ctx={ctx}
         onSelect={onSelect}
         onJoin={vi.fn()}
         onHide={vi.fn()}
@@ -160,9 +167,8 @@ describe('TimelineBlock manual entry actions (specs/0069 W3)', () => {
         lane={0}
         laneCount={1}
         canJoin={false}
-        canHide={false}
-        canEdit
         canRecord={false}
+        ctx={ctx}
         onSelect={vi.fn()}
         onJoin={vi.fn()}
         onHide={vi.fn()}

@@ -69,12 +69,37 @@ async function openReassignMenu() {
   return trigger;
 }
 
-// How many transcript lines currently render under a given speaker name (excludes menu
-// items — those are queried by role separately).
-function transcriptLabelCount(name: string): number {
-  return screen
-    .queryAllByText(name)
-    .filter((el) => el.tagName === 'SPAN' && el.getAttribute('role') !== 'menuitem').length;
+// Which speaker governs each transcript line, in document order.
+//
+// Since 2026-09-21 consecutive lines by one speaker share a single avatar + name (the
+// run's first line carries `data-run-start`), so counting rendered labels no longer counts
+// lines. This walks the rows in order and attributes each line to the last header seen —
+// which is what the reassignment actually has to get right, and reads the same whether or
+// not the lines happen to be merged.
+function speakerByLine(): Array<[string, string]> {
+  const rows = Array.from(document.querySelectorAll<HTMLElement>('[id^="segment-"]'));
+  let current = '';
+  return rows.map((row) => {
+    if (row.dataset.runStart === 'true') current = headerName(row);
+    const text = row.querySelector<HTMLElement>('p.u-typed')?.textContent?.trim() ?? '';
+    return [text, current];
+  });
+}
+
+/**
+ * The speaker name out of a run-start row's header. Read from the name span specifically,
+ * not the header's textContent — the header also holds the avatar, whose initials would
+ * otherwise show up glued to the front ("S1Speaker 1").
+ */
+function headerName(row: HTMLElement): string {
+  return row.querySelector<HTMLElement>('span.u-typed')?.textContent?.trim() ?? '';
+}
+
+/** The ordered run headers — one per block of consecutive same-speaker lines. */
+function runHeaders(): string[] {
+  return Array.from(document.querySelectorAll<HTMLElement>('[data-run-start="true"]')).map(
+    headerName,
+  );
 }
 
 describe('VirtualizedTranscriptView — span reassignment (specs/0039 WS2)', () => {
@@ -84,6 +109,9 @@ describe('VirtualizedTranscriptView — span reassignment (specs/0039 WS2)', () 
       () => new Promise<boolean>((r) => { resolve = r; }),
     );
     render(view(makeAssignment({ onReassignSegments })));
+
+    // All three lines start under one speaker, so they start as ONE run.
+    expect(runHeaders()).toEqual(['Speaker 1']);
 
     selectFirstTwoLines();
     expect(screen.getByText(/2 lines selected/i)).toBeInTheDocument();
@@ -96,10 +124,18 @@ describe('VirtualizedTranscriptView — span reassignment (specs/0039 WS2)', () 
       expect(onReassignSegments).toHaveBeenCalledWith(['seg-1', 'seg-2'], 'spk_1'),
     );
 
-    // Optimistic: the two selected lines already read "Speaker 2" while the write is
-    // still in flight; the untouched third line stays "Speaker 1".
-    await waitFor(() => expect(transcriptLabelCount('Speaker 2')).toBe(2));
-    expect(transcriptLabelCount('Speaker 1')).toBe(1);
+    // Optimistic: the two selected lines already belong to "Speaker 2" while the write is
+    // still in flight; the untouched third line stays "Speaker 1". The overlay also has to
+    // re-split the run — the grouping is derived from the SAME array the rows render from,
+    // so it must not wait for a refetch.
+    await waitFor(() =>
+      expect(speakerByLine()).toEqual([
+        ['line one', 'Speaker 2'],
+        ['line two', 'Speaker 2'],
+        ['line three', 'Speaker 1'],
+      ]),
+    );
+    expect(runHeaders()).toEqual(['Speaker 2', 'Speaker 1']);
 
     resolve(true);
   });
@@ -114,9 +150,16 @@ describe('VirtualizedTranscriptView — span reassignment (specs/0039 WS2)', () 
 
     await waitFor(() => expect(onReassignSegments).toHaveBeenCalled());
 
-    // On failure the labels revert to the server truth (all three "Speaker 1")…
-    await waitFor(() => expect(transcriptLabelCount('Speaker 1')).toBe(3));
-    expect(transcriptLabelCount('Speaker 2')).toBe(0);
+    // On failure every line reverts to the server truth — and the run they were split out
+    // of closes back up into one.
+    await waitFor(() =>
+      expect(speakerByLine()).toEqual([
+        ['line one', 'Speaker 1'],
+        ['line two', 'Speaker 1'],
+        ['line three', 'Speaker 1'],
+      ]),
+    );
+    expect(runHeaders()).toEqual(['Speaker 1']);
 
     // …and the selection is restored so the user can retry.
     await waitFor(() =>

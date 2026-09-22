@@ -175,6 +175,43 @@ pub(crate) fn stable_dismiss_key(event: &UpcomingMeeting) -> Option<String> {
         .map(|ext| format!("ext:{ext}@{}", event.starts_at))
 }
 
+/// Both keys a dismissal for this event may be stored under.
+///
+/// `.0` is the sync-stable key preferred for NEW dismissals ([`stable_dismiss_key`]); `.1`
+/// is the legacy key — the event's own identifier, as the agenda exposes it for an
+/// unrecorded calendar row, or a synthetic hash when the provider gave no id. A read must
+/// accept EITHER, or a dismissal made before the stable key existed silently stops working
+/// (specs/0029 WS6.2). When there is no external identifier both are the legacy key.
+pub(crate) fn dismissal_keys(event: &UpcomingMeeting) -> (String, String) {
+    let legacy = if event.id.trim().is_empty() {
+        synthetic_event_id(&event.title, &event.starts_at)
+    } else {
+        event.id.clone()
+    };
+    let stable = stable_dismiss_key(event).unwrap_or_else(|| legacy.clone());
+    (stable, legacy)
+}
+
+/// Has the user hidden this calendar event from their agenda (specs/0026)?
+///
+/// Extracted from `build_agenda` on 2026-09-21 because it had exactly one copy and needed
+/// three: `api_get_upcoming_meetings` (which drives the T-5 prep and T-0 join notifications)
+/// and `prep_jobs::upcoming_for_horizon` (which spends an LLM call per event generating a
+/// prep brief) both read the raw calendar and never consulted the dismissal set at all. So
+/// hiding "Lunch" removed it from Today and still bought you two banners and a summary.
+///
+/// Note this asks ONLY about the dismissal keys. The agenda additionally requires that the
+/// event matched no recording — recording something means you wanted it — but that is a fact
+/// only the agenda builder has, so it stays a condition at its call site. Both new callers
+/// look at strictly upcoming events, which by definition have no recording yet.
+pub(crate) fn is_event_dismissed(
+    event: &UpcomingMeeting,
+    dismissed: &std::collections::HashSet<String>,
+) -> bool {
+    let (stable, legacy) = dismissal_keys(event);
+    dismissed.contains(&stable) || dismissed.contains(&legacy)
+}
+
 /// Build today's unified agenda. Pure given its inputs, so it is unit-testable
 /// without EventKit/DB: takes today's calendar events and today's recorded
 /// meetings (with status), plus an attendee fetcher invoked only for calendar
@@ -234,21 +271,15 @@ fn build_agenda(
             .take(MAX_INLINE_ATTENDEES)
             .collect();
 
-        // Legacy dismissal key: the event's own identifier (the id the agenda exposes for an
-        // unrecorded calendar row), independent of whether it later matched a recording.
-        let event_key = if event.id.trim().is_empty() {
-            synthetic_event_id(&event.title, &event.starts_at)
-        } else {
-            event.id.clone()
-        };
-        // Preferred (sync-stable) key for NEW dismissals; reads accept either, so
-        // dismissals stored under the legacy `eventIdentifier` keep working even
-        // after a provider re-sync would have orphaned them (specs/0029 WS6.2).
-        let dismiss_key = stable_dismiss_key(&event).unwrap_or_else(|| event_key.clone());
+        // `.1` is the legacy key — the event's own identifier (the id the agenda exposes
+        // for an unrecorded calendar row), independent of whether it later matched a
+        // recording. `.0` is the sync-stable key written for NEW dismissals.
+        let (dismiss_key, event_key) = dismissal_keys(&event);
 
-        // Only an UNrecorded calendar item can be "dismissed" — if you recorded it, you want it.
-        let is_dismissed = meeting_id.is_none()
-            && (dismissed.contains(&dismiss_key) || dismissed.contains(&event_key));
+        // Only an UNrecorded calendar item can be "dismissed" — if you recorded it, you
+        // want it. That half of the rule lives here rather than in `is_event_dismissed`,
+        // because only the agenda knows whether an event claimed a recording.
+        let is_dismissed = meeting_id.is_none() && is_event_dismissed(&event, dismissed);
 
         let id = meeting_id.clone().unwrap_or_else(|| event_key.clone());
 

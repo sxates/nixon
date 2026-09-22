@@ -1,16 +1,12 @@
 'use client';
 
-import { MoreHorizontal, EyeOff, Pencil, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import type { DayAgendaItem } from '@/lib/day-agenda';
 import { formatClockTime } from '@/lib/calendar';
-import type { TimelineVisualState } from '@/lib/today-timeline';
+import type { TimelineContext, TimelineVisualState } from '@/lib/today-timeline';
+import { RecordingBadge } from '@/components/RecordingBadge';
+import { AgendaAttendees } from './AgendaAttendees';
+import { AgendaRowMenu } from './AgendaRowMenu';
 
 export const LANE_GAP_PX = 6; // horizontal gap between side-by-side (overlapping) blocks
 
@@ -108,12 +104,11 @@ interface TimelineBlockProps {
   lane: number;
   laneCount: number;
   canJoin: boolean;
-  /** Unrecorded calendar item — offer "Hide from timeline" (specs/0026 + 0041 WS5). */
-  canHide: boolean;
-  /** A manual, unrecorded entry (specs/0069 W3) — offer Edit/Delete in the menu. */
-  canEdit: boolean;
   /** A manual, unrecorded entry with nothing else recording — offer the Record button. */
   canRecord: boolean;
+  /** What the `…` menu offers (Hide / Edit / Delete) is derived from this, in
+   *  `AgendaRowMenu` — so the grid, the list and the week can't disagree about it. */
+  ctx: TimelineContext;
   onSelect: (item: DayAgendaItem) => void;
   onJoin: (item: DayAgendaItem) => void;
   onHide: (item: DayAgendaItem) => void;
@@ -130,9 +125,8 @@ export function TimelineBlock({
   lane,
   laneCount,
   canJoin,
-  canHide,
-  canEdit,
   canRecord,
+  ctx,
   onSelect,
   onJoin,
   onHide,
@@ -210,56 +204,18 @@ export function TimelineBlock({
         ) : (
           <StateChip state={state} />
         )}
-        {(canHide || canEdit) && (
-          /* Hover ⋯ menu (house idiom: All-meetings row options). The wrapper stops
-             click/keyboard propagation so opening the menu never routes the block. */
-          <span
-            onClick={(e) => e.stopPropagation()}
-            onKeyDown={(e) => e.stopPropagation()}
-            className="flex-shrink-0"
-          >
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  type="button"
-                  aria-label="Event options"
-                  title="Event options"
-                  className="inline-flex h-5 w-5 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100"
-                >
-                  <MoreHorizontal className="h-3.5 w-3.5" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                {canEdit && (
-                  <>
-                    <DropdownMenuItem onSelect={() => onEdit(item)}>
-                      <Pencil className="mr-2 h-4 w-4" />
-                      Edit
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onSelect={() => onDelete(item)}
-                      className="text-destructive focus:text-destructive"
-                    >
-                      <Trash2 className="mr-2 h-4 w-4" />
-                      Delete
-                    </DropdownMenuItem>
-                  </>
-                )}
-                {canHide && (
-                  <DropdownMenuItem onSelect={() => onHide(item)}>
-                    <EyeOff className="mr-2 h-4 w-4" />
-                    Hide from timeline
-                  </DropdownMenuItem>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </span>
-        )}
+        <AgendaRowMenu item={item} ctx={ctx} actions={{ onHide, onEdit, onDelete }} />
       </div>
       {!compact && (
-        <div className="u-meta mt-0.5 truncate">
-          {validStart ? formatClockTime(start) : '--:--'}
-          {item.attendeeCount > 0 && ` · ${item.attendeeCount} attendee${item.attendeeCount === 1 ? '' : 's'}`}
+        <div className="mt-0.5 flex min-w-0 items-center gap-2">
+          <span className="u-meta flex-shrink-0">
+            {validStart ? formatClockTime(start) : '--:--'}
+          </span>
+          {/* Faces instead of "· 3 attendees", and the live meeting reads as live —
+              parity with All Meetings (owner feedback 2026-09-21). A compact block has no
+              meta line at all, so it keeps carrying neither. */}
+          <AgendaAttendees item={item} max={2} />
+          {ctx.recordingThisId === item.id && <RecordingBadge />}
         </div>
       )}
     </div>

@@ -10,10 +10,17 @@ import type { ActionItem } from '@/types';
 import type { AgendaViewMode } from '@/hooks/useDayAgenda';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 
+/**
+ * Owner feedback 2026-09-21: "Day" is what the control was called, but an hour-gridded
+ * timeline of your day is an *agenda* — and the order should widen as you go right, from
+ * one day's shape, to one day's list, to the week. The stored VALUES are untouched
+ * (`'day'` is persisted under `nixon.today.viewMode` and appears in `?view=`), so every
+ * existing preference and deep link keeps working; only the label and the order move.
+ */
 const AGENDA_VIEWS = [
-  { value: 'day', label: 'Day' },
-  { value: 'week', label: 'Week' },
+  { value: 'day', label: 'Agenda' },
   { value: 'list', label: 'List' },
+  { value: 'week', label: 'Week' },
 ];
 
 interface TodayToolbarProps {

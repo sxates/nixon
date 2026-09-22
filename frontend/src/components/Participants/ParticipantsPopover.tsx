@@ -36,7 +36,9 @@ export function ParticipantsPopover({
           aria-label="Participants"
           title="Participants"
           className={cn(
-            'inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-xs font-semibold transition-colors focus:outline-none focus-visible:ring-2',
+            // h-8 to match the mode chip and template picker beside it on the record
+            // header (owner feedback 2026-09-21).
+            'inline-flex h-8 items-center gap-1.5 rounded-lg px-3 text-xs font-semibold transition-colors focus:outline-none focus-visible:ring-2',
             'border border-border bg-card text-foreground hover:bg-muted focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card',
             className,
           )}

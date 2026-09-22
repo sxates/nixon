@@ -335,3 +335,38 @@ export async function updateSavedQuestionAnswer(
     throw new Error('Could not save the answer. Please try again.');
   }
 }
+
+/**
+ * The answer as prose, with the `[M#]` citation markers taken out — what belongs on the
+ * clipboard.
+ *
+ * Owner feedback 2026-09-21: "I want an easy way to copy an answer I get and be able to
+ * paste it somewhere else in a clean way, without all the meeting references embedded."
+ * On screen the markers are chips labelled with their meeting's title (`AnswerMarkdown`),
+ * which is exactly right in a window that can link; pasted into a message they are noise
+ * that names meetings the reader may not have.
+ *
+ * Only the markers go. The markdown structure stays, because the paste target usually
+ * renders it and a bullet list flattened into a paragraph is worse than a marker.
+ *
+ * The whitespace handling is the fiddly part and the reason this is a tested function
+ * rather than a `.replace()` at the call site: a marker is nearly always preceded by a
+ * space ("…in October [M1].") and removing just the marker leaves "…in October ." So a
+ * marker run plus any space in front of it collapses to nothing before punctuation, and to
+ * a single space otherwise.
+ */
+export function answerAsPlainProse(markdown: string): string {
+  return (
+    markdown
+      // A run of adjacent markers ("[M2][M3]") counts as one, with its leading space.
+      .replace(/[ \t]*(?:\[M\d+\])+/g, (match, offset: number, whole: string) => {
+        const next = whole.slice(offset + match.length, offset + match.length + 1);
+        // Keep a separating space when real words follow; drop it before punctuation and
+        // at the end of a line.
+        return next === '' || /[\s.,;:!?)\]}]/.test(next) ? '' : ' ';
+      })
+      // Trailing spaces left on a line whose only tail was a citation.
+      .replace(/[ \t]+$/gm, '')
+      .trim()
+  );
+}

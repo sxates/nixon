@@ -24,7 +24,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { toast } from 'sonner';
-import { AtSign, Plus, UserPlus, Users } from 'lucide-react';
+import { AtSign, ChevronDown, Plus, UserPlus, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -34,6 +34,10 @@ import {
 } from '@/components/ui/popover';
 import { PersonFormDialog } from '@/components/People/PersonFormDialog';
 import { ParticipantChip } from './ParticipantChip';
+import {
+  PARTICIPANT_COLLAPSE_THRESHOLD,
+  ParticipantsSummary,
+} from './ParticipantsSummary';
 import { splitForDisplay } from '@/lib/list-overflow';
 import { filterPeople } from '@/lib/people-filter';
 import { MEETING_PARTICIPANTS_CHANGED_EVENT } from '@/lib/participants-events';
@@ -80,6 +84,13 @@ export function ParticipantsPanel({
   // specs/0019 WS3.1 — collapse long rosters to a cap with a "+N more" expander.
   const [expanded, setExpanded] = useState(false);
   const PARTICIPANT_CAP = 10;
+  // Owner feedback 2026-09-21 — a second, outer level of collapsing: on the meeting page a
+  // roster of 4+ starts as one summary line instead of a two-or-three-row grid.
+  //
+  // `null` means "the user hasn't said", which is why this isn't a plain boolean: the
+  // roster arrives asynchronously, so the default can only be decided once it has, and an
+  // explicit choice has to survive the refetches the participants-changed event triggers.
+  const [rosterOpenChoice, setRosterOpenChoice] = useState<boolean | null>(null);
   // Person currently being edited via the shared modal; null = closed.
   const [personToEdit, setPersonToEdit] = useState<Person | null>(null);
 
@@ -335,6 +346,12 @@ export function ParticipantsPanel({
     />
   );
 
+  // Only the meeting page's card collapses. The in-recording popover (`compact`) is already
+  // a scrolling single column inside a 320px flyout you opened on purpose — hiding its
+  // contents behind another click would be absurd.
+  const collapsible = !isCompact && participants.length >= PARTICIPANT_COLLAPSE_THRESHOLD;
+  const rosterOpen = !collapsible || (rosterOpenChoice ?? false);
+
   const header = (
     <div className="flex items-center gap-2">
       <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
@@ -344,6 +361,21 @@ export function ParticipantsPanel({
           <span className="text-muted-foreground">({participants.length})</span>
         )}
       </span>
+      {collapsible && (
+        <button
+          type="button"
+          onClick={() => setRosterOpenChoice(!rosterOpen)}
+          aria-expanded={rosterOpen}
+          aria-label={rosterOpen ? 'Collapse participants' : 'Expand participants'}
+          title={rosterOpen ? 'Collapse participants' : 'Expand participants'}
+          className="inline-flex h-5 w-5 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <ChevronDown
+            size={14}
+            className={cn('transition-transform', rosterOpen && 'rotate-180')}
+          />
+        </button>
+      )}
       <div className="ml-auto">{addControl}</div>
     </div>
   );
@@ -465,8 +497,20 @@ export function ParticipantsPanel({
       )}
     >
       {header}
-      {list}
-      {dlSection}
+      {/* Collapsed: faces and a sentence. Expanded: the full grid. The distribution-list
+          floor follows the roster — a DL is part of "who is in this meeting", so it
+          collapses with it rather than hanging under a collapsed card. */}
+      {rosterOpen ? (
+        <>
+          {list}
+          {dlSection}
+        </>
+      ) : (
+        <ParticipantsSummary
+          participants={participants}
+          onExpand={() => setRosterOpenChoice(true)}
+        />
+      )}
 
       <PersonFormDialog
         open={personToEdit !== null}

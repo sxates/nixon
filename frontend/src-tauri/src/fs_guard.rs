@@ -24,6 +24,19 @@ async fn allowed_fs_roots<R: Runtime>(app: &AppHandle<R>) -> Vec<std::path::Path
         roots.push(dir.canonicalize().unwrap_or(dir));
     }
 
+    // Debug builds also allow the RELEASE recordings root (2026-09-21). The debug build now
+    // writes to its own `nixon-recordings-dev` folder, but meetings it recorded before that
+    // change carry `folder_path` rows under the old root — and this allow-list is what lets
+    // the webview read a meeting's audio. Without this, re-pointing the dev root would have
+    // silently stranded every pre-existing dev recording.
+    //
+    // Never compiled into a shipped build, so production confinement is unchanged.
+    #[cfg(debug_assertions)]
+    {
+        let legacy = audio::recording_preferences::release_default_recordings_folder();
+        roots.push(legacy.canonicalize().unwrap_or(legacy));
+    }
+
     roots
 }
 

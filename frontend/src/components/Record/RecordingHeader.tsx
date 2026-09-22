@@ -67,7 +67,10 @@ function ModeChip({ meetingId }: { meetingId: string }) {
       onClick={handleClick}
       disabled={enabling}
       aria-label={`Transcription mode: ${label}. Click to switch to ${liveTranscription ? 'Deferred' : 'Live'}.`}
-      className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-border bg-card px-3 text-xs font-semibold text-foreground transition-colors hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+      // h-8 matches the template picker and the participants trigger beside it — the three
+      // per-meeting controls used to be h-7 / h-9 / h-9 and visibly failed to line up
+      // (owner feedback 2026-09-21).
+      className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border bg-card px-3 text-xs font-semibold text-foreground transition-colors hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
     >
       {showBatteryGlyph && <BatteryLow size={14} />}
       {enabling ? 'Switching…' : label}
@@ -181,60 +184,70 @@ export function RecordingHeader({
             <Pencil className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
           </button>
         )}
-        {isRecordingActive ? (
-          <p className="u-section-label mt-1">On the reel</p>
-        ) : (
+        {/* No "On the reel" subhead while recording (owner feedback 2026-09-21): the
+            transport rail says exactly that, in the same words, a few inches below — and
+            the only way to be looking at this header at all is with a recording in
+            progress, so the line carried no information for the height it took. The idle
+            line stays: an idle header DOES need to say what pressing REC will do. */}
+        {!isRecordingActive && (
           <p className="mt-0.5 text-xs text-muted-foreground">Recording locally on your Mac</p>
         )}
         {/* 0.1.0 canvas feedback: the per-meeting controls sit under the title, not in the
             meter bridge. Rendered only when at least one is live so an idle header carries
             no empty row. */}
+        {/* Per-meeting controls, ordered Participants → Live → Template (owner feedback
+            2026-09-21): who is here, then how it is being processed, then what the summary
+            will look like — decreasing immediacy, left to right. All three are h-8; they
+            used to be h-9 / h-9 / h-7 and the row visibly stepped. Rendered only when at
+            least one is live, so an idle header carries no empty row. */}
         {(isRecordingActive && availableTemplates.length > 0) || activeRecordingMeetingId ? (
           <div className="mt-2.5 flex flex-wrap items-center gap-2">
-        {/* Participants for the in-progress meeting (specs/0017). Use the authoritative
-            SQLite meeting id (`activeRecordingMeetingId`, set at recording start), NOT the
-            fabricated `currentMeetingId` from TranscriptContext (a `meeting-<timestamp>` IndexedDB
-            id) — adds made against that orphan id are lost at stop (specs/0024 WS3.1). The roster
-            row + its calendar_event_id already exist from Join & Record, so seeding works live;
-            an ad-hoc recording starts empty and is hand-added. */}
-        {/* Per-meeting summary template picker (specs/0029 WS4.3): quiet dropdown,
-            persisted against the recording's SQLite id; the eventual summary uses it. */}
-        {isRecordingActive && availableTemplates.length > 0 && (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="outline"
-                size="xs"
-                title="Summary template — used when this meeting is summarized"
-                className="max-w-[180px] text-muted-foreground"
-              >
-                <span className="truncate">{selectedTemplateName}</span>
-                <ChevronDown className="h-3 w-3 flex-shrink-0" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              {availableTemplates.map((template) => (
-                <DropdownMenuItem
-                  key={template.id}
-                  onClick={() => handleTemplateSelection(template.id, template.name)}
-                  title={template.description}
-                  className="flex items-center justify-between gap-2"
-                >
-                  <span>{template.name}</span>
-                  {selectedTemplate === template.id && (
-                    <Check className="h-4 w-4 text-brand" />
-                  )}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )}
-        {/* Per-meeting live/defer mode chip (low-power-mode spec §5) — only while an
-            actual recording session is active, same gate as ParticipantsPopover. */}
-        {isRecordingActive && activeRecordingMeetingId && (
-          <ModeChip meetingId={activeRecordingMeetingId} />
-        )}
-        {activeRecordingMeetingId && <ParticipantsPopover meetingId={activeRecordingMeetingId} />}
+            {/* Participants for the in-progress meeting (specs/0017). Use the authoritative
+                SQLite meeting id (`activeRecordingMeetingId`, set at recording start), NOT the
+                fabricated `currentMeetingId` from TranscriptContext (a `meeting-<timestamp>`
+                IndexedDB id) — adds made against that orphan id are lost at stop (specs/0024
+                WS3.1). The roster row + its calendar_event_id already exist from Join & Record,
+                so seeding works live; an ad-hoc recording starts empty and is hand-added. */}
+            {activeRecordingMeetingId && (
+              <ParticipantsPopover meetingId={activeRecordingMeetingId} />
+            )}
+            {/* Per-meeting live/defer mode chip (low-power-mode spec §5) — only while an
+                actual recording session is active, same gate as ParticipantsPopover. */}
+            {isRecordingActive && activeRecordingMeetingId && (
+              <ModeChip meetingId={activeRecordingMeetingId} />
+            )}
+            {/* Per-meeting summary template picker (specs/0029 WS4.3): quiet dropdown,
+                persisted against the recording's SQLite id; the eventual summary uses it. */}
+            {isRecordingActive && availableTemplates.length > 0 && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="xs"
+                    title="Summary template — used when this meeting is summarized"
+                    className="h-8 max-w-[180px] text-muted-foreground"
+                  >
+                    <span className="truncate">{selectedTemplateName}</span>
+                    <ChevronDown className="h-3 w-3 flex-shrink-0" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {availableTemplates.map((template) => (
+                    <DropdownMenuItem
+                      key={template.id}
+                      onClick={() => handleTemplateSelection(template.id, template.name)}
+                      title={template.description}
+                      className="flex items-center justify-between gap-2"
+                    >
+                      <span>{template.name}</span>
+                      {selectedTemplate === template.id && (
+                        <Check className="h-4 w-4 text-brand" />
+                      )}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
           </div>
         ) : null}
       </div>
@@ -242,8 +255,10 @@ export function RecordingHeader({
       {/* The control panel's meter bridge (specs/0057 §3.2): one needle per channel — CH1
           is the owner's mic, CH2 is system audio (the other side of the call) — read from
           the clean pre-mix windows. The PEAK / MIC GATE lamps were dropped on 0.1.0 canvas
-          feedback: the rail's ladder and the transport status line carry both states. */}
-      <div className="flex flex-shrink-0 items-center gap-3.5 self-center">
+          feedback: the rail's ladder and the transport status line carry both states. The
+          meters are 132×57 and carry their own channel label inside the well since
+          2026-09-21 — see VuMeter. */}
+      <div className="flex flex-shrink-0 items-center gap-2.5 self-center">
         <VuMeter db={rmsToVu(level.mic.rms)} active={isRecordingActive} label="CH1 Mic" />
         <VuMeter db={rmsToVu(level.sys.rms)} active={isRecordingActive} label="CH2 Sys" />
       </div>

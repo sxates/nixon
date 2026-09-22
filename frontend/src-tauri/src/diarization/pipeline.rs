@@ -51,6 +51,27 @@ const DIARIZATION_SAMPLE_RATE: u32 = 16_000;
 pub const EVENT_PROGRESS: &str = "diarization-progress";
 pub const EVENT_COMPLETE: &str = "diarization-complete";
 pub const EVENT_ERROR: &str = "diarization-error";
+/// "This meeting's speaker rows changed; refetch the transcript."
+///
+/// Owner feedback 2026-09-21: "Is it possible to update the transcript with speakers as
+/// they get identified, especially if they match a voice print, instead of waiting to the
+/// very end?" The sherpa pass itself cannot help — its cluster ids only exist once the whole
+/// file is clustered — but everything AFTER it used to land in one silent lump: align,
+/// persist, match against the voiceprint gallery, auto-label, then one `diarization-complete`
+/// that finally told the UI to look. The cluster labels were durably in SQLite two stages
+/// before anything said so.
+///
+/// So this fires twice: once the clusters are persisted (generic "Speaker 1/2/3" appear) and
+/// again once the gallery matches are applied (real names appear). It is advisory — dropping
+/// it costs nothing, because `EVENT_COMPLETE` still arrives.
+pub const EVENT_SPEAKERS_UPDATED: &str = "diarization-speakers-updated";
+
+/// Stages reported after the sherpa pass returns. Before 2026-09-21 there were none: the
+/// button sat on "Identifying… 100%" through alignment, persistence, the cross-meeting
+/// matcher and auto-labelling, which reads as hung.
+const STAGE_ATTRIBUTING: &str = "attributing";
+const STAGE_MATCHING: &str = "matching known voices";
+const STAGE_LABELLING: &str = "labelling";
 
 // ---------------------------------------------------------------------------
 // Per-meeting in-flight run registry (WS3.1, specs/0029).
@@ -528,6 +549,19 @@ async fn restore_user_identities(
 /// Returns the speaker turns plus the per-remote-cluster L2-normalized embeddings
 /// (`spk_N → vector`) for cross-meeting identity (specs/0016 1a). The embedding map
 /// can be empty (extractor unavailable, all clusters too short) without failing.
+/// Tell the frontend this meeting's speaker rows changed, so it refetches the transcript.
+///
+/// Best-effort: an emit failure means the window went away, and `EVENT_COMPLETE` is still
+/// coming, so there is nothing to recover. `stage` is carried for logging/diagnostics — the
+/// frontend's reaction is the same either way.
+fn emit_speakers_updated<R: Runtime>(app: &AppHandle<R>, meeting_id: &str, stage: &str) {
+    let _ = app.emit(
+        EVENT_SPEAKERS_UPDATED,
+        serde_json::json!({ "meeting_id": meeting_id, "stage": stage }),
+    );
+    log::info!("diarization: speakers updated for {meeting_id} at stage {stage}");
+}
+
 /// Map a diarization progress fraction (`0.0..=1.0`) to a whole-percent value for the
 /// `diarization-progress` event, clamped to `0..=100` (specs/0019 WS2.5).
 fn pct_from_fraction(frac: f32) -> i64 {
@@ -695,6 +729,14 @@ pub(super) async fn run<R: Runtime>(app: AppHandle<R>, meeting_id: String) -> Re
         turns.len()
     );
 
+    // Out of sherpa, into the DB work. Reported with no percentage (`registry_update` treats
+    // `None` as indeterminate) so the button shows a named stage instead of a stuck 100%.
+    registry_update(&meeting_id, STAGE_ATTRIBUTING, None);
+    let _ = app.emit(
+        EVENT_PROGRESS,
+        serde_json::json!({ "meeting_id": meeting_id, "stage": STAGE_ATTRIBUTING }),
+    );
+
     // Align + persist (async DB).
     let state = app.state::<AppState>();
     let pool = state.db_manager.pool();
@@ -756,11 +798,22 @@ pub(super) async fn run<R: Runtime>(app: AppHandle<R>, meeting_id: String) -> Re
         assignments.len()
     );
 
+    // The clusters are committed, so the transcript can show them NOW rather than after the
+    // matcher and the auto-label pass (owner feedback 2026-09-21). Emitted after the write,
+    // never inside it: an event that advertises rows a rollback could still take back would
+    // be worse than the wait it replaces.
+    emit_speakers_updated(&app, &meeting_id, STAGE_ATTRIBUTING);
+
     // specs/0016 1a/1c: run the cross-meeting matcher over this meeting's freshly-
     // persisted remote voiceprints vs. previously-identified speakers AND the voiceprint
     // gallery. The meeting's calendar attendee emails corroborate gallery matches for the
     // auto-label gate. Best-effort: a matcher/DB hiccup must not fail the (already-
     // persisted) diarization pass.
+    registry_update(&meeting_id, STAGE_MATCHING, None);
+    let _ = app.emit(
+        EVENT_PROGRESS,
+        serde_json::json!({ "meeting_id": meeting_id, "stage": STAGE_MATCHING }),
+    );
     let corroborating_emails: Vec<String> = lookup_calendar_attendees(&app, &meeting_id)
         .await
         .into_iter()
@@ -781,7 +834,18 @@ pub(super) async fn run<R: Runtime>(app: AppHandle<R>, meeting_id: String) -> Re
     // stays a confirm-first chip. Shared with the on-demand refetch path, which must apply
     // them too: the gallery grows after the meetings that taught it, so a pass run before a
     // person was well-trained can only be corrected later (specs/0064 W2).
-    crate::diarization::auto_label::apply(pool, &meeting_id, &suggestions).await;
+    registry_update(&meeting_id, STAGE_LABELLING, None);
+    let _ = app.emit(
+        EVENT_PROGRESS,
+        serde_json::json!({ "meeting_id": meeting_id, "stage": STAGE_LABELLING }),
+    );
+    let auto_labeled = crate::diarization::auto_label::apply(pool, &meeting_id, &suggestions).await;
+    // Only when something actually changed. `apply` re-derives the same labels on every
+    // refetch and skips rows already settled, so a no-op pass is the common case — and it
+    // must not cost the frontend a transcript refetch.
+    if auto_labeled > 0 {
+        emit_speakers_updated(&app, &meeting_id, STAGE_LABELLING);
+    }
 
     // specs/0041 WS2: a summary generated before this pass finished carries no speaker
     // names (and its action-item owners come back unresolved). If this pass assigned
@@ -1211,6 +1275,51 @@ mod tests {
         assert!(registry_try_begin(id), "slot reusable after terminal state");
         registry_finish(id, "error", 0);
         assert!(!run_status(id).unwrap().running);
+    }
+
+    // -----------------------------------------------------------------------
+    // Owner feedback 2026-09-21 — the run reports what it is doing after sherpa returns.
+    //
+    // Before this, the only stages were models / loading audio / diarizing, so from the
+    // moment sherpa hit 100% the button read "Identifying… 100%" through alignment,
+    // persistence, the cross-meeting matcher and auto-labelling. A static 100% reads as
+    // hung, which is the same reasoning specs/0024 WS4.1 applied to a static 0%.
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn post_sherpa_stages_clear_the_stuck_percentage() {
+        // Unique id: the registry is a process-global and tests run in parallel.
+        let id = "post-sherpa-stage-test-meeting";
+        assert!(registry_try_begin(id));
+
+        // Sherpa ramps to 100 …
+        registry_update(id, "diarizing", Some(100));
+        assert_eq!(run_status(id).unwrap().progress_pct, 100);
+
+        // … and then each post-pass stage reports itself with NO percentage, which
+        // `registry_update` stores as 0 and the frontend renders as a bare stage label.
+        for stage in [STAGE_ATTRIBUTING, STAGE_MATCHING, STAGE_LABELLING] {
+            registry_update(id, stage, None);
+            let s = run_status(id).unwrap();
+            assert_eq!(s.stage, stage, "stage is reported");
+            assert_eq!(
+                s.progress_pct, 0,
+                "{stage} must not inherit sherpa's 100%"
+            );
+            assert!(s.running, "the run is still going");
+        }
+
+        registry_finish(id, "complete", 100);
+    }
+
+    /// The stage strings are the frontend's only handle on what is happening, and they are
+    /// rendered verbatim into the button ("Matching known voices…"). Pin them so a rename
+    /// here has to be a deliberate, visible change.
+    #[test]
+    fn post_sherpa_stage_names_are_human_readable() {
+        assert_eq!(STAGE_ATTRIBUTING, "attributing");
+        assert_eq!(STAGE_MATCHING, "matching known voices");
+        assert_eq!(STAGE_LABELLING, "labelling");
     }
 
     // -----------------------------------------------------------------------

@@ -340,6 +340,11 @@ function HomeView() {
                 now={now}
                 onSelectItem={handleSelect}
                 onOpenDay={openDay}
+                actions={{
+                  onHide: (it) => void handleHide(it),
+                  onEdit: handleEditManual,
+                  onDelete: handleDeleteManual,
+                }}
               />
             )
           ) : !loaded ? (

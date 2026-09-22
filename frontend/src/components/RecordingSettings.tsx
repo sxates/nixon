@@ -32,6 +32,10 @@ import {
 
 export interface RecordingPreferences {
   save_folder: string;
+  /** The user picked `save_folder` by hand rather than inheriting the probe's default
+   *  (2026-09-21). Only the debug build reads it — see `repoint_dev_root` in
+   *  `audio/recording_preferences.rs`. */
+  save_folder_user_chosen?: boolean;
   auto_save: boolean;
   preferred_mic_device: string | null;
   preferred_system_device: string | null;

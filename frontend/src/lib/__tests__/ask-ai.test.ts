@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildScope, cachedAnswerFor, enterTriggersRun } from '@/lib/ask-ai';
+import { answerAsPlainProse, buildScope, cachedAnswerFor, enterTriggersRun } from '@/lib/ask-ai';
 
 // specs/0035 — pure helpers behind the /ask page. Locks:
 // (a) buildScope emits timezone-correct ISO-8601 UTC instants: dateFrom =
@@ -132,5 +132,52 @@ describe('enterTriggersRun — Enter runs the question directly', () => {
 
   it('never submits on legacy IME keyCode 229', () => {
     expect(enterTriggersRun({ ...base, keyCode: 229 })).toBe(false);
+  });
+});
+
+// Owner feedback 2026-09-21 — "copy an answer… without all the meeting references
+// embedded." The whitespace cases are the point: naive marker removal leaves "October ."
+describe('answerAsPlainProse', () => {
+  it('drops a marker and the space in front of it before punctuation', () => {
+    expect(answerAsPlainProse('We ship rev C in October [M1].')).toBe(
+      'We ship rev C in October.',
+    );
+  });
+
+  it('collapses a run of adjacent markers', () => {
+    expect(answerAsPlainProse('Pending the thermal retest [M2][M3].')).toBe(
+      'Pending the thermal retest.',
+    );
+  });
+
+  it('leaves one separating space when words follow the marker', () => {
+    expect(answerAsPlainProse('Maya owns it [M1] and Tomas reviews it [M2].')).toBe(
+      'Maya owns it and Tomas reviews it.',
+    );
+  });
+
+  it('handles a marker at the end of a line', () => {
+    expect(answerAsPlainProse('- Ship rev C [M1]\n- Retest thermals [M2]')).toBe(
+      '- Ship rev C\n- Retest thermals',
+    );
+  });
+
+  it('keeps the markdown structure intact', () => {
+    const md = '## Decisions\n\n- Ship rev C [M1]\n- Hold the retest [M2]\n\n**Owner:** Maya [M1]';
+    expect(answerAsPlainProse(md)).toBe(
+      '## Decisions\n\n- Ship rev C\n- Hold the retest\n\n**Owner:** Maya',
+    );
+  });
+
+  it('leaves text with no markers untouched', () => {
+    expect(answerAsPlainProse('No citations here.')).toBe('No citations here.');
+  });
+
+  it('does not touch bracketed text that is not a marker', () => {
+    expect(answerAsPlainProse('See [the doc] and [M1].')).toBe('See [the doc] and.');
+  });
+
+  it('is empty for an empty answer', () => {
+    expect(answerAsPlainProse('')).toBe('');
   });
 });

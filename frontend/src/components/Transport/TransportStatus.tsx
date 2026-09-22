@@ -72,7 +72,14 @@ export function TransportStatus({ phase, elapsedSeconds }: { phase: TransportPha
             counter's digit wells, and the ladder spans that same width — so the meter can
             never be wider than the timer above it (owner feedback 2026-09-19). */}
         <TapeCounter seconds={elapsedSeconds} size="sm" tone={tone} />
-        <LevelLadder level={level.rms} active={phase === 'recording' && !micMuted} fill />
+        {/* `level.rms` is the MIXED level (audio/live_meter.rs emits the mix plus the two
+            clean channels), so this ladder reads BOTH channels — which is the whole point of
+            a meter on the recording surface. It used to be gated on `!micMuted` too, which
+            killed it outright whenever the Zoom mute gate engaged: the owner would be
+            listening to a call whose system audio was being captured and recorded, looking at
+            a dead meter. The mic state belongs in words, and line 2 below already says
+            "Mic muted". */}
+        <LevelLadder level={level.rms} active={phase === 'recording'} fill />
       </div>
       {canNavigate ? (
         <button

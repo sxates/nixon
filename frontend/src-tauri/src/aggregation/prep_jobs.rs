@@ -14,6 +14,7 @@ use crate::aggregation::commands::configured_summary_model;
 use crate::aggregation::engine::Stage;
 use crate::aggregation::execute_pre_call_prep;
 use crate::calendar::eventkit::{self, UpcomingMeeting};
+use crate::database::repositories::dismissed_calendar_event::DismissedCalendarEventsRepository;
 use crate::database::repositories::meeting::MeetingsRepository;
 use crate::database::repositories::meeting_brief::{MeetingBrief, MeetingBriefsRepository};
 use crate::llm_activity::{LlmActivityState, Origin, TaskKind};
@@ -422,8 +423,13 @@ async fn source_fingerprint(pool: &SqlitePool, prior_ids: &[String]) -> String {
 
 /// Upcoming occurrences for the horizon, from whichever calendar source is active — the same
 /// active-source logic as `api_get_upcoming_meetings`.
+///
+/// Events the user has hidden from their agenda (specs/0026) are dropped. This was missing
+/// until 2026-09-21 and was the expensive half of that bug: every hidden event on the
+/// horizon got a prep brief generated for it, which is a real LLM call per event per pass.
+/// Hiding "Lunch" was buying a summarization of lunch.
 async fn upcoming_for_horizon<R: Runtime>(app: &AppHandle<R>, hours: u32) -> Vec<UpcomingMeeting> {
-    if crate::calendar::google_is_active_source(app).await {
+    let events = if crate::calendar::google_is_active_source(app).await {
         crate::calendar::google::sync::sync_if_stale(app).await;
         let now = Utc::now();
         let end = now + chrono::Duration::hours(i64::from(hours));
@@ -437,7 +443,36 @@ async fn upcoming_for_horizon<R: Runtime>(app: &AppHandle<R>, hours: u32) -> Vec
         tokio::task::spawn_blocking(move || eventkit::upcoming_meetings(hours))
             .await
             .unwrap_or_default()
+    };
+
+    // A pool we can't read means "prep everything" — the same fail-open choice
+    // `api_get_upcoming_meetings` makes, and here it only costs tokens, never a missed
+    // meeting.
+    let Some(pool) = crate::calendar::google::sync::db_pool(app) else {
+        return events;
+    };
+    let dismissed = match DismissedCalendarEventsRepository::all(&pool).await {
+        Ok(set) => set,
+        Err(e) => {
+            log::warn!("prep: could not read hidden events ({e}); prepping all");
+            return events;
+        }
+    };
+    if dismissed.is_empty() {
+        return events;
     }
+    let before = events.len();
+    let kept: Vec<UpcomingMeeting> = events
+        .into_iter()
+        .filter(|e| !crate::calendar::day_agenda::is_event_dismissed(e, &dismissed))
+        .collect();
+    if kept.len() != before {
+        log::info!(
+            "prep: skipping {} hidden event(s) on the horizon",
+            before - kept.len()
+        );
+    }
+    kept
 }
 
 fn parse_start(s: &str) -> Option<DateTime<Utc>> {

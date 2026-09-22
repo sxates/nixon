@@ -131,11 +131,48 @@ pub fn deliver(request: DeliverRequest) -> Result<()> {
     let center = UNUserNotificationCenter::currentNotificationCenter();
     center.addNotificationRequest_withCompletionHandler(&un_request, None);
     log::info!(
-        "notifications: delivered {} (category={:?})",
+        "notifications: delivered {} (category={:?}, auto_dismiss={:?}ms)",
         request.id,
-        request.category
+        request.category,
+        request
+            .auto_dismiss_ms
+            .or_else(|| super::default_auto_dismiss_ms(request.category.as_deref()))
     );
+
+    // The caller's explicit value wins; otherwise the category decides.
+    if let Some(ms) = request
+        .auto_dismiss_ms
+        .or_else(|| super::default_auto_dismiss_ms(request.category.as_deref()))
+    {
+        schedule_dismiss(request.id.clone(), ms);
+    }
     Ok(())
+}
+
+/// Take a delivered notification back down after `ms`.
+///
+/// In Rust rather than a `setTimeout` in `lib/osNotification.ts` on purpose: the whole point
+/// of an auto-dismiss is that it happens while the user is looking at something else, and a
+/// backgrounded or throttled webview does not reliably fire timers.
+///
+/// Best-effort throughout. `removeDeliveredNotifications` is a no-op on an identifier macOS
+/// no longer knows about, so a banner the user already dismissed, or one replaced by a later
+/// alert reusing the same id, costs nothing. The task re-checks [`super::capability`] before
+/// touching the framework — outside an `.app` that call raises an uncaught Objective-C
+/// exception and aborts the process (see this module's header), so the gate is a crash
+/// guard, not a politeness, and it has to hold on this path too.
+fn schedule_dismiss(id: String, ms: u64) {
+    tauri::async_runtime::spawn(async move {
+        tokio::time::sleep(std::time::Duration::from_millis(ms)).await;
+        if !super::capability().supported {
+            return;
+        }
+        let center = UNUserNotificationCenter::currentNotificationCenter();
+        let ns_id = NSString::from_str(&id);
+        let ids = NSArray::from_slice(&[&*ns_id]);
+        center.removeDeliveredNotificationsWithIdentifiers(&ids);
+        log::info!("notifications: auto-dismissed {id} after {ms}ms");
+    });
 }
 
 fn remember(id: &str, user_info: HashMap<String, String>) {

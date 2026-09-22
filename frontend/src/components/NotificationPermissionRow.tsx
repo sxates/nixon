@@ -30,7 +30,7 @@ import {
   requestNotificationPermission,
 } from '@/lib/osNotification';
 import { Button } from '@/components/ui/button';
-import { SettingsRow } from '@/components/ui/settings';
+import { SettingsNote, SettingsRow } from '@/components/ui/settings';
 
 export function NotificationPermissionRow() {
   const [capability, setCapability] = useState<NotificationCapability | null>(null);
@@ -82,6 +82,7 @@ export function NotificationPermissionRow() {
   const allowed = status === 'authorized' || status === 'provisional';
 
   return (
+    <>
     <SettingsRow
       label="Notifications"
       description="Alerts about meetings about to start, and calls Nixon spots, shown by macOS even when Nixon is behind another window."
@@ -119,5 +120,27 @@ export function NotificationPermissionRow() {
         </div>
       }
     />
+    {/* Owner feedback 2026-09-21: "the 'meeting starts now - join & record' should be
+        persistent, but all others transient." macOS has no per-notification control — the
+        Banner/Alert choice is one app-wide toggle, and the entitlement that would override
+        it is Apple's to grant. So Nixon runs as Alerts and takes back the ones that should
+        not have stayed, which means the one thing the user has to do is pick Alerts. Shown
+        only once notifications actually work; before that it is advice about a thing that
+        cannot happen yet. */}
+    {allowed && capability?.supported && (
+      <SettingsNote tone="info">
+        For the &quot;meeting is starting&quot; alert to wait for you, set Nixon to{' '}
+        <strong className="font-semibold">Alerts</strong> in System Settings → Notifications.
+        Nixon clears the rest by itself after a few seconds.{' '}
+        <button
+          type="button"
+          onClick={() => void openNotificationSettings()}
+          className="font-semibold text-brand underline-offset-2 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          Open Notifications
+        </button>
+      </SettingsNote>
+    )}
+    </>
   );
 }

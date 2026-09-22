@@ -130,9 +130,11 @@ export const VirtualizedTranscriptView: React.FC<VirtualizedTranscriptViewProps>
         getScrollElement: () => scrollRef.current,
         // Initial estimate only — real heights are measured per-row via
         // `virtualizer.measureElement` (data-index ref below), so variable-height
-        // rows (avatar + header + multi-line text) never overlap. Bumped from 60
-        // to account for the taller avatar/header layout.
-        estimateSize: () => 84,
+        // rows (avatar + header + multi-line text) never overlap. Back down from 84
+        // now that consecutive lines by one speaker share a single header and carry no
+        // divider (owner feedback 2026-09-21): most rows in a diarized transcript are
+        // continuation lines, which are roughly a third of the old height.
+        estimateSize: () => 56,
         overscan: 10, // Render extra items above/below viewport
         onChange: () => {
             startTransition(() => {
@@ -240,6 +242,27 @@ export const VirtualizedTranscriptView: React.FC<VirtualizedTranscriptViewProps>
             };
         });
     }, [segments, overlay, textOverlay]);
+
+    // Which rows continue the previous row's speaker run (owner feedback 2026-09-21 — one
+    // avatar + name per run of consecutive lines by the same speaker, instead of per line).
+    //
+    // Two deliberate choices:
+    //  - Derived from `displaySegments`, NOT `segments`, so an optimistic speaker
+    //    reassignment regroups the run on the click rather than at the next refetch.
+    //  - A line with no speaker key never continues a run. Undiarized transcripts (live
+    //    recording before diarization, imports that were never diarized) therefore render
+    //    exactly as they did before this change; merging them would put one "Speaker"
+    //    header at the top of hundreds of lines and leave everything scrolled past it
+    //    unlabelled.
+    const runContinuation = useMemo(() => {
+        const flags: boolean[] = [];
+        for (let i = 0; i < displaySegments.length; i++) {
+            const key = displaySegments[i].speaker;
+            const prevKey = i > 0 ? displaySegments[i - 1].speaker : null;
+            flags.push(!!key && !!prevKey && key === prevKey);
+        }
+        return flags;
+    }, [displaySegments]);
 
     // Drop a text-overlay entry once the re-fetched segments actually carry the
     // edited text (the background reconcile in TranscriptPanel lands it) — same
@@ -599,6 +622,7 @@ export const VirtualizedTranscriptView: React.FC<VirtualizedTranscriptViewProps>
                                         selectionActive={selectionActive}
                                         onToggleSelect={handleToggleSelect}
                                         userEdited={segment.userEdited}
+                                        continuesRun={runContinuation[virtualRow.index]}
                                         onEditText={onEditText ? handleEditText : undefined}
                                     />
                                 </div>
@@ -666,6 +690,7 @@ export const VirtualizedTranscriptView: React.FC<VirtualizedTranscriptViewProps>
                                         selectionActive={selectionActive}
                                         onToggleSelect={handleToggleSelect}
                                         userEdited={segment.userEdited}
+                                        continuesRun={runContinuation[index]}
                                         onEditText={onEditText ? handleEditText : undefined}
                                     />
                                 </motion.div>
