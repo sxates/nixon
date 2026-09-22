@@ -75,6 +75,9 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
   the audio by hand — and the **Process now** button did nothing when you tried. Both went
   through the same broken check, which could never succeed for any meeting. Stopping now
   transcribes and summarizes on its own, the way a meeting you never paused always did.
+- **A summary generated in the background now appears without reopening the meeting.** The
+  meeting page read the summary once when you opened it, so one produced afterwards by
+  background processing sat in the database unseen until you navigated away and back.
 - **A meeting that was being processed no longer gets abandoned halfway.** Nixon could end
   up with two processing runs for the same meeting; the second saw the first's work already
   underway, took that for a failure, and gave up — leaving the meeting transcribed but never

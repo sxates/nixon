@@ -62,6 +62,8 @@ function MeetingDetailsContent() {
   // only at the END of the pipeline). Read through the same shared provider
   // TranscriptButtonGroup uses so the toast and the backlog pill can never contradict.
   const { view: backlogView } = useBacklog();
+  /** The meeting-summary fetch, so the backlog watcher can re-run it (see below). */
+  const fetchSummaryRef = useRef<null | (() => Promise<void>)>(null);
   const backlogItems = backlogView.items;
   const router = useRouter();
 
@@ -454,6 +456,10 @@ function MeetingDetailsContent() {
       }
     };
 
+    // Held so the backlog watcher below can re-run exactly this fetch — same command, same
+    // parsing, no duplication and no loading flash.
+    fetchSummaryRef.current = fetchMeetingSummary;
+
     const loadData = async () => {
       try {
         await fetchMeetingSummary();
@@ -464,6 +470,23 @@ function MeetingDetailsContent() {
 
     loadData();
   }, [meetingId]);
+
+  // The summary is fetched once, keyed on the meeting id — so a summary the DEFERRED
+  // BACKLOG produces afterwards never reached the page. Measured 2026-09-22: the drain
+  // logged `summary -> done` and the row was stored `completed` with 2137 characters, while
+  // the open meeting showed nothing; the specs/0071 W3 "Summarizing this meeting…" notice
+  // simply vanished and left an empty tab behind. The page polls only for summaries IT
+  // started (`useSummaryGeneration`), and this one was started by the backlog.
+  //
+  // So: when this meeting leaves the backlog's in-flight set, re-read the summary.
+  const wasInFlightRef = useRef(false);
+  useEffect(() => {
+    const inFlight = isMeetingInFlight(backlogView.items, meetingId);
+    if (wasInFlightRef.current && !inFlight) {
+      void fetchSummaryRef.current?.();
+    }
+    wasInFlightRef.current = inFlight;
+  }, [backlogView.items, meetingId]);
 
   // Auto-generation check: runs when meeting is loaded with no summary
   useEffect(() => {
