@@ -70,6 +70,11 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 ### Fixed
 
+- **A meeting that ends with the transcript running now processes itself.** If you paused the
+  transcript partway through a meeting and resumed it, stopping used to tell you to process
+  the audio by hand — and the **Process now** button did nothing when you tried. Both went
+  through the same broken check, which could never succeed for any meeting. Stopping now
+  transcribes and summarizes on its own, the way a meeting you never paused always did.
 - **Hiding a meeting on Today now actually hides it.** Clearing something off your day —
   lunch, a hold, anything you are not recording — no longer sends you a reminder to prep for
   it or to join it, and no longer spends a summary working out what it was about.
@@ -90,6 +95,17 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
   mid-run, because `SpeechEnd` carries its own samples alongside the parallel accumulation
   and reconciling the two is how 0046 and 0051 both got scrambled clocks. `vad_split.rs` is a
   new module because `vad.rs` was at the size cap.
+- `useDeferredBacklog.enqueueMeeting` read `folder_path` off `api_get_meeting`, whose
+  `MeetingDetails` has no such field — so it returned `no-folder-path` for every meeting,
+  ever. It now asks `api_get_meeting_metadata`, which carries it (and costs less, since it
+  does not serialize every transcript). The periodic refresh path was unaffected because
+  `api_list_deferred_meetings` is camelCase and matches its TS type — which is also the real
+  reason a stop took 3min19s to summarize: a failed handoff, then the refresh eventually
+  noticing the marker, not retranscription cost. The hook had no tests; it has five now,
+  built on the real IPC payload shapes.
+- Log files were capped at the plugin's default 40 KB with `KeepOne`, which discards on
+  rotation — smaller than one recording produces, so two investigations found the session
+  they wanted already gone. Now 8 MB, keeping the last three.
 - A recording logs every term behind its stored duration (elapsed / pauses / active). One
   recording stored 68.85s for 114.6s of ffmpeg-measured audio; that is **not fixed** — the
   mute gate is exonerated, `pause_recording` has only the HOLD caller, and the session's log

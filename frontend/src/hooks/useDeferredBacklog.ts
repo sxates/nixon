@@ -35,7 +35,6 @@ import { useConfig } from '@/contexts/ConfigContext';
 import { retranscriptionProviderFor } from '@/lib/deferred-transcription';
 import { resolveSummaryLanguage } from '@/lib/resolve-summary-language';
 import { DEFAULT_TEMPLATE_ID } from '@/hooks/meeting-details/useTemplates';
-import { storageService } from '@/services/storageService';
 import type { Transcript } from '@/types';
 import {
   backlogReducer,
@@ -450,11 +449,26 @@ export function useDeferredBacklog(): UseDeferredBacklogReturn {
   // forced or on AC.
   const enqueueMeeting = useCallback(
     async (meetingId: string, opts?: { force?: boolean }): Promise<HandoffOutcome> => {
-      const meeting = await storageService.getMeeting(meetingId).catch(() => null);
-      const folderPath = (meeting as { folder_path?: string } | null)?.folder_path;
+      // `api_get_meeting_metadata`, NOT `api_get_meeting`.
+      //
+      // This guard used to read `folder_path` off `api_get_meeting`, whose `MeetingDetails`
+      // has no folder-path field at all — so it refused EVERY meeting. The stop handoff for
+      // a live->defer->live recording therefore always told the user to process it by hand,
+      // and the "Process now" button always returned here before dispatching or draining,
+      // which is precisely "clicking it doesn't seem to do anything".
+      //
+      // `MeetingMetadata` carries `folder_path: Option<String>` (snake_case, as this code
+      // always expected) and costs less than `api_get_meeting`, which also serializes every
+      // transcript. The refresh path never hit this because it reads
+      // `api_list_deferred_meetings`, whose DTO is camelCase and matches its TS type.
+      const meeting = await invoke<{ folder_path?: string; title?: string }>(
+        'api_get_meeting_metadata',
+        { meetingId },
+      ).catch(() => null);
+      const folderPath = meeting?.folder_path;
       if (!folderPath) {
         // spec 0051 WS2: this used to return silently, dropping the meeting on the
-        // floor with no trace.
+        // floor with no trace. A notes-only meeting legitimately lands here.
         console.warn('[deferred-backlog] no folder_path for', meetingId);
         return { accepted: false, reason: 'no-folder-path' };
       }
@@ -471,7 +485,7 @@ export function useDeferredBacklog(): UseDeferredBacklogReturn {
       }
       const m: DeferredMeeting = {
         id: meetingId,
-        title: (meeting as { title?: string } | null)?.title ?? 'meeting',
+        title: meeting?.title ?? 'meeting',
         folderPath,
         transcriptCount,
       };
