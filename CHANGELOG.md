@@ -19,7 +19,66 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 ## [Unreleased]
 
-_(nothing yet)_
+### Added
+
+- **A transcript you can actually read.** Consecutive lines from one speaker now form a
+  single block under one name, with each line's timestamp on the right. The same meeting
+  takes a fraction of the scrolling, and the speaker names are still one click from being
+  corrected.
+- **Speakers appear while Nixon is still identifying them**, instead of all at once at the
+  end. The numbered speakers show up as soon as they are worked out, and the real names land
+  as each voice is recognised — and the button now says what it is doing rather than sitting
+  on 100%.
+- **Copy an Ask AI answer as plain prose.** The Copy button on an answer leaves the meeting
+  references behind, so it pastes cleanly into a message or a doc.
+- **Ask AI history opens where it sits.** Click a past question and its answer expands
+  underneath, with its own Copy and **Ask again** — no more losing the question you were
+  about to ask.
+- **Faces on Today.** Meetings on your day show who is in them and mark the one being
+  recorded, the way All Meetings already did.
+
+### Changed
+
+- **The meter in the footer follows the whole meeting.** It used to go dead whenever your
+  mic was muted in Zoom, even though the other side of the call was still being recorded.
+  Muting your mic now only changes the words next to it.
+- **A tighter recording screen.** The meter bridge is smaller and carries its channel labels
+  inside the meters, the duplicated status line is gone, and the three controls read
+  Participants, Live, Template — all the same size.
+- **Participants fold up.** A meeting with four or more people opens with a row of faces and
+  a summary instead of three rows of names; one click shows everyone.
+- **Today's views read Agenda, List, Week**, and the week view now has the same ⋯ menu as the
+  other two, so you can hide or edit a meeting from any of them.
+- **Ask AI's box is laid out around the question.** The question spans the full width, with
+  Ask and Save under it on the left and the filters on the right. Answers now default to the
+  last 7 days rather than all time, and the person filter says what it does — it picks the
+  *meetings* someone was in.
+- **Copy and Open folder moved into the transcript's ⋯ menu**, so the row shows the actions
+  worth taking while a transcript is being worked on.
+- **Settings shows your save location as `~/Movies/…`**, without your account name.
+
+### Fixed
+
+- **Hiding a meeting on Today now actually hides it.** Clearing something off your day —
+  lunch, a hold, anything you are not recording — no longer sends you a reminder to prep for
+  it or to join it, and no longer spends a summary working out what it was about.
+- **Only the alert that matters waits for you.** "A meeting is starting" stays on screen
+  until you deal with it; every other Nixon banner now clears itself after a few seconds.
+  Set Nixon to **Alerts** in System Settings → Notifications and Settings will tell you the
+  rest.
+
+### Internal
+
+- Specs 0070 covers the four functional items of this batch (progressive speaker reveal,
+  dismissed events reaching the notifier and the prep-brief generator, notification lifetime,
+  the dev recordings root). The other eleven were presentation and were built without a spec.
+- The debug build writes recordings to `nixon-recordings-dev` instead of inheriting the
+  production probe's legacy folder; `fs_guard` allow-lists the release root in debug builds
+  so pre-existing dev recordings stay readable.
+- Removed two committed screenshots that leaked the maintainer's own path and email address;
+  `docs/screenshots/README.md` now names the review step that missed them.
+- Three shared Today components (`AgendaRowMenu`, `AgendaAttendees`, `RecordingBadge`) so the
+  three views cannot drift apart again. First tests for `WeekView` and the Ask AI page.
 
 ## [0.8.0] - 2026-09-20
 
