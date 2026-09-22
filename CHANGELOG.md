@@ -75,6 +75,10 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
   the audio by hand — and the **Process now** button did nothing when you tried. Both went
   through the same broken check, which could never succeed for any meeting. Stopping now
   transcribes and summarizes on its own, the way a meeting you never paused always did.
+- **A meeting that was being processed no longer gets abandoned halfway.** Nixon could end
+  up with two processing runs for the same meeting; the second saw the first's work already
+  underway, took that for a failure, and gave up — leaving the meeting transcribed but never
+  summarized. It now recognises its own work in progress and waits for it.
 - **A meeting's length is recorded correctly.** The stored duration was taken after the
   recording's clocks had already been cleared, so it fell back to the moment speech last
   stopped — a meeting with quiet at the end, or a paused transcript, came out shorter than it
@@ -110,6 +114,15 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 - Log files were capped at the plugin's default 40 KB with `KeepOne`, which discards on
   rotation — smaller than one recording produces, so two investigations found the session
   they wanted already gone. Now 8 MB, keeping the last three.
+- The `[fe:backlog]` instrumentation paid for itself immediately: it showed the app
+  remounting ~9s after a stop (recovery/onboarding/model-config burst at 04:37:35), which
+  hands the backlog a fresh controller whose one-drain-at-a-time guard is a per-instance ref
+  starting at false. `AUTOSTART_DEBOUNCE_MS` (5s) then fired its mount refresh at 04:37:40 and
+  started a second drain over the first — and the first controller's JavaScript had died with
+  the old React tree, so the survivor was the only thing that could finish the job.
+  `start_retranscription_command` now tracks WHICH meeting holds the guard: the same meeting
+  gets `already_running: true` (keep waiting — the listener was registered before the call, so
+  the in-flight pass's completion event settles it), a different meeting is still refused.
 - `RecordingState::stop_recording` now captures the duration accounting before anything
   clears it. `cleanup()` (via `stop_streams_only`) wipes `recording_start` and runs BEFORE
   `save_recording_only` reads it, so the save got `None` and `recording_saver.rs:1299` fell

@@ -5,8 +5,6 @@
 //! behaviour belongs in a new module. It is also genuinely separable — the accounting is a
 //! plain value plus its log format, with no access to recording state.
 
-use crate::audio::recording_state::RecordingState;
-
 /// The inputs behind a recording's stored duration (specs/0071 W5).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct DurationAccounting {
@@ -42,6 +40,7 @@ impl DurationAccounting {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::audio::recording_state::RecordingState;
 
     // specs/0071 W5 — the arithmetic behind a recording's stored duration, made checkable.
     // A recording stored 68.85s for 114.6s of audio and it could not be attributed after the
