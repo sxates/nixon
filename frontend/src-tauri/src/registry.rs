@@ -389,6 +389,7 @@ pub fn invoke_handler() -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Sen
         llm_activity::commands::api_llm_activity_snapshot,
         llm_activity::commands::api_llm_activity_dismiss,
         llm_activity::commands::api_llm_activity_dismiss_task,
+        llm_activity::commands::api_llm_activity_clear_finished,
         llm_activity::commands::api_llm_activity_retry_task,
     ]
 }

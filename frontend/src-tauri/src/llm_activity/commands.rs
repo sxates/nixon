@@ -33,6 +33,18 @@ pub async fn api_llm_activity_dismiss(
     Ok(())
 }
 
+/// The queue's "Clear finished" (specs/0074 W3): drop done and skipped records. Failures stay
+/// until dismissed or retried.
+#[tauri::command]
+pub async fn api_llm_activity_clear_finished(
+    app: AppHandle,
+    state: State<'_, LlmActivityState>,
+) -> Result<(), String> {
+    state.0.clear_finished();
+    emit_activity(&app, &state.0.view());
+    Ok(())
+}
+
 /// Dismiss ONE failed background task, addressed by its registry id (specs/0063 W3 Task 6).
 ///
 /// Distinct from [`api_llm_activity_dismiss`], which acknowledges the WHOLE failure history

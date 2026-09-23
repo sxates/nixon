@@ -89,3 +89,17 @@ describe('audio lifecycle commands (specs/0072)', () => {
     expect(used.filter((c) => !new RegExp(`::${c}\\b`).test(registry))).toEqual([]);
   });
 });
+
+// specs/0074 W3 — the queue's Clear finished drops done prep rows through this command.
+describe('llm activity commands (specs/0074)', () => {
+  const used = [
+    'api_llm_activity_snapshot',
+    'api_llm_activity_clear_finished',
+    'api_llm_activity_dismiss_task',
+    'api_llm_activity_retry_task',
+  ];
+
+  it('are all registered', () => {
+    expect(used.filter((c) => !new RegExp(`::${c}\\b`).test(registry))).toEqual([]);
+  });
+});

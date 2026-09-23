@@ -94,6 +94,8 @@ pub struct TaskRecord {
 #[derive(Debug, Clone, Serialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct LlmActivityView {
+    /// Planned but not yet started (specs/0074 W3), oldest first. Background only.
+    pub queued: Vec<crate::llm_activity::queued::QueuedTask>,
     pub running: Vec<RunningTask>,
     /// Newest first, capped at [`HISTORY_CAP`].
     pub history: Vec<TaskRecord>,
@@ -102,11 +104,12 @@ pub struct LlmActivityView {
 }
 
 #[derive(Default)]
-struct Inner {
-    next_id: u64,
-    running: Vec<(Origin, RunningTask)>,
-    history: VecDeque<TaskRecord>,
-    has_failure: bool,
+pub(super) struct Inner {
+    pub(super) next_id: u64,
+    pub(super) queued: Vec<(Origin, crate::llm_activity::queued::QueuedTask)>,
+    pub(super) running: Vec<(Origin, RunningTask)>,
+    pub(super) history: VecDeque<TaskRecord>,
+    pub(super) has_failure: bool,
 }
 
 #[derive(Default)]
@@ -126,7 +129,7 @@ impl LlmTaskRegistry {
     }
 
     /// A poisoned mutex must not take generation down with it — recover the guard.
-    fn lock(&self) -> std::sync::MutexGuard<'_, Inner> {
+    pub(super) fn lock(&self) -> std::sync::MutexGuard<'_, Inner> {
         self.inner.lock().unwrap_or_else(|e| e.into_inner())
     }
 
@@ -137,7 +140,7 @@ impl LlmTaskRegistry {
 
     /// Emit the current view. Must be called with the inner lock RELEASED — `view()`
     /// re-locks, so holding the guard here would deadlock.
-    fn notify(&self) {
+    pub(super) fn notify(&self) {
         let handle = self.app.lock().unwrap_or_else(|e| e.into_inner()).clone();
         if let Some(app) = handle {
             crate::llm_activity::commands::emit_activity(&app, &self.view());
@@ -187,6 +190,12 @@ impl LlmTaskRegistry {
     pub fn view(&self) -> LlmActivityView {
         let inner = self.lock();
         LlmActivityView {
+            queued: inner
+                .queued
+                .iter()
+                .filter(|(origin, _)| *origin == Origin::Background)
+                .map(|(_, t)| t.clone())
+                .collect(),
             running: inner
                 .running
                 .iter()
@@ -314,9 +323,9 @@ impl LlmTaskRegistry {
 /// RAII handle. Dropping without [`finish`](Self::finish) records the task as failed, so a
 /// job that panics or returns early can never leave a phantom "running" entry in the sidebar.
 pub struct TaskHandle {
-    registry: Arc<LlmTaskRegistry>,
-    id: u64,
-    finished: bool,
+    pub(super) registry: Arc<LlmTaskRegistry>,
+    pub(super) id: u64,
+    pub(super) finished: bool,
 }
 
 impl TaskHandle {

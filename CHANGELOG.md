@@ -49,6 +49,10 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 - **Keeping audio for less time asks first.** Choose a shorter time in Settings → Recording
   and Nixon shows how many meetings and how much space will be cleared, then clears it right
   away when you confirm, and tells you what was freed.
+- **Prep briefings show in the queue while they wait, run and finish.** Every brief Nixon
+  prepares ahead of your meetings, or that you ask for by opening Prep or pressing
+  Regenerate, appears as a row the moment it is planned. **Retry** on a failed one redoes
+  just that one.
 
 ### Changed
 

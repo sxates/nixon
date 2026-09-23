@@ -79,7 +79,16 @@ pub async fn retry_task<R: Runtime>(app: &AppHandle<R>, task_id: u64) -> Result<
             MeetingBriefsRepository::reset_failures(&pool, &meeting_id)
                 .await
                 .map_err(|e| format!("Could not clear the failure count: {e}"))?;
-            crate::aggregation::prep_jobs::run_prep_pass(app).await;
+            // specs/0074 W3: regenerate THIS brief. Rerunning the whole pass reached only
+            // calendar-keyed series, did nothing while another pass held its lock, and held
+            // the IPC for the whole pass. This returns once the brief's row is queued.
+            crate::aggregation::prep_commands::spawn_generation(
+                app,
+                meeting_id,
+                false,
+                Priority::Interactive,
+            )
+            .await;
             Ok(())
         }
         TaskKind::MeetingSummary => {

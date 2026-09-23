@@ -6,9 +6,11 @@
 //! how it ended, so the sidebar can show it.
 
 pub mod commands;
+pub mod queued;
 pub mod registry;
 pub mod retry;
 
+pub use queued::{QueuedHandle, QueuedTask};
 pub use registry::{
     LlmActivityState, LlmActivityView, LlmTaskRegistry, Origin, TaskHandle, TaskKind,
 };
