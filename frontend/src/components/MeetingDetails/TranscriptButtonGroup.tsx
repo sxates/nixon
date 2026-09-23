@@ -232,7 +232,6 @@ export function TranscriptButtonGroup({
           <Button
             size="xs"
             variant="outline"
-            className="bg-brand/10 hover:bg-brand/20 border-brand/30 text-brand"
             onClick={() => {
               setShowRetranscribeDialog(true);
             }}

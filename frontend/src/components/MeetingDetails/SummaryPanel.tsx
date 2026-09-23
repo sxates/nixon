@@ -7,7 +7,8 @@ import { SummaryGenerating } from './SummaryGenerating';
 import { ModelConfig } from '@/components/ModelSettingsModal';
 import { SummaryToolbar } from './SummaryToolbar';
 import { useEffect, useRef, useState, RefObject } from 'react';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, Loader2 } from 'lucide-react';
+import { useDiarizationActive } from '@/hooks/useDiarizationActive';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -43,13 +44,11 @@ interface SummaryPanelProps {
   onSaveModelConfig: (config?: ModelConfig) => Promise<void>;
   onGenerateSummary: (customPrompt: string) => Promise<void>;
   onStopGeneration: () => void;
-  customPrompt: string;
   onSaveSummary: (summary: Summary | { markdown?: string; summary_json?: any[] }) => Promise<void>;
   onSummaryChange: (summary: Summary) => void;
   onDirtyChange: (isDirty: boolean) => void;
   summaryError: string | null;
   onRegenerateSummary: () => Promise<void>;
-  getSummaryStatusMessage: (status: 'idle' | 'processing' | 'summarizing' | 'regenerating' | 'speaker_refresh' | 'completed' | 'error') => string;
   availableTemplates: Array<{ id: string, name: string, description: string }>;
   selectedTemplate: string;
   onTemplateSelect: (templateId: string, templateName: string) => void;
@@ -86,13 +85,11 @@ export function SummaryPanel({
   onSaveModelConfig,
   onGenerateSummary,
   onStopGeneration,
-  customPrompt,
   onSaveSummary,
   onSummaryChange,
   onDirtyChange,
   summaryError,
   onRegenerateSummary,
-  getSummaryStatusMessage,
   availableTemplates,
   selectedTemplate,
   onTemplateSelect,
@@ -108,6 +105,10 @@ export function SummaryPanel({
   // refresh keeps the existing summary on screen — only the status strip below the
   // summary announces "Updating with speaker names…"; no spinner takeover.
   const isSummaryLoading = summaryStatus === 'processing' || summaryStatus === 'summarizing' || summaryStatus === 'regenerating';
+  // A summary written before the speakers were known: the backend regenerates it with names
+  // once identification lands (`speaker_refresh` is that regeneration running).
+  const diarizationActive = useDiarizationActive(meeting.id);
+  const preliminary = diarizationActive || summaryStatus === 'speaker_refresh';
 
   // ── Confirm-before-regenerate (specs/0020 task 8) ──────────────────────────
   // Picking a DIFFERENT template while a summary is displayed must ask before
@@ -181,7 +182,6 @@ export function SummaryPanel({
                 onSaveModelConfig={onSaveModelConfig}
                 onGenerateSummary={onGenerateSummary}
                 onStopGeneration={onStopGeneration}
-                customPrompt={customPrompt}
                 summaryStatus={summaryStatus}
                 availableTemplates={availableTemplates}
                 selectedTemplate={selectedTemplate}
@@ -212,7 +212,6 @@ export function SummaryPanel({
               onSaveModelConfig={onSaveModelConfig}
               onGenerateSummary={onGenerateSummary}
               onStopGeneration={onStopGeneration}
-              customPrompt={customPrompt}
               summaryStatus={summaryStatus}
               availableTemplates={availableTemplates}
               selectedTemplate={selectedTemplate}
@@ -239,7 +238,6 @@ export function SummaryPanel({
               onSaveModelConfig={onSaveModelConfig}
               onGenerateSummary={onGenerateSummary}
               onStopGeneration={onStopGeneration}
-              customPrompt={customPrompt}
               summaryStatus={summaryStatus}
               availableTemplates={availableTemplates}
               selectedTemplate={selectedTemplate}
@@ -256,7 +254,7 @@ export function SummaryPanel({
           </div>
           {/* Empty state message */}
           <EmptyStateSummary
-            onGenerate={() => onGenerateSummary(customPrompt)}
+            onGenerate={() => onGenerateSummary('')}
             hasModel={modelConfig.provider !== null && modelConfig.model !== null}
             isGenerating={isSummaryLoading}
           />
@@ -266,6 +264,31 @@ export function SummaryPanel({
           <div className={isDoc ? 'w-full' : 'p-6 w-full'}>
             {/* Partial-summary warning (specs/0028): some transcript chunks failed
                 after retries, so sections of this summary may be missing. */}
+            {/* Status sits above the summary, not under pages of it. */}
+            {summaryStatus === 'error' && (
+              <div
+                role="alert"
+                className="mb-4 flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2"
+              >
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" aria-hidden="true" />
+                <p className="text-sm text-foreground">
+                  <span className="font-semibold">Could not generate the summary</span>
+                  {summaryError ? <> — {summaryError}</> : null}
+                </p>
+              </div>
+            )}
+            {preliminary && summaryStatus !== 'error' && (
+              <div
+                role="status"
+                className="mb-4 flex items-center gap-2 rounded-md border border-border bg-muted/50 px-3 py-2"
+              >
+                <Loader2 className="h-4 w-4 shrink-0 animate-spin text-muted-foreground" aria-hidden="true" />
+                <p className="text-sm text-muted-foreground">
+                  <span className="font-semibold text-foreground">Preliminary summary</span> — speakers
+                  will be added when available.
+                </p>
+              </div>
+            )}
             {partialSummary && (
               <div
                 role="status"
@@ -298,14 +321,6 @@ export function SummaryPanel({
               }}
             />
           </div>
-          {summaryStatus !== 'idle' && (
-            <div className={`mt-4 p-4 rounded-lg ${summaryStatus === 'error' ? 'bg-destructive/10 text-destructive' :
-              summaryStatus === 'completed' ? 'bg-[hsl(var(--success)/0.12)] text-[hsl(var(--success))]' :
-                'bg-brand/10 text-brand'
-              }`}>
-              <p className="text-sm font-medium">{getSummaryStatusMessage(summaryStatus)}</p>
-            </div>
-          )}
         </div>
       )}
 

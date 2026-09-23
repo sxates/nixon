@@ -62,8 +62,6 @@ function renderPanel(props: Partial<React.ComponentProps<typeof TranscriptPanel>
     <TooltipProvider>
       <TranscriptPanel
         transcripts={[]}
-        customPrompt=""
-        onPromptChange={vi.fn()}
         onCopyTranscript={vi.fn()}
         onOpenMeetingFolder={vi.fn().mockResolvedValue(undefined)}
         isRecording={false}

@@ -38,7 +38,6 @@ export interface SummaryToolbarProps {
   hasSummary: boolean;
   hasTranscripts: boolean;
   isModelConfigLoading: boolean;
-  customPrompt: string;
   onGenerateSummary: (customPrompt: string) => Promise<void>;
   onStopGeneration: () => void;
 
@@ -87,7 +86,6 @@ export function SummaryToolbar({
   hasSummary,
   hasTranscripts,
   isModelConfigLoading,
-  customPrompt,
   onGenerateSummary,
   onStopGeneration,
   availableTemplates,
@@ -109,8 +107,7 @@ export function SummaryToolbar({
 
   const { isCheckingModels, generate } = useSummaryGenerationGuards({
     modelConfig,
-    customPrompt,
-    onGenerateSummary,
+      onGenerateSummary,
     onNeedsModelSettings: () => setSettingsDialogOpen(true),
   });
 
@@ -179,7 +176,7 @@ export function SummaryToolbar({
           <Button
             variant="outline"
             size="xs"
-            className="border-brand/30 bg-brand/10 text-brand hover:bg-brand/20 xl:px-4"
+            className="xl:px-4"
             onClick={() => {
               void generate();
             }}

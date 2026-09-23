@@ -55,26 +55,6 @@ export function useSummaryGeneration({
   // specs/0029 WS7.2: which local STT provider to use for deferred transcription.
   const { transcriptModelConfig } = useConfig();
 
-  // Helper to get status message
-  const getSummaryStatusMessage = useCallback((status: SummaryStatus) => {
-    switch (status) {
-      case 'processing':
-        return 'Processing transcript...';
-      case 'summarizing':
-        return 'Generating summary...';
-      case 'regenerating':
-        return 'Regenerating summary...';
-      case 'speaker_refresh':
-        return 'Updating with speaker names…';
-      case 'completed':
-        return 'Summary completed';
-      case 'error':
-        return 'Error generating summary';
-      default:
-        return '';
-    }
-  }, []);
-
   // specs/0041 WS2: when offline diarization lands AFTER the auto-summary already ran,
   // the backend regenerates the (speakerless, pristine) summary itself and emits
   // `summary-refresh-started` the moment the regeneration actually kicks off — on the
@@ -786,6 +766,5 @@ export function useSummaryGeneration({
     handleGenerateSummary,
     handleRegenerateSummary,
     handleStopGeneration,
-    getSummaryStatusMessage,
   };
 }

@@ -92,7 +92,6 @@ export default function PageContent({
   const searchParams = useSearchParams();
 
   // State
-  const [customPrompt, setCustomPrompt] = useState<string>('');
   // Notes-only meetings (spec 0015) have no recording/transcript/audio: drop the
   // Transcript tab and default to My notes. Recorded/imported meetings are unchanged.
   const isNotesOnly = meeting.origin === 'notes_only';
@@ -462,8 +461,6 @@ export default function PageContent({
             setModelConfig={setModelConfig}
             onSaveModelConfig={handleSaveModelConfig}
             onRegisterModalOpen={handleRegisterModalOpen}
-            customPrompt={customPrompt}
-            onPromptChange={setCustomPrompt}
             isRecording={isRecording}
             deepLinkSegmentId={deepLinkSegmentId}
             onDeepLinkConsumed={onDeepLinkConsumed}

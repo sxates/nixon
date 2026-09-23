@@ -53,8 +53,6 @@ const props = {
   transcripts: [{ id: 't1', text: 'hello', timestamp: '0' }],
   onCopyTranscript: vi.fn(),
   onOpenMeetingFolder: vi.fn().mockResolvedValue(undefined),
-  onPromptChange: vi.fn(),
-  customPrompt: '',
   speakersController: { speakers: [] },
 } as unknown as React.ComponentProps<typeof TranscriptPanel>;
 

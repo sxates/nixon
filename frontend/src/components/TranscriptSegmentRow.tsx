@@ -148,7 +148,7 @@ const SelectionCheckbox = memo(function SelectionCheckbox({
                         : 'border-muted-foreground/40 bg-transparent hover:border-brand',
                     selected || active
                         ? 'opacity-100'
-                        : 'opacity-0 focus:opacity-100 group-hover/segment:opacity-100',
+                        : 'opacity-0 focus-visible:opacity-100 group-hover/segment:opacity-100',
                 )}
             >
                 {selected && <Check size={11} strokeWidth={3} />}
@@ -359,7 +359,7 @@ export const TranscriptSegment = memo(function TranscriptSegment({
                                     setSaveError(null);
                                     setEditing(true);
                                 }}
-                                className="rounded-[2px] p-0.5 text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground focus:opacity-100 group-hover/segment:opacity-100"
+                                className="rounded-[2px] p-0.5 text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground focus-visible:opacity-100 group-hover/segment:opacity-100"
                                 title="Edit this line's text"
                                 aria-label="Edit this line's text"
                             >

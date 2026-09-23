@@ -19,8 +19,6 @@ import { isMeetingInFlight } from '@/lib/deferred-backlog';
 
 interface TranscriptPanelProps {
   transcripts: Transcript[];
-  customPrompt: string;
-  onPromptChange: (value: string) => void;
   onCopyTranscript: () => void;
   onOpenMeetingFolder: () => Promise<void>;
   isRecording: boolean;
@@ -78,8 +76,6 @@ interface TranscriptPanelProps {
 
 export function TranscriptPanel({
   transcripts,
-  customPrompt,
-  onPromptChange,
   onCopyTranscript,
   onOpenMeetingFolder,
   isRecording,
@@ -450,21 +446,6 @@ export function TranscriptPanel({
           onEditText={!isRecording && meetingId ? editSegmentText : undefined}
         />
       </div>
-
-      {/* Custom prompt input at bottom of transcript section. specs/0061 review, I3 —
-          gated on the unfiltered allSegments: this box feeds the AI summary for the
-          WHOLE meeting, so an active speaker filter that happens to match zero
-          segments must not hide it. */}
-      {!isRecording && allSegments.length > 0 && (
-        <div className="p-1 border-t border-border">
-          <textarea
-            placeholder="Add context for AI summary. For example people involved, meeting overview, objective etc..."
-            className="w-full px-3 py-2 border border-input rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-ring focus:border-brand bg-card shadow-sm min-h-[80px] resize-y"
-            value={customPrompt}
-            onChange={(e) => onPromptChange(e.target.value)}
-          />
-        </div>
-      )}
     </div>
   );
 }

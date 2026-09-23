@@ -36,6 +36,9 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
   about to ask.
 - **Faces on Today.** Meetings on your day show who is in them and mark the one being
   recorded, the way All Meetings already did.
+- **A summary tells you when it is preliminary.** A summary written before Nixon has
+  finished identifying who spoke now says so above it — "Preliminary summary — speakers will
+  be added when available" — until the version with names replaces it.
 
 ### Changed
 
@@ -71,6 +74,12 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
   "generating summary", "speakers identified" and "summary ready" pop-ups. Nixon takes you to
   the meeting and the tape rewinds while it works; you only hear from it if something needs
   your attention.
+- **Your notes are the context for a summary.** The "Add context for AI summary" box at the
+  bottom of the transcript is gone; the notes you keep on a meeting already go into every
+  summary, and they are somewhere you can find them.
+- **Calmer meeting tabs.** Enhance and Regenerate Summary are ordinary buttons again, the
+  edit and reassign controls on a transcript line disappear as soon as the pointer leaves,
+  and a summary's status sits above it instead of under pages of text.
 
 ### Fixed
 

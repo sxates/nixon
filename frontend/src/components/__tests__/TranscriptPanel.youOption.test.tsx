@@ -56,8 +56,6 @@ function renderPanel(speakersController: UseSpeakersReturn) {
     <TooltipProvider>
       <TranscriptPanel
         transcripts={[]}
-        customPrompt=""
-        onPromptChange={vi.fn()}
         onCopyTranscript={vi.fn()}
         onOpenMeetingFolder={vi.fn().mockResolvedValue(undefined)}
         isRecording={false}
