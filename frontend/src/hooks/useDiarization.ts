@@ -251,22 +251,6 @@ export function useDiarization({
         setDownloadProgress(null);
         isDownloadingRef.current = false;
         resetProgressGuard(null, -1);
-        const count = event.payload.speaker_count;
-        const found =
-          count === 1 ? '1 speaker found.' : `${count} speakers found.`;
-        // Surface the basis when we seeded an estimate from the calendar, so the
-        // user understands why the count is constrained (specs/0011 calendar-seed).
-        const seeded = event.payload.seededSpeakerCount;
-        let basis = '';
-        if (
-          event.payload.speakerCountSource === 'calendar' &&
-          typeof seeded === 'number'
-        ) {
-          basis = ` Estimated ${seeded} speakers from calendar.`;
-        }
-        toast.success('Speakers identified', {
-          description: `${found}${basis}`,
-        });
         void Promise.resolve(onCompleteRef.current?.());
       },
     );

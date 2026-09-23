@@ -67,6 +67,10 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 - **Copy and Open folder moved into the transcript's ⋯ menu**, so the row shows the actions
   worth taking while a transcript is being worked on.
 - **Settings shows your save location as `~/Movies/…`**, without your account name.
+- **Ending a meeting is quiet.** Stopping a recording no longer stacks up "saved",
+  "generating summary", "speakers identified" and "summary ready" pop-ups. Nixon takes you to
+  the meeting and the tape rewinds while it works; you only hear from it if something needs
+  your attention.
 
 ### Fixed
 

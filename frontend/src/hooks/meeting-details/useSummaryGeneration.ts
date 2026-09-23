@@ -171,12 +171,6 @@ export function useSummaryGeneration({
 
       console.log('Processing transcript with template:', selectedTemplate);
 
-      // Show toast notification for generation start
-      toast.info(`${isRegeneration ? 'Regenerating' : 'Generating'} summary...`, {
-        description: `Using ${modelConfig.provider}/${modelConfig.model}`,
-        duration: 3000,
-      });
-
       // Resolve explicit metadata override first; Auto detects the transcript
       // language. For a notes-grounded summary there's no transcript to detect
       // from, so pass null and let the backend fall back to the notes' language.
@@ -321,12 +315,6 @@ export function useSummaryGeneration({
                 description: `${chunkStatus.failed_chunks} of ${chunkStatus.total_chunks} transcript section${chunkStatus.total_chunks === 1 ? '' : 's'} could not be processed, so some content may be missing. Regenerating may recover it.`,
                 duration: 8000,
               });
-            } else {
-              // Show success toast
-              toast.success('Summary generated successfully!', {
-                description: 'Your meeting summary is ready',
-                duration: 4000,
-              });
             }
 
             if (meetingName && onMeetingUpdated) {
@@ -384,12 +372,6 @@ export function useSummaryGeneration({
 
           setAiSummary(formattedSummary);
           setSummaryStatus('completed');
-
-          // Show success toast
-          toast.success('Summary generated successfully!', {
-            description: 'Your meeting summary is ready',
-            duration: 4000,
-          });
 
           if (meetingName && onMeetingUpdated) {
             await onMeetingUpdated();
@@ -508,13 +490,7 @@ export function useSummaryGeneration({
           provider: retranscriptionProviderFor(transcriptModelConfig?.provider),
         });
 
-        const ok = await completion;
-        if (ok) {
-          toast.success('Transcript ready', {
-            description: 'Meeting audio transcribed — generating the summary now.',
-          });
-        }
-        return ok;
+        return await completion;
       } catch (error) {
         console.error('Failed to start deferred transcription:', error);
         toast.error('Could not transcribe the meeting audio', {

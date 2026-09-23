@@ -563,17 +563,7 @@ export function useRecordingStop(
           // Mark as completed
           setStatus(RecordingStatus.COMPLETED);
 
-          // Show success toast with navigation option
-          toast.success('Recording saved successfully!', {
-            description: `${freshTranscripts.length} transcript segments saved.`,
-            action: {
-              label: 'View Meeting',
-              onClick: () => {
-                router.push(`/meeting-details?id=${meetingId}`);
-              }
-            },
-            duration: 10000,
-          });
+          // No "saved" toast: the move to the meeting page below is the confirmation.
 
           // Auto-navigate after a short delay with source parameter
           setTimeout(() => {
