@@ -222,6 +222,48 @@
     "wait": 4500
   },
   {
+    "name": "meeting-audio-purged",
+    "route": "/meeting-details?id=demo-04&tab=transcript",
+    "ignore": [
+      {
+        "x": 375,
+        "y": 345,
+        "w": 420,
+        "h": 35,
+        "why": "tab-bar row, sub-pixel text/underline flake between runs (specs/0060 Task 3 determinism check)"
+      },
+      {
+        "x": 338,
+        "y": 816,
+        "w": 106,
+        "h": 22,
+        "why": "footer TapeCounter roller digits (specs/0060 Task 3). Moved here in specs/0066: specs/0064 W6 reordered the rail (reel, then counter-over-meter, then title, keys right), so the old box at x=470 sat over \"Deck ready\" while the digits flaked unignored at x=343..434 \u2014 measured, not guessed."
+      }
+    ],
+    "wait": 4500
+  },
+  {
+    "name": "meeting-audio-failed",
+    "route": "/meeting-details?id=demo-06&tab=transcript",
+    "ignore": [
+      {
+        "x": 375,
+        "y": 345,
+        "w": 420,
+        "h": 35,
+        "why": "tab-bar row, sub-pixel text/underline flake between runs (specs/0060 Task 3 determinism check)"
+      },
+      {
+        "x": 338,
+        "y": 816,
+        "w": 106,
+        "h": 22,
+        "why": "footer TapeCounter roller digits (specs/0060 Task 3). Moved here in specs/0066: specs/0064 W6 reordered the rail (reel, then counter-over-meter, then title, keys right), so the old box at x=470 sat over \"Deck ready\" while the digits flaked unignored at x=343..434 \u2014 measured, not guessed."
+      }
+    ],
+    "wait": 4500
+  },
+  {
     "name": "meeting-unprocessed",
     "route": "/meeting-details?id=demo-05",
     "ignore": [
@@ -329,11 +371,26 @@
   },
   {
     "name": "settings-recordings",
-    "route": "/settings?tab=recording",
+    "route": "/settings?tab=recording&retention=days30",
+    "viewport": [1280, 1100],
     "ignore": [
       {
         "x": 338,
-        "y": 816,
+        "y": 1056,
+        "w": 106,
+        "h": 22,
+        "why": "footer TapeCounter roller digits (specs/0060 Task 3). Moved here in specs/0066: specs/0064 W6 reordered the rail (reel, then counter-over-meter, then title, keys right), so the old box at x=470 sat over \"Deck ready\" while the digits flaked unignored at x=343..434 \u2014 measured, not guessed."
+      }
+    ]
+  },
+  {
+    "name": "settings-recordings-once",
+    "route": "/settings?tab=recording&retention=once",
+    "viewport": [1280, 1100],
+    "ignore": [
+      {
+        "x": 338,
+        "y": 1056,
         "w": 106,
         "h": 22,
         "why": "footer TapeCounter roller digits (specs/0060 Task 3). Moved here in specs/0066: specs/0064 W6 reordered the rail (reel, then counter-over-meter, then title, keys right), so the old box at x=470 sat over \"Deck ready\" while the digits flaked unignored at x=343..434 \u2014 measured, not guessed."

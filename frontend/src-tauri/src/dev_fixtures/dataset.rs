@@ -53,6 +53,10 @@ pub struct FixtureMeeting {
     /// "HH:MM" local wall-clock start
     pub time_of_day: String,
     pub duration_seconds: u32,
+    /// `meetings.audio_state` to seed (specs/0072): `processed` | `failed` | `purged`;
+    /// absent = pending. A `purged` meeting gets no audio files.
+    #[serde(default)]
+    pub audio_state: Option<String>,
     #[serde(default)]
     pub template_id: Option<String>,
     #[serde(default)]
@@ -147,6 +151,11 @@ pub fn validate(ds: &Dataset) -> Result<(), Vec<String>> {
                 }
             }
         }
+        if let Some(st) = &m.audio_state {
+            if !matches!(st.as_str(), "processed" | "failed" | "purged") {
+                errs.push(format!("{}: bad audio_state {st}", m.id));
+            }
+        }
         let mut last_end = -1.0_f64;
         for seg in &m.segments {
             if let Some(k) = &seg.speaker {
@@ -221,6 +230,7 @@ mod tests {
                 days_ago: 0,
                 time_of_day: "14:00".into(),
                 duration_seconds: 60,
+                audio_state: None,
                 template_id: None,
                 participants: vec!["person-a".into()],
                 speakers: vec![FixtureSpeaker {
@@ -290,6 +300,17 @@ mod tests {
         ds.meetings[0].segments[0].speaker = Some("spk_9".into());
         let errs = validate(&ds).unwrap_err();
         assert!(errs.iter().any(|e| e.contains("spk_9")), "{errs:?}");
+    }
+
+    #[test]
+    fn validate_rejects_an_unknown_audio_state() {
+        let mut ds = minimal();
+        ds.meetings[0].audio_state = Some("pending".into()); // pending is NULL, not a value
+        let errs = validate(&ds).unwrap_err();
+        assert!(
+            errs.iter().any(|e| e.contains("bad audio_state")),
+            "{errs:?}"
+        );
     }
 
     #[test]

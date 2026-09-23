@@ -334,3 +334,39 @@ describe('RecordingSettings — settings hygiene (specs/0061 W6)', () => {
     expect(screen.getByRole('button', { name: 'Change…' })).toBeEnabled();
   });
 });
+
+describe('RecordingSettings — audio storage copy (specs/0072 W3)', () => {
+  beforeEach(() => {
+    useSidebarMock.mockReturnValue({ activeRecordingMeetingId: null });
+    const base = invokeMock.getMockImplementation()!;
+    invokeMock.mockImplementation((cmd: string, args?: unknown) =>
+      cmd === 'get_recording_preferences'
+        ? Promise.resolve({
+            save_folder: '/tmp/rec',
+            auto_save: false,
+            audio_retention: { mode: 'after_processing' },
+            preferred_mic_device: null,
+            preferred_system_device: null,
+            retention_days: 30,
+            live_transcription_enabled: true,
+            low_power_on_battery: true,
+          })
+        : base(cmd, args as never),
+    );
+  });
+
+  it('shows the save location under Once processed, because capture always saves', async () => {
+    await renderSettings();
+    expect(screen.getByRole('button', { name: 'Change…' })).toBeInTheDocument();
+  });
+
+  it('says audio goes only after processing, never at stop, and explains voiceprints', async () => {
+    await renderSettings();
+    expect(
+      screen.getByText(/kept until Nixon has transcribed the meeting and identified the speakers/),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/as soon as a recording stops/i)).toBeNull();
+    expect(screen.getByText(/numeric voice signatures that contain no audio/)).toBeInTheDocument();
+    expect(screen.getByText(/still rename and reassign its speakers/)).toBeInTheDocument();
+  });
+});

@@ -4,6 +4,7 @@
   "days_ago": 0,
   "time_of_day": "11:00",
   "duration_seconds": 600,
+  "audio_state": "failed",
   "template_id": "standard_meeting",
   "participants": [
     "person-rafael",

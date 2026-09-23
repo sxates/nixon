@@ -4,6 +4,7 @@
   "days_ago": 2,
   "time_of_day": "10:30",
   "duration_seconds": 1320,
+  "audio_state": "processed",
   "template_id": "standard_meeting",
   "participants": [
     "person-maya"

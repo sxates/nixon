@@ -16,11 +16,12 @@ import { useBacklog } from '@/contexts/DeferredBacklogProvider';
 import { useDiarization } from '@/hooks/useDiarization';
 import { SPARSE_TRANSCRIPT_SEGMENTS } from '@/lib/deferred-transcription';
 import { isMeetingInFlight } from '@/lib/deferred-backlog';
-
-/** Tooltip when the meeting's audio files are gone (specs/0029 WS7.1) — most
- * commonly removed by the "Delete recording audio after N days" setting. */
-const AUDIO_UNAVAILABLE_TITLE =
-  'No audio recording available — it may have been removed by your audio retention setting';
+import {
+  AUDIO_FAILED_NOTE,
+  audioGoneTitle,
+  canTranscribe,
+  useMeetingAudioStatus,
+} from '@/hooks/useMeetingAudioStatus';
 
 
 interface TranscriptButtonGroupProps {
@@ -64,29 +65,16 @@ export function TranscriptButtonGroup({
     };
   }, [meetingId]);
 
-  // Does this meeting still have audio on disk? (specs/0029 WS7.1). The retention
-  // sweep deletes only media files, so a meeting can have a transcript but no audio —
-  // diarize/re-transcribe would fail-fast with a raw error. Probe once per meeting and
-  // gate those affordances with a friendly state instead. null = unknown (probe pending
-  // or failed) — don't gate on unknown, the flows' own errors still backstop.
-  const [audioAvailable, setAudioAvailable] = useState<boolean | null>(null);
-  useEffect(() => {
-    setAudioAvailable(null);
-    if (!meetingId) return;
-    let cancelled = false;
-    invoke<boolean>('api_meeting_audio_available', { meetingId })
-      .then((available) => {
-        if (!cancelled) setAudioAvailable(available);
-      })
-      .catch((error) => {
-        console.error('Failed to check audio availability:', error);
-        if (!cancelled) setAudioAvailable(null);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [meetingId]);
-  const audioRemoved = audioAvailable === false;
+  // What audio does this meeting still have? (specs/0072 W3). Retention deletes only
+  // media files, so a meeting can keep its transcript with no audio. Each action is
+  // gated on the audio IT needs: "Identify speakers" reads the system channel, Enhance /
+  // Transcribe now read the mix (or channels Rust mixes). null = unknown — don't gate on
+  // unknown, the flows' own errors still backstop.
+  const audio = useMeetingAudioStatus(meetingId);
+  const audioAvailable = audio ? canTranscribe(audio) : null;
+  const speakersGoneTitle = audioGoneTitle(audio, 'channels');
+  const transcribeGoneTitle = audioGoneTitle(audio, 'transcribe');
+  const identifyFailed = audio?.state === 'failed';
 
   // specs/0029 WS7.2: a record-only meeting (live transcription off) has audio on
   // disk but no/sparse transcript rows — surface a first-class "Transcribe now"
@@ -161,17 +149,19 @@ export function TranscriptButtonGroup({
             variant="outline"
             className="gap-1.5"
             onClick={handleIdentifySpeakers}
-            disabled={isDiarizing || transcriptCount === 0 || audioRemoved}
+            disabled={isDiarizing || transcriptCount === 0 || !!speakersGoneTitle}
             title={
               transcriptCount === 0
                 ? 'No transcript to analyze'
-                : audioRemoved
-                  ? AUDIO_UNAVAILABLE_TITLE
+                : speakersGoneTitle
+                  ? speakersGoneTitle
                   : isDiarizing
                     ? diarizationStatus
                       ? `Identifying speakers: ${diarizationStatus}…`
                       : 'Identifying speakers…'
-                    : 'Identify who spoke (runs on-device after the meeting)'
+                    : identifyFailed
+                      ? AUDIO_FAILED_NOTE
+                      : 'Identify who spoke (runs on-device after the meeting)'
             }
           >
             {isDiarizing && <Loader2 className="animate-spin" size={16} />}
@@ -235,12 +225,8 @@ export function TranscriptButtonGroup({
             onClick={() => {
               setShowRetranscribeDialog(true);
             }}
-            disabled={audioRemoved}
-            title={
-              audioRemoved
-                ? AUDIO_UNAVAILABLE_TITLE
-                : 'Retranscribe to enhance your recorded audio'
-            }
+            disabled={!!transcribeGoneTitle}
+            title={transcribeGoneTitle ?? 'Retranscribe to enhance your recorded audio'}
           >
             <span>Enhance</span>
           </Button>

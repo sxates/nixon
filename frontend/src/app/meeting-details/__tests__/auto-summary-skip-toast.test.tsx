@@ -142,8 +142,8 @@ beforeEach(() => {
         return { status: 'idle', data: null };
       case 'api_get_meeting_processing_mode':
         return 'defer'; // written by the 'process-now' stop path BEFORE the handoff
-      case 'api_meeting_audio_available':
-        return true;
+      case 'api_meeting_audio_status':
+        return { mix: true, channels: true, compressed: false, state: 'pending' };
       default:
         return null;
     }

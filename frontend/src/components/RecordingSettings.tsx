@@ -3,19 +3,8 @@ import { Switch } from '@/components/ui/switch';
 import ZoomMuteGateToggle from '@/components/ZoomMuteGateToggle';
 import { invoke } from '@tauri-apps/api/core';
 import { SaveLocationRow } from '@/components/SaveLocationRow';
-import {
-  applyRetentionChoice,
-  retentionChoiceFromPreferences,
-  retentionChoiceFromSelectValue,
-  retentionChoiceToSelectValue,
-} from '@/lib/audio-retention';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { AudioRetentionRow } from '@/components/AudioRetentionRow';
+import type { AudioRetention } from '@/lib/audio-retention';
 import { toast } from 'sonner';
 import { patchRecordingPreferences } from '@/lib/recording-preferences';
 import { useSidebar } from '@/components/Sidebar/SidebarProvider';
@@ -36,10 +25,13 @@ export interface RecordingPreferences {
    *  (2026-09-21). Only the debug build reads it — see `repoint_dev_root` in
    *  `audio/recording_preferences.rs`. */
   save_folder_user_chosen?: boolean;
+  /** Vestigial since specs/0072 (capture always saves); mirrored from `audio_retention`. */
   auto_save: boolean;
+  /** How long kept audio lives (specs/0072). Always set by the backend on load. */
+  audio_retention?: AudioRetention | null;
   preferred_mic_device: string | null;
   preferred_system_device: string | null;
-  /** Auto-delete recording audio after N days (specs/0029 WS7.1); null = keep forever. */
+  /** Vestigial since specs/0072; mirrored from `audio_retention`. */
   retention_days: number | null;
   /** Real-time transcription while recording (specs/0029 WS7.2). false = record-only
    *  mode: audio is saved but STT is deferred (transcribe later / at summarize). */
@@ -161,36 +153,6 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
     }
   };
 
-  // Audio retention (specs/0029 WS7.1) — ONE control ("Delete audio recordings":
-  // Immediately / after N days / Never) mapped onto the UNCHANGED backend pair
-  // { auto_save, retention_days } via lib/audio-retention.ts. Writes through the
-  // same recording-preferences store the folder/device settings use; the backend
-  // sweep re-reads it on every pass, so no relaunch is needed. Optimistic, revert
-  // on failure. Kept separate from savePreferences() so the toast copy is
-  // truthful about WHAT gets deleted.
-  const handleRetentionChange = async (value: string) => {
-    const choice = retentionChoiceFromSelectValue(value);
-    const previous = preferences;
-    const newPreferences = applyRetentionChoice(preferences, choice);
-    setPreferences(newPreferences);
-    try {
-      await patchRecordingPreferences<RecordingPreferences>(newPreferences);
-      onSave?.(newPreferences);
-      toast.success('Preference saved', {
-        description:
-          choice === 'immediately'
-            ? 'Audio is discarded when the recording stops. Transcripts, notes, and summaries are still saved.'
-            : choice === 'never'
-              ? 'Recording audio is kept forever.'
-              : `Audio files older than ${choice} days will be deleted. Transcripts, notes, and summaries are always kept.`,
-      });
-    } catch (error) {
-      console.error('Failed to save audio retention preference:', error);
-      setPreferences(previous); // revert on failure
-      toast.error('Failed to save preference');
-    }
-  };
-
   // Live transcription during recording (specs/0029 WS7.2). Optimistic, revert on
   // failure — same recording-preferences store as folder/device settings; the backend
   // reads it at every recording start, so no relaunch is needed.
@@ -252,11 +214,6 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
     }
   };
 
-
-  // What the single "Delete audio recordings" select shows for the stored
-  // { auto_save, retention_days } pair. auto_save=false always reads as
-  // "Immediately", regardless of any leftover retention value.
-  const retentionChoice = retentionChoiceFromPreferences(preferences);
 
   // Sections run in the order a new user needs them: what is captured → how a
   // recording behaves → what language → who is labelled → where the audio lives
@@ -347,71 +304,32 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
 
       <SettingsSection
         title="Audio storage"
-        description="Where the audio files live and how long they are kept. Transcripts, notes, and summaries are always kept."
+        description="Where recordings are saved and how long their audio is kept."
       >
         <SettingsGroup>
-          {/* Delete audio recordings — ONE control combining the old "Save Audio
-              Recordings" toggle and the retention window. The backend contract is
-              unchanged: this maps onto { auto_save, retention_days } via
-              lib/audio-retention.ts ("Immediately" = auto_save off; a day count or
-              Never = auto_save on + that sweep window). */}
-          <SettingsRow
-            label="Delete audio recordings"
-            htmlFor="audio-retention"
-            description={
-              <>
-                &quot;Immediately&quot; discards audio as soon as a recording stops. Only the
-                audio is affected — meetings that haven&apos;t been transcribed yet are never
-                deleted.
-              </>
-            }
-            control={
-              /* The app's Select, not a bare <select> — this was the one control still
-                 wearing the browser's chrome (specs/0067). */
-              <Select
-                value={retentionChoiceToSelectValue(retentionChoice)}
-                onValueChange={(value) => void handleRetentionChange(value)}
-                disabled={loading}
-              >
-                <SelectTrigger id="audio-retention" className="w-48">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="immediately">Immediately</SelectItem>
-                  <SelectItem value="7">After 7 days</SelectItem>
-                  <SelectItem value="30">After 30 days</SelectItem>
-                  <SelectItem value="90">After 90 days</SelectItem>
-                  {/* A custom value stored outside the presets still renders truthfully. */}
-                  {typeof retentionChoice === 'number' &&
-                    ![7, 30, 90].includes(retentionChoice) && (
-                      <SelectItem value={String(retentionChoice)}>
-                        After {retentionChoice} days
-                      </SelectItem>
-                    )}
-                  <SelectItem value="never">Never</SelectItem>
-                </SelectContent>
-              </Select>
-            }
+          {/* specs/0072: one policy, enforced in Rust once a meeting is processed. Capture
+              always saves, so the location row is always shown. */}
+          <AudioRetentionRow
+            preferences={preferences}
+            setPreferences={setPreferences}
+            onSave={onSave}
+            disabled={loading}
           />
-
-          {preferences.auto_save && (
-            <SaveLocationRow
-              preferences={preferences}
-              setPreferences={setPreferences}
-              onSave={onSave}
-              disabled={isRecordingActive}
-            />
-          )}
+          <SaveLocationRow
+            preferences={preferences}
+            setPreferences={setPreferences}
+            onSave={onSave}
+            disabled={isRecordingActive}
+          />
         </SettingsGroup>
 
-        {/* Info when audio is discarded immediately (auto_save off) */}
-        {!preferences.auto_save && (
-          <SettingsNote tone="info">
-            Audio is deleted as soon as a recording stops — transcripts, notes, and
-            summaries are still saved. Pick a time window (or &quot;Never&quot;) above to
-            keep the audio files.
-          </SettingsNote>
-        )}
+        <SettingsNote>
+          Transcripts, notes, summaries and speaker names are never deleted. Speaker
+          voiceprints are numeric voice signatures that contain no audio: they can&apos;t be
+          played back or turned back into speech, and this setting doesn&apos;t affect them.
+          Once a meeting&apos;s audio is gone you can still rename and reassign its speakers,
+          but you can&apos;t re-transcribe it or identify its speakers again.
+        </SettingsNote>
       </SettingsSection>
 
     </div>

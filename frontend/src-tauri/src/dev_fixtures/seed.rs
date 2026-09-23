@@ -341,8 +341,13 @@ async fn insert_meeting_row(
     folder_path: Option<&str>,
     start: DateTime<Utc>,
 ) -> Result<()> {
-    sqlx::query("INSERT INTO meetings (id, title, created_at, updated_at, folder_path, origin, template_id, title_manually_set) VALUES (?, ?, ?, ?, ?, 'recorded', ?, 1)")
+    // specs/0072: one meeting per audio state. Speakers count as identified once processed
+    // (a `failed` meeting's identification didn't finish).
+    let done = matches!(m.audio_state.as_deref(), Some("processed" | "purged"));
+    let identified = (done && !m.speakers.is_empty()).then(|| start.to_rfc3339());
+    sqlx::query("INSERT INTO meetings (id, title, created_at, updated_at, folder_path, origin, template_id, title_manually_set, audio_state, speakers_identified_at) VALUES (?, ?, ?, ?, ?, 'recorded', ?, 1, ?, ?)")
         .bind(&m.id).bind(&m.title).bind(start.to_rfc3339()).bind(start.to_rfc3339()).bind(folder_path).bind(&m.template_id)
+        .bind(&m.audio_state).bind(identified)
         .execute(pool).await
         .with_context(|| format!("insert meetings row for {}", m.id))?;
     Ok(())

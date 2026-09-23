@@ -513,26 +513,16 @@ export function useRecordingStop(
             });
           }
 
-          // Optional auto-run speaker diarization (specs/0010, P1-C). Best-effort,
-          // non-blocking, gated on the opt-in setting AND models already present — we
-          // never auto-download mid-flow (that's the explicit "Identify speakers"
-          // button's job). Swallow all errors so they can't affect the save flow.
-          // spec 0051 WS2: this ALSO runs when a 'process-now' handoff was refused, so
-          // a failed pipeline still leaves the user with speaker labels.
+          // specs/0072 W3: Rust finishes the meeting's audio processing. It diarizes when
+          // that applies (setting on, models already present — never an auto-download —
+          // and a system channel), then records the outcome, which is what lets the
+          // retention policy delete or compress the audio. With diarization off it marks
+          // the meeting processed now. Best-effort and non-blocking. spec 0051 WS2: this
+          // ALSO runs when a 'process-now' handoff was refused.
           if (followUp.autoDiarize) {
-            void (async () => {
-              try {
-                const [enabled, modelsPresent] = await Promise.all([
-                  invoke<boolean>('api_get_diarization_enabled'),
-                  invoke<boolean>('api_diarization_models_present'),
-                ]);
-                if (enabled && modelsPresent) {
-                  await invoke('api_diarize_meeting', { meetingId });
-                }
-              } catch (error) {
-                console.warn('Auto-diarization skipped:', error);
-              }
-            })();
+            invoke('api_finish_audio_processing', { meetingId }).catch((error) => {
+              console.warn('Finishing audio processing failed:', error);
+            });
           }
 
           // Clean up session storage

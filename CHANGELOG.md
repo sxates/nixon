@@ -46,11 +46,17 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
   moves every recording there — including ones left in folders you used before — so they
   all live in one place. You can watch its progress or stop it, and it is safe to quit
   mid-move: the next launch finishes the job without losing or duplicating a recording.
+- **Keeping audio for less time asks first.** Choose a shorter time in Settings → Recording
+  and Nixon shows how many meetings and how much space will be cleared, then clears it right
+  away when you confirm, and tells you what was freed.
 
 ### Changed
 
 - **Recordings take about a sixth of the disk space.** Audio you keep is stored compressed
   once a meeting has been processed.
+- **"Immediately" is now "Once processed".** Audio is deleted after the meeting is
+  transcribed and its speakers are identified, never before. If identifying speakers fails,
+  the meeting page says so and the audio is kept for 7 days so you can retry.
 - **Recordings stay on this Mac's own drive.** A USB stick, SD card, disk image or network
   drive can't be chosen as the recordings folder, so a drive that goes away can't break a
   recording.
@@ -143,6 +149,10 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 ### Internal
 
+- Spec 0072 W3: the stop path calls `api_finish_audio_processing` instead of diarizing
+  inline; the meeting page reads `api_meeting_audio_status` and follows
+  `meeting-audio-state-changed`. The demo fixtures seed one meeting per `audio_state`, and
+  the screenshot mock answers the lifecycle commands (new `retention=` URL param).
 - Spec 0072 W2: compression is on (`lifecycle::COMPRESSION_ENABLED`). Every channel reader
   resolves `.wav` then `.opus` (`audio/channel_files.rs`: diarization, owner turns,
   retranscription channel tags, the recordings-root fallback scan); `.opus` decodes through

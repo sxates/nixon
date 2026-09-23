@@ -534,12 +534,10 @@ describe('useRecordingStop — 0051 WS2 durable defer marker + acknowledged hand
     warnSpy.mockRestore();
   });
 
-  it('falls back to auto-diarize AND warns the user when the handoff is refused', async () => {
+  it('falls back to finishing audio processing AND warns the user when the handoff is refused', async () => {
     enqueueMeetingMock.mockResolvedValue({ accepted: false, reason: 'no-folder-path' });
     invokeMock.mockImplementation((cmd: string) => {
       if (cmd === 'api_get_meeting_processing_mode') return Promise.resolve('live');
-      if (cmd === 'api_get_diarization_enabled') return Promise.resolve(true);
-      if (cmd === 'api_diarization_models_present') return Promise.resolve(true);
       return Promise.resolve(undefined);
     });
 
@@ -550,7 +548,7 @@ describe('useRecordingStop — 0051 WS2 durable defer marker + acknowledged hand
       await vi.advanceTimersByTimeAsync(100);
     });
 
-    expect(invokeMock).toHaveBeenCalledWith('api_diarize_meeting', { meetingId: 'meeting-x' });
+    expect(invokeMock).toHaveBeenCalledWith('api_finish_audio_processing', { meetingId: 'meeting-x' });
     // review round 1, finding 2: "no explanation to the user" is one of the three
     // symptoms this task exists to fix — assert the actual toast call, not just that
     // stopFollowUp() would have returned one.
@@ -570,8 +568,6 @@ describe('useRecordingStop — 0051 WS2 durable defer marker + acknowledged hand
     invokeMock.mockImplementation((cmd: string) => {
       if (cmd === 'api_get_meeting_processing_mode') return Promise.resolve('live');
       if (cmd === 'api_set_meeting_processing_mode') return Promise.reject(new Error('db locked'));
-      if (cmd === 'api_get_diarization_enabled') return Promise.resolve(true);
-      if (cmd === 'api_diarization_models_present') return Promise.resolve(true);
       return Promise.resolve(undefined);
     });
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
@@ -583,7 +579,7 @@ describe('useRecordingStop — 0051 WS2 durable defer marker + acknowledged hand
     });
 
     expect(enqueueMeetingMock).not.toHaveBeenCalled();
-    expect(invokeMock).toHaveBeenCalledWith('api_diarize_meeting', { meetingId: 'meeting-x' });
+    expect(invokeMock).toHaveBeenCalledWith('api_finish_audio_processing', { meetingId: 'meeting-x' });
     expect(toastWarn).toHaveBeenCalledWith(
       "Couldn't start processing this meeting",
       expect.objectContaining({ description: expect.stringContaining('Process now') }),
@@ -603,6 +599,33 @@ describe('useRecordingStop — 0051 WS2 durable defer marker + acknowledged hand
 
     expect(deferMarkerCalls().length).toBeGreaterThan(0);
     expect(enqueueMeetingMock).not.toHaveBeenCalled();
+    // 1.10 feedback: a deferred meeting runs nothing at stop — the backlog finishes it.
+    expect(invokeMock).not.toHaveBeenCalledWith('api_finish_audio_processing', expect.anything());
+  });
+
+  // specs/0072 W3 task 25: an ordinary live meeting hands its audio to Rust at stop,
+  // which diarizes if that applies and otherwise records it as processed right away.
+  it('an ordinary live meeting calls api_finish_audio_processing, never the old inline diarize', async () => {
+    sessionStorage.removeItem('recording_session_started_deferred');
+    invokeMock.mockImplementation((cmd: string) => {
+      if (cmd === 'api_get_meeting_processing_mode') return Promise.resolve(null);
+      return Promise.resolve(undefined);
+    });
+
+    const { result } = renderHook(() => useRecordingStop(vi.fn(), vi.fn()));
+    await runStop(result.current.handleRecordingStop);
+
+    expect(invokeMock).toHaveBeenCalledWith('api_finish_audio_processing', { meetingId: 'meeting-x' });
+    expect(invokeMock).not.toHaveBeenCalledWith('api_diarize_meeting', expect.anything());
+    expect(invokeMock).not.toHaveBeenCalledWith('api_get_diarization_enabled');
+  });
+
+  it('an accepted process-now handoff leaves finishing to the backlog', async () => {
+    const { result } = renderHook(() => useRecordingStop(vi.fn(), vi.fn()));
+    await runStop(result.current.handleRecordingStop);
+
+    expect(enqueueMeetingMock).toHaveBeenCalled();
+    expect(invokeMock).not.toHaveBeenCalledWith('api_finish_audio_processing', expect.anything());
   });
 });
 
