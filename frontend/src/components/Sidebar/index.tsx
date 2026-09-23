@@ -162,8 +162,10 @@ const Sidebar: React.FC = () => {
             onClick={() => router.push('/settings')}
           />
           <QueueRow collapsed={isCollapsed} />
+          {/* The ROW is dev-only, not just the badge: screenshots hid the badge and left its
+              empty row, lifting Settings and Queue off the bottom of the sidebar. */}
           {process.env.NODE_ENV !== 'production' && (
-            <div data-sidebar-row className={cn(SIDEBAR_ROW, 'mb-1')}>
+            <div data-sidebar-row data-dev-only="" className={cn(SIDEBAR_ROW, 'mb-1')}>
               <IconSlot name="dev">
                 <DevBadge />
               </IconSlot>

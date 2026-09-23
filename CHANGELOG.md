@@ -188,6 +188,9 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
   three views cannot drift apart again. First tests for `WeekView` and the Ask AI page.
 
 ## [0.8.0] - 2026-09-20
+- Screenshots: a `today-week` shot, so the Week view is covered (its parity regressions went
+  unseen for a release without one), and the sidebar's DEV row is hidden whole in shot
+  mode — hiding only the badge left an empty row that lifted Settings and Queue.
 
 ### Added
 
