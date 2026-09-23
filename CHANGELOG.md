@@ -41,6 +41,11 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
   be added when available" — until the version with names replaces it.
 - **Delete a recorded meeting from Today.** Every meeting on Agenda, List and Week now has
   a ⋯ menu: recorded ones offer **Delete meeting**, the same as All Meetings.
+- **Move your recordings when you change the recordings folder.** Pick a new folder in
+  Settings → Recording and Nixon shows how many meetings and how much space will move, then
+  moves every recording there — including ones left in folders you used before — so they
+  all live in one place. You can watch its progress or stop it, and it is safe to quit
+  mid-move: the next launch finishes the job without losing or duplicating a recording.
 
 ### Changed
 
@@ -151,7 +156,15 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
   only asks (`recordings-gather-needed`). A debug build never moves from, counts in or
   removes the production recordings folders. Commands: `api_plan_recordings_move`,
   `api_change_recordings_folder`, `api_gather_recordings`, `api_cancel_recordings_move`,
-  `api_recordings_move_status`, `api_recordings_gather_state`. The UI is not wired yet.
+  `api_recordings_move_status`, `api_recordings_gather_state`.
+- Spec 0073 W3: the mover's UI. `SaveLocationRow` plans → asks (`MoveRecordingsDialog`,
+  Move recordings / Cancel only) → `api_change_recordings_folder`, and shows progress, Stop
+  and the "still in another folder" line from `useRecordingsMove`, which pulls
+  `api_recordings_move_status` / `api_recordings_gather_state` on mount because the startup
+  events fire before any listener. `RecordingsMoveWatcher` (AppShell) raises the finish toast
+  on any route and asks the first-launch gather question. Continue-meeting now always
+  resolves its folder from the meeting row. New shots: `settings-recordings-moving`,
+  `settings-recordings-gather` (`move=` mock param, fictional paths only).
 - Spec 0071 covers the follow-up from an owner recording on 2026-09-21: three of the four
   reported faults were the app working as designed and failing to say so (the chip's label,
   the "Listening" indicator, and a silent 3min19s `'process-now'` repass after stop). Root

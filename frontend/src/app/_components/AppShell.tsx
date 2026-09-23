@@ -12,6 +12,7 @@ import CalendarAlerts from '@/components/Calendar/CalendarAlerts'
 import VoiceprintRetractionListener from '@/components/People/VoiceprintRetractionListener'
 import PermissionsModal from '@/components/PermissionsModal'
 import { UpdatedNotice } from '@/components/Updates/UpdatedNotice'
+import { RecordingsMoveWatcher } from '@/components/RecordingsMoveWatcher'
 
 interface AppShellProps {
   showOnboarding: boolean
@@ -70,6 +71,8 @@ export function AppShell({ showOnboarding, onOnboardingComplete, children }: App
       <ResumeRecordingPrompt />
       {/* First launch after an in-app update — says what changed, once (specs/0069 W6) */}
       <UpdatedNotice />
+      {/* Recordings-folder moves: the finish toast and the first-launch gather question (specs/0073) */}
+      <RecordingsMoveWatcher />
     </div>
   )
 }

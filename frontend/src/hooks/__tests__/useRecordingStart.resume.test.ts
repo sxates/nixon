@@ -86,7 +86,8 @@ import { armResumeRecording, RESUME_RECORDING_KEY } from '@/lib/resume-recording
 
 function routeInvoke({
   parakeetReady = true,
-  metadataFolderPath = '/recordings/from-row' as string | null,
+  // The row agrees with the stashed '/recordings/prev' by default; the row always wins (0073).
+  metadataFolderPath = '/recordings/prev' as string | null,
   meetingNotes = null as { notesMarkdown: string | null; notesJson: string | null } | null,
   safeToDiscard = true,
 }: {
@@ -189,6 +190,22 @@ describe('useRecordingStart — resume mode (specs/0037)', () => {
       resumeFolderPath: '/recordings/resolved',
     });
     expect(createMeetingCalls()).toHaveLength(0);
+  });
+
+  it('prefers the meeting row over a stale descriptor folder (specs/0073: recordings moved)', async () => {
+    routeInvoke({ metadataFolderPath: '/new-root/Weekly sync' });
+    sessionStorage.setItem(
+      RESUME_RECORDING_KEY,
+      JSON.stringify({ meetingId: 'meeting-existing', folderPath: '/old-root/Weekly sync', meetingName: 'Prev' }),
+    );
+
+    renderHook(() => useRecordingStart(false, vi.fn()));
+    await waitFor(() => expect(startRecordingWithDevices).toHaveBeenCalledTimes(1));
+
+    expect(startRecordingWithDevices).toHaveBeenCalledWith(null, null, 'Prev', {
+      meetingId: 'meeting-existing',
+      resumeFolderPath: '/new-root/Weekly sync',
+    });
   });
 
   it('ABORTS the resume with a toast when the meeting has no recording folder (FIX B)', async () => {

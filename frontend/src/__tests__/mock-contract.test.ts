@@ -47,3 +47,28 @@ describe('screenshot mock ↔ command registry', () => {
     expect(mock).toContain('Maya Okafor');
   });
 });
+
+// specs/0073 W3 — the recordings mover's commands the UI calls. Each must be registered,
+// and the two PULL commands (read on mount; the startup events fire before any listener)
+// must be answered explicitly: the generic fallback answers `{}` for "status"/"state"
+// names, which the UI would otherwise have to guess about.
+describe('recordings mover commands (specs/0073)', () => {
+  const used = [
+    'api_plan_recordings_move',
+    'api_change_recordings_folder',
+    'api_gather_recordings',
+    'api_cancel_recordings_move',
+    'api_recordings_move_status',
+    'api_recordings_gather_state',
+  ];
+
+  it('are all registered', () => {
+    expect(used.filter((c) => !new RegExp(`::${c}\\b`).test(registry))).toEqual([]);
+  });
+
+  it('the pull commands are answered by the screenshot mock', () => {
+    for (const c of ['api_recordings_move_status', 'api_recordings_gather_state', 'api_plan_recordings_move']) {
+      expect(fixturesBody).toMatch(new RegExp(`^\\s{4}${c}:`, 'm'));
+    }
+  });
+});

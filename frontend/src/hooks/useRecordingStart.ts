@@ -389,30 +389,28 @@ export function useRecordingStart(
           return;
         }
 
-        // Resolve a missing folder from the meeting row BEFORE starting (review-2 FIX B).
-        // The backend cannot infer resume-intent from meetingId alone (normal starts pass
-        // one too): a start without `resumeFolderPath` records into a brand-new folder,
-        // stops with resumed=false, and the save creates a DUPLICATE meeting row. So a
-        // null folder is resolved here — and if the meeting has no folder at all, the
-        // resume ABORTS loudly rather than silently degrading to a fresh recording.
-        let folderPath = descriptor.folderPath;
+        // Resolve the folder from the meeting row BEFORE starting, ALWAYS (review-2 FIX B;
+        // specs/0073: the descriptor's path may predate a recordings move, so the row wins
+        // and the descriptor is only the fallback). A start without `resumeFolderPath`
+        // records into a new folder and saves a DUPLICATE meeting row, so a meeting with no
+        // folder at all ABORTS loudly rather than silently degrading to a fresh recording.
+        let folderPath: string | null = null;
+        try {
+          const metadata = await invoke<{ folder_path?: string | null } | null>(
+            'api_get_meeting_metadata',
+            { meetingId: descriptor.meetingId },
+          );
+          folderPath = metadata?.folder_path || null;
+        } catch (error) {
+          console.error('Could not resolve the meeting folder for resume:', error);
+        }
+        folderPath = folderPath ?? descriptor.folderPath ?? null;
         if (!folderPath) {
-          try {
-            const metadata = await invoke<{ folder_path?: string | null } | null>(
-              'api_get_meeting_metadata',
-              { meetingId: descriptor.meetingId },
-            );
-            folderPath = metadata?.folder_path ?? null;
-          } catch (error) {
-            console.error('Could not resolve the meeting folder for resume:', error);
-          }
-          if (!folderPath) {
-            toast.error("Can't continue this recording", {
-              description: 'Its recording folder is missing, so there is nothing to resume into.',
-            });
-            setStatus(RecordingStatus.IDLE);
-            return;
-          }
+          toast.error("Can't continue this recording", {
+            description: 'Its recording folder is missing, so there is nothing to resume into.',
+          });
+          setStatus(RecordingStatus.IDLE);
+          return;
         }
 
         const title = descriptor.meetingName ?? '';

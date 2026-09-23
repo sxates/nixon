@@ -399,6 +399,7 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
               preferences={preferences}
               setPreferences={setPreferences}
               onSave={onSave}
+              disabled={isRecordingActive}
             />
           )}
         </SettingsGroup>

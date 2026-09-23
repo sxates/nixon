@@ -227,7 +227,7 @@ describe('RecordingSettings — settings hygiene (specs/0061 W6)', () => {
     expect(screen.getByRole('button', { name: 'Change…' })).toBeInTheDocument();
   });
 
-  it('Change… picks a folder via select_recording_folder and persists it', async () => {
+  it('Change… picks a folder via select_recording_folder and changes it through the mover', async () => {
     invokeMock.mockImplementation((cmd: string) => {
       switch (cmd) {
         case 'get_recording_preferences':
@@ -256,8 +256,9 @@ describe('RecordingSettings — settings hygiene (specs/0061 W6)', () => {
           return Promise.resolve([]);
         case 'select_recording_folder':
           return Promise.resolve('/tmp/chosen-folder');
-        case 'set_recording_preferences':
-          return Promise.resolve(undefined);
+        // specs/0073: nothing to move, so no dialog — the folder just changes.
+        case 'api_plan_recordings_move':
+          return Promise.resolve({ target: '/tmp/chosen-folder', meetings: 0, bytes: 0, enoughSpace: true });
         default:
           return Promise.resolve(undefined);
       }
@@ -270,8 +271,8 @@ describe('RecordingSettings — settings hygiene (specs/0061 W6)', () => {
 
     await waitFor(() => expect(invokeMock).toHaveBeenCalledWith('select_recording_folder'));
     await waitFor(() =>
-      expect(invokeMock).toHaveBeenCalledWith('set_recording_preferences', {
-        preferences: expect.objectContaining({ save_folder: '/tmp/chosen-folder' }),
+      expect(invokeMock).toHaveBeenCalledWith('api_change_recordings_folder', {
+        target: '/tmp/chosen-folder',
       }),
     );
   });
@@ -317,5 +318,19 @@ describe('RecordingSettings — settings hygiene (specs/0061 W6)', () => {
 
     await waitFor(() => expect(invokeMock).toHaveBeenCalledWith('select_recording_folder'));
     expect(invokeMock.mock.calls.some(([cmd]) => cmd === 'set_recording_preferences')).toBe(false);
+    expect(invokeMock.mock.calls.some(([cmd]) => cmd === 'api_change_recordings_folder')).toBe(false);
+  });
+
+  // specs/0073 — the folder can't change under a running recording.
+  it('disables Change… while a recording is active', async () => {
+    useSidebarMock.mockReturnValue({ activeRecordingMeetingId: 'meeting-123' });
+    await renderSettings();
+    expect(screen.getByRole('button', { name: 'Change…' })).toBeDisabled();
+  });
+
+  it('enables Change… when nothing is recording', async () => {
+    useSidebarMock.mockReturnValue({ activeRecordingMeetingId: null });
+    await renderSettings();
+    expect(screen.getByRole('button', { name: 'Change…' })).toBeEnabled();
   });
 });

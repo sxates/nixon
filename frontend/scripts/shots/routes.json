@@ -341,6 +341,35 @@
     ]
   },
   {
+    "name": "settings-recordings-moving",
+    "route": "/settings?tab=recording",
+    "move": "running",
+    "viewport": [1280, 1100],
+    "ignore": [
+      {
+        "x": 338,
+        "y": 1056,
+        "w": 106,
+        "h": 22,
+        "why": "footer TapeCounter roller digits (specs/0060 Task 3), as on settings-recordings; y follows the taller viewport."
+      }
+    ]
+  },
+  {
+    "name": "settings-recordings-gather",
+    "route": "/settings?tab=recording",
+    "move": "gather",
+    "ignore": [
+      {
+        "x": 338,
+        "y": 816,
+        "w": 106,
+        "h": 22,
+        "why": "footer TapeCounter roller digits (specs/0060 Task 3), as on settings-recordings."
+      }
+    ]
+  },
+  {
     "name": "settings-audio",
     "route": "/settings?tab=audio",
     "ignore": [
