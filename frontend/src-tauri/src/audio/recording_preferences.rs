@@ -70,6 +70,24 @@ pub struct RecordingPreferences {
     /// `previous_save_folders`.
     #[serde(default)]
     pub recordings_gathered_once: bool,
+    /// How long kept audio lives (specs/0072) — the setting the lifecycle sweep enforces.
+    /// Absent in files from before 0072: [`RecordingPreferences::effective_audio_retention`] derives
+    /// it once from `auto_save` + `retention_days`, which are otherwise no longer read (they
+    /// are kept in step so an older file and an older settings screen still make sense).
+    #[serde(default)]
+    pub audio_retention: Option<super::lifecycle::policy::AudioRetention>,
+}
+
+impl RecordingPreferences {
+    /// The effective retention policy: the stored one, else derived from the legacy pair.
+    pub fn effective_audio_retention(&self) -> super::lifecycle::policy::AudioRetention {
+        self.audio_retention.unwrap_or_else(|| {
+            super::lifecycle::policy::AudioRetention::from_legacy(
+                self.auto_save,
+                self.retention_days,
+            )
+        })
+    }
 }
 
 /// serde default for [`RecordingPreferences::live_transcription_enabled`].
@@ -97,6 +115,7 @@ impl Default for RecordingPreferences {
             save_folder_user_chosen: false,
             previous_save_folders: Vec::new(),
             recordings_gathered_once: false,
+            audio_retention: None,
         }
     }
 }
@@ -411,6 +430,8 @@ pub async fn load_recording_preferences<R: Runtime>(
         info!("No stored preferences found, using defaults");
         RecordingPreferences::default()
     };
+    let mut prefs = prefs;
+    prefs.audio_retention = Some(prefs.effective_audio_retention());
 
     info!(
         "Loaded recording preferences: save_folder={:?}, auto_save={}, mic={:?}, system={:?}",
@@ -506,6 +527,15 @@ fn carry_backend_fields(
     previous.retain(|p| *p != incoming.save_folder);
     incoming.previous_save_folders = previous;
     incoming.recordings_gathered_once = stored.recordings_gathered_once;
+    // specs/0072: the retention field the sender changed wins; the legacy pair follows it.
+    let policy = super::lifecycle::policy::reconcile_saved_retention(
+        stored.audio_retention,
+        (stored.auto_save, stored.retention_days),
+        incoming.audio_retention,
+        (incoming.auto_save, incoming.retention_days),
+    );
+    (incoming.auto_save, incoming.retention_days) = policy.to_legacy(incoming.retention_days);
+    incoming.audio_retention = Some(policy);
     incoming
 }
 

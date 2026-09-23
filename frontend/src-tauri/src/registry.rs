@@ -217,7 +217,11 @@ pub fn invoke_handler() -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Sen
         audio::recordings_move::commands::api_recordings_gather_state,
         // Audio retention (specs/0029 WS7.1): lets the UI probe whether a meeting
         // still has audio on disk (vs removed by the retention sweep).
-        audio::retention::api_meeting_audio_available,
+        audio::lifecycle::commands::api_meeting_audio_available,
+        audio::lifecycle::commands::api_meeting_audio_status,
+        audio::lifecycle::commands::api_finish_audio_processing,
+        audio::lifecycle::commands::api_preview_audio_retention,
+        audio::lifecycle::commands::api_apply_audio_retention_now,
         // low-power-mode spec §5: deferred-backlog query for meetings still
         // awaiting processing with audio still on disk.
         audio::deferred_backlog::api_list_deferred_meetings,

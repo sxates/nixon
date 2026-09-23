@@ -55,6 +55,15 @@ pub struct MeetingModel {
     #[serde(default)]
     #[sqlx(default)]
     pub join_url: Option<String>,
+    /// Audio lifecycle state (specs/0072): NULL = pending | "processed" | "failed" |
+    /// "purged". Written only by `audio::lifecycle`.
+    #[serde(default)]
+    #[sqlx(default)]
+    pub audio_state: Option<String>,
+    /// Last successful offline speaker identification (specs/0072); NULL until one runs.
+    #[serde(default)]
+    #[sqlx(default)]
+    pub speakers_identified_at: Option<String>,
 }
 
 /// Raw row for the enriched meeting-list query (`get_meetings_enriched`).

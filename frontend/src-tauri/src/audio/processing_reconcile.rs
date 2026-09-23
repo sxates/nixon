@@ -95,7 +95,7 @@ pub async fn reconcile_at_startup(
 /// emits `first-launch-detected` and defers `app.manage(AppState)` to a later,
 /// frontend-triggered command), so this uses `try_state` — the same pattern as the
 /// sibling background jobs spawned right alongside it in `lib.rs`
-/// (`audio::retention::run_retention_sweep`, `calendar::google::sync::db_pool`) —
+/// (`audio::lifecycle::spawn`, `calendar::google::sync::db_pool`) —
 /// rather than `state()`, which would panic on that path.
 ///
 /// Returns the `JoinHandle` so tests can await completion; `lib.rs` (like the

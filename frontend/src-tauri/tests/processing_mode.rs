@@ -196,7 +196,7 @@ async fn seed_completed_summary(pool: &SqlitePool, meeting_id: &str) {
 /// same threshold as the retention exemption) — and excludes everything else.
 #[tokio::test]
 async fn list_deferred_candidates_covers_the_matrix() {
-    use app_lib::audio::retention::MIN_TRANSCRIPT_SEGMENTS;
+    use app_lib::audio::lifecycle::MIN_TRANSCRIPT_SEGMENTS;
 
     let pool = pool_with_schema().await;
 

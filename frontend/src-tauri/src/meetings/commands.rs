@@ -316,6 +316,10 @@ pub async fn api_set_meeting_processing_mode<R: Runtime>(
     if !updated {
         return Err("Meeting not found".to_string());
     }
+    if mode.is_none() {
+        // specs/0072: the backlog clears `defer` last — the meeting's transcription is done.
+        crate::audio::lifecycle::reevaluate_after_backlog(&_app, &meeting_id).await;
+    }
     Ok(())
 }
 

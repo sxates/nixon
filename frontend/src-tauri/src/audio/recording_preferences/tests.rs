@@ -295,3 +295,67 @@ fn a_settings_save_keeps_the_gather_answer() {
     let merged = carry_backend_fields(&stored, prefs_at("/r/now", &[]));
     assert!(merged.recordings_gathered_once);
 }
+
+// --- specs/0072: the retention policy and the legacy pair ---
+
+fn loaded(json: &str) -> super::super::lifecycle::policy::AudioRetention {
+    serde_json::from_str::<RecordingPreferences>(json)
+        .unwrap()
+        .effective_audio_retention()
+}
+
+#[test]
+fn every_legacy_preferences_shape_loads_as_its_retention_policy() {
+    use super::super::lifecycle::policy::AudioRetention as R;
+    assert_eq!(
+        loaded(r#"{"save_folder":"/x","auto_save":false,"retention_days":null}"#),
+        R::AfterProcessing
+    );
+    assert_eq!(
+        loaded(r#"{"save_folder":"/x","auto_save":false,"retention_days":30}"#),
+        R::AfterProcessing,
+        "Immediately with a stale day count is still Immediately"
+    );
+    assert_eq!(
+        loaded(r#"{"save_folder":"/x","auto_save":true,"retention_days":30}"#),
+        R::Days { days: 30 }
+    );
+    assert_eq!(
+        loaded(r#"{"save_folder":"/x","auto_save":true}"#),
+        R::Forever
+    );
+    assert_eq!(
+        loaded(
+            r#"{"save_folder":"/x","auto_save":true,"audio_retention":{"mode":"days","days":7}}"#
+        ),
+        R::Days { days: 7 },
+        "a stored policy wins over the legacy pair"
+    );
+}
+
+#[test]
+fn an_older_settings_screen_still_changes_retention_and_the_pair_follows_the_policy() {
+    use super::super::lifecycle::policy::AudioRetention as R;
+    let stored = RecordingPreferences {
+        retention_days: Some(30),
+        audio_retention: Some(R::Days { days: 30 }),
+        ..prefs_at("/r/now", &[])
+    };
+    // The pre-0072 screen spreads the loaded object and flips auto_save ("Immediately").
+    let incoming = RecordingPreferences {
+        auto_save: false,
+        ..stored.clone()
+    };
+    let merged = carry_backend_fields(&stored, incoming);
+    assert_eq!(merged.audio_retention, Some(R::AfterProcessing));
+
+    // A new screen sends only the policy; the pair is rewritten to match it.
+    let incoming = RecordingPreferences {
+        audio_retention: Some(R::Forever),
+        ..merged.clone()
+    };
+    let merged = carry_backend_fields(&merged, incoming);
+    assert_eq!(merged.audio_retention, Some(R::Forever));
+    assert!(merged.auto_save);
+    assert_eq!(merged.retention_days, None);
+}

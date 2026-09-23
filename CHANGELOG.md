@@ -93,6 +93,8 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 ### Fixed
 
+- **With audio set to delete right away, the separate microphone and system-audio tracks are
+  now deleted too.** On first launch they're removed from past meetings.
 - **Meetings in a recordings folder you used before keep working.** After you change where
   recordings are saved, deleting one of your earlier meetings removes its recording too,
   and an interrupted recording in the old folder is still offered to resume.
@@ -139,6 +141,23 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 ### Internal
 
+- Spec 0072 W1: the audio lifecycle (`audio/lifecycle/`). A migration adds
+  `meetings.audio_state` (NULL/processed/failed/purged) and `speakers_identified_at`, and
+  backfills `processed` for every meeting not awaiting transcription. Rust writes the state
+  where processing finishes: diarization's terminal outcome (`launch.rs`), the backlog
+  clearing `defer`, retranscription, import, and a resume (which resets it). One pure
+  `disposition()` decides keep/compress/delete for the post-processing hook, the startup +
+  hourly sweep, "apply now" and the dry-run preview. The sweep and the channel compressor
+  (Opus 24k, verified by decoding, both channels or neither) take the folder lease with
+  `try_acquire` and re-read the folder, skipping a meeting the mover or a recording holds
+  (0073 W4). The retention preference is now `audio_retention`, derived once from
+  `auto_save`/`retention_days`. The backlog predicate is one shared SQL fragment and now
+  lets a transcribed silent meeting go. `audio/retention.rs` is gone (its daily sweep
+  returned early whenever no day count was set). Compression is wired but switched off
+  (`COMPRESSION_ENABLED`) until W2 teaches the channel readers `.opus`. New commands:
+  `api_finish_audio_processing`, `api_preview_audio_retention`,
+  `api_apply_audio_retention_now`, `api_meeting_audio_status`; event
+  `meeting-audio-state-changed`.
 - Spec 0072 W0: codec round-trips for the eval harnesses (`tests/eval_codec/`).
   `NIXON_EVAL_CODEC=opus<k>|flac` scores diarization after a channel re-encode and
   `NIXON_WER_CODEC=aac<k>` scores transcription after a mix re-encode. The gate chose Opus

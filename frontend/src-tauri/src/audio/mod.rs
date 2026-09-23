@@ -70,9 +70,8 @@ pub mod constants;
 // Retranscription module (re-process stored audio with different settings)
 pub mod retranscription;
 
-// Audio retention sweep (specs/0029 WS7.1): background deletion of media files
-// for meetings older than the user's retention window.
-pub mod retention;
+// Audio lifecycle (specs/0072): processed state, retention policy, sweep + compression.
+pub mod lifecycle;
 
 // Import module (import external audio files as new meetings)
 pub mod import;

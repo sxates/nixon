@@ -338,7 +338,11 @@ pub async fn lease_for_recording_start<R: Runtime>(
             )
         })?;
     let resume_folder = match resume_folder {
-        Some(folder) => leased_folder_path(app, meeting_id, Some(&folder)).await,
+        Some(folder) => {
+            // specs/0072: a resumed recording adds a segment, so the meeting is pending again.
+            super::lifecycle::reset_for_resume(app, meeting_id).await;
+            leased_folder_path(app, meeting_id, Some(&folder)).await
+        }
         None => None,
     };
     Ok((Some(lease), resume_folder))

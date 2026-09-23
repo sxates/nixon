@@ -138,9 +138,6 @@ pub async fn start_retranscription<R: Runtime>(
     // Unload the engine after the batch job (success, failure, or cancellation)
     super::common::unload_engine_after_batch(use_parakeet).await;
 
-    // Guard will automatically clear flag on drop
-    // No need for manual: RETRANSCRIPTION_IN_PROGRESS.store(false, Ordering::SeqCst);
-
     match &result {
         Ok(res) => {
             let _ = app.emit(
@@ -541,6 +538,7 @@ async fn run_retranscription<R: Runtime>(
     // The transcript now exists — the meeting is no longer "awaiting deferred
     // transcription", whatever surface ran this pass (1.10 feedback).
     clear_deferred_marker_after_transcription(app_state.db_manager.pool(), &meeting_id).await;
+    super::lifecycle::on_transcript_replaced(&app, &meeting_id).await;
 
     // Write updated transcripts.json and metadata.json to the meeting folder
     emit_progress(

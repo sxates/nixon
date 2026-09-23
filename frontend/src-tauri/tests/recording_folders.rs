@@ -279,20 +279,38 @@ async fn a_resumed_recording_uses_the_stored_folder_and_holds_the_lease() {
     assert_eq!(folder.as_deref(), Some("/x"));
 }
 
-// -- retention sweep skips a leased meeting (task 8) ------------------------------------
+// -- retention sweep skips a leased meeting (task 8; 0072 took over the sweep) -----------
 
 #[tokio::test]
 async fn the_retention_sweep_skips_a_busy_meeting_and_follows_a_moved_one() {
+    use app_lib::audio::lifecycle::policy::AudioRetention;
+    use app_lib::audio::lifecycle::sweep::{apply_one, ApplyOutcome, SweepOptions};
     let pool = pool_with_schema().await;
     let tmp = tempfile::tempdir().unwrap();
     let before = recording_folder(tmp.path(), "before", None);
     let id = meeting_with_folder(&pool, Some(&before)).await;
-
-    let mover = folder_lease::acquire(&id, LeaseHolder::Mover).await;
-    let skipped = app_lib::audio::retention::purge_meeting_media(&pool, &id)
+    sqlx::query("UPDATE meetings SET audio_state = 'processed' WHERE id = ?")
+        .bind(&id)
+        .execute(&pool)
         .await
         .unwrap();
-    assert!(skipped.is_none(), "a leased meeting is skipped");
+    let opts = SweepOptions::default();
+    let sweep = || {
+        apply_one(
+            &pool,
+            &id,
+            AudioRetention::AfterProcessing,
+            chrono::Utc::now(),
+            &opts,
+        )
+    };
+
+    let mover = folder_lease::acquire(&id, LeaseHolder::Mover).await;
+    let skipped = sweep().await.unwrap();
+    assert!(
+        matches!(skipped, ApplyOutcome::Busy { .. }),
+        "a leased meeting is skipped, got {skipped:?}"
+    );
     assert!(
         before.join("audio.mp4").exists(),
         "nothing is deleted under a mover"
@@ -306,10 +324,9 @@ async fn the_retention_sweep_skips_a_busy_meeting_and_follows_a_moved_one() {
         .unwrap();
     drop(mover);
 
-    let stats = app_lib::audio::retention::purge_meeting_media(&pool, &id)
-        .await
-        .unwrap()
-        .expect("purged once the lease is free");
+    let ApplyOutcome::Purged(stats) = sweep().await.unwrap() else {
+        panic!("purged once the lease is free");
+    };
     assert_eq!(stats.files_removed, 1);
     assert!(!after.join("audio.mp4").exists());
     assert!(

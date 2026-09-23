@@ -336,11 +336,9 @@ pub fn run() {
             #[cfg(debug_assertions)]
             crate::dev_fixtures::control::spawn_if_requested(_app.handle().clone());
 
-            // Audio retention sweep (specs/0029 WS7.1): background deletion of media
-            // files for meetings older than the user's retention window. Spawned AFTER
-            // database init (it queries `meetings`); first pass ~2 min after startup so
-            // short-lived sessions still enforce, then every 24 h.
-            audio::retention::spawn_retention_sweeper(_app.handle().clone());
+            // specs/0072: audio lifecycle — finish meetings a quit interrupted mid-processing,
+            // then enforce the retention policy (+60 s, then hourly). After database init.
+            audio::lifecycle::spawn(_app.handle().clone());
 
             // spec 0051 WS2: return meetings stranded at processing_mode='live' (a
             // stop-time handoff that never completed) to the deferred backlog. Spawned

@@ -61,6 +61,7 @@ pub fn diarize_meeting<R: Runtime>(app: AppHandle<R>, meeting_id: String) -> boo
         };
 
         let outcome = run(app.clone(), meeting_id.clone()).await;
+        crate::audio::lifecycle::on_diarization_outcome(&app, &meeting_id, outcome.is_ok()).await;
         if let Some(t) = task {
             t.finish(outcome.as_ref().map(|_| ()).map_err(|e| format!("{e:#}")));
         }

@@ -266,11 +266,9 @@ pub async fn start_import<R: Runtime>(
     // Unload the engine after the batch job (success, failure, or cancellation)
     super::common::unload_engine_after_batch(use_parakeet).await;
 
-    // Guard will automatically clear flag on drop
-    // No need for manual: IMPORT_IN_PROGRESS.store(false, Ordering::SeqCst);
-
     match &result {
         Ok(res) => {
+            super::lifecycle::finish_processing(&app, &res.meeting_id, true).await;
             let _ = app.emit(
                 "import-complete",
                 serde_json::json!({

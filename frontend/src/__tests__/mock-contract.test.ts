@@ -72,3 +72,20 @@ describe('recordings mover commands (specs/0073)', () => {
     }
   });
 });
+
+// specs/0072 W1 — the audio lifecycle commands the Settings dialog and the meeting page call.
+// The UI (0072 W3) adds them to the screenshot mock; until then each must at least be a
+// registered command, so a rename on either side fails here rather than in the app.
+describe('audio lifecycle commands (specs/0072)', () => {
+  const used = [
+    'api_finish_audio_processing',
+    'api_preview_audio_retention',
+    'api_apply_audio_retention_now',
+    'api_meeting_audio_status',
+    'api_meeting_audio_available',
+  ];
+
+  it('are all registered', () => {
+    expect(used.filter((c) => !new RegExp(`::${c}\\b`).test(registry))).toEqual([]);
+  });
+});
