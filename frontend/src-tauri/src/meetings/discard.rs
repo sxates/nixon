@@ -3,6 +3,7 @@
 
 use tauri::{AppHandle, Runtime};
 
+use crate::audio::constants::AUDIO_EXTENSIONS;
 use crate::{database::repositories::meeting::MeetingsRepository, state::AppState};
 
 /// specs/0019 WS6.1 — guards the stop handler's "abandoned recording" auto-cleanup
@@ -92,8 +93,9 @@ pub async fn recording_is_safe_to_discard(
 /// audio file. Used by `api_recording_is_safe_to_discard` to avoid deleting a meeting
 /// whose audio was captured even when no transcripts landed. Best-effort: any IO error
 /// (or absent folder) reads as "no audio" so it never blocks the caller.
+/// Any extension the app treats as audio counts, including the compressed `.opus`
+/// channels (specs/0072): a folder whose only audio is compressed is still a recording.
 fn recording_folder_has_audio(folder_path: Option<&str>) -> bool {
-    const AUDIO_EXTS: [&str; 5] = ["mp4", "m4a", "wav", "webm", "mp3"];
     let folder = match folder_path {
         Some(p) if !p.trim().is_empty() => p.trim(),
         _ => return false,
@@ -107,7 +109,7 @@ fn recording_folder_has_audio(folder_path: Option<&str>) -> bool {
         let is_audio = path
             .extension()
             .and_then(|e| e.to_str())
-            .map(|e| AUDIO_EXTS.contains(&e.to_ascii_lowercase().as_str()))
+            .map(|e| AUDIO_EXTENSIONS.contains(&e.to_ascii_lowercase().as_str()))
             .unwrap_or(false);
         if is_audio {
             // A non-empty audio file counts; a 0-byte stub does not.
@@ -223,6 +225,17 @@ mod discard_guard_tests {
         let dir = TmpDir::new("case");
         dir.file("mix.WAV", b"riff-ish bytes");
         assert!(recording_folder_has_audio(Some(dir.path())));
+    }
+
+    #[test]
+    fn compressed_channels_alone_count_as_audio() {
+        let dir = TmpDir::new("opus");
+        dir.file("microphone.opus", b"OggS compressed");
+        dir.file("system.opus", b"OggS compressed");
+        assert!(
+            recording_folder_has_audio(Some(dir.path())),
+            "an .opus-only folder must not read as deletable"
+        );
     }
 
     #[test]

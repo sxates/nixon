@@ -188,10 +188,34 @@ pub fn decode_stats(ffmpeg: &Path, path: &Path) -> Result<(u64, u16)> {
         .stderr(Stdio::null())
         .spawn()
         .with_context(|| format!("could not run ffmpeg to decode {}", path.display()))?;
-    let mut stdout = child
-        .stdout
-        .take()
-        .ok_or_else(|| anyhow!("ffmpeg gave no output for {}", path.display()))?;
+    let stats = read_or_reap(&mut child, |stdout| {
+        let stdout =
+            stdout.ok_or_else(|| anyhow!("ffmpeg gave no output for {}", path.display()))?;
+        sample_stats(stdout)
+    })?;
+    let status = child.wait()?;
+    if !status.success() {
+        bail!("ffmpeg could not decode {}", path.display());
+    }
+    Ok(stats)
+}
+
+/// Run `read` on the child's stdout; if it fails, kill and reap the child before returning
+/// the error, so no ffmpeg is left running (or as a zombie) on any exit path.
+fn read_or_reap<T>(
+    child: &mut std::process::Child,
+    read: impl FnOnce(Option<std::process::ChildStdout>) -> Result<T>,
+) -> Result<T> {
+    let out = read(child.stdout.take());
+    if out.is_err() {
+        let _ = child.kill();
+        let _ = child.wait();
+    }
+    out
+}
+
+/// (sample count, peak |sample|) of a 16-bit little-endian PCM stream.
+fn sample_stats(mut stdout: impl Read) -> Result<(u64, u16)> {
     let mut buf = vec![0u8; 64 * 1024];
     let (mut bytes, mut peak, mut carry): (u64, u16, Option<u8>) = (0, 0, None);
     loop {
@@ -211,10 +235,6 @@ pub fn decode_stats(ffmpeg: &Path, path: &Path) -> Result<(u64, u16)> {
         }
         carry = pairs.remainder().first().copied();
     }
-    let status = child.wait()?;
-    if !status.success() {
-        bail!("ffmpeg could not decode {}", path.display());
-    }
     Ok((bytes / 2, peak))
 }
 
@@ -233,6 +253,21 @@ fn sync_dir(dir: &Path) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_failed_read_kills_and_reaps_the_decoder() {
+        let mut child = Command::new("sleep")
+            .arg("30")
+            .stdout(Stdio::piped())
+            .spawn()
+            .unwrap();
+        let err = read_or_reap(&mut child, |_| -> Result<()> { bail!("read failed") });
+        assert!(err.is_err());
+        assert!(
+            child.try_wait().unwrap().is_some(),
+            "the decoder was left running after a read error"
+        );
+    }
 
     /// Spec risk "Intel ffmpeg": only the arm64 sidecar was probed for `libopus`. A sidecar
     /// without it would keep every meeting's WAVs forever, so a swap must fail CI instead.

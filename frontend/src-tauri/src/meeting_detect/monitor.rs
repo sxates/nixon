@@ -106,27 +106,34 @@ pub fn spawn_meeting_monitor<R: Runtime>(app: AppHandle<R>) {
 
             // Zoom and Teams need nothing else. A browser on the microphone needs
             // corroboration, which is read only now: the calendar first, then (Accessibility
-            // already granted, never prompted) the browser's front window title.
-            let mut raw = classify(zoom, &procs, own_pid, false, None);
+            // already granted, never prompted) the browser's front window title. Neither is
+            // read while detection is off or while recording: nothing would be prompted, and
+            // sampling itself continues so Zoom's end still stops a recording.
             let browsers = browser_mic_pids(&procs, own_pid);
+            let current = machine.state();
+            let mut raw = classify(zoom, &procs, own_pid, false, None);
             if raw.is_none() && !browsers.is_empty() {
-                let current = machine.state();
-                let event_now = calendar_corroborates(calendar.event_now(&app).await, current);
-                let title = if event_now {
-                    None
+                let detection_on = settings::load_settings().await.zoom_auto_detect;
+                if !may_corroborate(detection_on, is_recording().await) {
+                    raw = uncorroborated(zoom, &procs, own_pid, current);
                 } else {
-                    let helper = browsers[0];
-                    let (back, title) = tokio::task::spawn_blocking(move || {
-                        let title = sample::browser_app_pid(&s, helper)
-                            .and_then(sample::front_window_title);
-                        (s, title)
-                    })
-                    .await
-                    .unwrap_or_else(|_| (System::new(), None));
-                    s = back;
-                    title
-                };
-                raw = classify(zoom, &procs, own_pid, event_now, title.as_deref());
+                    let event_now = calendar_corroborates(calendar.event_now(&app).await, current);
+                    let title = if event_now {
+                        None
+                    } else {
+                        let helper = browsers[0];
+                        let (back, title) = tokio::task::spawn_blocking(move || {
+                            let title = sample::browser_app_pid(&s, helper)
+                                .and_then(sample::front_window_title);
+                            (s, title)
+                        })
+                        .await
+                        .unwrap_or_else(|_| (System::new(), None));
+                        s = back;
+                        title
+                    };
+                    raw = classify(zoom, &procs, own_pid, event_now, title.as_deref());
+                }
             }
             sys = Some(s);
 
@@ -141,6 +148,29 @@ pub fn spawn_meeting_monitor<R: Runtime>(app: AppHandle<R>) {
             }
         }
     });
+}
+
+/// Whether a poll may read the calendar and the browser's window title to corroborate a
+/// browser on the microphone. Only when detection is on and Nixon is not recording.
+fn may_corroborate(detection_on: bool, recording: bool) -> bool {
+    detection_on && !recording
+}
+
+/// The classifier's answer for a poll that may not corroborate: an already-confirmed Meet
+/// call is held (so suppressing corroboration never fakes an end), and no new Meet call starts.
+fn uncorroborated(
+    zoom: bool,
+    procs: &[AudioProc],
+    own_pid: i32,
+    current: Option<Platform>,
+) -> Option<Platform> {
+    classify(
+        zoom,
+        procs,
+        own_pid,
+        calendar_corroborates(false, current),
+        None,
+    )
 }
 
 async fn on_started<R: Runtime>(app: &AppHandle<R>, platform: Platform) {
@@ -184,6 +214,35 @@ fn emit<R: Runtime>(app: &AppHandle<R>, event: &str, platform: Platform, kind: &
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn browser_on_mic() -> Vec<AudioProc> {
+        vec![AudioProc {
+            pid: 77,
+            bundle_id: "com.google.Chrome.helper".into(),
+            running_input: true,
+        }]
+    }
+
+    #[test]
+    fn corroboration_is_read_only_while_detection_is_on_and_not_recording() {
+        assert!(may_corroborate(true, false));
+        assert!(!may_corroborate(false, false), "detection off");
+        assert!(!may_corroborate(true, true), "recording");
+        assert!(!may_corroborate(false, true));
+    }
+
+    #[test]
+    fn an_uncorroborated_poll_holds_a_confirmed_meet_call_and_starts_none() {
+        let procs = browser_on_mic();
+        assert_eq!(
+            uncorroborated(false, &procs, 1, Some(Platform::Meet)),
+            Some(Platform::Meet)
+        );
+        assert_eq!(uncorroborated(false, &procs, 1, None), None);
+        // Zoom's helpers still win, so its end (the auto-stop) is still seen while recording.
+        assert_eq!(uncorroborated(true, &procs, 1, None), Some(Platform::Zoom));
+        assert_eq!(uncorroborated(false, &[], 1, Some(Platform::Zoom)), None);
+    }
 
     #[test]
     fn the_payload_carries_the_platform_in_the_frontends_field_names() {

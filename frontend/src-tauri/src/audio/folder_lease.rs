@@ -16,7 +16,8 @@
 //!    waited, so a path captured earlier (from the frontend, a list query, a previous tick) is
 //!    only a hint. [`reread_folder_path`] / [`leased_folder_path`] are the re-read.
 //!
-//! Nothing holds two leases at once, so there is no lock-ordering hazard between meetings.
+//! Only the mover holds more than one lease, and it takes them in sorted meeting-id order,
+//! so there is no lock-ordering hazard between meetings (ADR-0013).
 //! A holder must also never wait for the engine-lifecycle lock while holding a lease: a
 //! recording start holds that lock while it waits for its own meeting's lease.
 

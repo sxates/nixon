@@ -13,6 +13,7 @@ pub mod journal;
 pub mod plan;
 pub mod roots;
 pub mod runner;
+pub mod target_dir;
 
 #[cfg(test)]
 mod plan_tests;

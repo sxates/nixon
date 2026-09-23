@@ -372,7 +372,7 @@ pub(crate) fn is_dev_build() -> bool {
 /// See [`default_recordings_folder_in`] for why an existing `meetily-recordings` folder
 /// still wins in a release build, and [`default_recordings_folder_for_profile`] for why the
 /// debug build opts out of that rule.
-fn get_default_recordings_folder() -> PathBuf {
+pub(crate) fn get_default_recordings_folder() -> PathBuf {
     default_recordings_folder_for_profile(&platform_recordings_base(), is_dev_build())
 }
 

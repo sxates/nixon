@@ -25,6 +25,7 @@ use super::runner::{
     build_plan, gather, precheck, resume_from_journal, run_units, write_journal, GatherDecision,
     MoveEnv, MoveFinished, MoveReporter, MoveStatus, RunGuard, MOVE_ALREADY_RUNNING, MOVE_STATE,
 };
+use super::target_dir::{startup_root, CreatedTarget, StartupRoot};
 use crate::audio::meeting_folder::canonical_or_lexical;
 use crate::audio::recording_preferences::{
     load_recording_preferences, recordings_root, save_recording_preferences,
@@ -88,10 +89,10 @@ fn target_path(target: &str) -> Result<PathBuf, String> {
 }
 
 /// Roots for moving into `target`, created first so every path canonicalizes the same way.
-fn roots_into(target: &Path) -> Result<MoveRoots, String> {
-    std::fs::create_dir_all(target)
-        .map_err(|e| format!("Couldn't create {}: {e}", target.display()))?;
-    Ok(profile_roots(target))
+/// A refusal after this calls [`CreatedTarget::undo`], which removes every folder made here.
+fn roots_into(target: &Path) -> Result<(MoveRoots, CreatedTarget), String> {
+    let created = CreatedTarget::create(target)?;
+    Ok((profile_roots(target), created))
 }
 
 /// Remove the folders the run emptied from `previous_save_folders` (a kept root stays).
@@ -175,15 +176,16 @@ pub async fn api_change_recordings_folder<R: Runtime>(
     // Refuse a removable or network drive before creating anything on it.
     crate::audio::volume_check::ensure_recordings_volume_allowed(&target)
         .map_err(|e| e.to_string())?;
-    let created = !target.exists();
-    let roots = roots_into(&target)?;
-    let plan = build_plan(&pool, &roots)
-        .await
-        .map_err(|e| format!("Couldn't look through your recordings: {e:#}"))?;
-    if let Err(why) = precheck(&plan, &roots, recording, &crate::app_paths::app_data_dir()) {
-        if created {
-            let _ = std::fs::remove_dir(&target); // only if still empty
+    let (roots, created) = roots_into(&target)?;
+    let plan = match build_plan(&pool, &roots).await {
+        Ok(plan) => plan,
+        Err(e) => {
+            created.undo();
+            return Err(format!("Couldn't look through your recordings: {e:#}"));
         }
+    };
+    if let Err(why) = precheck(&plan, &roots, recording, &crate::app_paths::app_data_dir()) {
+        created.undo();
         return Err(why);
     }
     // No move starts without its journal (see `write_journal`); written before the folder
@@ -191,9 +193,7 @@ pub async fn api_change_recordings_folder<R: Runtime>(
     let journal_path = journal::default_path();
     if !plan.is_empty() {
         if let Err(why) = write_journal(&journal_path, &plan) {
-            if created {
-                let _ = std::fs::remove_dir(&target);
-            }
+            created.undo();
             return Err(why);
         }
     }
@@ -229,12 +229,24 @@ pub async fn api_gather_recordings<R: Runtime>(app: AppHandle<R>) -> Result<(), 
     let guard = MOVE_STATE
         .try_begin()
         .ok_or_else(|| MOVE_ALREADY_RUNNING.to_string())?;
-    let roots = roots_into(&recordings_root())?;
-    let plan = build_plan(&pool, &roots)
-        .await
-        .map_err(|e| format!("Couldn't look through your recordings: {e:#}"))?;
+    let target = recordings_root();
+    let default_root = crate::audio::recording_preferences::get_default_recordings_folder();
+    if let StartupRoot::Unavailable(reason) = startup_root(&target, &default_root) {
+        return Err(reason);
+    }
+    let (roots, created) = roots_into(&target)?;
+    let plan = match build_plan(&pool, &roots).await {
+        Ok(plan) => plan,
+        Err(e) => {
+            created.undo();
+            return Err(format!("Couldn't look through your recordings: {e:#}"));
+        }
+    };
     let recording = crate::audio::recording_commands::is_recording().await;
-    precheck(&plan, &roots, recording, &crate::app_paths::app_data_dir())?;
+    if let Err(why) = precheck(&plan, &roots, recording, &crate::app_paths::app_data_dir()) {
+        created.undo();
+        return Err(why);
+    }
     let journal_path = journal::default_path();
     if !plan.is_empty() {
         write_journal(&journal_path, &plan)?;
@@ -308,9 +320,24 @@ pub fn spawn_startup_resume_and_gather<R: Runtime>(
         let app_data = crate::app_paths::app_data_dir();
         let reporter = AppReporter(app.clone());
         let target = recordings_root();
-        if let Err(e) = crate::audio::recording_preferences::ensure_recordings_directory(&target) {
-            log::warn!("recordings move: current folder unavailable, no gather: {e}");
-            return;
+        let default_root = crate::audio::recording_preferences::get_default_recordings_folder();
+        match startup_root(&target, &default_root) {
+            StartupRoot::Ready => {}
+            StartupRoot::CreateDefault => {
+                if let Err(e) = std::fs::create_dir_all(&target) {
+                    log::warn!("recordings move: couldn't create the default folder: {e}");
+                    return;
+                }
+            }
+            StartupRoot::Unavailable(reason) => {
+                // Never create it: on an unplugged drive that would be a stray local folder
+                // at the mount path. Tell Settings why nothing was gathered.
+                log::warn!("recordings move: current folder missing, no gather or resume");
+                MOVE_STATE.set_gather_blocked(Some(reason.clone()));
+                let plan = MovePlan::default();
+                let _ = app.emit(EVENT_GATHER_BLOCKED, GatherBlocked { plan, reason });
+                return;
+            }
         }
         let roots = profile_roots(&target);
         let env = MoveEnv {

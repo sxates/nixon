@@ -103,7 +103,7 @@ async fn read_rows(pool: &SqlitePool, unit: &MoveUnit) -> Result<Rows, sqlx::Err
         let Some(path) = path.filter(|p| !p.trim().is_empty()) else {
             continue;
         };
-        let stored = canonical_or_lexical(Path::new(path.trim()));
+        let stored = canonical_through_parent(Path::new(path.trim()));
         if stored == src {
             at_src.push((id.clone(), path));
         } else if stored == dst {
@@ -121,6 +121,19 @@ async fn read_rows(pool: &SqlitePool, unit: &MoveUnit) -> Result<Rows, sqlx::Err
     } else {
         Rows::Elsewhere
     })
+}
+
+/// Canonical form of a stored folder path that may no longer exist. After a same-volume
+/// rename the folder itself does not canonicalize, but its parent still does, so a path
+/// stored through a symlinked directory still compares equal to the unit's canonical source.
+fn canonical_through_parent(path: &Path) -> std::path::PathBuf {
+    if let Ok(canon) = path.canonicalize() {
+        return canon;
+    }
+    match (path.parent(), path.file_name()) {
+        (Some(parent), Some(name)) => canonical_or_lexical(parent).join(name),
+        _ => path.to_path_buf(),
+    }
 }
 
 /// Point every row that still names the source at the destination, in one transaction.

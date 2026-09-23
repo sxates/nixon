@@ -81,18 +81,46 @@ pub async fn save_transcript<R: Runtime>(
     let roots = allowed_fs_roots(&app);
     let safe_path = confine_to_roots(&file_path, &roots)?;
 
-    // Ensure parent directory exists
-    if let Some(parent) = safe_path.parent() {
-        if !parent.exists() {
-            std::fs::create_dir_all(parent)
-                .map_err(|e| format!("Failed to create directory: {}", e))?;
-        }
-    }
-
-    // Write content to file
-    std::fs::write(&safe_path, content)
-        .map_err(|e| format!("Failed to write transcript: {}", e))?;
-
+    write_transcript(&safe_path, &content)?;
     log_info!("Transcript saved successfully");
     Ok(())
+}
+
+/// Write `content` to `path`, whose folder must already exist. A missing folder is never
+/// created: a path captured before the recordings folder moved would otherwise bring an
+/// emptied old folder back.
+fn write_transcript(path: &std::path::Path, content: &str) -> Result<(), String> {
+    if let Some(parent) = path.parent() {
+        if !parent.is_dir() {
+            return Err(format!(
+                "Couldn't save the transcript: the folder {} no longer exists. The \
+                 recording may have moved; reopen the meeting and try again.",
+                parent.display()
+            ));
+        }
+    }
+    std::fs::write(path, content).map_err(|e| format!("Failed to write transcript: {}", e))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_transcript_is_never_written_into_a_folder_that_is_gone() {
+        let tmp = tempfile::tempdir().unwrap();
+        let gone = tmp.path().join("old-root/Meeting");
+        let err = write_transcript(&gone.join("transcript.json"), "{}").unwrap_err();
+        assert!(err.contains("no longer exists"), "{err}");
+        assert!(
+            !tmp.path().join("old-root").exists(),
+            "the folder was recreated"
+        );
+
+        write_transcript(&tmp.path().join("t.json"), "{}").unwrap();
+        assert_eq!(
+            std::fs::read_to_string(tmp.path().join("t.json")).unwrap(),
+            "{}"
+        );
+    }
 }

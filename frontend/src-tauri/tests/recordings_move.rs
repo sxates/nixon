@@ -878,3 +878,36 @@ async fn a_lost_journal_after_a_same_volume_rename_is_reconciled_by_the_gather()
     assert_eq!(finished.unwrap().moved, 1);
     assert_moved(&h, &id, &src, &h.new.join("Renamed"), &original).await;
 }
+
+// Row 5 when the stored path runs through a symlink: after the same-volume rename the
+// source no longer canonicalizes, so the row must still be recognised as naming it.
+#[tokio::test]
+async fn crash_after_a_same_volume_rename_updates_a_row_stored_through_a_symlink() {
+    let mut h = Harness::new().await;
+    let real = h.base().join("real");
+    std::fs::create_dir_all(real.join("old")).unwrap();
+    let link = h.base().join("link");
+    std::os::unix::fs::symlink(&real, &link).unwrap();
+    h.old = link.join("old");
+    h.roots = release_roots(&h.new, &h.old, &[], &[]);
+    let (id, src) = meeting(&h.pool, &h.old, "Linked").await;
+    let original = contents(&src);
+    let dst = h.new.join("Linked");
+
+    let crashed = h
+        .run(ExecOptions {
+            fail_at: Some(FailPoint::AfterRename),
+            ..ExecOptions::default()
+        })
+        .await;
+    assert_eq!(crashed, Err(Crashed(FailPoint::AfterRename)));
+    assert!(
+        !src.exists() && dst.exists(),
+        "renamed, row not yet updated"
+    );
+
+    let finished = h.resume().await.expect("the journal is resumed");
+    assert_eq!(finished.moved, 1, "the resume finishes the move");
+    assert_moved(&h, &id, &src, &dst, &original).await;
+    assert!(!h.journal.exists(), "the journal is gone once reconciled");
+}
