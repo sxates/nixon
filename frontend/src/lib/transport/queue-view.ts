@@ -54,6 +54,15 @@ const ACTIVE: BacklogItemStatus[] = ['transcribing', 'diarizing', 'summarizing']
  */
 const RETRYABLE_KINDS: readonly LlmTaskKind[] = ['prepBrief', 'meetingSummary', 'actionItems', 'diarization'];
 
+/**
+ * specs/0074 W4: "Done" prep rows share the queue's done section with finished backlog
+ * items, capped so a long session doesn't pile up every brief the pass ever wrote. `history`
+ * is already newest-first, so slicing the front keeps the most recent ones. Failures and
+ * other kinds are unaffected — only successful `prepBrief` history renders here at all
+ * (decision: "Done" rows are prep-only, matching the owner's ask).
+ */
+const DONE_PREP_LIMIT = 5;
+
 function backlogRow(item: BacklogItem): QueueRow {
   const stage = item.status as QueueStage;
   const isError = item.status === 'error';
@@ -99,7 +108,19 @@ export function buildQueueView(
     meetingId: t.meetingId,
     taskId: t.id,
   }));
-  const waiting = backlog.items.filter((i) => i.status === 'waiting').map(backlogRow);
+  const backlogWaiting = backlog.items.filter((i) => i.status === 'waiting').map(backlogRow);
+  // specs/0074 W4 — a queued prep brief (background work waiting its turn, distinct from a
+  // running one) renders alongside backlog waiting rows, same stage, same "Waiting" label.
+  const llmWaiting = (llm?.queued ?? []).map<QueueRow>((t) => ({
+    id: `llm:${t.id}`,
+    title: t.label,
+    stage: 'waiting',
+    stageLabel: QUEUE_STAGE_LABEL.waiting,
+    source: 'llm',
+    meetingId: t.meetingId,
+    taskId: t.id,
+  }));
+  const waiting = [...backlogWaiting, ...llmWaiting];
   const backlogErrors = backlog.items.filter((i) => i.status === 'error').map(backlogRow);
   // `hasFailure` is the registry's BACKGROUND-failure flag; `history` is unfiltered and also
   // holds foreground Ask-AI failures the user already saw inline. Lighting the rail red for
@@ -121,7 +142,20 @@ export function buildQueueView(
         action: retryable ? 'retry' : 'dismiss',
       };
     });
-  const done = backlog.items.filter((i) => i.status === 'done').map(backlogRow);
+  const backlogDone = backlog.items.filter((i) => i.status === 'done').map(backlogRow);
+  const doneLlmPrep = (llm?.history ?? [])
+    .filter((h) => h.kind === 'prepBrief' && h.outcome.type === 'success')
+    .slice(0, DONE_PREP_LIMIT)
+    .map<QueueRow>((h) => ({
+      id: `llm:${h.id}`,
+      title: h.label,
+      stage: 'done',
+      stageLabel: QUEUE_STAGE_LABEL.done,
+      source: 'llm',
+      meetingId: h.meetingId,
+      taskId: h.id,
+    }));
+  const done = [...backlogDone, ...doneLlmPrep];
 
   const rows = [...transcribing, ...active, ...running, ...waiting, ...backlogErrors, ...llmFailures, ...done];
   const failures = backlogErrors.length + llmFailures.length;

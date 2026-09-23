@@ -37,10 +37,25 @@ export function NotificationPermissionRow() {
   const [status, setStatus] = useState<AuthorizationStatus | null>(null);
   const [busy, setBusy] = useState(false);
 
+  // Carried fix (0074 batch, Ruling 11): `getNotificationCapability()` already catches its
+  // own `invoke` rejections, but a stub `invoke` that resolves `undefined`/`null` for every
+  // command (as several unrelated test fixtures do, mocking the whole Tauri surface at once)
+  // slips past that and used to crash here reading `.supported` off nothing. Treat anything
+  // that isn't a real capability object as "unsupported" rather than trust its shape.
   const refresh = useCallback(async () => {
-    const supported = await getNotificationCapability();
-    setCapability(supported);
-    setStatus(supported.supported ? await getNotificationPermission() : 'unavailable');
+    try {
+      const raw = await getNotificationCapability();
+      const cap: NotificationCapability =
+        raw && typeof raw.supported === 'boolean'
+          ? raw
+          : { supported: false, reason: 'Notifications are unavailable in this build.' };
+      setCapability(cap);
+      setStatus(cap.supported ? await getNotificationPermission() : 'unavailable');
+    } catch (error) {
+      console.warn('[NotificationPermissionRow] capability check failed:', error);
+      setCapability({ supported: false, reason: 'Notifications are unavailable in this build.' });
+      setStatus('unavailable');
+    }
   }, []);
 
   useEffect(() => {

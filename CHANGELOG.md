@@ -153,6 +153,12 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 ### Internal
 
+- Spec 0074 W4: the queue panel renders prep-brief queue rows (`LlmActivityView.queued` →
+  Waiting, successful `prepBrief` history → Done, capped at 5) alongside the existing backlog
+  rows; **Clear finished** now also calls `api_llm_activity_clear_finished`. Carried fix
+  (Ruling 11): `NotificationPermissionRow` now treats a missing/failed capability check as
+  unsupported instead of crashing on `.supported`, fixing 4 unhandled `pnpm test` rejections
+  from unrelated settings fixtures that stub every `invoke` call.
 - Spec 0072 W3: the stop path calls `api_finish_audio_processing` instead of diarizing
   inline; the meeting page reads `api_meeting_audio_status` and follows
   `meeting-audio-state-changed`. The demo fixtures seed one meeting per `audio_state`, and

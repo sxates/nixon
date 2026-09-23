@@ -10,16 +10,19 @@ import userEvent from '@testing-library/user-event';
 // "set Nixon to Alerts" the one thing the user has to do, and therefore something Settings
 // has to say.
 
-const { capability, permission, openSettings, notifyMock } = vi.hoisted(() => ({
+const { capability, permission, openSettings, notifyMock, getCapabilityMock } = vi.hoisted(() => ({
   capability: { supported: true, reason: null as string | null },
   permission: { value: 'authorized' as string },
   openSettings: vi.fn(),
   notifyMock: vi.fn().mockResolvedValue(true),
+  // A vi.fn(), not a bare arrow, so individual tests can override what a refresh sees
+  // (0074 batch, Ruling 11's carried fix — an undefined/rejected capability).
+  getCapabilityMock: vi.fn(),
 }));
 
 vi.mock('@/lib/osNotification', () => ({
   CATEGORY_PLAIN: 'nixon.plain',
-  getNotificationCapability: async () => capability,
+  getNotificationCapability: getCapabilityMock,
   getNotificationPermission: async () => permission.value,
   notify: notifyMock,
   openNotificationSettings: openSettings,
@@ -35,6 +38,8 @@ beforeEach(() => {
   permission.value = 'authorized';
   openSettings.mockClear();
   notifyMock.mockClear();
+  getCapabilityMock.mockReset();
+  getCapabilityMock.mockImplementation(async () => capability);
 });
 
 describe('NotificationPermissionRow — the Alerts note', () => {
@@ -74,5 +79,38 @@ describe('NotificationPermissionRow — the Alerts note', () => {
     render(<NotificationPermissionRow />);
     await userEvent.click(await screen.findByRole('button', { name: /Send a test/ }));
     expect(notifyMock).toHaveBeenCalled();
+  });
+});
+
+// 0074 batch, Ruling 11 (carried fix) — `pnpm test` had 4 unhandled rejections from this
+// component: a stub `invoke` that resolves every command to `undefined` (several unrelated
+// settings test fixtures mock the whole Tauri surface that way) made `getNotificationCapability`
+// resolve to `undefined`, and the old `supported.supported` read threw
+// "Cannot read properties of undefined (reading 'supported')" inside an unawaited `void
+// refresh()`. It must degrade to "unsupported" instead of throwing.
+describe('NotificationPermissionRow — tolerates a missing or failed capability (0074 batch)', () => {
+  it('treats an undefined capability as unsupported instead of throwing', async () => {
+    getCapabilityMock.mockResolvedValueOnce(undefined);
+    render(<NotificationPermissionRow />);
+    await waitFor(() =>
+      expect(screen.getByText('Notifications are unavailable in this build.')).toBeInTheDocument(),
+    );
+    expect(screen.queryByRole('button', { name: 'Allow…' })).not.toBeInTheDocument();
+  });
+
+  it('treats a null capability as unsupported instead of throwing', async () => {
+    getCapabilityMock.mockResolvedValueOnce(null);
+    render(<NotificationPermissionRow />);
+    await waitFor(() =>
+      expect(screen.getByText('Notifications are unavailable in this build.')).toBeInTheDocument(),
+    );
+  });
+
+  it('treats a rejected capability check as unsupported instead of throwing', async () => {
+    getCapabilityMock.mockRejectedValueOnce(new Error('notif_capability is not a registered command'));
+    render(<NotificationPermissionRow />);
+    await waitFor(() =>
+      expect(screen.getByText('Notifications are unavailable in this build.')).toBeInTheDocument(),
+    );
   });
 });
