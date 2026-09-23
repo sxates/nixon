@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { answerAsPlainProse, buildScope, cachedAnswerFor, enterTriggersRun } from '@/lib/ask-ai';
+import {
+  answerAsPlainProse,
+  buildScope,
+  cachedAnswerFor,
+  customRangeProblem,
+  enterTriggersRun,
+  scopeLabel,
+} from '@/lib/ask-ai';
 
 // specs/0035 — pure helpers behind the /ask page. Locks:
 // (a) buildScope emits timezone-correct ISO-8601 UTC instants: dateFrom =
@@ -179,5 +186,52 @@ describe('answerAsPlainProse', () => {
 
   it('is empty for an empty answer', () => {
     expect(answerAsPlainProse('')).toBe('');
+  });
+});
+
+// Owner feedback 2026-09-22: "a 'custom' date range that is only today (9/22 - 9/22) — the
+// answer includes meetings from weeks ago." The range itself was correct end to end; what
+// was not: a Custom preset with a blank date silently became "all meetings", and no answer
+// said which range it was produced under.
+describe('customRangeProblem — Custom never silently widens to all meetings', () => {
+  it('is null for a complete one-day range', () => {
+    expect(customRangeProblem('custom', '2026-09-22', '2026-09-22')).toBeNull();
+  });
+
+  it('flags a blank start or end', () => {
+    expect(customRangeProblem('custom', '', '2026-09-22')).not.toBeNull();
+    expect(customRangeProblem('custom', '2026-09-22', '')).not.toBeNull();
+    expect(customRangeProblem('custom', '', '')).not.toBeNull();
+  });
+
+  it('flags an end before the start', () => {
+    expect(customRangeProblem('custom', '2026-09-22', '2026-09-21')).not.toBeNull();
+  });
+
+  it('ignores the date fields for every other preset', () => {
+    expect(customRangeProblem('7d', '', '')).toBeNull();
+    expect(customRangeProblem('all', '', '')).toBeNull();
+  });
+});
+
+describe('scopeLabel — the range an answer was produced under', () => {
+  it('names an empty scope as all meetings', () => {
+    expect(scopeLabel({})).toBe('All meetings');
+    expect(scopeLabel({ dateFrom: null, dateTo: null } as never)).toBe('All meetings');
+  });
+
+  it('shows a one-day range as that single day (the upper bound is exclusive)', () => {
+    const scope = buildScope({ preset: 'custom', customFrom: '2026-09-22', customTo: '2026-09-22' });
+    expect(scopeLabel(scope)).toBe('Sep 22, 2026');
+  });
+
+  it('shows a multi-day range as first – last day', () => {
+    const scope = buildScope({ preset: '7d', now: NOW });
+    expect(scopeLabel(scope)).toBe('Jun 9 – Jun 15, 2026');
+  });
+
+  it('shows open-ended bounds', () => {
+    expect(scopeLabel({ dateFrom: new Date(2026, 8, 1).toISOString() })).toBe('Since Sep 1, 2026');
+    expect(scopeLabel({ dateTo: new Date(2026, 8, 2).toISOString() })).toBe('Through Sep 1, 2026');
   });
 });
