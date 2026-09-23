@@ -19,6 +19,10 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 ## [Unreleased]
 
+_(nothing yet)_
+
+## [0.9.0] - 2026-09-23
+
 ### Added
 
 - **A transcript you can actually read.** Consecutive lines from one speaker now form a
