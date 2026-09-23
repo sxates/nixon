@@ -227,7 +227,7 @@ describe('RecordingSettings — settings hygiene (specs/0061 W6)', () => {
     expect(screen.getByRole('button', { name: 'Change…' })).toBeInTheDocument();
   });
 
-  it('Change… picks a folder via select_recording_folder and persists it', async () => {
+  it('Change… picks a folder via select_recording_folder and changes it through the mover', async () => {
     invokeMock.mockImplementation((cmd: string) => {
       switch (cmd) {
         case 'get_recording_preferences':
@@ -256,8 +256,9 @@ describe('RecordingSettings — settings hygiene (specs/0061 W6)', () => {
           return Promise.resolve([]);
         case 'select_recording_folder':
           return Promise.resolve('/tmp/chosen-folder');
-        case 'set_recording_preferences':
-          return Promise.resolve(undefined);
+        // specs/0073: nothing to move, so no dialog — the folder just changes.
+        case 'api_plan_recordings_move':
+          return Promise.resolve({ target: '/tmp/chosen-folder', meetings: 0, bytes: 0, enoughSpace: true });
         default:
           return Promise.resolve(undefined);
       }
@@ -270,8 +271,8 @@ describe('RecordingSettings — settings hygiene (specs/0061 W6)', () => {
 
     await waitFor(() => expect(invokeMock).toHaveBeenCalledWith('select_recording_folder'));
     await waitFor(() =>
-      expect(invokeMock).toHaveBeenCalledWith('set_recording_preferences', {
-        preferences: expect.objectContaining({ save_folder: '/tmp/chosen-folder' }),
+      expect(invokeMock).toHaveBeenCalledWith('api_change_recordings_folder', {
+        target: '/tmp/chosen-folder',
       }),
     );
   });
@@ -317,5 +318,75 @@ describe('RecordingSettings — settings hygiene (specs/0061 W6)', () => {
 
     await waitFor(() => expect(invokeMock).toHaveBeenCalledWith('select_recording_folder'));
     expect(invokeMock.mock.calls.some(([cmd]) => cmd === 'set_recording_preferences')).toBe(false);
+    expect(invokeMock.mock.calls.some(([cmd]) => cmd === 'api_change_recordings_folder')).toBe(false);
+  });
+
+  // specs/0073 — the folder can't change under a running recording.
+  it('disables Change… while a recording is active', async () => {
+    useSidebarMock.mockReturnValue({ activeRecordingMeetingId: 'meeting-123' });
+    await renderSettings();
+    expect(screen.getByRole('button', { name: 'Change…' })).toBeDisabled();
+  });
+
+  it('enables Change… when nothing is recording', async () => {
+    useSidebarMock.mockReturnValue({ activeRecordingMeetingId: null });
+    await renderSettings();
+    expect(screen.getByRole('button', { name: 'Change…' })).toBeEnabled();
+  });
+});
+
+describe('RecordingSettings — audio storage copy (specs/0072 W3)', () => {
+  beforeEach(() => {
+    useSidebarMock.mockReturnValue({ activeRecordingMeetingId: null });
+    const base = invokeMock.getMockImplementation()!;
+    invokeMock.mockImplementation((cmd: string, args?: unknown) =>
+      cmd === 'get_recording_preferences'
+        ? Promise.resolve({
+            save_folder: '/tmp/rec',
+            auto_save: false,
+            audio_retention: { mode: 'after_processing' },
+            preferred_mic_device: null,
+            preferred_system_device: null,
+            retention_days: 30,
+            live_transcription_enabled: true,
+            low_power_on_battery: true,
+          })
+        : base(cmd, args as never),
+    );
+  });
+
+  it('shows the save location under Once processed, because capture always saves', async () => {
+    await renderSettings();
+    expect(screen.getByRole('button', { name: 'Change…' })).toBeInTheDocument();
+  });
+
+  it('says audio goes only after processing, never at stop, and explains voiceprints', async () => {
+    await renderSettings();
+    expect(
+      screen.getByText(/kept until Nixon has transcribed the meeting and identified the speakers/),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/as soon as a recording stops/i)).toBeNull();
+    expect(screen.getByText(/numeric voice signatures that contain no audio/)).toBeInTheDocument();
+    expect(screen.getByText(/still rename and reassign its speakers/)).toBeInTheDocument();
+  });
+});
+
+describe('RecordingSettings — meeting detection (specs/0074 W5)', () => {
+  beforeEach(() => {
+    useSidebarMock.mockReturnValue({ activeRecordingMeetingId: null });
+  });
+
+  // Named for what it does rather than one app; the stored key keeps its old name.
+  it('is called "Detect meetings" and still saves to the same key', async () => {
+    await renderSettings();
+    expect(screen.queryByText(/Auto-detect Zoom/)).not.toBeInTheDocument();
+    // specs/0074 W6: Teams and Google Meet are detected too, and the copy says so.
+    expect(
+      screen.getByText('When a Zoom, Teams or Google Meet call starts, offer to record it.'),
+    ).toBeInTheDocument();
+    fireEvent.click(switchForLabel('Detect meetings'));
+    await waitFor(() =>
+      expect(invokeMock).toHaveBeenCalledWith('api_set_zoom_auto_detect', { enabled: false }),
+    );
   });
 });

@@ -208,9 +208,20 @@ pub fn invoke_handler() -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Sen
         audio::recording_preferences::get_default_recordings_folder_path,
         audio::recording_preferences::open_recordings_folder,
         audio::recording_preferences::select_recording_folder,
+        // specs/0073 W2: the recordings mover (plan, move, gather, cancel, status).
+        audio::recordings_move::commands::api_plan_recordings_move,
+        audio::recordings_move::commands::api_change_recordings_folder,
+        audio::recordings_move::commands::api_gather_recordings,
+        audio::recordings_move::commands::api_cancel_recordings_move,
+        audio::recordings_move::commands::api_recordings_move_status,
+        audio::recordings_move::commands::api_recordings_gather_state,
         // Audio retention (specs/0029 WS7.1): lets the UI probe whether a meeting
         // still has audio on disk (vs removed by the retention sweep).
-        audio::retention::api_meeting_audio_available,
+        audio::lifecycle::commands::api_meeting_audio_available,
+        audio::lifecycle::commands::api_meeting_audio_status,
+        audio::lifecycle::commands::api_finish_audio_processing,
+        audio::lifecycle::commands::api_preview_audio_retention,
+        audio::lifecycle::commands::api_apply_audio_retention_now,
         // low-power-mode spec §5: deferred-backlog query for meetings still
         // awaiting processing with audio still on disk.
         audio::deferred_backlog::api_list_deferred_meetings,
@@ -222,6 +233,7 @@ pub fn invoke_handler() -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Sen
         notifications::os_commands::notif_authorization_status,
         notifications::os_commands::notif_request_authorization,
         notifications::os_commands::notif_deliver,
+        notifications::os_commands::notif_remove,
         notifications::os_commands::notif_open_system_settings,
         // System audio capture commands
         audio::system_audio_commands::start_system_audio_capture_command,
@@ -378,6 +390,7 @@ pub fn invoke_handler() -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Sen
         llm_activity::commands::api_llm_activity_snapshot,
         llm_activity::commands::api_llm_activity_dismiss,
         llm_activity::commands::api_llm_activity_dismiss_task,
+        llm_activity::commands::api_llm_activity_clear_finished,
         llm_activity::commands::api_llm_activity_retry_task,
     ]
 }

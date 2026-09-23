@@ -60,6 +60,50 @@ async fn insert_segments(
     Ok(())
 }
 
+/// specs/0073 stale write-back guard: the `folder_path` a transcript save may write over
+/// `meeting_id`'s stored one. A supplied path replaces the stored one only when the stored
+/// one is NULL/empty or no longer exists on disk — so a path the frontend captured before
+/// a move (stale by the time the save lands) can never undo the move. Read inside the
+/// caller's transaction.
+async fn folder_path_to_write(
+    transaction: &mut SqliteConnection,
+    meeting_id: &str,
+    supplied: Option<String>,
+) -> Result<Option<String>, SqlxError> {
+    let Some(supplied) = supplied else {
+        return Ok(None);
+    };
+    let stored: Option<Option<String>> =
+        sqlx::query_scalar("SELECT folder_path FROM meetings WHERE id = ?")
+            .bind(meeting_id)
+            .fetch_optional(&mut *transaction)
+            .await?;
+    match stored.flatten().filter(|p| !p.trim().is_empty()) {
+        Some(live) if live != supplied && std::path::Path::new(&live).exists() => {
+            info!(
+                "Keeping meeting {}'s folder {:?}; ignoring the save's {:?}",
+                meeting_id, live, supplied
+            );
+            Ok(None)
+        }
+        _ => Ok(Some(supplied)),
+    }
+}
+
+/// Hold the meeting's folder lease for a transcript save that writes `folder_path`
+/// (specs/0073): it must not interleave with a move of the same folder. `None` when the
+/// save carries no path and so touches no folder state.
+async fn folder_path_write_lease(
+    meeting_id: &str,
+    folder_path: &Option<String>,
+) -> Option<crate::audio::folder_lease::FolderLease> {
+    use crate::audio::folder_lease::{acquire, LeaseHolder};
+    match folder_path {
+        Some(_) => Some(acquire(meeting_id, LeaseHolder::FolderPathWrite).await),
+        None => None,
+    }
+}
+
 impl TranscriptsRepository {
     /// Saves a new meeting and its associated transcript segments.
     /// This function uses a transaction to ensure that either both the meeting
@@ -142,6 +186,7 @@ impl TranscriptsRepository {
         transcripts: &[TranscriptSegment],
         folder_path: Option<String>,
     ) -> Result<bool, SqlxError> {
+        let _lease = folder_path_write_lease(meeting_id, &folder_path).await;
         let mut conn = pool.acquire().await?;
         let mut transaction = conn.begin().await?;
 
@@ -187,6 +232,7 @@ impl TranscriptsRepository {
         .fetch_optional(&mut *transaction)
         .await?;
         let keep_title = keep_title.unwrap_or(false);
+        let folder_path = folder_path_to_write(&mut transaction, meeting_id, folder_path).await?;
 
         let update =
             match (keep_title, folder_path.is_some()) {
@@ -265,9 +311,11 @@ impl TranscriptsRepository {
         folder_path: Option<String>,
         audio_offset_seconds: f64,
     ) -> Result<bool, SqlxError> {
+        let _lease = folder_path_write_lease(meeting_id, &folder_path).await;
         let mut conn = pool.acquire().await?;
         let mut transaction = conn.begin().await?;
         let now = Utc::now();
+        let folder_path = folder_path_to_write(&mut transaction, meeting_id, folder_path).await?;
 
         let update = if folder_path.is_some() {
             sqlx::query("UPDATE meetings SET updated_at = ?, folder_path = ? WHERE id = ?")

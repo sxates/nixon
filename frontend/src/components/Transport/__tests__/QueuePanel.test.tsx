@@ -5,7 +5,7 @@ const { backlog, llm, invokeMock, toastMock } = vi.hoisted(() => ({
   backlog: { view: { items: [], pendingCount: 0, processing: false, active: null, activeOrdinal: 0, total: 0 }, stop: vi.fn(), startNow: vi.fn(), dismissDone: vi.fn(), enqueueMeeting: vi.fn() },
   // The provider's context value is FLAT (`{...view, dismiss}` — LlmActivityProvider.tsx),
   // so the fixture mirrors that shape rather than nesting a `view`.
-  llm: { running: [] as unknown[], history: [] as unknown[], hasFailure: false, dismiss: vi.fn(), retry: vi.fn() },
+  llm: { queued: [] as unknown[], running: [] as unknown[], history: [] as unknown[], hasFailure: false, dismiss: vi.fn(), retry: vi.fn() },
   invokeMock: vi.fn(),
   toastMock: { error: vi.fn(), success: vi.fn(), warning: vi.fn() },
 }));
@@ -28,7 +28,12 @@ const backlogView = (items: BacklogView['items']): BacklogView => ({
   activeOrdinal: 0,
   total: items.length,
 });
-const llmView = (running: LlmActivityView['running'], history: LlmActivityView['history'] = []): LlmActivityView => ({
+const llmView = (
+  running: LlmActivityView['running'],
+  history: LlmActivityView['history'] = [],
+  queued: LlmActivityView['queued'] = [],
+): LlmActivityView => ({
+  queued,
   running,
   history,
   hasFailure: history.some((h) => h.outcome.type === 'failed'),
@@ -36,7 +41,7 @@ const llmView = (running: LlmActivityView['running'], history: LlmActivityView['
 
 beforeEach(() => {
   backlog.view = { items: [], pendingCount: 0, processing: false, active: null, activeOrdinal: 0, total: 0 };
-  Object.assign(llm, { running: [], history: [], hasFailure: false });
+  Object.assign(llm, { queued: [], running: [], history: [], hasFailure: false });
   vi.clearAllMocks();
   invokeMock.mockResolvedValue(undefined);
   // `enqueueMeeting` always resolves to a HandoffOutcome; a bare undefined here would be
@@ -106,6 +111,49 @@ describe('QueuePanel', () => {
 
     expect(llm.dismiss).toHaveBeenCalled();
     expect(invokeMock).not.toHaveBeenCalledWith('api_llm_activity_dismiss_task', expect.anything());
+  });
+});
+
+// specs/0074 W4 Task 19 — "Clear finished" now also drops the registry's Done prep rows.
+describe('QueuePanel — Clear finished also clears the registry (specs/0074 W4)', () => {
+  it('shows "Clear finished" for a Done prep row even with no finished backlog item', () => {
+    const view = buildQueueView(
+      backlogView([]),
+      llmView([], [{ id: 6, kind: 'prepBrief', label: 'Preparing brief — Weekly sync', error: null, meetingId: 'w1', outcome: { type: 'success' } }]),
+    );
+    render(<QueuePanel view={view} />);
+
+    expect(screen.getByRole('button', { name: 'Clear finished' })).toBeInTheDocument();
+  });
+
+  it('calls both the backlog dismiss and the registry clear-finished command', async () => {
+    const view = buildQueueView(
+      backlogView([{ meeting: meeting('c', 'Old one'), status: 'done' }]),
+      llmView([], [{ id: 6, kind: 'prepBrief', label: 'Preparing brief — Weekly sync', error: null, meetingId: 'w1', outcome: { type: 'success' } }]),
+    );
+    render(<QueuePanel view={view} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear finished' }));
+
+    expect(backlog.dismissDone).toHaveBeenCalled();
+    await waitFor(() => expect(invokeMock).toHaveBeenCalledWith('api_llm_activity_clear_finished'));
+  });
+
+  it('reports a failed clear instead of failing silently', async () => {
+    invokeMock.mockImplementation((cmd: string) =>
+      cmd === 'api_llm_activity_clear_finished' ? Promise.reject('Database is busy.') : Promise.resolve(undefined),
+    );
+    const view = buildQueueView(
+      backlogView([]),
+      llmView([], [{ id: 6, kind: 'prepBrief', label: 'Preparing brief — Weekly sync', error: null, meetingId: 'w1', outcome: { type: 'success' } }]),
+    );
+    render(<QueuePanel view={view} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear finished' }));
+
+    await waitFor(() =>
+      expect(toastMock.error).toHaveBeenCalledWith('Could not clear finished tasks', { description: 'Database is busy.' }),
+    );
   });
 });
 

@@ -39,12 +39,13 @@ vi.mock('@/components/MainContent', () => ({ default: mainContentMock }));
 vi.mock('@/components/CommandPalette', () => ({ default: commandPaletteMock }));
 
 vi.mock('@/components/ResumeRecordingPrompt', () => ({ default: vi.fn(() => null) }));
-vi.mock('@/components/ZoomAutoDetect', () => ({ default: vi.fn(() => null) }));
+vi.mock('@/components/MeetingAutoDetect', () => ({ default: vi.fn(() => null) }));
 vi.mock('@/components/NotificationPermissionBootstrap', () => ({ default: vi.fn(() => null) }));
 vi.mock('@/components/Calendar/CalendarAlerts', () => ({ default: vi.fn(() => null) }));
 vi.mock('@/components/People/VoiceprintRetractionListener', () => ({ default: vi.fn(() => null) }));
 vi.mock('@/components/PermissionsModal', () => ({ default: vi.fn(() => null) }));
 vi.mock('@/components/Updates/UpdatedNotice', () => ({ UpdatedNotice: vi.fn(() => null) }));
+vi.mock('@/components/RecordingsMoveWatcher', () => ({ RecordingsMoveWatcher: vi.fn(() => null) }));
 vi.mock('@/contexts/LlmActivityProvider', () => ({
   LlmActivityProvider: ({ children }: { children: React.ReactNode }) => children,
 }));

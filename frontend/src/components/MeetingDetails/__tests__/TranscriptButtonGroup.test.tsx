@@ -4,16 +4,31 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { BacklogItem, BacklogItemStatus } from '@/lib/deferred-backlog';
 
-// specs/0029 WS7.1 — the retention sweep deletes only media files, so a meeting can
+// specs/0029 WS7.1 / specs/0072 W3 — retention deletes only media files, so a meeting can
 // carry a transcript but no audio. The diarize ("Identify speakers") and re-transcribe
 // ("Enhance") affordances would fail-fast with a raw error; instead the button group
-// probes `api_meeting_audio_available` and renders a friendly disabled state. These
+// probes `api_meeting_audio_status` and gates each action on the audio it needs. These
 // tests lock that gating (and that an unknown/failed probe does NOT gate).
 
-const { invoke, enqueueMeetingSpy } = vi.hoisted(() => ({
+const { invoke, enqueueMeetingSpy, listeners } = vi.hoisted(() => ({
   invoke: vi.fn(),
   enqueueMeetingSpy: vi.fn(),
+  listeners: new Map<string, (e: { payload: unknown }) => void>(),
 }));
+
+type Audio = { mix: boolean; channels: boolean; compressed: boolean; state: string };
+const PRESENT: Audio = { mix: true, channels: true, compressed: false, state: 'processed' };
+const PURGED: Audio = { mix: false, channels: false, compressed: false, state: 'purged' };
+const MISSING: Audio = { mix: false, channels: false, compressed: false, state: 'processed' };
+/** invoke mock: this audio status; no processing-mode marker. */
+const mockAudio = (audio: Audio | Error) =>
+  invoke.mockImplementation(async (cmd: string) => {
+    if (cmd === 'api_meeting_audio_status') {
+      if (audio instanceof Error) throw audio;
+      return audio;
+    }
+    return null;
+  });
 
 // specs/0045 WS3 (Task 8) — the per-meeting "Process now" button no longer owns a local
 // set-once spinner; it reads the shared backlog controller (`useBacklog`). This mock
@@ -25,6 +40,12 @@ function setBacklogItems(items: BacklogItem[]) {
 }
 
 vi.mock('@tauri-apps/api/core', () => ({ invoke }));
+vi.mock('@tauri-apps/api/event', () => ({
+  listen: vi.fn(async (event: string, cb: (e: { payload: unknown }) => void) => {
+    listeners.set(event, cb);
+    return () => listeners.delete(event);
+  }),
+}));
 vi.mock('@/contexts/DeferredBacklogProvider', () => ({
   useBacklog: () => {
     const [items, setItems] = useState<BacklogItem[]>(() => initialBacklogItems);
@@ -82,32 +103,26 @@ beforeEach(() => {
 });
 
 describe('TranscriptButtonGroup audio-availability gating (WS7.1)', () => {
-  it('probes api_meeting_audio_available for the meeting', async () => {
-    invoke.mockResolvedValue(true);
+  it('probes api_meeting_audio_status for the meeting', async () => {
+    mockAudio(PRESENT);
     render(<TranscriptButtonGroup {...baseProps} />);
     await waitFor(() =>
-      expect(invoke).toHaveBeenCalledWith('api_meeting_audio_available', {
+      expect(invoke).toHaveBeenCalledWith('api_meeting_audio_status', {
         meetingId: 'meeting-abc',
       })
     );
   });
 
-  it('disables Identify speakers and Enhance with retention copy when audio is gone', async () => {
-    invoke.mockResolvedValue(false);
+  it('disables Identify speakers and Enhance with retention copy when the policy deleted the audio', async () => {
+    mockAudio(PURGED);
     render(<TranscriptButtonGroup {...baseProps} />);
 
     const identify = await screen.findByRole('button', { name: /identify speakers/i });
     const enhance = await screen.findByRole('button', { name: /enhance/i });
     await waitFor(() => expect(identify).toBeDisabled());
     expect(enhance).toBeDisabled();
-    expect(identify).toHaveAttribute(
-      'title',
-      expect.stringMatching(/no audio recording available.*retention/i)
-    );
-    expect(enhance).toHaveAttribute(
-      'title',
-      expect.stringMatching(/no audio recording available.*retention/i)
-    );
+    expect(identify).toHaveAttribute('title', 'Audio deleted by your retention setting.');
+    expect(enhance).toHaveAttribute('title', 'Audio deleted by your retention setting.');
 
     // Audio-independent affordances stay usable: the transcript is still there. They live
     // in the `…` overflow since 2026-09-21 (owner feedback — they were sitting in front of
@@ -127,7 +142,7 @@ describe('TranscriptButtonGroup audio-availability gating (WS7.1)', () => {
   // 42% · Enhance". The two file-management affordances are now behind `…`, so the row
   // shows only what you can act on.
   it('keeps Copy and Open folder out of the front row entirely', async () => {
-    invoke.mockResolvedValue(true);
+    mockAudio(PRESENT);
     render(<TranscriptButtonGroup {...baseProps} />);
     await waitFor(() => expect(invoke).toHaveBeenCalled());
 
@@ -137,7 +152,7 @@ describe('TranscriptButtonGroup audio-availability gating (WS7.1)', () => {
   });
 
   it('the overflow Copy is disabled when there is no transcript to copy', async () => {
-    invoke.mockResolvedValue(true);
+    mockAudio(PRESENT);
     render(<TranscriptButtonGroup {...baseProps} transcriptCount={0} />);
     await waitFor(() => expect(invoke).toHaveBeenCalled());
 
@@ -149,7 +164,7 @@ describe('TranscriptButtonGroup audio-availability gating (WS7.1)', () => {
   });
 
   it('the overflow actions call through to their handlers', async () => {
-    invoke.mockResolvedValue(true);
+    mockAudio(PRESENT);
     const onCopyTranscript = vi.fn();
     const onOpenMeetingFolder = vi.fn().mockResolvedValue(undefined);
     render(
@@ -171,7 +186,7 @@ describe('TranscriptButtonGroup audio-availability gating (WS7.1)', () => {
   });
 
   it('keeps both affordances enabled when audio is present', async () => {
-    invoke.mockResolvedValue(true);
+    mockAudio(PRESENT);
     render(<TranscriptButtonGroup {...baseProps} />);
 
     await waitFor(() => expect(invoke).toHaveBeenCalled());
@@ -181,8 +196,57 @@ describe('TranscriptButtonGroup audio-availability gating (WS7.1)', () => {
     expect(screen.getByRole('button', { name: /enhance/i })).toBeEnabled();
   });
 
+  it('does not blame the retention setting when audio went missing some other way', async () => {
+    mockAudio(MISSING);
+    render(<TranscriptButtonGroup {...baseProps} />);
+    const identify = await screen.findByRole('button', { name: /identify speakers/i });
+    await waitFor(() => expect(identify).toBeDisabled());
+    expect(identify).toHaveAttribute('title', 'No audio recording is available for this meeting.');
+  });
+
+  it('gates each action on the audio it needs: no system channel disables only Identify speakers', async () => {
+    mockAudio({ mix: true, channels: false, compressed: false, state: 'processed' });
+    render(<TranscriptButtonGroup {...baseProps} />);
+    const identify = await screen.findByRole('button', { name: /identify speakers/i });
+    await waitFor(() => expect(identify).toBeDisabled());
+    expect(screen.getByRole('button', { name: /enhance/i })).toBeEnabled();
+  });
+
+  it('a failed identification keeps Identify speakers usable and says the audio is kept', async () => {
+    mockAudio({ ...PRESENT, state: 'failed' });
+    render(<TranscriptButtonGroup {...baseProps} />);
+    const identify = await screen.findByRole('button', { name: /identify speakers/i });
+    await waitFor(() =>
+      expect(identify).toHaveAttribute(
+        'title',
+        "Speaker identification didn't finish. Audio is kept so you can retry.",
+      ),
+    );
+    expect(identify).toBeEnabled();
+  });
+
+  it('follows meeting-audio-state-changed: a purge while the page is open disables the actions', async () => {
+    let audio: Audio = PRESENT;
+    invoke.mockImplementation(async (cmd: string) =>
+      cmd === 'api_meeting_audio_status' ? audio : null,
+    );
+    render(<TranscriptButtonGroup {...baseProps} />);
+    const identify = await screen.findByRole('button', { name: /identify speakers/i });
+    await waitFor(() => expect(listeners.has('meeting-audio-state-changed')).toBe(true));
+    expect(identify).toBeEnabled();
+
+    audio = PURGED;
+    // Another meeting's event is ignored.
+    listeners.get('meeting-audio-state-changed')!({ payload: { meetingId: 'other', state: 'purged' } });
+    listeners.get('meeting-audio-state-changed')!({
+      payload: { meetingId: 'meeting-abc', state: 'purged' },
+    });
+    await waitFor(() => expect(identify).toBeDisabled());
+    expect(identify).toHaveAttribute('title', 'Audio deleted by your retention setting.');
+  });
+
   it('does not gate when the probe fails (unknown state falls back to old behavior)', async () => {
-    invoke.mockRejectedValue(new Error('command not found'));
+    mockAudio(new Error('command not found'));
     render(<TranscriptButtonGroup {...baseProps} />);
 
     await waitFor(() => expect(invoke).toHaveBeenCalled());
@@ -198,7 +262,7 @@ describe('TranscriptButtonGroup audio-availability gating (WS7.1)', () => {
 // transcription) in place of the beta "Enhance" retranscribe affordance.
 describe('TranscriptButtonGroup deferred transcription (WS7.2)', () => {
   it('shows "Transcribe now" for a transcript-empty meeting with audio', async () => {
-    invoke.mockResolvedValue(true);
+    mockAudio(PRESENT);
     render(<TranscriptButtonGroup {...baseProps} transcriptCount={0} />);
 
     const transcribeNow = await screen.findByRole('button', { name: /transcribe now/i });
@@ -208,7 +272,7 @@ describe('TranscriptButtonGroup deferred transcription (WS7.2)', () => {
   });
 
   it('shows "Transcribe now" for a sparse (below-threshold) transcript with audio', async () => {
-    invoke.mockResolvedValue(true);
+    mockAudio(PRESENT);
     render(<TranscriptButtonGroup {...baseProps} transcriptCount={2} />);
     expect(
       await screen.findByRole('button', { name: /transcribe now/i })
@@ -216,7 +280,7 @@ describe('TranscriptButtonGroup deferred transcription (WS7.2)', () => {
   });
 
   it('never offers "Transcribe now" when the audio is gone', async () => {
-    invoke.mockResolvedValue(false);
+    mockAudio(PURGED);
     render(<TranscriptButtonGroup {...baseProps} transcriptCount={0} />);
 
     await waitFor(() => expect(invoke).toHaveBeenCalled());
@@ -224,7 +288,7 @@ describe('TranscriptButtonGroup deferred transcription (WS7.2)', () => {
   });
 
   it('never offers "Transcribe now" while the probe is unresolved (unknown state)', async () => {
-    invoke.mockRejectedValue(new Error('command not found'));
+    mockAudio(new Error('command not found'));
     render(<TranscriptButtonGroup {...baseProps} transcriptCount={0} />);
 
     await waitFor(() => expect(invoke).toHaveBeenCalled());
@@ -232,7 +296,7 @@ describe('TranscriptButtonGroup deferred transcription (WS7.2)', () => {
   });
 
   it('keeps the plain "Enhance" affordance for fully transcribed meetings', async () => {
-    invoke.mockResolvedValue(true);
+    mockAudio(PRESENT);
     render(<TranscriptButtonGroup {...baseProps} transcriptCount={12} />);
 
     await waitFor(() => expect(invoke).toHaveBeenCalled());
@@ -250,7 +314,7 @@ describe('TranscriptButtonGroup deferred processing (1.10 feedback / specs/0045 
   /** invoke mock: audio present; meeting marked deferred. */
   const mockDeferredMeeting = (mode: string | null, audioAvailable = true) => {
     invoke.mockImplementation(async (cmd: string) => {
-      if (cmd === 'api_meeting_audio_available') return audioAvailable;
+      if (cmd === 'api_meeting_audio_status') return audioAvailable ? PRESENT : PURGED;
       if (cmd === 'api_get_meeting_processing_mode') return mode;
       return null;
     });

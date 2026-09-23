@@ -23,15 +23,19 @@ pub mod batch_processor;
 pub mod buffer_pool;
 pub mod capture_commands; // specs/0042 WS1: top-level recording/device/language commands (from lib.rs)
 pub mod channel_attribution; // specs/0029 WS3.4 / 0055: per-window capture-channel classification + per-segment views
+pub mod channel_files; // specs/0072 W2: channel readers resolve .wav or .opus; decoding joins/mixes
 pub mod channel_writer; // NEW (specs/0010): per-channel 16kHz mono WAVs for diarization
 pub mod deferred_backlog; // low-power-mode spec §5: backlog query for meetings awaiting deferred processing
 pub mod device_monitor; // NEW: Device disconnect/reconnect monitoring
 pub mod device_resolution; // low-power-mode ratchet offset: start-time mic/system device resolution
+pub mod folder_lease; // specs/0073 W1: per-meeting exclusive right to touch a meeting folder
 pub mod hardware_detector;
 pub mod incremental_saver; // NEW: Incremental audio saving with checkpoints
 pub mod level_monitor;
 pub mod live_meter; // specs/0057 §3.2: per-channel + mixed live meter feed (split from pipeline.rs)
 pub mod live_toggle; // low-power-mode spec §§3-4: session live/defer toggle state
+pub mod meeting_audio; // specs/0072 W2: the mix to (re)transcribe; never one channel alone
+pub mod meeting_folder; // specs/0073 W1: ownership check + folder copy helper
 pub mod mute_gate; // specs/0049: owner-mic gate for Zoom-mute
 pub mod pipeline;
 pub mod playback_monitor;
@@ -45,6 +49,7 @@ pub mod recording_recovery; // specs/0037: crash/quit recovery scan for resume
 pub mod recording_saver;
 pub mod recording_duration;
 pub mod recording_state;
+pub mod recordings_move; // specs/0073 W2: move every meeting when the recordings folder changes
 pub mod retranscription_channels; // 1.10 feedback: channel tags for batch retranscription (deferred "You" attribution)
 pub mod retranscription_engines; // engine get-or-init for batch retranscription (size-ratchet split)
 pub mod simple_level_monitor;
@@ -53,6 +58,7 @@ pub mod stt_lock; // spec 0045 WS1b: process-wide inference mutex serializing li
 pub mod stt_stage; // low-power-mode spec §3: pipeline VAD/STT gating stage (attach/detach)
 pub mod system_audio_commands;
 pub mod system_detector; // NEW: Playback device detection for BT warnings
+pub mod volume_check; // specs/0073: recordings stay on an internal, local drive
 
 // Transcription module (provider abstraction, engine management, worker pool)
 pub mod transcription;
@@ -66,9 +72,8 @@ pub mod constants;
 // Retranscription module (re-process stored audio with different settings)
 pub mod retranscription;
 
-// Audio retention sweep (specs/0029 WS7.1): background deletion of media files
-// for meetings older than the user's retention window.
-pub mod retention;
+// Audio lifecycle (specs/0072): processed state, retention policy, sweep + compression.
+pub mod lifecycle;
 
 // Import module (import external audio files as new meetings)
 pub mod import;

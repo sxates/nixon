@@ -61,15 +61,16 @@ impl ChannelRmsProfile {
     /// decoded MIXED file's duration) — a mismatched timeline would attribute
     /// the wrong speaker, which is worse than no tag.
     pub fn load(folder: &Path, expected_duration_seconds: f64) -> Option<Self> {
-        let mic_path = crate::audio::channel_writer::mic_channel_wav(folder);
-        let system_path = crate::audio::channel_writer::system_channel_wav(folder);
-        if !mic_path.exists() || !system_path.exists() {
+        // `.wav`, or `.opus` once kept audio is compressed (specs/0072).
+        let mic_path = crate::audio::channel_writer::mic_channel_path(folder);
+        let system_path = crate::audio::channel_writer::system_channel_path(folder);
+        let (Some(mic_path), Some(system_path)) = (mic_path, system_path) else {
             info!(
-                "No per-channel WAVs in {} — retranscription proceeds untagged",
+                "No per-channel audio in {} — retranscription proceeds untagged",
                 folder.display()
             );
             return None;
-        }
+        };
         // Sequential decode-and-reduce keeps the peak footprint to one track's
         // samples; only the tiny per-window RMS vectors are retained.
         let mic = decode_track_rms(&mic_path, expected_duration_seconds)?;

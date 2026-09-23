@@ -5,10 +5,10 @@ import { render, waitFor } from '@testing-library/react';
 // pinning are which one fires when, that neither fires twice, and that the start alert
 // stands down while Nixon is already recording.
 
-const { notifyMock, getStatusMock, getUpcomingMock, joinAndRecordMock, pushMock, prepRouteMock } =
+const { notifyMock, invokeMock, getUpcomingMock, joinAndRecordMock, pushMock, prepRouteMock } =
   vi.hoisted(() => ({
-    notifyMock: vi.fn().mockResolvedValue(true),
-    getStatusMock: vi.fn().mockResolvedValue('authorized'),
+    notifyMock: vi.fn(),
+    invokeMock: vi.fn(),
     getUpcomingMock: vi.fn(),
     joinAndRecordMock: vi.fn(),
     pushMock: vi.fn(),
@@ -22,13 +22,30 @@ vi.mock('@/lib/osNotification', async () => {
   const actual = await vi.importActual<typeof import('@/lib/osNotification')>('@/lib/osNotification');
   return { ...actual, notify: notifyMock, focusMainWindow: vi.fn() };
 });
-vi.mock('@/lib/calendar', () => ({
-  getCalendarAccessStatus: getStatusMock,
-  getUpcomingMeetings: getUpcomingMock,
-  joinAndRecord: joinAndRecordMock,
-  openZoomMeeting: vi.fn(),
-  formatClockTime: () => '10:00',
-}));
+// The connection gate is the REAL `isAnyCalendarConnected` (specs/0074 W5), answered at the
+// IPC boundary, so the test pins which sources count rather than a mock of the answer.
+vi.mock('@tauri-apps/api/core', () => ({ invoke: invokeMock }));
+let eventkitStatus = 'authorized';
+let googleConnected = false;
+function calendarBackend() {
+  invokeMock.mockImplementation(async (command: string) => {
+    if (command === 'api_get_calendar_access_status') return eventkitStatus;
+    if (command === 'api_google_calendar_status') {
+      return { configured: true, connected: googleConnected, email: null, calendars: [] };
+    }
+    return null;
+  });
+}
+vi.mock('@/lib/calendar', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/calendar')>('@/lib/calendar');
+  return {
+    isAnyCalendarConnected: actual.isAnyCalendarConnected,
+    getUpcomingMeetings: getUpcomingMock,
+    joinAndRecord: joinAndRecordMock,
+    openZoomMeeting: vi.fn(),
+    formatClockTime: () => '10:00',
+  };
+});
 
 let recording = false;
 vi.mock('@/contexts/RecordingStateContext', () => ({
@@ -60,7 +77,9 @@ beforeEach(() => {
   recording = false;
   sessionStorage.clear();
   notifyMock.mockResolvedValue(true);
-  getStatusMock.mockResolvedValue('authorized');
+  eventkitStatus = 'authorized';
+  googleConnected = false;
+  calendarBackend();
 });
 
 afterEach(() => {
@@ -198,9 +217,21 @@ describe('pressing Prep', () => {
   });
 });
 
+describe('which calendars count', () => {
+  // Google-only users got no alerts at all while the gate read EventKit alone.
+  it('alerts with only Google connected', async () => {
+    eventkitStatus = 'notDetermined';
+    googleConnected = true;
+    getUpcomingMock.mockResolvedValue(meetingIn(30 * 1000));
+    render(<CalendarAlerts />);
+    await waitFor(() => expect(notifyMock).toHaveBeenCalled());
+    expect(notifyMock.mock.calls[0][0].title).toBe('Standup starting now');
+  });
+});
+
 describe('when the calendar is not available', () => {
   it('does nothing at all', async () => {
-    getStatusMock.mockResolvedValue('notDetermined');
+    eventkitStatus = 'notDetermined';
     getUpcomingMock.mockResolvedValue(meetingIn(60 * 1000));
     render(<CalendarAlerts />);
     await new Promise((r) => setTimeout(r, 20));

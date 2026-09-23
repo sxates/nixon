@@ -6,12 +6,13 @@ import CommandPalette from '@/components/CommandPalette'
 import { LlmActivityProvider } from '@/contexts/LlmActivityProvider'
 import { TransportRail } from '@/components/Transport/TransportRail'
 import ResumeRecordingPrompt from '@/components/ResumeRecordingPrompt'
-import ZoomAutoDetect from '@/components/ZoomAutoDetect'
+import MeetingAutoDetect from '@/components/MeetingAutoDetect'
 import NotificationPermissionBootstrap from '@/components/NotificationPermissionBootstrap'
 import CalendarAlerts from '@/components/Calendar/CalendarAlerts'
 import VoiceprintRetractionListener from '@/components/People/VoiceprintRetractionListener'
 import PermissionsModal from '@/components/PermissionsModal'
 import { UpdatedNotice } from '@/components/Updates/UpdatedNotice'
+import { RecordingsMoveWatcher } from '@/components/RecordingsMoveWatcher'
 
 interface AppShellProps {
   showOnboarding: boolean
@@ -56,7 +57,7 @@ export function AppShell({ showOnboarding, onOnboardingComplete, children }: App
       {/* Request OS notification permission up front (post-onboarding) */}
       <NotificationPermissionBootstrap />
       {/* Zoom auto-detection — global listeners for record/stop (post-onboarding) */}
-      <ZoomAutoDetect />
+      <MeetingAutoDetect />
       {/* Calendar "time to join" alerts — app-wide, fires before meetings (spec 0008) */}
       <CalendarAlerts />
       {/* Voiceprint retraction feedback — app-wide undo toast when a span
@@ -70,6 +71,8 @@ export function AppShell({ showOnboarding, onOnboardingComplete, children }: App
       <ResumeRecordingPrompt />
       {/* First launch after an in-app update — says what changed, once (specs/0069 W6) */}
       <UpdatedNotice />
+      {/* Recordings-folder moves: the finish toast and the first-launch gather question (specs/0073) */}
+      <RecordingsMoveWatcher />
     </div>
   )
 }

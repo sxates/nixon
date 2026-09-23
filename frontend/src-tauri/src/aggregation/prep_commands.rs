@@ -7,7 +7,7 @@
 //! generation routes through the shared `prep_jobs::generate_brief_for_target`.
 
 use crate::aggregation::engine::{SourceMeeting, Stage};
-use crate::aggregation::prep_jobs::generate_brief_for_target;
+use crate::aggregation::prep_jobs::{enqueue_brief, generate_brief_for_target, Slot};
 use crate::database::repositories::action_item::{ActionItem, ActionItemsRepository};
 use crate::database::repositories::meeting::{
     is_per_occurrence_event_id, MeetingsRepository, ScheduledResolution, SeriesLinkedMeeting,
@@ -39,7 +39,7 @@ static PREP_RUNS: Lazy<Mutex<HashMap<String, (String, CancellationToken)>>> =
 
 /// Registers a run for `meeting_id` and returns its `(run_id, token)`, or `None` if one is
 /// already in flight (caller should not start a second).
-fn try_register(meeting_id: &str) -> Option<(String, CancellationToken)> {
+pub(crate) fn try_register(meeting_id: &str) -> Option<(String, CancellationToken)> {
     let mut runs = PREP_RUNS.lock().expect("prep run registry poisoned");
     if runs.contains_key(meeting_id) {
         return None;
@@ -52,21 +52,51 @@ fn try_register(meeting_id: &str) -> Option<(String, CancellationToken)> {
 
 /// Removes the registry entry for `meeting_id` ONLY if it still belongs to `run_id` — so a
 /// finishing (possibly cancelled) run never clobbers a newer run that replaced it.
-fn finish_run(meeting_id: &str, run_id: &str) {
+pub(crate) fn finish_run(meeting_id: &str, run_id: &str) {
     let mut runs = PREP_RUNS.lock().expect("prep run registry poisoned");
     if runs.get(meeting_id).map(|(rid, _)| rid.as_str()) == Some(run_id) {
         runs.remove(meeting_id);
     }
 }
 
-/// Cancels an in-flight generation for `meeting_id` (used before a forced regenerate).
-fn cancel_run(meeting_id: &str) {
-    if let Some((_, token)) = PREP_RUNS
+/// Whether a manual run holds `meeting_id` — the background pass leaves it alone
+/// (specs/0074 W3: one brief, one generation).
+pub(crate) fn is_generating(meeting_id: &str) -> bool {
+    PREP_RUNS
         .lock()
         .expect("prep run registry poisoned")
-        .remove(meeting_id)
-    {
+        .contains_key(meeting_id)
+}
+
+/// The background pass's claim on one brief as it starts it (specs/0074 W3). Registered in
+/// `PREP_RUNS` like a manual run, so `cancel_run` supersedes the pass too. `None` when a
+/// manual run holds the brief, or a click took over the pass's queued row.
+pub(crate) fn claim_for_pass(
+    meeting_id: &str,
+    handle: Option<&crate::llm_activity::QueuedHandle>,
+) -> Option<(String, CancellationToken)> {
+    let (run_id, token) = try_register(meeting_id)?;
+    if handle.is_some_and(|h| !h.is_queued()) {
+        finish_run(meeting_id, &run_id);
+        return None;
+    }
+    Some((run_id, token))
+}
+
+/// Cancels an in-flight generation for `meeting_id` (used before a forced regenerate), and
+/// drops its queue row so the replacement can take its place instead of deduping against it.
+pub(crate) fn cancel_run<R: Runtime>(app: &AppHandle<R>, meeting_id: &str) {
+    let removed = PREP_RUNS
+        .lock()
+        .expect("prep run registry poisoned")
+        .remove(meeting_id);
+    if let Some((_, token)) = removed {
         token.cancel();
+        if let Some(state) = app.try_state::<crate::llm_activity::LlmActivityState>() {
+            state
+                .0
+                .forget(crate::llm_activity::TaskKind::PrepBrief, meeting_id);
+        }
     }
 }
 
@@ -109,19 +139,49 @@ fn stage_str(stage: Stage) -> (&'static str, usize, usize) {
 
 /// Spawn on-demand brief generation for a meeting, emitting `prep-brief-*` progress and, on
 /// finish, `prep-briefs-updated` (so the Today view / open Prep tab refresh). No-ops if a run
-/// is already in flight for the meeting (unless it was just cancelled by a forced regenerate).
-fn spawn_generation<R: Runtime>(app: &AppHandle<R>, meeting_id: String, force: bool) {
+/// is already in flight for the meeting (unless it was just cancelled by a forced regenerate)
+/// or the background pass already has it queued.
+///
+/// specs/0074 W3: returns once the brief's *Waiting* row is registered — before the priority
+/// gate — so a click shows in the queue at once; generation runs spawned at `priority`.
+pub(crate) async fn spawn_generation<R: Runtime>(
+    app: &AppHandle<R>,
+    meeting_id: String,
+    force: bool,
+    priority: Priority,
+) {
     let Some((run_id, cancel)) = try_register(&meeting_id) else {
         return; // already generating
     };
-    let app = app.clone();
-    tauri::async_runtime::spawn(async move {
-        let Some(state) = app.try_state::<AppState>() else {
+    let Some(pool) = app
+        .try_state::<AppState>()
+        .map(|state| state.db_manager.pool().clone())
+    else {
+        finish_run(&meeting_id, &run_id);
+        return;
+    };
+    // A click the user is waiting on (Retry, Regenerate, link) takes over a brief the pass
+    // has only queued, instead of waiting behind the whole pass at background priority.
+    if force || priority == Priority::Interactive {
+        if let Some(state) = app.try_state::<crate::llm_activity::LlmActivityState>() {
+            state
+                .0
+                .forget_queued(crate::llm_activity::TaskKind::PrepBrief, &meeting_id);
+        }
+    }
+    let queued = match enqueue_brief(app, &pool, &meeting_id).await {
+        Slot::Queued(handle) => handle,
+        Slot::Busy => {
+            // Something else is already generating it and will announce it when done.
             finish_run(&meeting_id, &run_id);
             return;
-        };
-        let pool = state.db_manager.pool().clone();
-
+        }
+    };
+    if cancel.is_cancelled() {
+        return; // superseded while the label was read; the newer run owns the brief
+    }
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
         let progress_app = app.clone();
         let progress_id = meeting_id.clone();
         let on_progress = move |stage: Stage| {
@@ -137,21 +197,22 @@ fn spawn_generation<R: Runtime>(app: &AppHandle<R>, meeting_id: String, force: b
             );
         };
 
-        // specs/0056 W2: an explicit "Regenerate" click is interactive; the lazy generation
-        // kicked off by merely opening the Prep tab stays background work.
-        let priority = if force {
-            Priority::Interactive
-        } else {
-            Priority::Background
-        };
         let result = with_priority(
             priority,
-            generate_brief_for_target(&app, &pool, &meeting_id, force, &cancel, on_progress),
+            generate_brief_for_target(
+                &app,
+                &pool,
+                &meeting_id,
+                force,
+                &cancel,
+                on_progress,
+                queued,
+            ),
         )
         .await;
 
         match result {
-            Ok(()) => {
+            Ok(_) => {
                 // Emit the freshly-cached brief (status may be ready | none | pending).
                 match MeetingBriefsRepository::get(&pool, &meeting_id).await {
                     Ok(Some(row)) => {
@@ -289,7 +350,7 @@ pub async fn api_get_prep<R: Runtime>(
         // regenerate on open instead of showing the empty state until the next background
         // pass. `generate_brief_for_target` recomputes the prior set itself, so this is safe.
         Some(row) if row.status == "none" && !prior.is_empty() => {
-            spawn_generation(&app, meeting_id.clone(), false);
+            spawn_generation(&app, meeting_id.clone(), false, Priority::Background).await;
             ("absent".to_string(), None, Vec::new())
         }
         Some(row) => {
@@ -303,7 +364,7 @@ pub async fn api_get_prep<R: Runtime>(
         None => {
             // Only worth generating when there's prior history to brief from.
             if !prior.is_empty() {
-                spawn_generation(&app, meeting_id.clone(), false);
+                spawn_generation(&app, meeting_id.clone(), false, Priority::Background).await;
                 ("absent".to_string(), None, Vec::new())
             } else {
                 ("none".to_string(), None, Vec::new())
@@ -360,8 +421,9 @@ pub async fn api_link_meeting_to_series<R: Runtime>(
     );
 
     // Warm the target's brief right away so the open Prep tab fills in.
-    cancel_run(&target_meeting_id);
-    spawn_generation(&app, target_meeting_id, false);
+    cancel_run(&app, &target_meeting_id);
+    // A click the user waits on: it takes over a brief the pass only has queued.
+    spawn_generation(&app, target_meeting_id, false, Priority::Interactive).await;
     // Nudge any open Prep views to re-read (the linked-meetings list changed even where no
     // brief regeneration happens).
     let _ = app.emit("prep-briefs-updated", ());
@@ -598,7 +660,7 @@ pub async fn api_ensure_scheduled_meeting<R: Runtime>(
         .flatten()
         .is_none()
     {
-        spawn_generation(&app, meeting_id.clone(), false);
+        spawn_generation(&app, meeting_id.clone(), false, Priority::Background).await;
     }
 
     Ok(meeting_id)
@@ -611,8 +673,9 @@ pub async fn api_regenerate_prep_brief<R: Runtime>(
     _state: tauri::State<'_, AppState>,
     meeting_id: String,
 ) -> Result<(), String> {
-    cancel_run(&meeting_id);
-    spawn_generation(&app, meeting_id, true);
+    cancel_run(&app, &meeting_id);
+    // specs/0056 W2: an explicit "Regenerate" click is interactive.
+    spawn_generation(&app, meeting_id, true, Priority::Interactive).await;
     Ok(())
 }
 

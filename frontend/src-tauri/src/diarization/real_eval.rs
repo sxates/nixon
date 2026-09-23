@@ -133,12 +133,16 @@ fn eval_you_attribution_old_vs_new() {
     };
 
     // Decode both channels (16 kHz mono), same time base.
-    let mic = decode_audio_file(&folder.join("mic.wav"))
-        .expect("decode mic.wav")
-        .to_whisper_format();
-    let sys = decode_audio_file(&folder.join("system.wav"))
-        .expect("decode system.wav")
-        .to_whisper_format();
+    // `.wav` or `.opus` (specs/0072).
+    use crate::audio::channel_writer::{mic_channel_path, system_channel_path};
+    let decode = |p: Option<PathBuf>| {
+        let p = p.expect("channel file");
+        decode_audio_file(&p)
+            .expect("decode channel")
+            .to_whisper_format()
+    };
+    let mic = decode(mic_channel_path(&folder));
+    let sys = decode(system_channel_path(&folder));
 
     // Owner turns from mic-VAD: raw (pre-0047) vs bleed-guarded (0047).
     let raw_segs = get_speech_chunks(&mic, VAD_REDEMPTION_TIME_MS).expect("vad mic");

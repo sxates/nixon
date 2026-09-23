@@ -48,18 +48,14 @@ impl MeetingsRepository {
     pub async fn list_deferred_candidates(
         pool: &SqlitePool,
     ) -> Result<Vec<DeferredCandidateRow>, SqlxError> {
-        sqlx::query_as::<_, DeferredCandidateRow>(
+        sqlx::query_as::<_, DeferredCandidateRow>(&format!(
             "SELECT m.id, m.title, m.folder_path, m.processing_mode, m.created_at,
                     (SELECT COUNT(*) FROM transcripts t WHERE t.meeting_id = m.id) AS transcript_count
              FROM meetings m
-             WHERE m.folder_path IS NOT NULL
-               AND (m.processing_mode = 'defer'
-                    OR ((SELECT COUNT(*) FROM transcripts t WHERE t.meeting_id = m.id) < ?
-                        AND NOT EXISTS (SELECT 1 FROM summary_processes sp
-                                        WHERE sp.meeting_id = m.id AND sp.status = 'completed')))
+             WHERE m.folder_path IS NOT NULL AND {}
              ORDER BY m.created_at ASC",
-        )
-        .bind(crate::audio::retention::MIN_TRANSCRIPT_SEGMENTS)
+            crate::audio::lifecycle::state::awaiting_transcription_sql("m")
+        ))
         .fetch_all(pool)
         .await
     }

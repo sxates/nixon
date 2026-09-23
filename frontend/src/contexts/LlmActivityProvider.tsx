@@ -24,6 +24,18 @@ export interface RunningTask {
 }
 
 /**
+ * A background task waiting for its turn (specs/0074 W3/W4) — e.g. a prep brief the pass
+ * planned but hasn't started yet. Foreground tasks never appear here (`Priority::Interactive`
+ * work is not queued the same way). Oldest first.
+ */
+export interface QueuedTask {
+  id: number;
+  kind: LlmTaskKind;
+  label: string;
+  meetingId: string | null;
+}
+
+/**
  * Terminal outcome of a finished task (specs/0053 W3 added `skipped`). Mirrors the Rust
  * `TaskOutcome` enum's `#[serde(tag = "type")]` shape. A skip is deliberate, healthy
  * behaviour — e.g. action-item extraction skipped because the outline found no
@@ -48,12 +60,13 @@ export interface TaskRecord {
 }
 
 export interface LlmActivityView {
+  queued: QueuedTask[];
   running: RunningTask[];
   history: TaskRecord[];
   hasFailure: boolean;
 }
 
-const EMPTY: LlmActivityView = { running: [], history: [], hasFailure: false };
+const EMPTY: LlmActivityView = { queued: [], running: [], history: [], hasFailure: false };
 
 export interface LlmActivityValue extends LlmActivityView {
   dismiss: () => Promise<void>;

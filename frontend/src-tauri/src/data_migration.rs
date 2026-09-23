@@ -107,7 +107,9 @@ pub fn migrate_legacy_app_data(new_dir: &Path, current_identifier: &str) {
     if old_models.exists() && !new_models.exists() {
         if let Err(e) = std::fs::rename(&old_models, &new_models) {
             log::warn!("data_migration: model dir rename failed ({e}); falling back to copy");
-            if let Err(e) = copy_dir_recursive(&old_models, &new_models) {
+            if let Err(e) =
+                crate::audio::meeting_folder::copy_dir_recursive(&old_models, &new_models)
+            {
                 log::error!("data_migration: model dir copy failed: {e}");
             }
         }
@@ -122,22 +124,6 @@ fn write_marker(marker: &Path, old_identifier: &str, status: &str) {
     if let Err(e) = std::fs::write(marker, body) {
         log::error!("data_migration: failed writing marker file: {e}");
     }
-}
-
-/// Recursively copy `src` into `dst` (used only as a model-dir fallback).
-fn copy_dir_recursive(src: &Path, dst: &Path) -> std::io::Result<()> {
-    std::fs::create_dir_all(dst)?;
-    for entry in std::fs::read_dir(src)? {
-        let entry = entry?;
-        let from = entry.path();
-        let to = dst.join(entry.file_name());
-        if entry.file_type()?.is_dir() {
-            copy_dir_recursive(&from, &to)?;
-        } else {
-            std::fs::copy(&from, &to)?;
-        }
-    }
-    Ok(())
 }
 
 /// Convenience used by the Tauri setup hook: resolve the migration inputs from

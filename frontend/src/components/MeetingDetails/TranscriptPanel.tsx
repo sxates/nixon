@@ -10,12 +10,17 @@ import { SpeakerFilterChip } from './SpeakerFilterChip';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { toast } from 'sonner';
-import { Loader2 } from 'lucide-react';
+import { AlertCircle, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { UseSpeakersReturn } from '@/hooks/useSpeakers';
 import { useBacklog } from '@/contexts/DeferredBacklogProvider';
 import { isUnprocessedRecording } from '@/lib/processing-mode';
 import { isMeetingInFlight } from '@/lib/deferred-backlog';
+import {
+  AUDIO_FAILED_NOTE,
+  canTranscribe,
+  useMeetingAudioStatus,
+} from '@/hooks/useMeetingAudioStatus';
 
 interface TranscriptPanelProps {
   transcripts: Transcript[];
@@ -120,23 +125,10 @@ export function TranscriptPanel({
     };
   }, [meetingId]);
 
-  const [audioAvailable, setAudioAvailable] = useState<boolean | null>(null);
-  useEffect(() => {
-    setAudioAvailable(null);
-    if (!meetingId) return;
-    let cancelled = false;
-    invoke<boolean>('api_meeting_audio_available', { meetingId })
-      .then((available) => {
-        if (!cancelled) setAudioAvailable(available);
-      })
-      .catch((error) => {
-        console.error('Failed to check audio availability:', error);
-        if (!cancelled) setAudioAvailable(null);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [meetingId]);
+  // specs/0072 W3 — follows `meeting-audio-state-changed`, so a failed identification or
+  // a purge shows here without a refetch.
+  const audio = useMeetingAudioStatus(meetingId);
+  const audioAvailable = audio ? canTranscribe(audio) : null;
 
   const { view: backlogView, enqueueMeeting } = useBacklog();
 
@@ -411,6 +403,18 @@ export function TranscriptPanel({
                 ? 'Summarizing this meeting…'
                 : 'Re-transcribing this meeting — the transcript below will update when it finishes.'}
           </p>
+        </div>
+      )}
+
+      {/* specs/0072 W3 — speaker identification failed; the audio stays for a retry (the
+          activity queue's Retry, or Identify speakers above). */}
+      {!isRecording && audio?.state === 'failed' && (
+        <div
+          role="status"
+          className="mt-2 flex items-center gap-2 rounded-[3px] border border-border bg-muted/40 px-3 py-2"
+        >
+          <AlertCircle size={14} aria-hidden="true" className="shrink-0 text-muted-foreground" />
+          <p className="text-xs text-muted-foreground">{AUDIO_FAILED_NOTE}</p>
         </div>
       )}
 

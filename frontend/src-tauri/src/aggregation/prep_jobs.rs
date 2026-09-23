@@ -13,11 +13,12 @@
 use crate::aggregation::commands::configured_summary_model;
 use crate::aggregation::engine::Stage;
 use crate::aggregation::execute_pre_call_prep;
+use crate::aggregation::prep_commands::{claim_for_pass, finish_run};
 use crate::calendar::eventkit::{self, UpcomingMeeting};
 use crate::database::repositories::dismissed_calendar_event::DismissedCalendarEventsRepository;
 use crate::database::repositories::meeting::MeetingsRepository;
 use crate::database::repositories::meeting_brief::{MeetingBrief, MeetingBriefsRepository};
-use crate::llm_activity::{LlmActivityState, Origin, TaskKind};
+use crate::llm_activity::{LlmActivityState, Origin, QueuedHandle, TaskKind};
 use crate::state::AppState;
 use crate::summary::processor::generate_summary_with_retry;
 use crate::summary::provider_config::resolve_provider_config;
@@ -27,7 +28,7 @@ use once_cell::sync::Lazy;
 use sqlx::SqlitePool;
 use std::sync::Arc;
 use std::time::Duration;
-use tauri::{AppHandle, Manager, Runtime};
+use tauri::{AppHandle, Emitter, Manager, Runtime};
 use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
@@ -65,6 +66,9 @@ pub(crate) fn should_skip_brief(
 /// concurrent passes.
 static PASS_LOCK: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
 
+/// Tells Today / an open Prep tab to re-read briefs.
+pub(crate) const PREP_BRIEFS_UPDATED: &str = "prep-briefs-updated";
+
 /// Spawn the background prep generator (call once at startup, like the retention sweeper).
 pub fn spawn_prep_generator<R: Runtime>(app: AppHandle<R>) {
     tauri::async_runtime::spawn(async move {
@@ -83,6 +87,10 @@ pub fn spawn_prep_generator<R: Runtime>(app: AppHandle<R>) {
 /// One pass: for every upcoming recurring occurrence in the horizon that has prior content,
 /// ensure a scheduled prep row exists and its brief is generated + up to date. Best-effort;
 /// never propagates errors.
+///
+/// specs/0074 W3: plan first, then execute. Every brief that needs generating is queued
+/// before the first one starts, so the queue shows the whole pass as *Waiting* rows; briefs
+/// that are up to date register nothing at all.
 pub async fn run_prep_pass<R: Runtime>(app: &AppHandle<R>) {
     let _guard = match PASS_LOCK.try_lock() {
         Ok(g) => g,
@@ -105,40 +113,108 @@ pub async fn run_prep_pass<R: Runtime>(app: &AppHandle<R>) {
         info!("prep: pass complete — no upcoming meetings in the next {HORIZON_HOURS}h");
         return;
     }
-    let considered = upcoming.len();
-    let mut failed = 0usize;
-    let cancel = CancellationToken::new();
+    let (planned, plan_failed) = plan_pass(app, &pool, &upcoming).await;
+    let queued = planned.len();
+    let failed = plan_failed + execute_pass(app, &pool, planned).await;
+
+    // Always log the pass outcome, so a healthy generator, a misconfigured one, and one
+    // skipping every event can be told apart from outside.
+    info!(
+        "prep: pass complete — {} upcoming meeting(s) considered, {queued} queued, {failed} failed",
+        upcoming.len()
+    );
+}
+
+/// A brief the pass will generate, with its waiting row (`None` when there is no registry).
+pub(crate) type PlannedBrief = (String, Option<QueuedHandle>);
+
+/// Plan half of the pass: queue every brief that needs generating. Returns the queue and the
+/// number of events that could not be planned.
+pub(crate) async fn plan_pass<R: Runtime>(
+    app: &AppHandle<R>,
+    pool: &SqlitePool,
+    upcoming: &[UpcomingMeeting],
+) -> (Vec<PlannedBrief>, usize) {
+    let (mut planned, mut failed, mut changed) = (Vec::new(), 0usize, false);
     for ev in upcoming {
-        if let Err(e) = ensure_brief_for_event(app, &pool, &ev, &cancel).await {
-            failed += 1;
-            warn!(
-                "prep: brief for event {:?} failed (continuing): {:#}",
-                ev.id, e
-            );
+        let (target_id, plan) = match plan_event(pool, ev).await {
+            Ok(Some(p)) => p,
+            Ok(None) => continue,
+            Err(e) => {
+                failed += 1;
+                warn!(
+                    "prep: could not plan event {:?} (continuing): {:#}",
+                    ev.id, e
+                );
+                continue;
+            }
+        };
+        match plan {
+            // A manual run already holds it; it will finish the job and say so.
+            BriefPlan::Generate { .. }
+                if crate::aggregation::prep_commands::is_generating(&target_id) => {}
+            BriefPlan::Generate { .. } => match enqueue_brief(app, pool, &target_id).await {
+                Slot::Queued(handle) => planned.push((target_id, handle)),
+                Slot::Busy => {}
+            },
+            BriefPlan::NoPriors => {
+                changed |= record_no_priors(pool, &target_id).await.unwrap_or(false)
+            }
+            BriefPlan::UpToDate | BriefPlan::GivenUp => {}
         }
     }
+    if changed {
+        briefs_updated(app);
+    }
+    (planned, failed)
+}
 
-    // Always log the pass outcome. Every other exit from this function used to be silent —
-    // including the common one where no upcoming meeting is recurring-with-priors — so a
-    // healthy generator, a misconfigured one, and one skipping every event were
-    // indistinguishable from outside. That is the same "I can't tell what it's doing"
-    // problem specs/0052 exists to fix, and the sidebar can't help here because the
-    // activity registry is only entered once `generate_brief_for_target` starts.
-    info!("prep: pass complete — {considered} upcoming meeting(s) considered, {failed} failed");
+/// Execute half: generate each queued brief in order. Emits `prep-briefs-updated` after each
+/// brief whose status may have changed, so Today and an open Prep tab refresh as they land
+/// rather than when the whole pass ends. Returns the number that failed.
+pub(crate) async fn execute_pass<R: Runtime>(
+    app: &AppHandle<R>,
+    pool: &SqlitePool,
+    planned: Vec<PlannedBrief>,
+) -> usize {
+    let mut failed = 0usize;
+    for (target_id, handle) in planned {
+        // Claimed like a manual run, so a Regenerate or link supersedes it; `None` when a
+        // click took the brief over while it waited.
+        let Some((run_id, cancel)) = claim_for_pass(&target_id, handle.as_ref()) else {
+            continue;
+        };
+        let result =
+            generate_brief_for_target(app, pool, &target_id, false, &cancel, |_| {}, handle).await;
+        finish_run(&target_id, &run_id);
+        if cancel.is_cancelled() {
+            continue; // superseded; the replacement run reports
+        }
+        if !matches!(result, Ok(false)) {
+            briefs_updated(app);
+        }
+        if let Err(e) = result {
+            failed += 1;
+            warn!("prep: brief for {target_id} failed (continuing): {e:#}");
+        }
+    }
+    failed
+}
+
+fn briefs_updated<R: Runtime>(app: &AppHandle<R>) {
+    let _ = app.emit(PREP_BRIEFS_UPDATED, ());
 }
 
 /// For one upcoming calendar occurrence: if it's recurring (has ≥1 prior occurrence with
-/// content), mint/return its scheduled prep row and (re)generate the brief when stale. A
-/// non-recurring occurrence is skipped here — its scheduled row is minted lazily when the
-/// user opens prep (`api_ensure_scheduled_meeting`).
-async fn ensure_brief_for_event<R: Runtime>(
-    app: &AppHandle<R>,
+/// content), mint/return its scheduled prep row and plan its brief. A non-recurring
+/// occurrence is skipped here — its scheduled row is minted lazily when the user opens prep
+/// (`api_ensure_scheduled_meeting`).
+async fn plan_event(
     pool: &SqlitePool,
     ev: &UpcomingMeeting,
-    cancel: &CancellationToken,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<Option<(String, BriefPlan)>> {
     let Some(occurrence_start) = parse_start(&ev.starts_at) else {
-        return Ok(());
+        return Ok(None);
     };
     let series_key = ev.external_id.as_deref();
     let prior = MeetingsRepository::find_prior_series_occurrences(
@@ -150,7 +226,7 @@ async fn ensure_brief_for_event<R: Runtime>(
     )
     .await?;
     if prior.is_empty() {
-        return Ok(()); // not recurring / no prior content → no brief
+        return Ok(None); // not recurring / no prior content → no brief
     }
 
     let target_id = MeetingsRepository::upsert_scheduled_meeting(
@@ -162,17 +238,132 @@ async fn ensure_brief_for_event<R: Runtime>(
     )
     .await?
     .into_id();
+    let plan = plan_brief(pool, &target_id, false).await?;
+    Ok(Some((target_id, plan)))
+}
 
-    generate_brief_for_target(app, pool, &target_id, false, cancel, |_| {}).await
+/// Whether a manual trigger found a waiting row for its brief.
+pub(crate) enum Slot {
+    /// Queued (`None`: no registry to show it in, e.g. tests) — go ahead.
+    Queued(Option<QueuedHandle>),
+    /// Already queued or running elsewhere — that run will do the work.
+    Busy,
+}
+
+/// Register the *Waiting* row for one brief (specs/0074 W3).
+pub(crate) async fn enqueue_brief<R: Runtime>(
+    app: &AppHandle<R>,
+    pool: &SqlitePool,
+    target_meeting_id: &str,
+) -> Slot {
+    let Some(registry) = app
+        .try_state::<LlmActivityState>()
+        .map(|s| Arc::clone(&s.0))
+    else {
+        return Slot::Queued(None);
+    };
+    // Queue before the first await, so nothing separates a caller's PREP_RUNS claim from
+    // its row (a Regenerate's cancel_run then always finds both); name it afterwards.
+    let meeting = Some(target_meeting_id.to_string());
+    let generic = "Preparing brief";
+    let Some(handle) =
+        registry.enqueue_for(TaskKind::PrepBrief, Origin::Background, generic, meeting)
+    else {
+        return Slot::Busy;
+    };
+    handle.relabel(brief_task_label(pool, target_meeting_id).await);
+    Slot::Queued(Some(handle))
+}
+
+/// What a brief needs, decided before any task starts (specs/0074 W3) — so a pass over
+/// up-to-date briefs records nothing and cannot flood the 20-entry history.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum BriefPlan {
+    UpToDate,
+    NoPriors,
+    /// Failed [`MAX_BRIEF_FAILURES`] times against unchanged input (specs/0052).
+    GivenUp,
+    Generate {
+        prior: Vec<String>,
+        fingerprint: String,
+        /// The input changed since the last attempt, so the failure count restarts.
+        input_changed: bool,
+    },
+}
+
+/// The decision half of generation: reads only, writes nothing.
+pub(crate) async fn plan_brief(
+    pool: &SqlitePool,
+    target_meeting_id: &str,
+    force: bool,
+) -> anyhow::Result<BriefPlan> {
+    let meta = MeetingsRepository::get_meeting_metadata(pool, target_meeting_id)
+        .await?
+        .ok_or_else(|| anyhow::anyhow!("target meeting {target_meeting_id} not found"))?;
+
+    // EFFECTIVE key — calendar-stamped, else the manual meeting_series_links key
+    // (specs/0041 WS4) — so a manually associated series briefs like a calendar one.
+    let series_key =
+        MeetingsRepository::resolve_effective_series_key(pool, target_meeting_id).await?;
+    let prior = MeetingsRepository::find_prior_series_occurrences(
+        pool,
+        series_key.as_deref(),
+        &meta.title,
+        meta.created_at.0,
+        MAX_PRIOR,
+    )
+    .await?;
+    if prior.is_empty() {
+        return Ok(BriefPlan::NoPriors);
+    }
+
+    let fingerprint = source_fingerprint(pool, &prior).await;
+    let existing = MeetingBriefsRepository::get(pool, target_meeting_id).await?;
+    if !force {
+        if existing.as_ref().is_some_and(|e| {
+            e.status == "ready" && e.source_fingerprint.as_deref() == Some(fingerprint.as_str())
+        }) {
+            return Ok(BriefPlan::UpToDate);
+        }
+        // specs/0052: stop burning GPU on a brief that has failed repeatedly against input
+        // that has not changed. Resumes on a fingerprint change or a manual retry.
+        if should_skip_brief(existing.as_ref(), &fingerprint) {
+            info!(
+                "prep: skipping {} — {} consecutive failures against unchanged input",
+                target_meeting_id, MAX_BRIEF_FAILURES
+            );
+            return Ok(BriefPlan::GivenUp);
+        }
+    }
+    let input_changed = existing
+        .as_ref()
+        .is_some_and(|e| e.source_fingerprint.as_deref() != Some(fingerprint.as_str()));
+    Ok(BriefPlan::Generate {
+        prior,
+        fingerprint,
+        input_changed,
+    })
+}
+
+/// Stable 'none' fingerprint so it isn't recomputed every pass until a prior appears.
+/// Returns whether the status changed.
+async fn record_no_priors(pool: &SqlitePool, target_meeting_id: &str) -> anyhow::Result<bool> {
+    let was = MeetingBriefsRepository::get(pool, target_meeting_id)
+        .await?
+        .map(|b| b.status);
+    MeetingBriefsRepository::upsert_status(pool, target_meeting_id, "none", Some("none")).await?;
+    Ok(was.as_deref() != Some("none"))
 }
 
 /// Generate + cache the prep brief for a target meeting (the upcoming/scheduled occurrence),
 /// unless a `ready` brief with the same input fingerprint already exists (`force` overrides).
 ///
-/// Shared by the background pass and the on-demand IPC. Emits stage progress via `on_progress`
+/// Shared by the background pass and the on-demand IPC. `queued` is the caller's *Waiting*
+/// row: it starts only when the plan says to generate, and otherwise disappears without a
+/// trace. Returns whether the brief's status changed. Emits stage progress via `on_progress`
 /// (the IPC forwards it to `prep-brief-*` events; the background pass passes a no-op).
 /// - No prior occurrences → records `status = 'none'` (nothing to brief).
-/// - No summary provider configured → leaves the row `pending` and returns Ok (retried later).
+/// - No summary provider configured → returns an error (the caller surfaces it).
 /// - Generation error → records `status = 'failed'` WITH the input fingerprint and bumps
 ///   `failure_count`. It retries on the next pass, but after [`MAX_BRIEF_FAILURES`]
 ///   consecutive failures against that same fingerprint the pass skips it entirely
@@ -184,38 +375,49 @@ pub async fn generate_brief_for_target<R: Runtime, P: Fn(Stage)>(
     force: bool,
     cancel: &CancellationToken,
     on_progress: P,
-) -> anyhow::Result<()> {
-    // specs/0052: register this as background work so the sidebar can show it. Prep runs
-    // every 30 minutes, including mid-meeting, and used to be completely invisible.
-    let registry = app
-        .try_state::<LlmActivityState>()
-        .map(|state| Arc::clone(&state.0));
-    let task = match registry {
-        Some(registry) => {
-            let label = brief_task_label(pool, target_meeting_id).await;
-            Some(registry.start_for(
-                TaskKind::PrepBrief,
-                Origin::Background,
-                label,
-                Some(target_meeting_id.to_string()),
-            ))
+    queued: Option<QueuedHandle>,
+) -> anyhow::Result<bool> {
+    let plan = match plan_brief(pool, target_meeting_id, force).await {
+        Ok(plan) => plan,
+        Err(e) => {
+            if let Some(q) = queued {
+                q.start().finish(Err(format!("{e:#}")));
+            }
+            return Err(e);
         }
-        None => None,
+    };
+    let (prior, fingerprint, input_changed) = match plan {
+        BriefPlan::Generate {
+            prior,
+            fingerprint,
+            input_changed,
+        } => (prior, fingerprint, input_changed),
+        BriefPlan::NoPriors => return record_no_priors(pool, target_meeting_id).await,
+        BriefPlan::UpToDate | BriefPlan::GivenUp => return Ok(false),
     };
 
+    // specs/0052: registered as background work so the queue shows it.
+    let task = queued.map(QueuedHandle::start);
     let forward = |stage: Stage| {
         if let Some(t) = task.as_ref() {
             t.progress(stage_note(stage));
         }
         on_progress(stage);
     };
-
-    let result = generate_brief_inner(app, pool, target_meeting_id, force, cancel, forward).await;
+    let result = generate_brief_inner(
+        app,
+        pool,
+        target_meeting_id,
+        (prior, fingerprint, input_changed),
+        cancel,
+        forward,
+    )
+    .await;
 
     if let Some(t) = task {
         t.finish(result.as_ref().map(|_| ()).map_err(|e| format!("{e:#}")));
     }
-    result
+    result.map(|()| true)
 }
 
 /// Human-readable note for the activity row, mirroring the engine's stages.
@@ -240,62 +442,13 @@ async fn generate_brief_inner<R: Runtime, P: Fn(Stage)>(
     app: &AppHandle<R>,
     pool: &SqlitePool,
     target_meeting_id: &str,
-    force: bool,
+    (prior, fingerprint, input_changed): (Vec<String>, String, bool),
     cancel: &CancellationToken,
     on_progress: P,
 ) -> anyhow::Result<()> {
-    let meta = MeetingsRepository::get_meeting_metadata(pool, target_meeting_id)
-        .await?
-        .ok_or_else(|| anyhow::anyhow!("target meeting {target_meeting_id} not found"))?;
-
-    // EFFECTIVE key — calendar-stamped, else the manual meeting_series_links key
-    // (specs/0041 WS4) — so a manually associated series briefs like a calendar one.
-    let series_key =
-        MeetingsRepository::resolve_effective_series_key(pool, target_meeting_id).await?;
-    let prior = MeetingsRepository::find_prior_series_occurrences(
-        pool,
-        series_key.as_deref(),
-        &meta.title,
-        meta.created_at.0,
-        MAX_PRIOR,
-    )
-    .await?;
-
-    if prior.is_empty() {
-        // Stable fingerprint so 'none' isn't recomputed every pass until a prior appears.
-        MeetingBriefsRepository::upsert_status(pool, target_meeting_id, "none", Some("none"))
-            .await?;
-        return Ok(());
-    }
-
-    let fingerprint = source_fingerprint(pool, &prior).await;
-    let existing = MeetingBriefsRepository::get(pool, target_meeting_id).await?;
-
-    if !force {
-        if let Some(existing) = existing.as_ref() {
-            if existing.status == "ready"
-                && existing.source_fingerprint.as_deref() == Some(fingerprint.as_str())
-            {
-                return Ok(()); // up to date
-            }
-        }
-        // specs/0052: stop burning GPU on a brief that has failed repeatedly against input
-        // that has not changed. Resumes on a fingerprint change or a manual retry.
-        if should_skip_brief(existing.as_ref(), &fingerprint) {
-            info!(
-                "prep: skipping {} — {} consecutive failures against unchanged input",
-                target_meeting_id, MAX_BRIEF_FAILURES
-            );
-            return Ok(());
-        }
-    }
-
     // New input => fresh attempts. Must happen before this pass can record a failure of its
     // own, so the counter always describes consecutive failures against ONE fingerprint.
-    if existing
-        .as_ref()
-        .is_some_and(|e| e.source_fingerprint.as_deref() != Some(fingerprint.as_str()))
-    {
+    if input_changed {
         MeetingBriefsRepository::reset_failures(pool, target_meeting_id).await?;
     }
 
@@ -362,7 +515,14 @@ async fn generate_brief_inner<R: Runtime, P: Fn(Stage)>(
         }
     };
 
-    match execute_pre_call_prep(pool, &prior, llm, budget_tokens, cancel, on_progress).await {
+    let outcome =
+        execute_pre_call_prep(pool, &prior, llm, budget_tokens, cancel, on_progress).await;
+    if cancel.is_cancelled() {
+        // Superseded by a Regenerate or a series link: the replacement writes the brief. A
+        // stale answer or a "failed" here would overwrite or penalise it.
+        return Err(anyhow::anyhow!("prep brief generation was superseded"));
+    }
+    match outcome {
         Ok(answer) => {
             let sources_json =
                 serde_json::to_string(&answer.sources).unwrap_or_else(|_| "[]".into());
@@ -589,3 +749,7 @@ mod instrumentation_tests {
         assert_eq!(stage_note(Stage::Reducing), "composing the brief");
     }
 }
+
+#[cfg(test)]
+#[path = "prep_jobs_tests.rs"]
+mod queue_tests;

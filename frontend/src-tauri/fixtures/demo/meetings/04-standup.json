@@ -4,6 +4,7 @@
   "days_ago": 0,
   "time_of_day": "09:15",
   "duration_seconds": 540,
+  "audio_state": "purged",
   "template_id": "daily_standup",
   "participants": [
     "person-tomas",

@@ -33,7 +33,7 @@ use anyhow::{anyhow, Context, Result};
 use std::path::PathBuf;
 use tauri::{AppHandle, Emitter, Manager, Runtime};
 
-use crate::audio::channel_writer::system_channel_wav;
+use crate::audio::channel_writer::{system_channel_path, system_channel_wav};
 use crate::database::repositories::speaker::{SpeakerIdentitySnapshot, SpeakersRepository};
 use crate::database::repositories::transcript_speaker_overrides::TranscriptSpeakerOverridesRepository;
 use crate::diarization::align::{
@@ -190,24 +190,23 @@ async fn resolve_system_wav<R: Runtime>(app: &AppHandle<R>, meeting_id: &str) ->
     .with_context(|| format!("look up meeting {meeting_id}"))?
     .ok_or_else(|| anyhow!("meeting {meeting_id} not found"))?;
 
-    // Happy path: stored folder with a real system.wav.
+    // Happy path: stored folder with a system channel (`system.wav`, or `.opus` once kept
+    // audio is compressed, specs/0072).
     if let Some(folder) = meta.folder_path.as_deref() {
-        let wav = system_channel_wav(std::path::Path::new(folder));
-        if wav.exists() {
+        if let Some(wav) = system_channel_path(std::path::Path::new(folder)) {
             return Ok(wav);
         }
         log::warn!(
-            "meeting {meeting_id} folder_path is set ({folder}) but {} is missing; \
-             falling back to a recordings-root scan",
-            wav.display()
+            "meeting {meeting_id} folder_path is set ({folder}) but has no system channel; \
+             falling back to a recordings-root scan"
         );
     }
 
-    // Fallback: locate the recording folder under the recordings root by name/time.
-    let resolved = locate_recording_folder(&meta).with_context(|| {
+    // Fallback: locate the recording folder under any known recordings root by name/time.
+    let resolved = super::folder_locate::locate_recording_folder(&meta).with_context(|| {
         format!("locate recording folder for meeting {meeting_id} (folder_path was unusable)")
     })?;
-    let wav = system_channel_wav(&resolved);
+    let wav = system_channel_path(&resolved).unwrap_or_else(|| system_channel_wav(&resolved));
 
     // Opportunistic backfill so we don't re-scan next time. Best-effort: log + continue.
     let folder_str = resolved.to_string_lossy().to_string();
@@ -224,47 +223,6 @@ async fn resolve_system_wav<R: Runtime>(app: &AppHandle<R>, meeting_id: &str) ->
     }
 
     Ok(wav)
-}
-
-/// Scan the recordings root for the meeting's folder and return it iff the chosen
-/// folder actually contains a `system.wav`. Pure matching lives in [`folder_match`].
-fn locate_recording_folder(meta: &crate::database::models::MeetingModel) -> Result<PathBuf> {
-    use crate::audio::recording_preferences::recordings_root;
-    use crate::diarization::folder_match::best_folder_match;
-
-    let root = recordings_root();
-    let read_dir = std::fs::read_dir(&root)
-        .with_context(|| format!("read recordings folder {}", root.display()))?;
-
-    // Bare directory names under the recordings root (skip files / non-UTF8).
-    let candidates: Vec<String> = read_dir
-        .filter_map(|entry| entry.ok())
-        .filter(|entry| entry.file_type().map(|t| t.is_dir()).unwrap_or(false))
-        .filter_map(|entry| entry.file_name().into_string().ok())
-        .collect();
-
-    let title = meta.title.trim();
-    let title_opt = if title.is_empty() { None } else { Some(title) };
-
-    let name = best_folder_match(meta.created_at.0, title_opt, &candidates).ok_or_else(|| {
-        anyhow!(
-            "no recording folder recorded for this meeting and none could be matched \
-             under {}; it cannot be diarized",
-            root.display()
-        )
-    })?;
-
-    let folder = root.join(&name);
-    let wav = system_channel_wav(&folder);
-    if !wav.exists() {
-        return Err(anyhow!(
-            "matched recording folder {} has no per-channel audio (expected {}); \
-             meetings recorded before per-channel capture cannot be diarized",
-            folder.display(),
-            wav.display()
-        ));
-    }
-    Ok(folder)
 }
 
 /// Display name for a speaker key. `local` → "You"; `spk_N` → "Speaker {N+1}";
@@ -694,6 +652,13 @@ fn diarize_audio_blocking<R: Runtime>(
 pub(super) async fn run<R: Runtime>(app: AppHandle<R>, meeting_id: String) -> Result<()> {
     log::info!("Starting diarization for meeting {meeting_id}");
 
+    // specs/0073: hold the meeting's folder lease across every audio read (system.wav here,
+    // mic.wav in `inject_owner_turns`); resolving the WAV re-reads `folder_path` under it.
+    let folder_lease = crate::audio::folder_lease::acquire(
+        &meeting_id,
+        crate::audio::folder_lease::LeaseHolder::Diarization,
+    )
+    .await;
     // Resolve audio (async DB + fs check) before the blocking work.
     let wav = resolve_system_wav(&app, &meeting_id).await?;
 
@@ -741,6 +706,7 @@ pub(super) async fn run<R: Runtime>(app: AppHandle<R>, meeting_id: String) -> Re
     let state = app.state::<AppState>();
     let pool = state.db_manager.pool();
     crate::diarization::owner_turns::inject_owner_turns(&app, pool, &meeting_id, &mut turns).await;
+    drop(folder_lease); // the last audio read is done
 
     // specs/0044 W1.2: a fast speaker handoff (gap shorter than the VAD
     // redemption window) merges both speakers into ONE transcript row, which

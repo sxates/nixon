@@ -42,6 +42,7 @@ pub mod diarization;
 pub mod fs_guard;
 pub mod groq;
 pub mod llm_activity;
+pub mod meeting_detect;
 pub mod meetings;
 pub mod notifications;
 pub mod ollama;
@@ -247,11 +248,9 @@ pub fn run() {
                 log::warn!("Could not install the notification delegate: {}", e);
             }
 
-            // Start the Zoom meeting auto-detection monitor (specs/0008 P1).
-            // Background task: polls for Zoom's `CptHost` meeting-helper process
-            // and emits `zoom-meeting-detected` / `zoom-meeting-ended` to the
-            // main window. The frontend owns record start/stop.
-            zoom::spawn_zoom_monitor(_app.handle().clone());
+            // Meeting auto-detection (specs/0008 P1; Teams + Meet in specs/0074 W6): emits
+            // `meeting-detected` / `meeting-ended`; the frontend owns record start/stop.
+            meeting_detect::spawn_meeting_monitor(_app.handle().clone());
 
             // Zoom mute gate (specs/0049): while recording with the opt-in setting on,
             // poll Zoom's mute state via Accessibility and drop the owner mic while muted.
@@ -336,16 +335,18 @@ pub fn run() {
             #[cfg(debug_assertions)]
             crate::dev_fixtures::control::spawn_if_requested(_app.handle().clone());
 
-            // Audio retention sweep (specs/0029 WS7.1): background deletion of media
-            // files for meetings older than the user's retention window. Spawned AFTER
-            // database init (it queries `meetings`); first pass ~2 min after startup so
-            // short-lived sessions still enforce, then every 24 h.
-            audio::retention::spawn_retention_sweeper(_app.handle().clone());
+            // specs/0072: audio lifecycle — finish meetings a quit interrupted mid-processing,
+            // then enforce the retention policy (+60 s, then hourly). After database init.
+            audio::lifecycle::spawn(_app.handle().clone());
 
             // spec 0051 WS2: return meetings stranded at processing_mode='live' (a
             // stop-time handoff that never completed) to the deferred backlog. Spawned
             // AFTER database init; best-effort, retried on the next launch.
             audio::processing_reconcile::spawn_startup_reconciliation(_app.handle().clone());
+
+            // specs/0073: finish a recordings move a quit interrupted, then gather meetings
+            // left outside the recordings folder (the first launch asks first).
+            audio::recordings_move::commands::spawn_startup_resume_and_gather(_app.handle().clone());
 
             // Google Calendar background sync timer (specs/0032, owner decision
             // 2026-07-02): every 10 minutes while the app runs, sync-if-stale.

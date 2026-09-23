@@ -19,6 +19,10 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 ## [Unreleased]
 
+_(nothing yet)_
+
+## [0.9.0] - 2026-09-23
+
 ### Added
 
 - **A transcript you can actually read.** Consecutive lines from one speaker now form a
@@ -41,9 +45,41 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
   be added when available" — until the version with names replaces it.
 - **Delete a recorded meeting from Today.** Every meeting on Agenda, List and Week now has
   a ⋯ menu: recorded ones offer **Delete meeting**, the same as All Meetings.
+- **Move your recordings when you change the recordings folder.** Pick a new folder in
+  Settings → Recording and Nixon shows how many meetings and how much space will move, then
+  moves every recording there — including ones left in folders you used before — so they
+  all live in one place. You can watch its progress or stop it, and it is safe to quit
+  mid-move: the next launch finishes the job without losing or duplicating a recording.
+- **Keeping audio for less time asks first.** Choose a shorter time in Settings → Recording
+  and Nixon shows how many meetings and how much space will be cleared, then clears it right
+  away when you confirm, and tells you what was freed.
+- **Prep briefings show in the queue while they wait, run and finish.** Every brief Nixon
+  prepares ahead of your meetings, or that you ask for by opening Prep or pressing
+  Regenerate, appears as a row the moment it is planned. **Retry** on a failed one redoes
+  just that one.
+- **The call-detected alert now always arrives as a macOS notification, even with Nixon in
+  front.** "Record this meeting?" shows in Nixon and as a notification at the same time, and
+  answering it in either place clears the other. If macOS notifications are off for Nixon,
+  the prompt says so and **Enable** takes you to the setting.
+- **Nixon offers to record Teams and Google Meet calls too, not just Zoom.** When a Teams
+  call starts, or a browser call starts while a meeting on your calendar is under way, you
+  get the same "Record this meeting?" prompt, named for the app. A browser using your
+  microphone with no meeting on your calendar (or one you hid from Today) is left alone.
+  Only a Zoom call ending stops a recording; muting in Teams or Meet never does.
+- **"Starting now" alerts with Google Calendar alone.** If Google Calendar is your only
+  connected calendar, you now get the five-minute and "starting now — Join & Record" alerts
+  too.
 
 ### Changed
 
+- **Recordings take about a sixth of the disk space.** Audio you keep is stored compressed
+  once a meeting has been processed.
+- **"Immediately" is now "Once processed".** Audio is deleted after the meeting is
+  transcribed and its speakers are identified, never before. If identifying speakers fails,
+  the meeting page says so and the audio is kept for 7 days so you can retry.
+- **Recordings stay on this Mac's own drive.** A USB stick, SD card, disk image or network
+  drive can't be chosen as the recordings folder, so a drive that goes away can't break a
+  recording.
 - **The transcript's pause button says what it will do.** The control on the recording header
   used to be labelled with the mode you were already in — "Live" — so pressing it stopped the
   transcript. It now reads **Pause transcript** while running and **Resume transcript** while
@@ -82,52 +118,118 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 - **Calmer meeting tabs.** Enhance and Regenerate Summary are ordinary buttons again, the
   edit and reassign controls on a transcript line disappear as soon as the pointer leaves,
   and a summary's status sits above it instead of under pages of text.
+- **"Auto-detect Zoom meetings" is now "Detect meetings"** in Settings → Recording. Your
+  choice carries over.
 
 ### Fixed
 
-- **A meeting that ends with the transcript running now processes itself.** If you paused the
-  transcript partway through a meeting and resumed it, stopping used to tell you to process
-  the audio by hand — and the **Process now** button did nothing when you tried. Both went
-  through the same broken check, which could never succeed for any meeting. Stopping now
-  transcribes and summarizes on its own, the way a meeting you never paused always did.
-- **A summary generated in the background now appears without reopening the meeting.** The
-  meeting page read the summary once when you opened it, so one produced afterwards by
-  background processing sat in the database unseen until you navigated away and back.
-- **A meeting that was being processed no longer gets abandoned halfway.** Nixon could end
-  up with two processing runs for the same meeting; the second saw the first's work already
-  underway, took that for a failure, and gave up — leaving the meeting transcribed but never
-  summarized. It now recognises its own work in progress and waits for it.
-- **A meeting's length is recorded correctly.** The stored duration was taken after the
-  recording's clocks had already been cleared, so it fell back to the moment speech last
-  stopped — a meeting with quiet at the end, or a paused transcript, came out shorter than it
-  was (63 seconds recorded as a 67-second meeting; 69 for a 115-second one).
-- **Hiding a meeting on Today now actually hides it.** Clearing something off your day —
-  lunch, a hold, anything you are not recording — no longer sends you a reminder to prep for
-  it or to join it, and no longer spends a summary working out what it was about.
+- **Once processed now removes the separate microphone and system-audio tracks too**,
+  including those kept from past meetings.
+- **Meetings in a recordings folder you used before keep working.** After you change where
+  recordings are saved, deleting one of your earlier meetings removes its recording too,
+  and an interrupted recording in the old folder is still offered to resume.
+- **A meeting whose transcript you paused processes itself when you stop.** It is
+  transcribed and summarized on its own, like any other meeting, and **Process now** runs
+  it by hand whenever you want.
+- **Background summaries appear on the open meeting page** the moment they are ready, in
+  place of "writing your summary".
+- **Every meeting finishes processing**, transcribed and summarized, even when processing
+  was started for it twice.
+- **Meeting lengths include quiet endings and paused stretches.**
+- **Hiding a meeting on Today also silences it**: no prep reminder, no join alert, and no
+  summary spent working out what it was.
 - **Only the alert that matters waits for you.** "A meeting is starting" stays on screen
-  until you deal with it; every other Nixon banner now clears itself after a few seconds.
+  until you deal with it; every other Nixon banner clears itself after a few seconds.
   Set Nixon to **Alerts** in System Settings → Notifications and Settings will tell you the
   rest.
-- **A finished summary replaces "writing your summary".** When a meeting was summarized by
-  background processing while its page was open, the page could keep saying it was still
-  writing — over a summary that had already finished. It now shows the summary as soon as
-  it is ready.
-- **A meeting is summarized once when it ends.** The meeting page and background processing
-  could both start a summary of the same meeting, doing the work twice and renaming the
-  meeting twice. The page now leaves a meeting to background processing once it has it.
-- **No "Welcome to Nixon!" flash when a meeting ends.** The recording screen emptied its
-  transcript a moment before the meeting page replaced it, briefly showing the screen for a
-  brand-new meeting on the way out.
-- **Faces on every meeting on Today.** A meeting recorded without a calendar invite now
-  shows the people named on it, the way All Meetings does.
+- **A meeting is summarized, and renamed, once when it ends.**
+- **Ending a meeting goes straight to the meeting page**, without a "Welcome to Nixon!"
+  flash on the way.
+- **Faces on every meeting on Today.** A meeting recorded without a calendar invite shows
+  the people named on it, the way All Meetings does.
 - **The meeting you are recording is marked in the Week view** too, and appears on Today
   as soon as recording starts.
-- **A meeting you added in Nixon says whether it was recorded.** Once its time had passed
-  it read "Recorded" whether you had recorded it or not, and it kept offering a Record
-  button long after it was over. Record now shows until the meeting ends.
+- **A meeting you added in Nixon says whether it was recorded**, and offers Record only
+  until it ends.
 
 ### Internal
 
+- Branch-review fixes: meeting detection reads the calendar and the browser window title
+  only while detection is on and Nixon isn't recording (a confirmed Meet call is held, and
+  Zoom's end still stops a recording). The abandoned-recording guard counts `.opus` channels
+  as audio. Row recovery after a same-volume rename matches a folder stored through a
+  symlink. `decode_stats` reaps ffmpeg on a read error. A refused folder change removes
+  every folder it created, and the gather never creates a missing folder the owner chose
+  (it reports it as blocked). `save_transcript` no longer recreates a missing folder.
+  ADR-0013 documents the folder lease.
+- Spec 0074 W4: the queue panel renders prep-brief queue rows (`LlmActivityView.queued` →
+  Waiting, successful `prepBrief` history → Done, capped at 5) alongside the existing backlog
+  rows; **Clear finished** now also calls `api_llm_activity_clear_finished`. Carried fix
+  (Ruling 11): `NotificationPermissionRow` now treats a missing/failed capability check as
+  unsupported instead of crashing on `.supported`, fixing 4 unhandled `pnpm test` rejections
+  from unrelated settings fixtures that stub every `invoke` call.
+- Spec 0072 W3: the stop path calls `api_finish_audio_processing` instead of diarizing
+  inline; the meeting page reads `api_meeting_audio_status` and follows
+  `meeting-audio-state-changed`. The demo fixtures seed one meeting per `audio_state`, and
+  the screenshot mock answers the lifecycle commands (new `retention=` URL param).
+- Spec 0072 W2: compression is on (`lifecycle::COMPRESSION_ENABLED`). Every channel reader
+  resolves `.wav` then `.opus` (`audio/channel_files.rs`: diarization, owner turns,
+  retranscription channel tags, the recordings-root fallback scan); `.opus` decodes through
+  ffmpeg at 16 kHz mono. A resume scopes compressed channels (`system_seg00.opus`) and joins
+  channel segments by decoding. `find_audio_file` (now `audio/meeting_audio.rs`) never picks
+  a channel file and mixes a channels-only folder. The mix is written at 64 kbps
+  (`MIX_AAC_BITRATE`). Capture always saves the mix whatever the retention setting. The
+  backfill skips a meeting whose compression failed until the next launch. A unit test
+  checks the bundled ffmpeg has `libopus`.
+- Spec 0072 W1: the audio lifecycle (`audio/lifecycle/`). A migration adds
+  `meetings.audio_state` (NULL/processed/failed/purged) and `speakers_identified_at`, and
+  backfills `processed` for every meeting not awaiting transcription. Rust writes the state
+  where processing finishes: diarization's terminal outcome (`launch.rs`), the backlog
+  clearing `defer`, retranscription, import, and a resume (which resets it). One pure
+  `disposition()` decides keep/compress/delete for the post-processing hook, the startup +
+  hourly sweep, "apply now" and the dry-run preview. The sweep and the channel compressor
+  (Opus 24k, verified by decoding, both channels or neither) take the folder lease with
+  `try_acquire` and re-read the folder, skipping a meeting the mover or a recording holds
+  (0073 W4). The retention preference is now `audio_retention`, derived once from
+  `auto_save`/`retention_days`. The backlog predicate is one shared SQL fragment and now
+  lets a transcribed silent meeting go. `audio/retention.rs` is gone (its daily sweep
+  returned early whenever no day count was set). Compression is wired but switched off
+  (`COMPRESSION_ENABLED`) until W2 teaches the channel readers `.opus`. New commands:
+  `api_finish_audio_processing`, `api_preview_audio_retention`,
+  `api_apply_audio_retention_now`, `api_meeting_audio_status`; event
+  `meeting-audio-state-changed`.
+- Spec 0072 W0: codec round-trips for the eval harnesses (`tests/eval_codec/`).
+  `NIXON_EVAL_CODEC=opus<k>|flac` scores diarization after a channel re-encode and
+  `NIXON_WER_CODEC=aac<k>` scores transcription after a mix re-encode. The gate chose Opus
+  24 kbps for the channels (macro DER 7.93% vs 8.07% baseline, every pin held) and AAC
+  64 kbps for the mix (Parakeet pooled WER 10.6%, vs 10.7% at today's 192 kbps). Numbers are
+  in ADR-0014.
+- Spec 0073 W1: a per-meeting folder lease (`audio/folder_lease.rs`) is now the one
+  exclusion primitive for meeting folders. The recording saver, retranscription,
+  diarization, the retention sweep, the transcript save's `folder_path` write-back, meeting
+  delete and interrupted-recording discard take it and re-read `folder_path` after acquiring; a stale `folder_path` from the frontend can
+  no longer overwrite a live one. "Under the current recordings root" is replaced by an
+  ownership check (`audio/meeting_folder.rs`) and `known_recording_roots()`, which the
+  delete, `fs_guard`, recovery, reconcile and diarization-fallback scans all use. Removed
+  the unused `StreamManagerType` enum.
+- Spec 0073 W2: the recordings mover (`audio/recordings_move/`). It plans a move of every
+  meeting folder into one target, then moves each folder under its folder lease: a rename on
+  one volume, a synced copy plus verify and staging rename across volumes. A journal
+  (`recordings-move.json`) and an ordering where rows change only after a verified copy make
+  every crash point recoverable at the next launch. Emptied old roots are removed with a
+  non-recursive `remove_dir`. A startup gather collects leftovers, but the first launch
+  only asks (`recordings-gather-needed`). A debug build never moves from, counts in or
+  removes the production recordings folders. Commands: `api_plan_recordings_move`,
+  `api_change_recordings_folder`, `api_gather_recordings`, `api_cancel_recordings_move`,
+  `api_recordings_move_status`, `api_recordings_gather_state`.
+- Spec 0073 W3: the mover's UI. `SaveLocationRow` plans → asks (`MoveRecordingsDialog`,
+  Move recordings / Cancel only) → `api_change_recordings_folder`, and shows progress, Stop
+  and the "still in another folder" line from `useRecordingsMove`, which pulls
+  `api_recordings_move_status` / `api_recordings_gather_state` on mount because the startup
+  events fire before any listener. `RecordingsMoveWatcher` (AppShell) raises the finish toast
+  on any route and asks the first-launch gather question. Continue-meeting now always
+  resolves its folder from the meeting row. New shots: `settings-recordings-moving`,
+  `settings-recordings-gather` (`move=` mock param, fictional paths only).
 - Spec 0071 covers the follow-up from an owner recording on 2026-09-21: three of the four
   reported faults were the app working as designed and failing to say so (the chip's label,
   the "Listening" indicator, and a silent 3min19s `'process-now'` repass after stop). Root
@@ -186,6 +288,15 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
   `docs/screenshots/README.md` now names the review step that missed them.
 - Three shared Today components (`AgendaRowMenu`, `AgendaAttendees`, `RecordingBadge`) so the
   three views cannot drift apart again. First tests for `WeekView` and the Ask AI page.
+- `notif_remove` command (capability-gated like every UNUserNotificationCenter call) backs
+  the detected-call prompt's cross-dismiss; `ZoomAutoDetect` is now `MeetingAutoDetect` and
+  reads an optional `platform` from the still-`zoom-meeting-*` events (specs/0074 W5).
+- Meeting detection moved from `zoom/monitor.rs` to `meeting_detect/` (specs/0074 W6): a pure
+  `classify` over Core Audio's client-process list (pid, bundle id, running-input) plus the
+  Zoom helpers, a calendar corroboration probe, and an Accessibility window-title check that
+  runs only when Accessibility is already granted. Events renamed to `meeting-detected` /
+  `meeting-ended` with a `platform` field. The Teams and browser signals are provisional
+  until the `meeting_detect_spike` diagnostic (an ignored test) is run during real calls.
 
 ## [0.8.0] - 2026-09-20
 - Screenshots: a `today-week` shot, so the Week view is covered (its parity regressions went

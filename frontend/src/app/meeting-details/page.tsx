@@ -20,6 +20,7 @@ import {
   autoSummarySkipToast,
 } from "@/lib/auto-summary";
 import { devLog } from "@/lib/dev-log";
+import { canTranscribe, type MeetingAudioStatus } from '@/hooks/useMeetingAudioStatus';
 
 interface MeetingDetailsResponse {
   id: string;
@@ -181,9 +182,8 @@ function MeetingDetailsContent() {
     let audioAwaitingTranscription = false;
     if (transcriptCount <= 0 && source === 'recording') {
       try {
-        audioAwaitingTranscription = await invoke<boolean>('api_meeting_audio_available', {
-          meetingId,
-        });
+        const audio = await invoke<MeetingAudioStatus>('api_meeting_audio_status', { meetingId });
+        audioAwaitingTranscription = !!audio && canTranscribe(audio);
       } catch (error) {
         console.warn('Could not check audio availability for auto-summary gate:', error);
       }

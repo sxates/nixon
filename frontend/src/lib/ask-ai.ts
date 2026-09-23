@@ -126,6 +126,49 @@ export function buildScope(opts: {
   return scope;
 }
 
+/**
+ * Why a Custom range can't be asked yet, or null when it can. `buildScope` drops a
+ * blank bound, and a scope with neither bound means ALL meetings — so without this
+ * gate, Custom with an empty (or not-yet-committed) date field answered from every
+ * meeting while the picker still showed the range the user chose.
+ */
+export function customRangeProblem(
+  preset: DatePreset,
+  customFrom: string,
+  customTo: string,
+): string | null {
+  if (preset !== 'custom') return null;
+  const from = parseLocalDay(customFrom);
+  const to = parseLocalDay(customTo);
+  if (!from || !to) return 'Pick a start and an end date.';
+  if (to < from) return 'The end date is before the start date.';
+  return null;
+}
+
+const LABEL_DAY: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' };
+const LABEL_DAY_YEAR: Intl.DateTimeFormatOptions = { ...LABEL_DAY, year: 'numeric' };
+
+/**
+ * The range an answer was produced under, for display beside it: "All meetings",
+ * "Sep 22, 2026", "Sep 16 – Sep 22, 2026". `dateTo` is exclusive, so the last day
+ * shown is the day before it.
+ */
+export function scopeLabel(scope: AggregationScope): string {
+  const from = scope.dateFrom ? new Date(scope.dateFrom) : null;
+  const toExclusive = scope.dateTo ? new Date(scope.dateTo) : null;
+  const last = toExclusive
+    ? new Date(toExclusive.getFullYear(), toExclusive.getMonth(), toExclusive.getDate() - 1)
+    : null;
+  const day = (d: Date) => d.toLocaleDateString('en-US', LABEL_DAY_YEAR);
+  if (from && last) {
+    if (from.toDateString() === last.toDateString()) return day(from);
+    return `${from.toLocaleDateString('en-US', LABEL_DAY)} – ${day(last)}`;
+  }
+  if (from) return `Since ${day(from)}`;
+  if (last) return `Through ${day(last)}`;
+  return 'All meetings';
+}
+
 // ---------------------------------------------------------------------------
 // Label helpers
 // ---------------------------------------------------------------------------

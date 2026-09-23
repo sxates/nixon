@@ -8,6 +8,7 @@ export const DEFAULTS = { viewport: [1280, 860], themes: ['faceplate', 'deck'], 
 const THEMES = new Set(['faceplate', 'deck']);
 const UPDATE_STATES = new Set(['ready', 'downloading']);
 const CALENDAR_STATES = new Set(['none']);
+const MOVE_STATES = new Set(['running', 'gather']);
 
 export function loadManifest(path = join(here, '..', 'routes.json')) {
   const raw = JSON.parse(readFileSync(path, 'utf8'));
@@ -23,6 +24,7 @@ export function loadManifest(path = join(here, '..', 'routes.json')) {
     if (e.onboardingStep !== undefined && !(e.onboardingStep >= 1 && e.onboardingStep <= 5)) throw new Error(`${e.name}: onboardingStep 1..5`);
     if (e.update !== undefined && !UPDATE_STATES.has(e.update)) throw new Error(`${e.name}: unknown update state ${e.update}`);
     if (e.calendar !== undefined && !CALENDAR_STATES.has(e.calendar)) throw new Error(`${e.name}: unknown calendar state ${e.calendar}`);
+    if (e.move !== undefined && !MOVE_STATES.has(e.move)) throw new Error(`${e.name}: unknown move state ${e.move}`);
     return { ...e, viewport: e.viewport ?? DEFAULTS.viewport, themes, wait: e.wait ?? DEFAULTS.wait, ignore: e.ignore ?? [] };
   });
 }
@@ -33,6 +35,9 @@ export function expand(entries, { headless = false } = {}) {
   const shots = [];
   for (const entry of entries) {
     if (headless && entry.real_only) continue;
+    // headless_only: mock-driven states, or tabs that render real account data (the
+    // Calendar tab shows the owner's invite addresses) — never captured from a real window.
+    if (!headless && entry.headless_only) continue;
     for (const theme of entry.themes) {
       shots.push({
         name: entry.name, theme, entry, file: outputName(entry.name, theme),
@@ -49,6 +54,8 @@ export function expand(entries, { headless = false } = {}) {
           // genuine no-calendar-connected state (build-mock.mjs reads this to answer
           // api_get_calendar_access_status / api_google_calendar_status).
           if (entry.calendar) u.searchParams.set('calendar', entry.calendar);
+          // specs/0073 W3 — seeds a recordings move (build-mock.mjs answers the mover).
+          if (entry.move) u.searchParams.set('move', entry.move);
           return u.toString();
         },
       });

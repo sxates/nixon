@@ -34,6 +34,14 @@ pub fn notif_deliver(request: DeliverRequest) -> Result<(), String> {
     macos::deliver(request).map_err(|e| e.to_string())
 }
 
+/// Take a delivered notification down (specs/0074 W5) — the in-app prompt was acted on,
+/// so its banner twin should not stay asking. Best-effort for the caller: an id macOS no
+/// longer knows is a no-op.
+#[tauri::command]
+pub fn notif_remove(id: String) -> Result<(), String> {
+    macos::remove(&id).map_err(|e| e.to_string())
+}
+
 /// Open System Settings → Notifications.
 ///
 /// A command of its own rather than `utils::open_external_url`, because that one keeps a

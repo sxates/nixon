@@ -13,6 +13,7 @@ import type { MeetingSpeaker, TranscriptSegmentData } from '@/types';
 
 const { invoke } = vi.hoisted(() => ({ invoke: vi.fn() }));
 vi.mock('@tauri-apps/api/core', () => ({ invoke }));
+vi.mock('@tauri-apps/api/event', () => ({ listen: vi.fn().mockResolvedValue(() => {}) }));
 vi.mock('../MeetingDetails/TranscriptButtonGroup', () => ({
   TranscriptButtonGroup: () => null,
 }));
@@ -137,7 +138,8 @@ describe('TranscriptPanel — speaker filter chip (specs/0061 W4 task 3)', () =>
   it('does not show the unprocessed/"Process now" state when a zero-match filter hides a deferred meeting\'s transcripts', async () => {
     invoke.mockImplementation((cmd: string) => {
       if (cmd === 'api_get_meeting_processing_mode') return Promise.resolve('defer');
-      if (cmd === 'api_meeting_audio_available') return Promise.resolve(true);
+      if (cmd === 'api_meeting_audio_status')
+        return Promise.resolve({ mix: true, channels: true, compressed: false, state: 'pending' });
       return Promise.resolve(null);
     });
 
@@ -148,5 +150,36 @@ describe('TranscriptPanel — speaker filter chip (specs/0061 W4 task 3)', () =>
 
     expect(screen.queryByText(/hasn't been processed yet/i)).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Process now' })).not.toBeInTheDocument();
+  });
+});
+
+// specs/0072 W3 — a failed speaker identification says so on the meeting page; the audio is
+// kept for the retry. Other states say nothing here.
+describe('TranscriptPanel — audio state note (specs/0072 W3)', () => {
+  const withState = (state: string) =>
+    invoke.mockImplementation((cmd: string) =>
+      Promise.resolve(
+        cmd === 'api_meeting_audio_status'
+          ? { mix: true, channels: true, compressed: false, state }
+          : null,
+      ),
+    );
+
+  it('shows the failed note when speaker identification did not finish', async () => {
+    withState('failed');
+    renderPanel();
+    expect(
+      await screen.findByText("Speaker identification didn't finish. Audio is kept so you can retry."),
+    ).toBeInTheDocument();
+  });
+
+  it('shows nothing for a processed meeting', async () => {
+    withState('processed');
+    renderPanel();
+    await vi.waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith('api_meeting_audio_status', { meetingId: 'meeting-1' }),
+    );
+    await Promise.resolve();
+    expect(screen.queryByText(/Speaker identification didn't finish/)).not.toBeInTheDocument();
   });
 });

@@ -167,7 +167,10 @@ fn prepare_folder(
             return None;
         }
     };
-    if !no_audio {
+    if m.audio_state.as_deref() == Some("purged") {
+        // specs/0072: the retention policy already deleted this one's audio.
+        crate::audio::lifecycle::sweep::purge_media_files(&f);
+    } else if !no_audio {
         let t0 = std::time::Instant::now();
         match audio::render_meeting_audio(m, &f) {
             Ok(true) => log::info!(
@@ -233,6 +236,26 @@ mod tests {
         let start = Utc::now();
         let folder = prepare_folder(&m, dir.path(), start, true).expect("folder is created");
         assert!(folder.exists());
+    }
+
+    /// specs/0072: a `purged` demo meeting really has no audio, even when an earlier
+    /// `--demo` run cached a render in its (stable) folder.
+    #[test]
+    fn prepare_folder_leaves_a_purged_meeting_without_audio() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let mut m = dataset::load_embedded().expect("embedded dataset").meetings[3].clone();
+        m.audio_state = None;
+        let start = Utc::now();
+        let folder = prepare_folder(&m, dir.path(), start, true).expect("folder");
+        for f in ["audio.mp4", "mic.wav", "system.opus"] {
+            std::fs::write(folder.join(f), b"cached").unwrap();
+        }
+        m.audio_state = Some("purged".into());
+        prepare_folder(&m, dir.path(), start, false).expect("folder");
+        for f in ["audio.mp4", "mic.wav", "system.opus"] {
+            assert!(!folder.join(f).exists(), "{f} survived");
+        }
+        assert!(folder.join("metadata.json").exists());
     }
 
     /// specs/0059 fix round 2 (Important 1): with stable folder names, re-running

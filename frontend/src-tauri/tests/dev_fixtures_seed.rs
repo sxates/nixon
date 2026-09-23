@@ -97,6 +97,28 @@ async fn seeds_embedded_dataset_and_is_idempotent() {
         "{created} vs {expected}"
     );
 
+    // specs/0072: one meeting per audio state (NULL = pending), so the meeting page's
+    // purged / failed / pending states all have a demo meeting.
+    let states: Vec<(String, Option<String>, Option<String>)> = sqlx::query_as(
+        "SELECT id, audio_state, speakers_identified_at FROM meetings WHERE id LIKE 'demo-0%' ORDER BY id",
+    )
+    .fetch_all(db.pool())
+    .await
+    .unwrap();
+    let state_of = |id: &str| states.iter().find(|s| s.0 == id).unwrap();
+    assert_eq!(state_of("demo-01").1.as_deref(), Some("processed"));
+    assert!(
+        state_of("demo-01").2.is_some(),
+        "processed ⇒ speakers identified"
+    );
+    assert_eq!(state_of("demo-04").1.as_deref(), Some("purged"));
+    assert_eq!(state_of("demo-05").1, None);
+    assert_eq!(state_of("demo-06").1.as_deref(), Some("failed"));
+    assert!(
+        state_of("demo-06").2.is_none(),
+        "failed ⇒ identification didn't finish"
+    );
+
     // idempotent
     let r2 = seed::seed_all(db.pool(), &ds, &HashMap::new(), now)
         .await

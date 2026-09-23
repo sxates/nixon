@@ -89,7 +89,10 @@ function describeHandoff(reason: 'no-folder-path' | 'threw'): string {
 export function QueuePanel({ view, className }: { view: QueueView; className?: string }) {
   const { view: backlog, stop, startNow, dismissDone, enqueueMeeting } = useBacklog();
   const llm = useOptionalLlmActivity();
-  const hasFinished = backlog.items.some((i) => i.status === 'done' || i.status === 'error');
+  // specs/0074 W4 — a Done prep row (llm success history) also counts as "finished", so the
+  // control shows up and clears it even when no backlog item is done/errored.
+  const hasLlmDone = view.rows.some((r) => r.source === 'llm' && r.stage === 'done');
+  const hasFinished = backlog.items.some((i) => i.status === 'done' || i.status === 'error') || hasLlmDone;
   const hasLlmFailure = view.rows.some((r) => r.source === 'llm' && r.stage === 'error');
 
   // A backlog row retries by re-enqueuing that meeting (TranscriptPanel.tsx's "Process now"
@@ -133,6 +136,18 @@ export function QueuePanel({ view, className }: { view: QueueView; className?: s
     }
   };
   const handleDismissAll = () => void llm?.dismiss();
+  // specs/0074 W4 — "Clear finished" now clears BOTH finished surfaces: the backlog's local
+  // done/error items (unchanged, `dismissDone`) and the registry's success/skipped history
+  // (new — `api_llm_activity_clear_finished`, which is what makes a Done prep row go away).
+  // Best-effort like the header's dismiss: a failed clear just leaves the rows for next time.
+  const handleClearFinished = async () => {
+    dismissDone();
+    try {
+      await invoke('api_llm_activity_clear_finished');
+    } catch (error) {
+      toast.error('Could not clear finished tasks', { description: messageOf(error) });
+    }
+  };
 
   return (
     <div className={cn('flex flex-col gap-1', className)}>
@@ -172,7 +187,11 @@ export function QueuePanel({ view, className }: { view: QueueView; className?: s
       </ul>
       {hasFinished && (
         <div className="flex justify-end px-2">
-          <button type="button" onClick={dismissDone} className="text-[10px] text-muted-foreground hover:text-foreground">
+          <button
+            type="button"
+            onClick={() => void handleClearFinished()}
+            className="text-[10px] text-muted-foreground hover:text-foreground"
+          >
             Clear finished
           </button>
         </div>

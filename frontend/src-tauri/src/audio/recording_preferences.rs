@@ -59,6 +59,35 @@ pub struct RecordingPreferences {
     /// where the re-point never runs.
     #[serde(default)]
     pub save_folder_user_chosen: bool,
+    /// Recordings folders used before the current one that may still hold meetings
+    /// (specs/0073). Backend-owned: [`set_recording_preferences`] carries the stored value
+    /// over whatever the frontend sends. Feeds [`known_recording_roots`].
+    #[serde(default)]
+    pub previous_save_folders: Vec<PathBuf>,
+    /// The owner has agreed to (or already had) the one-time gather of recordings from
+    /// every earlier folder into the current one (specs/0073). Until then the startup
+    /// gather asks first instead of moving anything. Backend-owned like
+    /// `previous_save_folders`.
+    #[serde(default)]
+    pub recordings_gathered_once: bool,
+    /// How long kept audio lives (specs/0072) — the setting the lifecycle sweep enforces.
+    /// Absent in files from before 0072: [`RecordingPreferences::effective_audio_retention`] derives
+    /// it once from `auto_save` + `retention_days`, which are otherwise no longer read (they
+    /// are kept in step so an older file and an older settings screen still make sense).
+    #[serde(default)]
+    pub audio_retention: Option<super::lifecycle::policy::AudioRetention>,
+}
+
+impl RecordingPreferences {
+    /// The effective retention policy: the stored one, else derived from the legacy pair.
+    pub fn effective_audio_retention(&self) -> super::lifecycle::policy::AudioRetention {
+        self.audio_retention.unwrap_or_else(|| {
+            super::lifecycle::policy::AudioRetention::from_legacy(
+                self.auto_save,
+                self.retention_days,
+            )
+        })
+    }
 }
 
 /// serde default for [`RecordingPreferences::live_transcription_enabled`].
@@ -70,7 +99,6 @@ fn default_live_transcription_enabled() -> bool {
 fn default_low_power_on_battery() -> bool {
     true
 }
-
 
 impl Default for RecordingPreferences {
     fn default() -> Self {
@@ -85,6 +113,9 @@ impl Default for RecordingPreferences {
             live_transcription_enabled: true,
             low_power_on_battery: true,
             save_folder_user_chosen: false,
+            previous_save_folders: Vec::new(),
+            recordings_gathered_once: false,
+            audio_retention: None,
         }
     }
 }
@@ -185,6 +216,62 @@ pub fn set_recordings_root(root: PathBuf) {
     RECORDINGS_ROOT.set(root);
 }
 
+/// Cache of the persisted `previous_save_folders`, seeded alongside [`RECORDINGS_ROOT`].
+static PREVIOUS_ROOTS: RwLock<Vec<PathBuf>> = RwLock::new(Vec::new());
+
+/// Set the earlier recordings folders [`known_recording_roots`] reports.
+pub fn set_previous_recording_roots(roots: Vec<PathBuf>) {
+    *PREVIOUS_ROOTS.write().unwrap_or_else(|e| e.into_inner()) = roots;
+}
+
+/// The earlier recordings folders currently cached (the persisted `previous_save_folders`).
+pub fn previous_recording_roots() -> Vec<PathBuf> {
+    PREVIOUS_ROOTS
+        .read()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone()
+}
+
+/// Every recordings folder Nixon has written meetings to (specs/0073): the current root,
+/// the persisted earlier ones, and the platform default folders (legacy `meetily-recordings`
+/// and `nixon-recordings`) that exist on disk. A debug build also includes the folder a
+/// release build would use (the 0070 case: dev meetings recorded before the dev root moved).
+///
+/// Anything that scans "the recordings root" for existing meetings scans these instead.
+pub fn known_recording_roots() -> Vec<PathBuf> {
+    let base = platform_recordings_base();
+    let mut extras: Vec<PathBuf> = [LEGACY_RECORDINGS_DIR, RECORDINGS_DIR]
+        .iter()
+        .map(|name| base.join(name))
+        .filter(|p| p.is_dir())
+        .collect();
+    if is_dev_build() {
+        extras.push(release_default_recordings_folder());
+    }
+    let previous = previous_recording_roots();
+    known_roots_from(recordings_root(), &previous, &extras)
+}
+
+/// Pure half of [`known_recording_roots`]: `current` first, then `previous`, then `extras`,
+/// canonicalized where they exist and de-duplicated.
+pub fn known_roots_from(
+    current: PathBuf,
+    previous: &[PathBuf],
+    extras: &[PathBuf],
+) -> Vec<PathBuf> {
+    let mut out: Vec<PathBuf> = Vec::new();
+    for root in std::iter::once(current)
+        .chain(previous.iter().cloned())
+        .chain(extras.iter().cloned())
+    {
+        let root = root.canonicalize().unwrap_or(root);
+        if !out.contains(&root) {
+            out.push(root);
+        }
+    }
+    out
+}
+
 /// The folder new recordings are written to. Prefer this over the module-private
 /// `get_default_recordings_folder` probe.
 pub fn recordings_root() -> PathBuf {
@@ -200,6 +287,7 @@ pub async fn init_recordings_root<R: Runtime>(app: &AppHandle<R>) {
     match load_recording_preferences(app).await {
         Ok(prefs) => {
             let prefs = repoint_dev_root(app, prefs).await;
+            set_previous_recording_roots(prefs.previous_save_folders);
             set_recordings_root(prefs.save_folder);
         }
         Err(e) => {
@@ -247,7 +335,9 @@ async fn repoint_dev_root<R: Runtime>(
     if let Err(e) = save_recording_preferences(app, &next).await {
         // Persisting is the whole point — without it `fs_guard` and the write root
         // disagree. Fall back to the stored value rather than run in that split state.
-        warn!("recordings root: could not persist the dev re-point ({e}); keeping the stored folder");
+        warn!(
+            "recordings root: could not persist the dev re-point ({e}); keeping the stored folder"
+        );
         return load_recording_preferences(app).await.unwrap_or(next);
     }
     next
@@ -273,7 +363,7 @@ fn default_recordings_folder_for_profile(base: &Path, dev: bool) -> PathBuf {
 }
 
 /// Is this a debug ("Dev Nixon") build?
-fn is_dev_build() -> bool {
+pub(crate) fn is_dev_build() -> bool {
     cfg!(debug_assertions)
 }
 
@@ -282,7 +372,7 @@ fn is_dev_build() -> bool {
 /// See [`default_recordings_folder_in`] for why an existing `meetily-recordings` folder
 /// still wins in a release build, and [`default_recordings_folder_for_profile`] for why the
 /// debug build opts out of that rule.
-fn get_default_recordings_folder() -> PathBuf {
+pub(crate) fn get_default_recordings_folder() -> PathBuf {
     default_recordings_folder_for_profile(&platform_recordings_base(), is_dev_build())
 }
 
@@ -292,6 +382,14 @@ fn get_default_recordings_folder() -> PathBuf {
 /// after the re-point below moves the write root. Never a write target.
 pub(crate) fn release_default_recordings_folder() -> PathBuf {
     default_recordings_folder_for_profile(&platform_recordings_base(), false)
+}
+
+/// The platform default recordings folders (legacy `meetily-recordings` and
+/// `nixon-recordings`), whether or not they exist. The recordings mover (specs/0073) needs
+/// them by name: a release build may gather from them, a debug build must never touch them.
+pub(crate) fn platform_default_recordings_folders() -> Vec<PathBuf> {
+    let base = platform_recordings_base();
+    vec![base.join(LEGACY_RECORDINGS_DIR), base.join(RECORDINGS_DIR)]
 }
 
 /// Ensure the recordings directory exists
@@ -332,6 +430,8 @@ pub async fn load_recording_preferences<R: Runtime>(
         info!("No stored preferences found, using defaults");
         RecordingPreferences::default()
     };
+    let mut prefs = prefs;
+    prefs.audio_retention = Some(prefs.effective_audio_retention());
 
     info!(
         "Loaded recording preferences: save_folder={:?}, auto_save={}, mic={:?}, system={:?}",
@@ -378,6 +478,7 @@ pub async fn save_recording_preferences<R: Runtime>(
     // specs/0057 Plan 2 — keep the active write root in lockstep with the persisted
     // preference, so writers land where `fs_guard` and the meetings commands look.
     set_recordings_root(preferences.save_folder.clone());
+    set_previous_recording_roots(preferences.previous_save_folders.clone());
 
     // Ensure the directory exists
     ensure_recordings_directory(&preferences.save_folder)?;
@@ -400,9 +501,42 @@ pub async fn set_recording_preferences<R: Runtime>(
     app: AppHandle<R>,
     preferences: RecordingPreferences,
 ) -> Result<(), String> {
-    save_recording_preferences(&app, &preferences)
+    let stored = load_recording_preferences(&app)
+        .await
+        .map_err(|e| format!("Failed to load recording preferences: {}", e))?;
+    if stored.save_folder != preferences.save_folder {
+        super::volume_check::ensure_recordings_volume_allowed(&preferences.save_folder)
+            .map_err(|e| e.to_string())?;
+    }
+    save_recording_preferences(&app, &carry_backend_fields(&stored, preferences))
         .await
         .map_err(|e| format!("Failed to save recording preferences: {}", e))
+}
+
+/// Merge a frontend-sent preferences object over the stored one (specs/0073): the frontend
+/// doesn't own `previous_save_folders`, so the stored list is kept, and a folder change adds
+/// the outgoing folder to it so meetings left there stay known.
+fn carry_backend_fields(
+    stored: &RecordingPreferences,
+    mut incoming: RecordingPreferences,
+) -> RecordingPreferences {
+    let mut previous = stored.previous_save_folders.clone();
+    if stored.save_folder != incoming.save_folder && !previous.contains(&stored.save_folder) {
+        previous.push(stored.save_folder.clone());
+    }
+    previous.retain(|p| *p != incoming.save_folder);
+    incoming.previous_save_folders = previous;
+    incoming.recordings_gathered_once = stored.recordings_gathered_once;
+    // specs/0072: the retention field the sender changed wins; the legacy pair follows it.
+    let policy = super::lifecycle::policy::reconcile_saved_retention(
+        stored.audio_retention,
+        (stored.auto_save, stored.retention_days),
+        incoming.audio_retention,
+        (incoming.auto_save, incoming.retention_days),
+    );
+    (incoming.auto_save, incoming.retention_days) = policy.to_legacy(incoming.retention_days);
+    incoming.audio_retention = Some(policy);
+    incoming
 }
 
 #[tauri::command]
@@ -467,216 +601,4 @@ pub async fn select_recording_folder<R: Runtime>(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// specs/0061 W6 — `file_format` was removed from [`RecordingPreferences`] (the
-    /// "File format" settings row was dead: nothing let a user change it, and the
-    /// value was never actually used to pick an encoding). Preferences saved to disk
-    /// by an older build still have the key. `RecordingPreferences` carries no
-    /// `#[serde(deny_unknown_fields)]`, so serde must silently ignore it rather than
-    /// fail to load a user's existing preferences file.
-    #[test]
-    fn unknown_saved_field_is_ignored_on_deserialize() {
-        let json = r#"{"save_folder":"/tmp/x","auto_save":true,"file_format":"mp4"}"#;
-        let prefs: RecordingPreferences =
-            serde_json::from_str(json).expect("unknown fields must not fail deserialization");
-        assert_eq!(prefs.save_folder, PathBuf::from("/tmp/x"));
-        assert!(prefs.auto_save);
-    }
-
-    fn tempdir(tag: &str) -> PathBuf {
-        let d = std::env::temp_dir().join(format!(
-            "nixon-0057-recdir-{tag}-{}-{:?}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
-        ));
-        std::fs::create_dir_all(&d).unwrap();
-        d
-    }
-
-    #[test]
-    fn legacy_folder_wins_when_it_is_the_only_one_present() {
-        // An install from before specs/0057: its persisted save_folder points at
-        // meetily-recordings, so the write root must keep matching it.
-        let base = tempdir("legacy-only");
-        std::fs::create_dir_all(base.join(LEGACY_RECORDINGS_DIR)).unwrap();
-
-        assert_eq!(
-            default_recordings_folder_in(&base),
-            base.join(LEGACY_RECORDINGS_DIR)
-        );
-
-        std::fs::remove_dir_all(&base).ok();
-    }
-
-    #[test]
-    fn fresh_install_uses_the_nixon_folder() {
-        let base = tempdir("fresh");
-
-        assert_eq!(
-            default_recordings_folder_in(&base),
-            base.join(RECORDINGS_DIR)
-        );
-
-        std::fs::remove_dir_all(&base).ok();
-    }
-
-    #[test]
-    fn legacy_folder_wins_when_both_exist() {
-        // Monotone probe: once a legacy install exists, a nixon-recordings folder
-        // appearing beside it must NOT move the write root off the persisted
-        // save_folder (specs/0057 final review).
-        let base = tempdir("both");
-        std::fs::create_dir_all(base.join(LEGACY_RECORDINGS_DIR)).unwrap();
-        std::fs::create_dir_all(base.join(RECORDINGS_DIR)).unwrap();
-
-        assert_eq!(
-            default_recordings_folder_in(&base),
-            base.join(LEGACY_RECORDINGS_DIR)
-        );
-
-        std::fs::remove_dir_all(&base).ok();
-    }
-
-    // -- the debug build's own recordings root (owner feedback 2026-09-21) -------------
-    //
-    // The monotone legacy/new probe above protects a production install whose persisted
-    // save_folder already points at the fork's folder. The debug profile has no such data,
-    // so it opted out — which is also how the owner's real home path, under the *fork's*
-    // name, ended up legible in a screenshot committed to a public repo.
-    //
-    // These pass `dev` explicitly rather than relying on the build flag: `cargo test` runs
-    // WITH debug_assertions, so a `cfg!` inside the policy would make the production cases
-    // above impossible to test.
-
-    #[test]
-    fn a_dev_build_gets_its_own_folder_on_a_fresh_machine() {
-        let base = tempdir("dev-fresh");
-
-        assert_eq!(
-            default_recordings_folder_for_profile(&base, true),
-            base.join(DEV_RECORDINGS_DIR)
-        );
-
-        std::fs::remove_dir_all(&base).ok();
-    }
-
-    /// The case that produced the leak: a machine carrying a pre-0057 install. The release
-    /// probe must keep choosing the legacy folder, and the dev build must not.
-    #[test]
-    fn a_dev_build_ignores_a_legacy_folder_the_release_build_would_take() {
-        let base = tempdir("dev-legacy");
-        std::fs::create_dir_all(base.join(LEGACY_RECORDINGS_DIR)).unwrap();
-
-        assert_eq!(
-            default_recordings_folder_for_profile(&base, false),
-            base.join(LEGACY_RECORDINGS_DIR),
-            "release still honours the persisted legacy folder (specs/0057 Plan 2)"
-        );
-        assert_eq!(
-            default_recordings_folder_for_profile(&base, true),
-            base.join(DEV_RECORDINGS_DIR),
-            "the dev build has no production data to protect"
-        );
-
-        std::fs::remove_dir_all(&base).ok();
-    }
-
-    #[test]
-    fn a_dev_build_ignores_a_nixon_folder_too() {
-        // Not just the legacy name: the dev root is its own folder either way, so dev and
-        // production recordings can never land in the same directory.
-        let base = tempdir("dev-nixon");
-        std::fs::create_dir_all(base.join(RECORDINGS_DIR)).unwrap();
-
-        assert_eq!(
-            default_recordings_folder_for_profile(&base, true),
-            base.join(DEV_RECORDINGS_DIR)
-        );
-        assert_ne!(
-            default_recordings_folder_for_profile(&base, true),
-            default_recordings_folder_for_profile(&base, false)
-        );
-
-        std::fs::remove_dir_all(&base).ok();
-    }
-
-    #[test]
-    fn the_dev_folder_is_named_for_nixon_not_the_fork() {
-        assert!(DEV_RECORDINGS_DIR.starts_with("nixon-"));
-        assert!(!DEV_RECORDINGS_DIR.contains("meetily"));
-        assert_ne!(DEV_RECORDINGS_DIR, RECORDINGS_DIR, "dev is its own folder");
-    }
-
-    /// `#[serde(default)]` on the new marker is what keeps every preferences file written
-    /// before 2026-09-21 deserializing — and it must default to "not chosen", or the debug
-    /// re-point would decline to run on exactly the profiles that need it.
-    #[test]
-    fn an_older_preferences_file_reads_as_not_user_chosen() {
-        let prefs: RecordingPreferences = serde_json::from_str(
-            r#"{"save_folder":"/Users/x/Movies/meetily-recordings","auto_save":true}"#,
-        )
-        .unwrap();
-        assert!(!prefs.save_folder_user_chosen);
-    }
-
-    #[test]
-    fn a_hand_picked_folder_round_trips_as_user_chosen() {
-        let prefs: RecordingPreferences = serde_json::from_str(
-            r#"{"save_folder":"/Volumes/Audio","auto_save":true,"save_folder_user_chosen":true}"#,
-        )
-        .unwrap();
-        assert!(prefs.save_folder_user_chosen);
-        // And survives a serialize/deserialize round trip, since that is how it is stored.
-        let again: RecordingPreferences =
-            serde_json::from_str(&serde_json::to_string(&prefs).unwrap()).unwrap();
-        assert!(again.save_folder_user_chosen);
-    }
-
-    #[test]
-    fn a_legacy_file_is_not_mistaken_for_the_legacy_folder() {
-        let base = tempdir("legacy-file");
-        std::fs::write(base.join(LEGACY_RECORDINGS_DIR), b"not a directory").unwrap();
-
-        assert_eq!(
-            default_recordings_folder_in(&base),
-            base.join(RECORDINGS_DIR)
-        );
-
-        std::fs::remove_dir_all(&base).ok();
-    }
-
-    #[test]
-    fn recordings_root_falls_back_to_the_probe_when_unset() {
-        // A fresh cache (nothing seeded from the persisted preference yet) must
-        // defer to the filesystem probe. Each test builds its own cache, so the
-        // two are order-independent and never touch the process-wide static.
-        let cache = RecordingsRootCache::default();
-        let tmp = tempfile::tempdir().unwrap();
-        assert_eq!(
-            cache.resolve_with(|| tmp.path().join("probe")),
-            tmp.path().join("probe")
-        );
-    }
-
-    #[test]
-    fn recordings_root_prefers_the_cached_persisted_folder() {
-        let cache = RecordingsRootCache::default();
-        let tmp = tempfile::tempdir().unwrap();
-        cache.set(tmp.path().join("chosen"));
-        assert_eq!(
-            cache.resolve_with(|| tmp.path().join("probe")),
-            tmp.path().join("chosen")
-        );
-        // a later set replaces the earlier one (Settings -> change folder)
-        cache.set(tmp.path().join("chosen2"));
-        assert_eq!(
-            cache.resolve_with(|| PathBuf::from("/never")),
-            tmp.path().join("chosen2")
-        );
-    }
-}
+mod tests;

@@ -26,7 +26,8 @@ export type HandoffOutcome =
   | { accepted: false; reason: 'no-folder-path' | 'threw' };
 
 export interface StopFollowUp {
-  /** Run the best-effort auto-diarization pass at stop. */
+  /** Finish the audio at stop (`api_finish_audio_processing`: diarize if that applies,
+   *  then record the outcome for the retention policy, specs/0072). */
   autoDiarize: boolean;
   /** Leave `processing_mode='defer'` in place so a later pass can retry. */
   deferMarker: boolean;

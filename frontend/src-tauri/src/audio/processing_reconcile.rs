@@ -30,7 +30,7 @@
 //! the user declines the resume).
 
 use sqlx::SqlitePool;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use tauri::{AppHandle, Manager, Runtime};
 
 use crate::audio::processing_mode::{MODE_DEFER, MODE_LIVE};
@@ -59,21 +59,23 @@ pub async fn reconcile_stranded_live_markers(
 /// The meeting ids whose recording folder is still mid-recording (crash/force-quit),
 /// i.e. exactly what the specs/0037 resume prompt may offer to continue. Filesystem
 /// only — safe to call before the resume prompt has been answered.
-fn interrupted_meeting_ids(recordings_root: &Path) -> Vec<String> {
-    super::recording_recovery::scan_interrupted_recordings(recordings_root)
+fn interrupted_meeting_ids(recordings_roots: &[PathBuf]) -> Vec<String> {
+    super::recording_recovery::scan_interrupted_in_roots(recordings_roots)
         .into_iter()
         .map(|r| r.meeting_id)
         .collect()
 }
 
-/// The startup sweep against a given recordings root: skip the crash-interrupted
-/// meetings, reconcile the rest. Split out from `spawn_startup_reconciliation` so the
-/// scan→skip wiring is testable without a real app-data recordings folder.
+/// The startup sweep against the given recordings roots (every root Nixon knows about,
+/// specs/0073 — an interrupted recording in an earlier folder must be skipped too): skip
+/// the crash-interrupted meetings, reconcile the rest. Split out from
+/// `spawn_startup_reconciliation` so the scan→skip wiring is testable without a real
+/// app-data recordings folder.
 pub async fn reconcile_at_startup(
     pool: &SqlitePool,
-    recordings_root: &Path,
+    recordings_roots: &[PathBuf],
 ) -> Result<u64, sqlx::Error> {
-    let skip = interrupted_meeting_ids(recordings_root);
+    let skip = interrupted_meeting_ids(recordings_roots);
     if !skip.is_empty() {
         log::info!(
             "processing-mode reconciliation: leaving {} interrupted recording(s) alone \
@@ -93,7 +95,7 @@ pub async fn reconcile_at_startup(
 /// emits `first-launch-detected` and defers `app.manage(AppState)` to a later,
 /// frontend-triggered command), so this uses `try_state` — the same pattern as the
 /// sibling background jobs spawned right alongside it in `lib.rs`
-/// (`audio::retention::run_retention_sweep`, `calendar::google::sync::db_pool`) —
+/// (`audio::lifecycle::spawn`, `calendar::google::sync::db_pool`) —
 /// rather than `state()`, which would panic on that path.
 ///
 /// Returns the `JoinHandle` so tests can await completion; `lib.rs` (like the
@@ -117,18 +119,18 @@ pub fn spawn_startup_reconciliation<R: Runtime>(
         };
         // The interrupted-recording scan touches the filesystem; keep it off the async
         // worker (mirrors `api_list_interrupted_recordings`).
-        let root: PathBuf = match tokio::task::spawn_blocking(
-            super::recording_preferences::recordings_root,
+        let roots: Vec<PathBuf> = match tokio::task::spawn_blocking(
+            super::recording_preferences::known_recording_roots,
         )
         .await
         {
-            Ok(root) => root,
+            Ok(roots) => roots,
             Err(e) => {
                 log::warn!("processing-mode reconciliation: recordings-folder lookup failed: {e}");
                 return;
             }
         };
-        match reconcile_at_startup(&pool, &root).await {
+        match reconcile_at_startup(&pool, &roots).await {
             Ok(0) => log::debug!("processing-mode reconciliation: nothing stranded"),
             Ok(n) => log::info!(
                 "processing-mode reconciliation: returned {n} stranded meeting(s) to the deferred backlog"

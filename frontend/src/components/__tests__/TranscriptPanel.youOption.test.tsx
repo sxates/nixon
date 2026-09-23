@@ -13,6 +13,7 @@ import type { MeetingSpeaker, TranscriptSegmentData } from '@/types';
 
 const { invoke } = vi.hoisted(() => ({ invoke: vi.fn() }));
 vi.mock('@tauri-apps/api/core', () => ({ invoke }));
+vi.mock('@tauri-apps/api/event', () => ({ listen: vi.fn().mockResolvedValue(() => {}) }));
 // The button group pulls in config/backlog/diarization context this test doesn't
 // exercise; stub it out so only the reassign-menu wiring under test is live.
 vi.mock('../MeetingDetails/TranscriptButtonGroup', () => ({

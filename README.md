@@ -92,8 +92,11 @@ another app's audio without extra software.
 You will be asked once for **microphone** and **audio-capture** permission.
 
 **Disk:** about 3 GB for the models Nixon downloads the first time it needs them, plus
-roughly 250 MB per hour of recorded audio. Recordings can be set to delete themselves
-after a few days in Settings → Recordings.
+about 50 MB per hour of recorded audio. That audio is stored compressed once a meeting has
+been transcribed. While a meeting is recording and being processed it takes about
+320 MB per hour, so keep a few GB free before a long session. In Settings → Recording
+you can have audio deleted after a set number of days, or as soon as each meeting is
+processed.
 
 **Memory:** 8 GB is enough. With 16 GB or more Nixon automatically uses a larger, better
 summary model — it checks on first run and chooses for you.

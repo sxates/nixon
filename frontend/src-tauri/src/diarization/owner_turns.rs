@@ -135,11 +135,11 @@ pub async fn owner_turns_for_meeting<R: Runtime>(
     _app: &AppHandle<R>,
     meeting_folder: &Path,
 ) -> Vec<SpeakerTurn> {
-    let mic_wav = crate::audio::channel_writer::mic_channel_wav(meeting_folder);
-    if !mic_wav.exists() {
-        log::info!("owner turns: no mic WAV at {mic_wav:?} — skipping owner track");
+    // `mic.wav`, or `mic.opus` once kept audio is compressed (specs/0072).
+    let Some(mic_wav) = crate::audio::channel_writer::mic_channel_path(meeting_folder) else {
+        log::info!("owner turns: no mic channel in {meeting_folder:?} — skipping owner track");
         return Vec::new();
-    }
+    };
     // Decode → mono 16k, then VAD with the batch redemption window.
     let decoded = match crate::audio::decoder::decode_audio_file(&mic_wav) {
         Ok(d) => d,
@@ -155,9 +155,9 @@ pub async fn owner_turns_for_meeting<R: Runtime>(
     // mic. Best-effort: on a missing/undecodable system track we pass an empty
     // slice, which `filter_bleed_owner_segments` treats as "nothing to compare"
     // and keeps every interval — i.e. exactly the pre-0047 behavior.
-    let sys_wav = crate::audio::channel_writer::system_channel_wav(meeting_folder);
-    let sys_samples = if sys_wav.exists() {
-        match crate::audio::decoder::decode_audio_file(&sys_wav) {
+    let sys_wav = crate::audio::channel_writer::system_channel_path(meeting_folder);
+    let sys_samples = if let Some(sys_wav) = &sys_wav {
+        match crate::audio::decoder::decode_audio_file(sys_wav) {
             Ok(d) => d.to_whisper_format(),
             Err(e) => {
                 log::warn!(
@@ -167,7 +167,7 @@ pub async fn owner_turns_for_meeting<R: Runtime>(
             }
         }
     } else {
-        log::info!("owner turns: no system WAV at {sys_wav:?} — bleed guard off for this meeting");
+        log::info!("owner turns: no system channel in {meeting_folder:?} — bleed guard off");
         Vec::new()
     };
 

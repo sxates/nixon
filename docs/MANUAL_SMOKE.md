@@ -210,9 +210,13 @@ the system-audio tap silently returns silence (see `CLAUDE.md` / ADR-0004).
       does not create a duplicate.
 
 ## 10. Zoom auto-detect / auto-stop (WS6.2)
-- [ ] Joining a Zoom call (without clicking record) surfaces the "Zoom meeting detected" prompt.
+- [ ] Joining a Zoom call (without clicking record) surfaces the "Zoom call detected" prompt (in-app toast AND an OS banner, even with Nixon focused; answering one clears the other).
 - [ ] When the Zoom call ends, Nixon wraps up the recording **and** the transport rail returns
       to idle (counter dim, reels stopped, HOLD/STOP disabled).
+- [ ] (specs/0074 W6, provisional until the spike) Joining a Teams call shows "Teams call
+      detected". A Google Meet call in Chrome during a calendar event shows "Google Meet call
+      detected"; the same browser call with no calendar event shows nothing. While recording,
+      muting in Teams or Meet, and then leaving the call, never stops the recording.
 
 ## 11. Recording state on Home (WS6.4)
 - [ ] While a recording is in progress, Home shows it as recording; "happening now" calendar

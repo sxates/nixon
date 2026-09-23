@@ -41,12 +41,15 @@ import { CopyAnswerButton } from '@/components/AskAI/CopyAnswerButton';
 import { SourcesList } from '@/components/AskAI/SourcesList';
 import {
   buildScope,
+  customRangeProblem,
+  scopeLabel,
   createSavedQuestion,
   deleteAskAiHistory,
   deleteSavedQuestion,
   enterTriggersRun,
   listAskAiHistory,
   listSavedQuestions,
+  parseScope,
   parseSources,
   stageLabel,
   type AggregationScope,
@@ -105,6 +108,9 @@ function AskPageContent() {
   const [phase, setPhase] = useState<Phase>('idle');
   const [progress, setProgress] = useState<AskAiProgressPayload | null>(null);
   const [answer, setAnswer] = useState<Answer | null>(null);
+  // The scope the live answer was produced under — shown beside it, since the controls
+  // above can change after the run.
+  const [answerScope, setAnswerScope] = useState<AggregationScope>({});
   const [runError, setRunError] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState(false);
 
@@ -240,7 +246,8 @@ function AskPageContent() {
     };
   }, [dispatchEvent]);
 
-  const canAsk = phase !== 'running' && trimmedQuestion.length > 0;
+  const rangeProblem = customRangeProblem(preset, customFrom, customTo);
+  const canAsk = phase !== 'running' && trimmedQuestion.length > 0 && !rangeProblem;
 
   // `override` lets a saved-question re-run (WS2.b) bypass the live input/scope
   // controls and answer against the stored (question, scope) verbatim. With no
@@ -254,6 +261,7 @@ function AskPageContent() {
     if (override) setQuestion(override.question);
     setPhase('running');
     setAnswer(null);
+    setAnswerScope(runScope);
     // Collapse any open history row: a new run is about to fill the card above, and two
     // answers on screen with no indication which is which is the confusion this replaced.
     setExpandedHistoryId(null);
@@ -521,6 +529,7 @@ function AskPageContent() {
                       aria-label="To date"
                       className="h-[30px] rounded-lg border border-border bg-card px-2 text-xs text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     />
+                    {rangeProblem && <span className="text-xs text-muted-foreground">{rangeProblem}</span>}
                   </div>
                 )}
 
@@ -588,7 +597,8 @@ function AskPageContent() {
               banner that existed to tell them apart. */}
           {phase === 'done' && answer && (
             <div className="mt-4 rounded-[3px] border border-border bg-card p-6 shadow-sm">
-              <div className="mb-3 flex justify-end">
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <span className="u-meta">{scopeLabel(answerScope)}</span>
                 <CopyAnswerButton markdown={answer.markdown} />
               </div>
               <AnswerMarkdown markdown={answer.markdown} sources={answer.sources} />
@@ -719,11 +729,14 @@ function AskPageContent() {
                         {open && (
                           <div className="border-t border-border px-4 pb-4 pt-3">
                             <div className="mb-2 flex items-center justify-end gap-2">
+                              <span className="u-meta mr-auto">
+                                {scopeLabel(parseScope(entry.scopeJson))}
+                              </span>
                               <CopyAnswerButton markdown={entry.answerMarkdown} />
                               <button
                                 type="button"
                                 onClick={() => askAgain(entry)}
-                                disabled={phase === 'running'}
+                                disabled={phase === 'running' || !!rangeProblem}
                                 title="Ask this again against your current meetings"
                                 className="inline-flex h-7 flex-shrink-0 items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 text-xs font-semibold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:text-muted-foreground/50"
                               >

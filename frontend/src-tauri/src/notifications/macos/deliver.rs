@@ -167,12 +167,19 @@ fn schedule_dismiss(id: String, ms: u64) {
         if !super::capability().supported {
             return;
         }
-        let center = UNUserNotificationCenter::currentNotificationCenter();
-        let ns_id = NSString::from_str(&id);
-        let ids = NSArray::from_slice(&[&*ns_id]);
-        center.removeDeliveredNotificationsWithIdentifiers(&ids);
+        remove(&id);
         log::info!("notifications: auto-dismissed {id} after {ms}ms");
     });
+}
+
+/// Take a notification down now — off the screen and out of Notification Center. A no-op
+/// for an id macOS no longer knows. Callers must have checked `super::capability()` first
+/// (the public entry point is `super::remove`, which does).
+pub fn remove(id: &str) {
+    let center = UNUserNotificationCenter::currentNotificationCenter();
+    let ns_id = NSString::from_str(id);
+    let ids = NSArray::from_slice(&[&*ns_id]);
+    center.removeDeliveredNotificationsWithIdentifiers(&ids);
 }
 
 fn remember(id: &str, user_info: HashMap<String, String>) {

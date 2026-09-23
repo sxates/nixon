@@ -254,6 +254,20 @@ export async function notify(options: NotifyOptions): Promise<boolean> {
 }
 
 /**
+ * Take a delivered notification back down (specs/0074 W5) and forget its callbacks. Used
+ * when the in-app twin of a banner was acted on, so the same question is not left asked
+ * twice. Best-effort: never throws, and an id macOS no longer knows is a no-op.
+ */
+export async function removeNotification(id: string): Promise<void> {
+  callbacks.delete(id);
+  try {
+    await invoke('notif_remove', { id });
+  } catch (error) {
+    console.warn('[osNotification] could not remove notification:', error);
+  }
+}
+
+/**
  * Bring the Nixon window to the front. Best-effort and safe to call even if the window APIs
  * are unavailable.
  */

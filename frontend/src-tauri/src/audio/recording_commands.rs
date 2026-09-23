@@ -13,7 +13,8 @@ use std::sync::{
 use tauri::{AppHandle, Emitter, Manager, Runtime};
 
 use super::{
-    device_resolution, parse_audio_device, DeviceEvent, DeviceMonitorType, RecordingManager,
+    device_resolution, folder_lease, parse_audio_device, DeviceEvent, DeviceMonitorType,
+    RecordingManager,
 };
 
 // Import transcription modules
@@ -276,7 +277,9 @@ fn apply_resume_context(
     manager: &mut RecordingManager,
     meeting_id: Option<String>,
     resume_folder_path: Option<String>,
+    folder_lease: Option<folder_lease::FolderLease>,
 ) {
+    manager.set_folder_lease(folder_lease);
     manager.set_meeting_id(meeting_id.clone());
     match (meeting_id, resume_folder_path) {
         (Some(mid), Some(folder)) => {
@@ -322,10 +325,14 @@ pub async fn start_recording_with_meeting_name<R: Runtime>(
     // arming it (or an early-exit before apply_resume_context) can never mis-tag this
     // session's stop as a resume. apply_resume_context re-arms it only for a real resume.
     RESUMED_SESSION.store(false, Ordering::SeqCst);
+    // specs/0073: the meeting's folder lease (the saver holds it through finalization).
+    let (folder_lease, resume_folder_path) =
+        folder_lease::lease_for_recording_start(&app, meeting_id.as_deref(), resume_folder_path)
+            .await?;
 
     // Load recording preferences to get auto_save, live-transcription AND device prefs
     let (
-        auto_save,
+        _auto_save, // specs/0072: logged only; capture no longer reads it
         live_transcription_enabled,
         low_power_on_battery,
         preferred_mic_name,
@@ -406,7 +413,7 @@ pub async fn start_recording_with_meeting_name<R: Runtime>(
     });
     manager.set_meeting_name(Some(effective_meeting_name.clone()));
     let resume_pair = meeting_id.clone().zip(resume_folder_path.clone());
-    apply_resume_context(&mut manager, meeting_id, resume_folder_path);
+    apply_resume_context(&mut manager, meeting_id, resume_folder_path, folder_lease);
     // specs/0037 (review-2): BEFORE the resumed session can write anything to the
     // folder, import the crashed session's transcripts.json into the meeting's DB rows
     // (guarded attach → a cleanly-stopped "Continue recording" is a natural no-op).
@@ -445,7 +452,7 @@ pub async fn start_recording_with_meeting_name<R: Runtime>(
         .start_recording(
             microphone_device,
             system_device,
-            auto_save,
+            true, // specs/0072: capture always saves; the audio lifecycle applies retention
             live_diarizer,
             live_stt,
         )
@@ -584,9 +591,13 @@ pub async fn start_recording_with_devices_and_meeting<R: Runtime>(
     // arming it (or an early-exit before apply_resume_context) can never mis-tag this
     // session's stop as a resume. apply_resume_context re-arms it only for a real resume.
     RESUMED_SESSION.store(false, Ordering::SeqCst);
+    // specs/0073: the meeting's folder lease (the saver holds it through finalization).
+    let (folder_lease, resume_folder_path) =
+        folder_lease::lease_for_recording_start(&app, meeting_id.as_deref(), resume_folder_path)
+            .await?;
 
     // Load recording preferences to check auto_save + live-transcription settings
-    let (auto_save, live_transcription_enabled, low_power_on_battery) =
+    let (_auto_save, live_transcription_enabled, low_power_on_battery) =
         match super::recording_preferences::load_recording_preferences(&app).await {
             Ok(prefs) => {
                 info!(
@@ -673,7 +684,7 @@ pub async fn start_recording_with_devices_and_meeting<R: Runtime>(
     });
     manager.set_meeting_name(Some(effective_meeting_name.clone()));
     let resume_pair = meeting_id.clone().zip(resume_folder_path.clone());
-    apply_resume_context(&mut manager, meeting_id, resume_folder_path);
+    apply_resume_context(&mut manager, meeting_id, resume_folder_path, folder_lease);
     // specs/0037 (review-2): BEFORE the resumed session can write anything to the
     // folder, import the crashed session's transcripts.json into the meeting's DB rows
     // (guarded attach → a cleanly-stopped "Continue recording" is a natural no-op).
@@ -711,7 +722,7 @@ pub async fn start_recording_with_devices_and_meeting<R: Runtime>(
         .start_recording(
             mic_device,
             system_device,
-            auto_save,
+            true, // specs/0072: capture always saves; the audio lifecycle applies retention
             live_diarizer,
             live_stt,
         )

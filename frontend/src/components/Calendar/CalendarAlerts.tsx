@@ -3,14 +3,14 @@
 /**
  * "Time to join" calendar alerts (spec 0008, P2 frontend — the key piece).
  *
- * App-wide background component (mounted in layout.tsx alongside ZoomAutoDetect)
+ * App-wide background component (mounted in layout.tsx alongside MeetingAutoDetect)
  * that fires ONE native macOS notification a short lead time before each
  * upcoming calendar meeting starts, so a user in back-to-back calls gets a
  * heads-up even when Nixon is backgrounded.
  *
  * Behaviour:
- *   - Polls `api_get_upcoming_meetings` every 60s, but ONLY when calendar access
- *     is authorized (cheap no-op otherwise — we re-check status each tick so a
+ *   - Polls `api_get_upcoming_meetings` every 60s, but ONLY when a calendar (EventKit
+ *     or Google) is connected (cheap no-op otherwise — we re-check status each tick so a
  *     just-granted permission starts working without a reload).
  *   - Two alerts per meeting (specs/0068 W3): one at T-5, and one as it starts. The
  *     second reuses the first's notification id, so macOS replaces the banner instead of
@@ -37,7 +37,7 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import {
   type UpcomingMeeting,
-  getCalendarAccessStatus,
+  isAnyCalendarConnected,
   getUpcomingMeetings,
   joinAndRecord,
   formatClockTime,
@@ -211,9 +211,10 @@ export default function CalendarAlerts() {
 
     const tick = async () => {
       if (cancelled) return;
-      // Cheap gate: do nothing unless calendar is authorized.
-      const status = await getCalendarAccessStatus();
-      if (cancelled || status !== 'authorized') return;
+      // Cheap gate: do nothing without a calendar. EITHER source counts (specs/0074 W5) —
+      // gating on EventKit alone left Google-only users with no alerts at all.
+      const connected = await isAnyCalendarConnected();
+      if (cancelled || !connected) return;
 
       const meetings = await getUpcomingMeetings();
       if (cancelled) return;

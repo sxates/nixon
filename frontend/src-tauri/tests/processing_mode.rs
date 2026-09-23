@@ -196,7 +196,7 @@ async fn seed_completed_summary(pool: &SqlitePool, meeting_id: &str) {
 /// same threshold as the retention exemption) — and excludes everything else.
 #[tokio::test]
 async fn list_deferred_candidates_covers_the_matrix() {
-    use app_lib::audio::retention::MIN_TRANSCRIPT_SEGMENTS;
+    use app_lib::audio::lifecycle::MIN_TRANSCRIPT_SEGMENTS;
 
     let pool = pool_with_schema().await;
 
@@ -603,9 +603,10 @@ async fn startup_sweep_leaves_interrupted_recordings_alone() {
         .unwrap();
     write_recording_folder(root, &stranded, "completed");
 
-    let rewritten = app_lib::audio::processing_reconcile::reconcile_at_startup(&pool, root)
-        .await
-        .expect("startup sweep");
+    let rewritten =
+        app_lib::audio::processing_reconcile::reconcile_at_startup(&pool, &[root.to_path_buf()])
+            .await
+            .expect("startup sweep");
     assert_eq!(rewritten, 1, "only the finalized meeting may be rewritten");
 
     assert_eq!(
@@ -644,7 +645,7 @@ async fn startup_sweep_reclaims_a_finalized_recording_on_the_next_launch() {
     write_recording_folder(root, &id, "recording");
 
     assert_eq!(
-        app_lib::audio::processing_reconcile::reconcile_at_startup(&pool, root)
+        app_lib::audio::processing_reconcile::reconcile_at_startup(&pool, &[root.to_path_buf()])
             .await
             .unwrap(),
         0,
@@ -655,7 +656,7 @@ async fn startup_sweep_reclaims_a_finalized_recording_on_the_next_launch() {
     write_recording_folder(root, &id, "discarded");
 
     assert_eq!(
-        app_lib::audio::processing_reconcile::reconcile_at_startup(&pool, root)
+        app_lib::audio::processing_reconcile::reconcile_at_startup(&pool, &[root.to_path_buf()])
             .await
             .unwrap(),
         1,
@@ -683,9 +684,35 @@ async fn startup_sweep_tolerates_a_missing_recordings_root() {
     let dir = tempfile::tempdir().expect("tempdir");
     let missing = dir.path().join("no-recordings-here");
     assert_eq!(
-        app_lib::audio::processing_reconcile::reconcile_at_startup(&pool, &missing)
+        app_lib::audio::processing_reconcile::reconcile_at_startup(&pool, &[missing])
             .await
             .unwrap(),
         1
+    );
+}
+
+/// specs/0073 W1: an interrupted recording in an EARLIER recordings folder (the user
+/// changed the folder since) is skipped exactly like one in the current folder.
+#[tokio::test]
+async fn startup_sweep_skips_an_interrupted_recording_in_an_earlier_root() {
+    let pool = pool_with_schema().await;
+    let current = tempfile::tempdir().expect("tempdir");
+    let earlier = tempfile::tempdir().expect("tempdir");
+
+    let id = MeetingsRepository::create_meeting(&pool, None, None, None, None, None)
+        .await
+        .unwrap();
+    MeetingsRepository::set_processing_mode(&pool, &id, Some("live"))
+        .await
+        .unwrap();
+    write_recording_folder(earlier.path(), &id, "recording");
+
+    let roots = [current.path().to_path_buf(), earlier.path().to_path_buf()];
+    assert_eq!(
+        app_lib::audio::processing_reconcile::reconcile_at_startup(&pool, &roots)
+            .await
+            .unwrap(),
+        0,
+        "the interrupted recording in the earlier root keeps its Live marker"
     );
 }

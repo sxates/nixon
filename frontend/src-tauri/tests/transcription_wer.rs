@@ -19,12 +19,17 @@
 //!   NIXON_DIARIZATION_EVAL_DIR  corpus dir (default: `zoom-samples/` beside the repo)
 //!   NIXON_WER_SECONDS           audio per sample, seconds (default 300; 0 = whole file)
 //!   NIXON_WER_WHISPER_MODEL     catalogue name (default: whatever is installed)
+//!   NIXON_WER_CODEC             specs/0072 W0: `aac64`, `aac96`, … round-trips each
+//!                               sample through that codec first (the recorded mix's
+//!                               bitrate); unset = baseline. See `tests/eval_codec/`.
 
 use std::path::{Path, PathBuf};
 
 use app_lib::audio::decoder::decode_audio_file;
 use app_lib::parakeet_engine::ParakeetEngine;
 use app_lib::whisper_engine::WhisperEngine;
+
+mod eval_codec;
 
 const SAMPLE_RATE: usize = 16_000;
 
@@ -297,8 +302,22 @@ async fn parakeet_vs_whisper_word_error_rate() {
                                             // real time cannot keep up with a meeting at all.
     let mut spent = [0f64; 2];
     let mut audio_secs_total = 0f64;
+    let codec = eval_codec::Codec::from_env("NIXON_WER_CODEC");
+    if let Some(codec) = codec {
+        eprintln!("codec round-trip: {}", codec.tag());
+    }
     for sample in &samples {
-        let decoded = match decode_audio_file(&sample.media) {
+        let media = match codec {
+            None => sample.media.clone(),
+            Some(codec) => {
+                let ffmpeg = eval_codec::bundled_ffmpeg().expect("bundled ffmpeg sidecar");
+                let stem = sample.media.file_stem().unwrap().to_string_lossy();
+                let cache = sample.media.parent().unwrap().join(".eval-cache");
+                eval_codec::round_trip_cached(&ffmpeg, codec, &sample.media, &cache, &stem)
+                    .unwrap_or_else(|e| panic!("{} round-trip failed: {e}", codec.tag()))
+            }
+        };
+        let decoded = match decode_audio_file(&media) {
             Ok(d) => d,
             Err(e) => {
                 eprintln!("  {}: decode failed ({e})", sample.name);
