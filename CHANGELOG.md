@@ -124,46 +124,29 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 - **Meetings in a recordings folder you used before keep working.** After you change where
   recordings are saved, deleting one of your earlier meetings removes its recording too,
   and an interrupted recording in the old folder is still offered to resume.
-- **A meeting that ends with the transcript running now processes itself.** If you paused the
-  transcript partway through a meeting and resumed it, stopping used to tell you to process
-  the audio by hand — and the **Process now** button did nothing when you tried. Both went
-  through the same broken check, which could never succeed for any meeting. Stopping now
-  transcribes and summarizes on its own, the way a meeting you never paused always did.
-- **A summary generated in the background now appears without reopening the meeting.** The
-  meeting page read the summary once when you opened it, so one produced afterwards by
-  background processing sat in the database unseen until you navigated away and back.
-- **A meeting that was being processed no longer gets abandoned halfway.** Nixon could end
-  up with two processing runs for the same meeting; the second saw the first's work already
-  underway, took that for a failure, and gave up — leaving the meeting transcribed but never
-  summarized. It now recognises its own work in progress and waits for it.
-- **A meeting's length is recorded correctly.** The stored duration was taken after the
-  recording's clocks had already been cleared, so it fell back to the moment speech last
-  stopped — a meeting with quiet at the end, or a paused transcript, came out shorter than it
-  was (63 seconds recorded as a 67-second meeting; 69 for a 115-second one).
-- **Hiding a meeting on Today now actually hides it.** Clearing something off your day —
-  lunch, a hold, anything you are not recording — no longer sends you a reminder to prep for
-  it or to join it, and no longer spends a summary working out what it was about.
+- **A meeting whose transcript you paused processes itself when you stop.** It is
+  transcribed and summarized on its own, like any other meeting, and **Process now** runs
+  it by hand whenever you want.
+- **Background summaries appear on the open meeting page** the moment they are ready, in
+  place of "writing your summary".
+- **Every meeting finishes processing**, transcribed and summarized, even when processing
+  was started for it twice.
+- **Meeting lengths include quiet endings and paused stretches.**
+- **Hiding a meeting on Today also silences it**: no prep reminder, no join alert, and no
+  summary spent working out what it was.
 - **Only the alert that matters waits for you.** "A meeting is starting" stays on screen
-  until you deal with it; every other Nixon banner now clears itself after a few seconds.
+  until you deal with it; every other Nixon banner clears itself after a few seconds.
   Set Nixon to **Alerts** in System Settings → Notifications and Settings will tell you the
   rest.
-- **A finished summary replaces "writing your summary".** When a meeting was summarized by
-  background processing while its page was open, the page could keep saying it was still
-  writing — over a summary that had already finished. It now shows the summary as soon as
-  it is ready.
-- **A meeting is summarized once when it ends.** The meeting page and background processing
-  could both start a summary of the same meeting, doing the work twice and renaming the
-  meeting twice. The page now leaves a meeting to background processing once it has it.
-- **No "Welcome to Nixon!" flash when a meeting ends.** The recording screen emptied its
-  transcript a moment before the meeting page replaced it, briefly showing the screen for a
-  brand-new meeting on the way out.
-- **Faces on every meeting on Today.** A meeting recorded without a calendar invite now
-  shows the people named on it, the way All Meetings does.
+- **A meeting is summarized, and renamed, once when it ends.**
+- **Ending a meeting goes straight to the meeting page**, without a "Welcome to Nixon!"
+  flash on the way.
+- **Faces on every meeting on Today.** A meeting recorded without a calendar invite shows
+  the people named on it, the way All Meetings does.
 - **The meeting you are recording is marked in the Week view** too, and appears on Today
   as soon as recording starts.
-- **A meeting you added in Nixon says whether it was recorded.** Once its time had passed
-  it read "Recorded" whether you had recorded it or not, and it kept offering a Record
-  button long after it was over. Record now shows until the meeting ends.
+- **A meeting you added in Nixon says whether it was recorded**, and offers Record only
+  until it ends.
 
 ### Internal
 
