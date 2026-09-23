@@ -370,3 +370,19 @@ describe('RecordingSettings — audio storage copy (specs/0072 W3)', () => {
     expect(screen.getByText(/still rename and reassign its speakers/)).toBeInTheDocument();
   });
 });
+
+describe('RecordingSettings — meeting detection (specs/0074 W5)', () => {
+  beforeEach(() => {
+    useSidebarMock.mockReturnValue({ activeRecordingMeetingId: null });
+  });
+
+  // Named for what it does rather than one app; the stored key keeps its old name.
+  it('is called "Detect meetings" and still saves to the same key', async () => {
+    await renderSettings();
+    expect(screen.queryByText(/Auto-detect Zoom/)).not.toBeInTheDocument();
+    fireEvent.click(switchForLabel('Detect meetings'));
+    await waitFor(() =>
+      expect(invokeMock).toHaveBeenCalledWith('api_set_zoom_auto_detect', { enabled: false }),
+    );
+  });
+});

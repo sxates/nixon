@@ -39,7 +39,7 @@ vi.mock('@/components/MainContent', () => ({ default: mainContentMock }));
 vi.mock('@/components/CommandPalette', () => ({ default: commandPaletteMock }));
 
 vi.mock('@/components/ResumeRecordingPrompt', () => ({ default: vi.fn(() => null) }));
-vi.mock('@/components/ZoomAutoDetect', () => ({ default: vi.fn(() => null) }));
+vi.mock('@/components/MeetingAutoDetect', () => ({ default: vi.fn(() => null) }));
 vi.mock('@/components/NotificationPermissionBootstrap', () => ({ default: vi.fn(() => null) }));
 vi.mock('@/components/Calendar/CalendarAlerts', () => ({ default: vi.fn(() => null) }));
 vi.mock('@/components/People/VoiceprintRetractionListener', () => ({ default: vi.fn(() => null) }));

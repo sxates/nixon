@@ -53,6 +53,14 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
   prepares ahead of your meetings, or that you ask for by opening Prep or pressing
   Regenerate, appears as a row the moment it is planned. **Retry** on a failed one redoes
   just that one.
+- **Nixon alerts you on screen when a call starts, even while you're in another app.** The
+  "Zoom call detected — Record this meeting?" alert now always arrives as a macOS
+  notification as well as in Nixon, whether or not Nixon is in front; answering either one
+  clears the other. If macOS notifications are off for Nixon, the prompt says so and
+  **Enable** takes you to the setting.
+- **"Starting now" alerts with Google Calendar alone.** If Google Calendar is your only
+  connected calendar, you now get the five-minute and "starting now — Join & Record" alerts
+  too.
 
 ### Changed
 
@@ -102,6 +110,8 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 - **Calmer meeting tabs.** Enhance and Regenerate Summary are ordinary buttons again, the
   edit and reassign controls on a transcript line disappear as soon as the pointer leaves,
   and a summary's status sits above it instead of under pages of text.
+- **"Auto-detect Zoom meetings" is now "Detect meetings"** in Settings → Recording. Your
+  choice carries over.
 
 ### Fixed
 
@@ -279,6 +289,9 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
   `docs/screenshots/README.md` now names the review step that missed them.
 - Three shared Today components (`AgendaRowMenu`, `AgendaAttendees`, `RecordingBadge`) so the
   three views cannot drift apart again. First tests for `WeekView` and the Ask AI page.
+- `notif_remove` command (capability-gated like every UNUserNotificationCenter call) backs
+  the detected-call prompt's cross-dismiss; `ZoomAutoDetect` is now `MeetingAutoDetect` and
+  reads an optional `platform` from the still-`zoom-meeting-*` events (specs/0074 W5).
 
 ## [0.8.0] - 2026-09-20
 - Screenshots: a `today-week` shot, so the Week view is covered (its parity regressions went

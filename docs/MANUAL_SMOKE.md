@@ -210,7 +210,7 @@ the system-audio tap silently returns silence (see `CLAUDE.md` / ADR-0004).
       does not create a duplicate.
 
 ## 10. Zoom auto-detect / auto-stop (WS6.2)
-- [ ] Joining a Zoom call (without clicking record) surfaces the "Zoom meeting detected" prompt.
+- [ ] Joining a Zoom call (without clicking record) surfaces the "Zoom call detected" prompt (in-app toast AND an OS banner, even with Nixon focused; answering one clears the other).
 - [ ] When the Zoom call ends, Nixon wraps up the recording **and** the transport rail returns
       to idle (counter dim, reels stopped, HOLD/STOP disabled).
 

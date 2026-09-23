@@ -3,7 +3,7 @@
 /**
  * Voiceprint retraction feedback (specs/0039 WS3, task 9).
  *
- * App-wide background component (mounted in layout.tsx alongside ZoomAutoDetect /
+ * App-wide background component (mounted in layout.tsx alongside MeetingAutoDetect /
  * CalendarAlerts) that listens for the backend `voiceprint-retracted` event. When a WS2 span
  * correction reassigns a transcript span away from a speaker, the backend quarantines the voice
  * samples that speaker's cluster contributed for that meeting and emits this event — once per

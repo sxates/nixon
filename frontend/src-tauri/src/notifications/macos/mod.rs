@@ -55,7 +55,7 @@ pub const CATEGORY_MEETING: &str = "nixon.meeting";
 /// Category for the five-minute warning. Its button opens the meeting's Prep tab — at
 /// T-5 you are not joining yet, you are deciding what this meeting is for.
 pub const CATEGORY_PREP: &str = "nixon.prep";
-/// Category for "a call started — record it?" (`ZoomAutoDetect`), and for a meeting
+/// Category for "a call started — record it?" (`MeetingAutoDetect`), and for a meeting
 /// starting with no join link. One button: macOS already gives dismissal for free, so an
 /// "Ignore" button would only take up room.
 pub const CATEGORY_RECORD: &str = "nixon.record";
@@ -277,6 +277,34 @@ pub fn deliver(request: DeliverRequest) -> Result<()> {
     }
 }
 
+/// Take a delivered notification down now (specs/0074 W5): acting on the in-app twin of a
+/// banner removes the banner, so the same question is not left asked twice. Gated like
+/// every other entry point — outside an `.app` the framework aborts the process.
+pub fn remove(id: &str) -> Result<()> {
+    let capability = capability();
+    if !capability.supported {
+        return Err(anyhow::anyhow!(
+            "{}",
+            capability
+                .reason
+                .unwrap_or_else(|| "Notifications are unavailable.".to_string())
+        ));
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        deliver::remove(id);
+        log::info!("notifications: removed {id}");
+        Ok(())
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = id;
+        Ok(())
+    }
+}
+
 /// Install the delegate and register the categories. Called once from setup; a no-op when
 /// the build cannot deliver, so the dev binary launches normally.
 pub fn install<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Result<()> {
@@ -343,6 +371,8 @@ mod tests {
             auto_dismiss_ms: Some(1),
         })
         .is_err());
+        // specs/0074 W5: the cross-dismiss removal is an entry point too.
+        assert!(remove("t").is_err());
     }
 
     // Owner feedback 2026-09-21: "the 'meeting starts now - join & record' should be

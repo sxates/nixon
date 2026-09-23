@@ -283,14 +283,16 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
             }
           />
 
+          {/* specs/0074 W5: named for what it does, not one app. The stored key and the
+              `api_*_zoom_auto_detect` commands keep their names (on-disk compatibility). */}
           <SettingsRow
-            label="Auto-detect Zoom meetings"
-            description="When a Zoom meeting starts, offer to record it."
+            label="Detect meetings"
+            description="When a video call starts, offer to record it."
             control={
               <Switch
                 checked={zoomAutoDetect}
                 onCheckedChange={handleZoomAutoDetectToggle}
-                aria-label="Auto-detect Zoom meetings"
+                aria-label="Detect meetings"
               />
             }
           />

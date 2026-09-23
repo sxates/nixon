@@ -21,6 +21,7 @@ import {
   __resetNotificationStateForTests,
   ensureNotificationPermission,
   notify,
+  removeNotification,
 } from '@/lib/osNotification';
 
 /** The handler `listen('notification-action', …)` was given. */
@@ -172,5 +173,24 @@ describe('a press comes back to the right callback', () => {
     handler?.({ payload: { actionId: ACTION_JOIN_AND_RECORD, notificationId: 'once', userInfo: {} } });
     handler?.({ payload: { actionId: ACTION_JOIN_AND_RECORD, notificationId: 'once', userInfo: {} } });
     expect(pressed).toEqual(['joinAndRecord']);
+  });
+});
+
+// specs/0074 W5 — acting on the in-app prompt takes its banner twin down.
+describe('removeNotification', () => {
+  it('asks Rust to take the banner down and forgets its callbacks', async () => {
+    backend();
+    const pressed: string[] = [];
+    await notify({ title: 'T', body: 'B', id: 'twin', onRecord: () => pressed.push('record') });
+    await removeNotification('twin');
+    expect(invokeMock).toHaveBeenCalledWith('notif_remove', { id: 'twin' });
+    // A press that raced the removal must not start a second recording.
+    handler?.({ payload: { actionId: ACTION_RECORD, notificationId: 'twin', userInfo: {} } });
+    expect(pressed).toEqual([]);
+  });
+
+  it('never throws when the build cannot remove anything', async () => {
+    invokeMock.mockRejectedValue(new Error('unbundled'));
+    await expect(removeNotification('gone')).resolves.toBeUndefined();
   });
 });
