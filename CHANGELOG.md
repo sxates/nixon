@@ -100,6 +100,9 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 - **A meeting is summarized once when it ends.** The meeting page and background processing
   could both start a summary of the same meeting, doing the work twice and renaming the
   meeting twice. The page now leaves a meeting to background processing once it has it.
+- **No "Welcome to Nixon!" flash when a meeting ends.** The recording screen emptied its
+  transcript a moment before the meeting page replaced it, briefly showing the screen for a
+  brand-new meeting on the way out.
 
 ### Internal
 
