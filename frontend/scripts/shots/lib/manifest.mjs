@@ -35,6 +35,9 @@ export function expand(entries, { headless = false } = {}) {
   const shots = [];
   for (const entry of entries) {
     if (headless && entry.real_only) continue;
+    // headless_only: mock-driven states, or tabs that render real account data (the
+    // Calendar tab shows the owner's invite addresses) — never captured from a real window.
+    if (!headless && entry.headless_only) continue;
     for (const theme of entry.themes) {
       shots.push({
         name: entry.name, theme, entry, file: outputName(entry.name, theme),

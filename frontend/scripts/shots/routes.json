@@ -385,6 +385,7 @@
   },
   {
     "name": "settings-recordings-once",
+    "headless_only": true,
     "route": "/settings?tab=recording&retention=once",
     "viewport": [1280, 1100],
     "ignore": [
@@ -399,6 +400,7 @@
   },
   {
     "name": "settings-recordings-moving",
+    "headless_only": true,
     "route": "/settings?tab=recording",
     "move": "running",
     "viewport": [1280, 1100],
@@ -414,6 +416,7 @@
   },
   {
     "name": "settings-recordings-gather",
+    "headless_only": true,
     "route": "/settings?tab=recording",
     "move": "gather",
     "ignore": [
@@ -441,6 +444,7 @@
   },
   {
     "name": "settings-calendar",
+    "headless_only": true,
     "route": "/settings?tab=calendar",
     "ignore": [
       {
