@@ -348,6 +348,12 @@ pub async fn api_list_interrupted_recordings(
 /// so it stops being offered, WITHOUT deleting the captured audio/transcripts.
 #[tauri::command]
 pub async fn api_discard_interrupted_recording(meeting_id: String) -> Result<(), String> {
+    // specs/0073: the metadata rewrite must not race a move/copy of the same folder.
+    let _folder_lease = crate::audio::folder_lease::acquire(
+        &meeting_id,
+        crate::audio::folder_lease::LeaseHolder::Discard,
+    )
+    .await;
     // specs/0073: the folder may be under any known recordings root, not just the current.
     let roots = crate::audio::recording_preferences::known_recording_roots();
     let found =

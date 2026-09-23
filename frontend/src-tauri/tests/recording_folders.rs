@@ -398,3 +398,83 @@ async fn the_webview_can_read_audio_from_an_earlier_root_and_nothing_else() {
         "anything outside the known roots is denied"
     );
 }
+
+// -- delete and discard wait for the folder lease (review fix round 1) ------------------
+
+#[tokio::test]
+async fn deleting_a_meeting_waits_for_a_job_holding_its_folder() {
+    let (current, _) = roots();
+    let (app, pool, _db) = app_with_db().await;
+    let id = meeting_with_folder(&pool, None).await;
+    let folder = recording_folder(current, "delete-waits", Some(&id));
+    MeetingsRepository::update_folder_path(&pool, &id, &folder.to_string_lossy())
+        .await
+        .unwrap();
+
+    let retranscription = folder_lease::acquire(&id, LeaseHolder::Retranscription).await;
+    let delete = {
+        let (handle, id) = (app.handle().clone(), id.clone());
+        tokio::spawn(async move {
+            let state = handle.state::<AppState>();
+            app_lib::meetings::api_delete_meeting(handle.clone(), state, id).await
+        })
+    };
+    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    assert!(
+        !delete.is_finished(),
+        "delete must wait for the retranscription"
+    );
+    assert!(
+        folder.exists(),
+        "the folder is untouched while another job holds it"
+    );
+    assert!(
+        MeetingsRepository::get_meeting(&pool, &id)
+            .await
+            .unwrap()
+            .is_some(),
+        "the row is untouched too"
+    );
+
+    drop(retranscription);
+    delete.await.unwrap().unwrap();
+    assert!(
+        !folder.exists(),
+        "once the job is done the folder is removed"
+    );
+    assert_eq!(folder_lease::current_holder(&id), None);
+}
+
+#[tokio::test]
+async fn discarding_an_interrupted_recording_waits_for_a_job_holding_its_folder() {
+    let (_, earlier) = roots();
+    let id = "discard-waits-meeting";
+    let folder = earlier.join("discard-waits");
+    std::fs::create_dir_all(folder.join(".checkpoints")).unwrap();
+    std::fs::write(
+        folder.join("metadata.json"),
+        format!(r#"{{"meeting_id":"{id}","status":"recording"}}"#),
+    )
+    .unwrap();
+    let status = || -> String {
+        let v: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(folder.join("metadata.json")).unwrap()).unwrap();
+        v["status"].as_str().unwrap().to_string()
+    };
+
+    let mover = folder_lease::acquire(id, LeaseHolder::Mover).await;
+    let discard = tokio::spawn(
+        app_lib::audio::recording_recovery::api_discard_interrupted_recording(id.to_string()),
+    );
+    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    assert!(!discard.is_finished(), "discard must wait for the mover");
+    assert_eq!(
+        status(),
+        "recording",
+        "metadata untouched while the mover holds it"
+    );
+
+    drop(mover);
+    discard.await.unwrap().unwrap();
+    assert_eq!(status(), "discarded");
+}

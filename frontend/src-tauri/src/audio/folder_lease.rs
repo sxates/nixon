@@ -3,8 +3,9 @@
 //! Exclusive, per-meeting right to touch a meeting's recording folder on disk. Every job that
 //! reads or writes inside a meeting folder, or rewrites `meetings.folder_path`, holds it:
 //! the recording saver (start → finalization), retranscription, diarization, the retention
-//! sweep, the audio compressor, the recordings mover, and the transcript save's `folder_path`
-//! write-back. It is the one exclusion primitive for meeting folders; never define a second.
+//! sweep, the audio compressor, the recordings mover, the transcript save's `folder_path`
+//! write-back, meeting delete and interrupted-recording discard. It is the one exclusion
+//! primitive for meeting folders; never define a second.
 //!
 //! The contract has two halves:
 //!
@@ -46,6 +47,10 @@ pub enum LeaseHolder {
     Mover,
     /// A transcript save writing `meetings.folder_path` back.
     FolderPathWrite,
+    /// Deleting a meeting (removes its folder).
+    Delete,
+    /// Discarding an interrupted recording (rewrites its `metadata.json` status).
+    Discard,
 }
 
 impl LeaseHolder {
@@ -59,6 +64,8 @@ impl LeaseHolder {
             LeaseHolder::Compression => "audio compression",
             LeaseHolder::Mover => "moving recordings",
             LeaseHolder::FolderPathWrite => "saving the transcript",
+            LeaseHolder::Delete => "deleting the meeting",
+            LeaseHolder::Discard => "discarding the recording",
         }
     }
 }

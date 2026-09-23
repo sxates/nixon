@@ -101,9 +101,18 @@ pub async fn api_delete_meeting<R: Runtime>(
 
     let pool = state.db_manager.pool();
 
-    // Capture the recording folder BEFORE the delete so we can clean it up from
-    // disk after the DB transaction commits. Read it directly (no signature
-    // change) — if the lookup fails we still proceed with the DB delete.
+    // specs/0073: hold the meeting's folder lease across the folder_path read, the DB
+    // delete and the folder removal, so a delete never pulls a folder out from under a
+    // retranscription, diarization or move of the same meeting. Waits for that job.
+    let _folder_lease = crate::audio::folder_lease::acquire(
+        &meeting_id,
+        crate::audio::folder_lease::LeaseHolder::Delete,
+    )
+    .await;
+
+    // Capture the recording folder BEFORE the delete (and after taking the lease, so it is
+    // the folder's current location) so we can clean it up from disk after the DB
+    // transaction commits. If the lookup fails we still proceed with the DB delete.
     let folder_path: Option<String> =
         sqlx::query_scalar("SELECT folder_path FROM meetings WHERE id = ?")
             .bind(&meeting_id)

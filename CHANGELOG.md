@@ -136,8 +136,8 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 - Spec 0073 W1: a per-meeting folder lease (`audio/folder_lease.rs`) is now the one
   exclusion primitive for meeting folders. The recording saver, retranscription,
-  diarization, the retention sweep and the transcript save's `folder_path` write-back take
-  it and re-read `folder_path` after acquiring; a stale `folder_path` from the frontend can
+  diarization, the retention sweep, the transcript save's `folder_path` write-back, meeting
+  delete and interrupted-recording discard take it and re-read `folder_path` after acquiring; a stale `folder_path` from the frontend can
   no longer overwrite a live one. "Under the current recordings root" is replaced by an
   ownership check (`audio/meeting_folder.rs`) and `known_recording_roots()`, which the
   delete, `fs_guard`, recovery, reconcile and diarization-fallback scans all use. Removed
