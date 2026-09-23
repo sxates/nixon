@@ -46,7 +46,7 @@ problems:
    which passed the WER gate. Every reader decodes through
    `audio::decoder::decode_audio_file`, which falls back to ffmpeg for Opus.
 6. **Background jobs that touch a meeting folder go through the per-meeting folder lease**
-   (see the folder-lease ADR). This covers the compressor and the sweep.
+   (see [ADR-0013](ADR-0013-per-meeting-folder-lease.md)). This covers the compressor and the sweep.
 
 ## Codec gate (measured 2026-09-23)
 

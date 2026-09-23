@@ -53,11 +53,10 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
   prepares ahead of your meetings, or that you ask for by opening Prep or pressing
   Regenerate, appears as a row the moment it is planned. **Retry** on a failed one redoes
   just that one.
-- **Nixon alerts you on screen when a call starts, even while you're in another app.** The
-  "Zoom call detected — Record this meeting?" alert now always arrives as a macOS
-  notification as well as in Nixon, whether or not Nixon is in front; answering either one
-  clears the other. If macOS notifications are off for Nixon, the prompt says so and
-  **Enable** takes you to the setting.
+- **The call-detected alert now always arrives as a macOS notification, even with Nixon in
+  front.** "Record this meeting?" shows in Nixon and as a notification at the same time, and
+  answering it in either place clears the other. If macOS notifications are off for Nixon,
+  the prompt says so and **Enable** takes you to the setting.
 - **Nixon offers to record Teams and Google Meet calls too, not just Zoom.** When a Teams
   call starts, or a browser call starts while a meeting on your calendar is under way, you
   get the same "Record this meeting?" prompt, named for the app. A browser using your
@@ -120,8 +119,8 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 ### Fixed
 
-- **With audio set to delete right away, the separate microphone and system-audio tracks are
-  now deleted too.** On first launch they're removed from past meetings.
+- **Once processed now removes the separate microphone and system-audio tracks too**,
+  including those kept from past meetings.
 - **Meetings in a recordings folder you used before keep working.** After you change where
   recordings are saved, deleting one of your earlier meetings removes its recording too,
   and an interrupted recording in the old folder is still offered to resume.
@@ -168,6 +167,14 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 ### Internal
 
+- Branch-review fixes: meeting detection reads the calendar and the browser window title
+  only while detection is on and Nixon isn't recording (a confirmed Meet call is held, and
+  Zoom's end still stops a recording). The abandoned-recording guard counts `.opus` channels
+  as audio. Row recovery after a same-volume rename matches a folder stored through a
+  symlink. `decode_stats` reaps ffmpeg on a read error. A refused folder change removes
+  every folder it created, and the gather never creates a missing folder the owner chose
+  (it reports it as blocked). `save_transcript` no longer recreates a missing folder.
+  ADR-0013 documents the folder lease.
 - Spec 0074 W4: the queue panel renders prep-brief queue rows (`LlmActivityView.queued` →
   Waiting, successful `prepBrief` history → Done, capped at 5) alongside the existing backlog
   rows; **Clear finished** now also calls `api_llm_activity_clear_finished`. Carried fix
