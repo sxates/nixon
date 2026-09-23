@@ -47,6 +47,7 @@ pub mod recording_recovery; // specs/0037: crash/quit recovery scan for resume
 pub mod recording_saver;
 pub mod recording_duration;
 pub mod recording_state;
+pub mod recordings_move; // specs/0073 W2: move every meeting when the recordings folder changes
 pub mod retranscription_channels; // 1.10 feedback: channel tags for batch retranscription (deferred "You" attribution)
 pub mod retranscription_engines; // engine get-or-init for batch retranscription (size-ratchet split)
 pub mod simple_level_monitor;

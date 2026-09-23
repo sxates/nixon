@@ -347,6 +347,10 @@ pub fn run() {
             // AFTER database init; best-effort, retried on the next launch.
             audio::processing_reconcile::spawn_startup_reconciliation(_app.handle().clone());
 
+            // specs/0073: finish a recordings move a quit interrupted, then gather meetings
+            // left outside the recordings folder (the first launch asks first).
+            audio::recordings_move::commands::spawn_startup_resume_and_gather(_app.handle().clone());
+
             // Google Calendar background sync timer (specs/0032, owner decision
             // 2026-07-02): every 10 minutes while the app runs, sync-if-stale.
             // Spawned AFTER database init (it reads the google_calendar_* tables);

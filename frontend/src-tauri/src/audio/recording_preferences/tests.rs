@@ -283,3 +283,15 @@ fn changing_the_folder_remembers_the_outgoing_one_once() {
         vec![PathBuf::from("/r/b"), PathBuf::from("/r/c")]
     );
 }
+
+#[test]
+fn a_settings_save_keeps_the_gather_answer() {
+    // specs/0073: the frontend never sends recordings_gathered_once; a routine save must
+    // not bring the one-time gather question back.
+    let stored = RecordingPreferences {
+        recordings_gathered_once: true,
+        ..prefs_at("/r/now", &[])
+    };
+    let merged = carry_backend_fields(&stored, prefs_at("/r/now", &[]));
+    assert!(merged.recordings_gathered_once);
+}

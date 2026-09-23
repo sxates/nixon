@@ -142,6 +142,16 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
   ownership check (`audio/meeting_folder.rs`) and `known_recording_roots()`, which the
   delete, `fs_guard`, recovery, reconcile and diarization-fallback scans all use. Removed
   the unused `StreamManagerType` enum.
+- Spec 0073 W2: the recordings mover (`audio/recordings_move/`). It plans a move of every
+  meeting folder into one target, then moves each folder under its folder lease: a rename on
+  one volume, a synced copy plus verify and staging rename across volumes. A journal
+  (`recordings-move.json`) and an ordering where rows change only after a verified copy make
+  every crash point recoverable at the next launch. Emptied old roots are removed with a
+  non-recursive `remove_dir`. A startup gather collects leftovers, but the first launch
+  only asks (`recordings-gather-needed`). A debug build never moves from, counts in or
+  removes the production recordings folders. Commands: `api_plan_recordings_move`,
+  `api_change_recordings_folder`, `api_gather_recordings`, `api_cancel_recordings_move`,
+  `api_recordings_move_status`, `api_recordings_gather_state`. The UI is not wired yet.
 - Spec 0071 covers the follow-up from an owner recording on 2026-09-21: three of the four
   reported faults were the app working as designed and failing to say so (the chip's label,
   the "Listening" indicator, and a silent 3min19s `'process-now'` repass after stop). Root

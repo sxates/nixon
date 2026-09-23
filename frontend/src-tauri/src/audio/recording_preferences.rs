@@ -64,6 +64,12 @@ pub struct RecordingPreferences {
     /// over whatever the frontend sends. Feeds [`known_recording_roots`].
     #[serde(default)]
     pub previous_save_folders: Vec<PathBuf>,
+    /// The owner has agreed to (or already had) the one-time gather of recordings from
+    /// every earlier folder into the current one (specs/0073). Until then the startup
+    /// gather asks first instead of moving anything. Backend-owned like
+    /// `previous_save_folders`.
+    #[serde(default)]
+    pub recordings_gathered_once: bool,
 }
 
 /// serde default for [`RecordingPreferences::live_transcription_enabled`].
@@ -90,6 +96,7 @@ impl Default for RecordingPreferences {
             low_power_on_battery: true,
             save_folder_user_chosen: false,
             previous_save_folders: Vec::new(),
+            recordings_gathered_once: false,
         }
     }
 }
@@ -198,6 +205,14 @@ pub fn set_previous_recording_roots(roots: Vec<PathBuf>) {
     *PREVIOUS_ROOTS.write().unwrap_or_else(|e| e.into_inner()) = roots;
 }
 
+/// The earlier recordings folders currently cached (the persisted `previous_save_folders`).
+pub fn previous_recording_roots() -> Vec<PathBuf> {
+    PREVIOUS_ROOTS
+        .read()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone()
+}
+
 /// Every recordings folder Nixon has written meetings to (specs/0073): the current root,
 /// the persisted earlier ones, and the platform default folders (legacy `meetily-recordings`
 /// and `nixon-recordings`) that exist on disk. A debug build also includes the folder a
@@ -214,10 +229,7 @@ pub fn known_recording_roots() -> Vec<PathBuf> {
     if is_dev_build() {
         extras.push(release_default_recordings_folder());
     }
-    let previous = PREVIOUS_ROOTS
-        .read()
-        .unwrap_or_else(|e| e.into_inner())
-        .clone();
+    let previous = previous_recording_roots();
     known_roots_from(recordings_root(), &previous, &extras)
 }
 
@@ -332,7 +344,7 @@ fn default_recordings_folder_for_profile(base: &Path, dev: bool) -> PathBuf {
 }
 
 /// Is this a debug ("Dev Nixon") build?
-fn is_dev_build() -> bool {
+pub(crate) fn is_dev_build() -> bool {
     cfg!(debug_assertions)
 }
 
@@ -351,6 +363,14 @@ fn get_default_recordings_folder() -> PathBuf {
 /// after the re-point below moves the write root. Never a write target.
 pub(crate) fn release_default_recordings_folder() -> PathBuf {
     default_recordings_folder_for_profile(&platform_recordings_base(), false)
+}
+
+/// The platform default recordings folders (legacy `meetily-recordings` and
+/// `nixon-recordings`), whether or not they exist. The recordings mover (specs/0073) needs
+/// them by name: a release build may gather from them, a debug build must never touch them.
+pub(crate) fn platform_default_recordings_folders() -> Vec<PathBuf> {
+    let base = platform_recordings_base();
+    vec![base.join(LEGACY_RECORDINGS_DIR), base.join(RECORDINGS_DIR)]
 }
 
 /// Ensure the recordings directory exists
@@ -485,6 +505,7 @@ fn carry_backend_fields(
     }
     previous.retain(|p| *p != incoming.save_folder);
     incoming.previous_save_folders = previous;
+    incoming.recordings_gathered_once = stored.recordings_gathered_once;
     incoming
 }
 

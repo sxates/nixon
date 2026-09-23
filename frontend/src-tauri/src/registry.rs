@@ -208,6 +208,13 @@ pub fn invoke_handler() -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Sen
         audio::recording_preferences::get_default_recordings_folder_path,
         audio::recording_preferences::open_recordings_folder,
         audio::recording_preferences::select_recording_folder,
+        // specs/0073 W2: the recordings mover (plan, move, gather, cancel, status).
+        audio::recordings_move::commands::api_plan_recordings_move,
+        audio::recordings_move::commands::api_change_recordings_folder,
+        audio::recordings_move::commands::api_gather_recordings,
+        audio::recordings_move::commands::api_cancel_recordings_move,
+        audio::recordings_move::commands::api_recordings_move_status,
+        audio::recordings_move::commands::api_recordings_gather_state,
         // Audio retention (specs/0029 WS7.1): lets the UI probe whether a meeting
         // still has audio on disk (vs removed by the retention sweep).
         audio::retention::api_meeting_audio_available,
