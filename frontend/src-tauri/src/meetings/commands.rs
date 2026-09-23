@@ -90,7 +90,7 @@ pub async fn api_get_meetings<R: Runtime>(
 
 #[tauri::command]
 pub async fn api_delete_meeting<R: Runtime>(
-    app: AppHandle<R>,
+    _app: AppHandle<R>,
     state: tauri::State<'_, AppState>,
     meeting_id: String,
 ) -> Result<serde_json::Value, String> {
@@ -125,7 +125,7 @@ pub async fn api_delete_meeting<R: Runtime>(
             // DB rows are gone. Now best-effort remove the on-disk recording
             // folder. A filesystem error here must NOT fail the command or roll
             // back the committed DB delete — log and continue.
-            delete_recording_folder_best_effort(&app, folder_path.as_deref()).await;
+            delete_recording_folder_best_effort(&meeting_id, folder_path.as_deref()).await;
             Ok(serde_json::json!({
                 "status": "success",
                 "message": "Meeting deleted successfully"
@@ -148,83 +148,48 @@ pub async fn api_delete_meeting<R: Runtime>(
 /// Best-effort removal of a meeting's on-disk recording folder after its DB rows
 /// have been deleted.
 ///
-/// Safety: only removes `folder_path` if it resolves to a directory **under** the
-/// configured recordings root (`RecordingPreferences::save_folder`, default
-/// `~/Movies/nixon-recordings`). An empty/missing path, or any path that
-/// resolves outside that root, is skipped (logged) — we never `remove_dir_all`
-/// an arbitrary stored path. A filesystem error (including the folder already
-/// being gone) is logged and swallowed; it never fails the delete command.
-async fn delete_recording_folder_best_effort<R: Runtime>(
-    app: &AppHandle<R>,
-    folder_path: Option<&str>,
-) {
+/// Safety (specs/0073): the folder is removed only if it passes the ownership check
+/// ([`is_meeting_folder`](crate::audio::meeting_folder::is_meeting_folder)): its
+/// `metadata.json` names this meeting, or (a pre-0037 folder with no id) it lies inside
+/// a recordings folder Nixon knows about, and it is never a root, `$HOME`, `/` or a volume
+/// root. So a meeting left in an EARLIER recordings folder is still deleted, while we
+/// never `remove_dir_all` an arbitrary stored path. A filesystem error (including the
+/// folder already being gone) is logged and swallowed; it never fails the delete command.
+async fn delete_recording_folder_best_effort(meeting_id: &str, folder_path: Option<&str>) {
+    use crate::audio::meeting_folder::{remove_meeting_folder_in, RemoveOutcome};
+
     let folder_path = match folder_path {
-        Some(p) if !p.trim().is_empty() => p.trim(),
+        Some(p) if !p.trim().is_empty() => p.trim().to_string(),
         _ => {
             log_info!("No recording folder to delete (meeting has no folder_path); skipping");
             return;
         }
     };
+    let id = meeting_id.to_string();
+    let target = folder_path.clone();
+    let outcome = tokio::task::spawn_blocking(move || {
+        let roots = crate::audio::recording_preferences::known_recording_roots();
+        remove_meeting_folder_in(std::path::Path::new(&target), &id, &roots)
+    })
+    .await
+    .unwrap_or_else(|e| RemoveOutcome::Failed(format!("delete task failed: {e}")));
 
-    // Resolve the configured recordings root.
-    let prefs = match crate::audio::recording_preferences::load_recording_preferences(app).await {
-        Ok(prefs) => prefs,
-        Err(e) => {
-            log_warn!(
-                "Could not load recording preferences to validate folder '{}'; \
-                 skipping file deletion: {}",
-                folder_path,
-                e
-            );
-            return;
-        }
-    };
-    let root = prefs.save_folder;
-
-    let target = std::path::Path::new(folder_path);
-
-    // Guard: the target must be strictly under the recordings root. Canonicalize
-    // when possible to defeat `..` traversal; fall back to the lexical path if the
-    // folder no longer exists (canonicalize fails on a missing path).
-    let canonical_root = root.canonicalize().unwrap_or(root.clone());
-    let canonical_target = target
-        .canonicalize()
-        .unwrap_or_else(|_| target.to_path_buf());
-
-    if !canonical_target.starts_with(&canonical_root) {
-        log_warn!(
-            "Recording folder '{}' is outside the recordings root '{}'; \
+    match outcome {
+        RemoveOutcome::Removed => log_info!("Deleted recording folder: {}", folder_path),
+        RemoveOutcome::AlreadyGone => log_info!(
+            "Recording folder '{}' already gone; nothing to delete",
+            folder_path
+        ),
+        RemoveOutcome::NotOwned => log_warn!(
+            "Recording folder '{}' is not this meeting's recording folder; \
              skipping file deletion for safety",
-            canonical_target.display(),
-            canonical_root.display()
-        );
-        return;
-    }
-
-    // Never delete the recordings root itself.
-    if canonical_target == canonical_root {
-        log_warn!(
-            "Refusing to delete the recordings root itself ('{}'); skipping",
-            canonical_root.display()
-        );
-        return;
-    }
-
-    match std::fs::remove_dir_all(&canonical_target) {
-        Ok(()) => log_info!("Deleted recording folder: {}", canonical_target.display()),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-            log_info!(
-                "Recording folder '{}' already gone; nothing to delete",
-                canonical_target.display()
-            );
-        }
-        Err(e) => {
-            log_warn!(
-                "Failed to delete recording folder '{}' (DB delete already committed): {}",
-                canonical_target.display(),
-                e
-            );
-        }
+            folder_path
+        ),
+        RemoveOutcome::Failed(e) => log_warn!(
+            "Failed to delete recording folder '{}' (DB delete already committed): {}",
+            folder_path,
+            e
+        ),
     }
 }
 

@@ -9,34 +9,16 @@ use tauri::{AppHandle, Manager, Runtime};
 
 use crate::audio;
 
-/// Collect the canonical app-controlled roots the webview is allowed to read/write:
-/// the configured recordings folder and the app-data directory. Paths outside all of
-/// these are rejected. (specs/0028 — privacy: no arbitrary-FS access from the webview.)
-async fn allowed_fs_roots<R: Runtime>(app: &AppHandle<R>) -> Vec<std::path::PathBuf> {
-    let mut roots: Vec<std::path::PathBuf> = Vec::new();
-
-    if let Ok(prefs) = audio::recording_preferences::load_recording_preferences(app).await {
-        let root = prefs.save_folder;
-        roots.push(root.canonicalize().unwrap_or(root));
-    }
-
+/// Collect the canonical app-controlled roots the webview is allowed to read/write: every
+/// recordings folder Nixon has written meetings to (specs/0073 — the current one, earlier
+/// ones, and in a debug build the release root, see `known_recording_roots`) and the
+/// app-data directory. Paths outside all of these are rejected. (specs/0028 — privacy: no
+/// arbitrary-FS access from the webview.)
+fn allowed_fs_roots<R: Runtime>(app: &AppHandle<R>) -> Vec<std::path::PathBuf> {
+    let mut roots = audio::recording_preferences::known_recording_roots();
     if let Ok(dir) = app.path().app_data_dir() {
         roots.push(dir.canonicalize().unwrap_or(dir));
     }
-
-    // Debug builds also allow the RELEASE recordings root (2026-09-21). The debug build now
-    // writes to its own `nixon-recordings-dev` folder, but meetings it recorded before that
-    // change carry `folder_path` rows under the old root — and this allow-list is what lets
-    // the webview read a meeting's audio. Without this, re-pointing the dev root would have
-    // silently stranded every pre-existing dev recording.
-    //
-    // Never compiled into a shipped build, so production confinement is unchanged.
-    #[cfg(debug_assertions)]
-    {
-        let legacy = audio::recording_preferences::release_default_recordings_folder();
-        roots.push(legacy.canonicalize().unwrap_or(legacy));
-    }
-
     roots
 }
 
@@ -79,7 +61,7 @@ pub async fn read_audio_file<R: Runtime>(
     app: AppHandle<R>,
     file_path: String,
 ) -> Result<Vec<u8>, String> {
-    let roots = allowed_fs_roots(&app).await;
+    let roots = allowed_fs_roots(&app);
     let safe_path = confine_to_roots(&file_path, &roots)?;
 
     match std::fs::read(&safe_path) {
@@ -96,7 +78,7 @@ pub async fn save_transcript<R: Runtime>(
 ) -> Result<(), String> {
     log_info!("Saving transcript to: {}", file_path);
 
-    let roots = allowed_fs_roots(&app).await;
+    let roots = allowed_fs_roots(&app);
     let safe_path = confine_to_roots(&file_path, &roots)?;
 
     // Ensure parent directory exists

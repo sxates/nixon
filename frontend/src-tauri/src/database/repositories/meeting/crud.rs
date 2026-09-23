@@ -227,6 +227,9 @@ impl MeetingsRepository {
     /// Backfill `meetings.folder_path` for a meeting whose folder was never persisted
     /// (the frontend save can race the folder write). Best-effort: callers log and
     /// continue on failure. Returns whether a row was updated.
+    ///
+    /// FolderLease required (specs/0073): hold the meeting's
+    /// [`FolderLease`](crate::audio::folder_lease::FolderLease) while calling this.
     pub async fn update_folder_path(
         pool: &SqlitePool,
         meeting_id: &str,

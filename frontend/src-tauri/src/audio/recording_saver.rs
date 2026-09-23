@@ -128,6 +128,8 @@ pub struct RecordingSaver {
     /// cleanly-completed folder is left exactly as it was (status `"completed"`,
     /// canonical filenames, no phantom `.checkpoints/`).
     resume_init_journal: Option<ResumeInitJournal>,
+    /// specs/0073: the meeting's folder lease, held from start through finalization.
+    folder_lease: Option<super::folder_lease::FolderLease>,
 }
 
 /// What `initialize_resume_folder` changed on disk, so a failed start can be rolled
@@ -213,7 +215,14 @@ impl RecordingSaver {
             prior_audio_duration: 0.0,
             prior_transcript_segments: Vec::new(),
             resume_init_journal: None,
+            folder_lease: None,
         }
+    }
+
+    /// Hand the saver its meeting's folder lease (taken by the start command); released when
+    /// finalization ends (`stop_and_save`), a start is rolled back, or the saver drops.
+    pub fn set_folder_lease(&mut self, lease: Option<super::folder_lease::FolderLease>) {
+        self.folder_lease = lease;
     }
 
     /// Set the meeting name for this recording session
@@ -463,6 +472,7 @@ impl RecordingSaver {
     /// (specs/0060 review finding — hit in practice by a screenshot-driver take whose
     /// `start_recording` failed after folder init). Best-effort; never fails.
     pub async fn rollback_failed_start(&mut self) {
+        let _lease = self.folder_lease.take(); // released once the folder is unwound
         if let Ok(mut is_saving) = self.is_saving.lock() {
             *is_saving = false;
         }
@@ -1235,6 +1245,7 @@ impl RecordingSaver {
         recording_duration: Option<f64>,
     ) -> Result<Option<String>, String> {
         info!("Stopping recording saver");
+        let _lease = self.folder_lease.take(); // held until finalization returns
 
         // Stop accumulation
         if let Ok(mut is_saving) = self.is_saving.lock() {

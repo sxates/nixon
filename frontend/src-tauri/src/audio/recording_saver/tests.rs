@@ -721,3 +721,38 @@ async fn rollback_failed_start_removes_a_fresh_folder_with_no_journal() {
     assert!(saver.meeting_folder.is_none());
     assert!(saver.metadata.is_none());
 }
+
+/// specs/0073 W1: the saver holds its meeting's folder lease from start through
+/// finalization, and gives it up when a start is rolled back (or the saver is dropped), so
+/// a failed start never leaves the folder locked against every other job.
+#[tokio::test]
+async fn the_folder_lease_is_released_by_a_rolled_back_start_and_by_drop() {
+    use crate::audio::folder_lease::{acquire, current_holder, LeaseHolder};
+
+    let mut saver = RecordingSaver::new();
+    saver.set_folder_lease(Some(
+        acquire("saver-lease-rollback", LeaseHolder::Recording).await,
+    ));
+    assert_eq!(
+        current_holder("saver-lease-rollback"),
+        Some(LeaseHolder::Recording)
+    );
+    saver.rollback_failed_start().await;
+    assert_eq!(current_holder("saver-lease-rollback"), None);
+
+    let mut saver = RecordingSaver::new();
+    saver.set_folder_lease(Some(
+        acquire("saver-lease-drop", LeaseHolder::Recording).await,
+    ));
+    drop(saver);
+    assert_eq!(current_holder("saver-lease-drop"), None);
+
+    // Finalization (`stop_and_save`) ends the hold even though the saver lives on.
+    let app = tauri::test::mock_app();
+    let mut saver = RecordingSaver::new();
+    saver.set_folder_lease(Some(
+        acquire("saver-lease-stop", LeaseHolder::Recording).await,
+    ));
+    let _ = saver.stop_and_save(app.handle(), None).await;
+    assert_eq!(current_holder("saver-lease-stop"), None);
+}

@@ -106,6 +106,22 @@ pub fn scan_interrupted_recordings(root: &Path) -> Vec<InterruptedRecording> {
     out
 }
 
+/// [`scan_interrupted_recordings`] over every root in `roots` (specs/0073: an interrupted
+/// recording in an earlier recordings folder is still offered). Newest first; a folder
+/// reachable through two roots is reported once.
+pub fn scan_interrupted_in_roots(roots: &[std::path::PathBuf]) -> Vec<InterruptedRecording> {
+    let mut out: Vec<InterruptedRecording> = Vec::new();
+    for root in roots {
+        for found in scan_interrupted_recordings(root) {
+            if !out.iter().any(|o| o.folder_path == found.folder_path) {
+                out.push(found);
+            }
+        }
+    }
+    out.sort_by(|a, b| b.started_at.cmp(&a.started_at));
+    out
+}
+
 /// Mark an interrupted recording as no longer offerable WITHOUT deleting its captured
 /// audio/transcripts — "finalize-and-keep": nothing the user recorded is lost, the
 /// partial simply stays on disk (importable later) and stops appearing in the relaunch
@@ -149,6 +165,19 @@ pub fn discard_interrupted_recording(root: &Path, meeting_id: &str) -> std::io::
             folder.display()
         );
         return Ok(true);
+    }
+    Ok(false)
+}
+
+/// [`discard_interrupted_recording`] under whichever of `roots` holds the folder.
+pub fn discard_interrupted_in_roots(
+    roots: &[std::path::PathBuf],
+    meeting_id: &str,
+) -> std::io::Result<bool> {
+    for root in roots {
+        if discard_interrupted_recording(root, meeting_id)? {
+            return Ok(true);
+        }
     }
     Ok(false)
 }
@@ -286,8 +315,8 @@ pub async fn import_prior_folder_transcripts<R: tauri::Runtime>(
 pub async fn api_list_interrupted_recordings(
     state: tauri::State<'_, crate::state::AppState>,
 ) -> Result<Vec<InterruptedRecording>, String> {
-    let root = crate::audio::recordings_root();
-    let candidates = tokio::task::spawn_blocking(move || scan_interrupted_recordings(&root))
+    let roots = crate::audio::recording_preferences::known_recording_roots();
+    let candidates = tokio::task::spawn_blocking(move || scan_interrupted_in_roots(&roots))
         .await
         .map_err(|e| format!("recovery scan task failed: {e}"))?;
 
@@ -319,9 +348,10 @@ pub async fn api_list_interrupted_recordings(
 /// so it stops being offered, WITHOUT deleting the captured audio/transcripts.
 #[tauri::command]
 pub async fn api_discard_interrupted_recording(meeting_id: String) -> Result<(), String> {
-    let root = crate::audio::recordings_root();
+    // specs/0073: the folder may be under any known recordings root, not just the current.
+    let roots = crate::audio::recording_preferences::known_recording_roots();
     let found =
-        tokio::task::spawn_blocking(move || discard_interrupted_recording(&root, &meeting_id))
+        tokio::task::spawn_blocking(move || discard_interrupted_in_roots(&roots, &meeting_id))
             .await
             .map_err(|e| format!("discard task failed: {e}"))?
             .map_err(|e| format!("Could not discard the interrupted recording: {e}"))?;
@@ -391,6 +421,42 @@ mod tests {
         assert_eq!(found[0].segment_count, 2);
         assert_eq!(found[1].meeting_id, "m-1");
         let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn scan_in_roots_finds_interrupted_recordings_in_every_root_once() {
+        let current = scratch("roots-current");
+        let earlier = scratch("roots-earlier");
+        write_meta(
+            &current.join("New_2026-07-06_10-00"),
+            r#"{"meeting_id":"m-new","created_at":"2026-07-06T10:00:00Z","status":"recording"}"#,
+            true,
+        );
+        write_meta(
+            &earlier.join("Old_2026-07-05_10-00"),
+            r#"{"meeting_id":"m-old","created_at":"2026-07-05T10:00:00Z","status":"recording"}"#,
+            true,
+        );
+        // The current root listed twice (a duplicate known root) must not double-report.
+        let found = scan_interrupted_in_roots(&[current.clone(), earlier.clone(), current.clone()]);
+        let ids: Vec<&str> = found.iter().map(|r| r.meeting_id.as_str()).collect();
+        assert_eq!(
+            ids,
+            vec!["m-new", "m-old"],
+            "both roots, newest first, no duplicates"
+        );
+
+        // Discard finds the folder in the earlier root.
+        assert!(
+            discard_interrupted_in_roots(&[current.clone(), earlier.clone()], "m-old").unwrap()
+        );
+        let left: Vec<String> = scan_interrupted_in_roots(&[current.clone(), earlier.clone()])
+            .into_iter()
+            .map(|r| r.meeting_id)
+            .collect();
+        assert_eq!(left, vec!["m-new".to_string()]);
+        let _ = fs::remove_dir_all(&current);
+        let _ = fs::remove_dir_all(&earlier);
     }
 
     #[test]

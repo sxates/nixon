@@ -168,6 +168,39 @@ fn parse_created_at(raw: &str) -> Option<DateTime<Utc>> {
     None
 }
 
+/// Purge one meeting's media under its folder lease (specs/0073). The sweep is a periodic
+/// background job, so it only ever `try_acquire`s: when another job holds the folder (a
+/// move, a retranscription, a recording) the meeting is skipped and the next sweep picks it
+/// up. After acquiring, `folder_path` is re-read — the folder may have moved since the
+/// sweep listed it.
+///
+/// `Ok(None)` = skipped (folder busy, no folder, or the folder is gone).
+pub async fn purge_meeting_media(
+    pool: &sqlx::SqlitePool,
+    meeting_id: &str,
+) -> Result<Option<PurgeStats>> {
+    use crate::audio::folder_lease::{current_holder, reread_folder_path, try_acquire};
+    let Some(_lease) = try_acquire(
+        meeting_id,
+        crate::audio::folder_lease::LeaseHolder::Retention,
+    ) else {
+        debug!(
+            "Retention sweep: meeting {meeting_id} is busy ({:?}); skipping until the next sweep",
+            current_holder(meeting_id)
+        );
+        return Ok(None);
+    };
+    let Some(folder) = reread_folder_path(pool, meeting_id).await? else {
+        return Ok(None);
+    };
+    let folder = Path::new(&folder);
+    if !folder.is_dir() {
+        // Folder already gone (external cleanup) — nothing to do.
+        return Ok(None);
+    }
+    purge_media_files(folder).map(Some)
+}
+
 /// One full sweep: read preferences, list meetings with a recording folder,
 /// decide per meeting, purge, and log a summary line.
 pub async fn run_retention_sweep<R: Runtime>(app: &AppHandle<R>) -> Result<()> {
@@ -220,26 +253,20 @@ pub async fn run_retention_sweep<R: Runtime>(app: &AppHandle<R>) -> Result<()> {
         };
 
         match decide_sweep(now, Some(days), &candidate) {
-            SweepDecision::Purge => {
-                let folder = Path::new(&folder_path);
-                if !folder.is_dir() {
-                    // Folder already gone (moved, external cleanup) — nothing to do.
-                    continue;
-                }
-                match purge_media_files(folder) {
-                    Ok(stats) => {
-                        if stats.files_removed > 0 {
-                            meetings_purged += 1;
-                            totals.files_removed += stats.files_removed;
-                            totals.bytes_freed += stats.bytes_freed;
-                        }
+            SweepDecision::Purge => match purge_meeting_media(pool, &candidate.meeting_id).await {
+                Ok(None) => {}
+                Ok(Some(stats)) => {
+                    if stats.files_removed > 0 {
+                        meetings_purged += 1;
+                        totals.files_removed += stats.files_removed;
+                        totals.bytes_freed += stats.bytes_freed;
                     }
-                    Err(e) => warn!(
-                        "Retention sweep: could not purge media for meeting {}: {:#}",
-                        candidate.meeting_id, e
-                    ),
                 }
-            }
+                Err(e) => warn!(
+                    "Retention sweep: could not purge media for meeting {}: {:#}",
+                    candidate.meeting_id, e
+                ),
+            },
             SweepDecision::ExemptUntranscribed => {
                 // Only count meetings that actually still hold audio — that's
                 // the interesting "awaiting deferred transcription" set.

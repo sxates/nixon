@@ -24,6 +24,7 @@ pub mod auto_label;
 pub mod commands;
 pub mod corrections;
 pub mod embedding;
+pub mod folder_locate; // specs/0073 W1: NULL-folder_path fallback scan over every known root
 pub mod folder_match;
 pub mod identity;
 pub mod launch;

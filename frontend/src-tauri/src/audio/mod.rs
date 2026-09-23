@@ -27,11 +27,13 @@ pub mod channel_writer; // NEW (specs/0010): per-channel 16kHz mono WAVs for dia
 pub mod deferred_backlog; // low-power-mode spec §5: backlog query for meetings awaiting deferred processing
 pub mod device_monitor; // NEW: Device disconnect/reconnect monitoring
 pub mod device_resolution; // low-power-mode ratchet offset: start-time mic/system device resolution
+pub mod folder_lease; // specs/0073 W1: per-meeting exclusive right to touch a meeting folder
 pub mod hardware_detector;
 pub mod incremental_saver; // NEW: Incremental audio saving with checkpoints
 pub mod level_monitor;
 pub mod live_meter; // specs/0057 §3.2: per-channel + mixed live meter feed (split from pipeline.rs)
 pub mod live_toggle; // low-power-mode spec §§3-4: session live/defer toggle state
+pub mod meeting_folder; // specs/0073 W1: ownership check + folder copy helper
 pub mod mute_gate; // specs/0049: owner-mic gate for Zoom-mute
 pub mod pipeline;
 pub mod playback_monitor;
@@ -53,6 +55,7 @@ pub mod stt_lock; // spec 0045 WS1b: process-wide inference mutex serializing li
 pub mod stt_stage; // low-power-mode spec §3: pipeline VAD/STT gating stage (attach/detach)
 pub mod system_audio_commands;
 pub mod system_detector; // NEW: Playback device detection for BT warnings
+pub mod volume_check; // specs/0073: recordings stay on an internal, local drive
 
 // Transcription module (provider abstraction, engine management, worker pool)
 pub mod transcription;

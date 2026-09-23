@@ -44,6 +44,9 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 ### Changed
 
+- **Recordings stay on this Mac's own drive.** A USB stick, SD card, disk image or network
+  drive can't be chosen as the recordings folder, so a drive that goes away can't break a
+  recording.
 - **The transcript's pause button says what it will do.** The control on the recording header
   used to be labelled with the mode you were already in — "Live" — so pressing it stopped the
   transcript. It now reads **Pause transcript** while running and **Resume transcript** while
@@ -85,6 +88,9 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 ### Fixed
 
+- **Meetings in a recordings folder you used before keep working.** After you change where
+  recordings are saved, deleting one of your earlier meetings removes its recording too,
+  and an interrupted recording in the old folder is still offered to resume.
 - **A meeting that ends with the transcript running now processes itself.** If you paused the
   transcript partway through a meeting and resumed it, stopping used to tell you to process
   the audio by hand — and the **Process now** button did nothing when you tried. Both went
@@ -128,6 +134,14 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 ### Internal
 
+- Spec 0073 W1: a per-meeting folder lease (`audio/folder_lease.rs`) is now the one
+  exclusion primitive for meeting folders. The recording saver, retranscription,
+  diarization, the retention sweep and the transcript save's `folder_path` write-back take
+  it and re-read `folder_path` after acquiring; a stale `folder_path` from the frontend can
+  no longer overwrite a live one. "Under the current recordings root" is replaced by an
+  ownership check (`audio/meeting_folder.rs`) and `known_recording_roots()`, which the
+  delete, `fs_guard`, recovery, reconcile and diarization-fallback scans all use. Removed
+  the unused `StreamManagerType` enum.
 - Spec 0071 covers the follow-up from an owner recording on 2026-09-21: three of the four
   reported faults were the app working as designed and failing to say so (the chip's label,
   the "Listening" indicator, and a silent 3min19s `'process-now'` repass after stop). Root

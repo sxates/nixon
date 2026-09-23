@@ -117,15 +117,23 @@ pub async fn start_retranscription<R: Runtime>(
     RETRANSCRIPTION_CANCELLED.store(false, Ordering::SeqCst);
 
     let use_parakeet = provider.as_deref() == Some("parakeet");
+    // specs/0073: take the meeting's folder lease, then resolve the folder from the DB — the
+    // caller's path is a fallback for a NULL row only (it may predate a move).
+    use super::folder_lease::{acquire, leased_folder_path, LeaseHolder};
+    let lease = acquire(&meeting_id, LeaseHolder::Retranscription).await;
+    let folder = leased_folder_path(&app, &meeting_id, Some(&meeting_folder_path)).await;
     let result = run_retranscription(
         app.clone(),
         meeting_id.clone(),
-        meeting_folder_path,
+        folder.unwrap_or(meeting_folder_path),
         language,
         model,
         provider,
     )
     .await;
+    // Released BEFORE the engine unload, which takes the engine-lifecycle lock — a recording
+    // start holds that lock while waiting for this meeting's lease.
+    drop(lease);
 
     // Unload the engine after the batch job (success, failure, or cancellation)
     super::common::unload_engine_after_batch(use_parakeet).await;

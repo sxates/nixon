@@ -22,11 +22,6 @@ use super::stream::AudioStreamManager;
 /// multi-minute stop hang). Tunable — see the spec's soak-test risk note.
 const TRANSCRIPTION_QUEUE_CAPACITY: usize = 512;
 
-/// Stream manager type enumeration
-pub enum StreamManagerType {
-    Standard(AudioStreamManager),
-}
-
 /// Simplified recording manager that coordinates all audio components
 pub struct RecordingManager {
     state: Arc<RecordingState>,
@@ -61,8 +56,6 @@ impl RecordingManager {
             device_event_receiver: Some(device_event_receiver),
         }
     }
-
-    // Remove app handle storage for now - will be passed directly when saving
 
     /// Start recording with specified devices
     ///
@@ -584,6 +577,11 @@ impl RecordingManager {
     pub fn set_resume_context(&mut self, meeting_id: String, resume_folder: std::path::PathBuf) {
         self.recording_saver
             .set_resume_context(meeting_id, resume_folder);
+    }
+
+    /// Hand the saver its meeting's folder lease (specs/0073). Delegates to the saver.
+    pub fn set_folder_lease(&mut self, lease: Option<super::folder_lease::FolderLease>) {
+        self.recording_saver.set_folder_lease(lease);
     }
 
     /// Audio offset (seconds) for the current session in resume mode = sum of prior
