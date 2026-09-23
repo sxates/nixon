@@ -453,7 +453,7 @@ export async function seedMeetingParticipants(meetingId: string): Promise<void> 
  *
  * Robustness (specs/0019 WS6.3 + specs/0029 WS2.1):
  *   - The pending-join is stashed BEFORE Zoom is opened and BEFORE the awaited
- *     create. Opening Zoom trips the backend `zoom-meeting-detected` prompt, and any
+ *     create. Opening Zoom trips the backend `meeting-detected` prompt, and any
  *     start path that wins during the create/delay window (toast Record, tray,
  *     sidebar) consumes this stash — so it must already carry the event identity,
  *     even without a SQLite id yet. The id is reconciled in when the create returns;

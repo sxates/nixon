@@ -380,6 +380,10 @@ describe('RecordingSettings — meeting detection (specs/0074 W5)', () => {
   it('is called "Detect meetings" and still saves to the same key', async () => {
     await renderSettings();
     expect(screen.queryByText(/Auto-detect Zoom/)).not.toBeInTheDocument();
+    // specs/0074 W6: Teams and Google Meet are detected too, and the copy says so.
+    expect(
+      screen.getByText('When a Zoom, Teams or Google Meet call starts, offer to record it.'),
+    ).toBeInTheDocument();
     fireEvent.click(switchForLabel('Detect meetings'));
     await waitFor(() =>
       expect(invokeMock).toHaveBeenCalledWith('api_set_zoom_auto_detect', { enabled: false }),

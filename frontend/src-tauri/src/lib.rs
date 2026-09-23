@@ -42,6 +42,7 @@ pub mod diarization;
 pub mod fs_guard;
 pub mod groq;
 pub mod llm_activity;
+pub mod meeting_detect;
 pub mod meetings;
 pub mod notifications;
 pub mod ollama;
@@ -247,11 +248,9 @@ pub fn run() {
                 log::warn!("Could not install the notification delegate: {}", e);
             }
 
-            // Start the Zoom meeting auto-detection monitor (specs/0008 P1).
-            // Background task: polls for Zoom's `CptHost` meeting-helper process
-            // and emits `zoom-meeting-detected` / `zoom-meeting-ended` to the
-            // main window. The frontend owns record start/stop.
-            zoom::spawn_zoom_monitor(_app.handle().clone());
+            // Meeting auto-detection (specs/0008 P1; Teams + Meet in specs/0074 W6): emits
+            // `meeting-detected` / `meeting-ended`; the frontend owns record start/stop.
+            meeting_detect::spawn_meeting_monitor(_app.handle().clone());
 
             // Zoom mute gate (specs/0049): while recording with the opt-in setting on,
             // poll Zoom's mute state via Accessibility and drop the owner mic while muted.

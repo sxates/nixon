@@ -1,22 +1,15 @@
-// Zoom meeting auto-detection (specs/0008 P1).
+// Zoom integration: the meeting-detection on/off setting (specs/0008 P1) and the
+// self-mute gate (specs/0049).
 //
-// A cheap background monitor that detects when a Zoom *meeting* (not just the
-// Zoom app) is live on macOS by polling for Zoom's meeting-helper process
-// `CptHost` (also `aomhost` / `caphost`), which Zoom spawns only while in a
-// meeting and tears down on leave.
-//
-// On a debounced Idle -> InMeeting transition it emits the Tauri event
-// `zoom-meeting-detected`; on InMeeting -> Idle it emits `zoom-meeting-ended`.
-// The frontend owns the actual record start/stop — this module only detects,
-// emits, and exposes the on/off setting.
+// Detection itself moved to `crate::meeting_detect` (specs/0074 W6), which now covers
+// Teams and Google Meet too; its setting keeps the `zoom_auto_detect` key and the
+// `api_{get,set}_zoom_auto_detect` commands for on-disk compatibility.
 
 pub mod commands;
-pub mod monitor;
 /// Zoom self-mute detection via macOS Accessibility (specs/0049).
 pub mod mute;
 /// Poll that gates the owner mic on Zoom's mute state while recording (specs/0049).
 pub mod mute_monitor;
 pub mod settings;
 
-pub use monitor::spawn_zoom_monitor;
 pub use mute_monitor::spawn_zoom_mute_monitor;

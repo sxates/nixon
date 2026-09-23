@@ -287,7 +287,7 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
               `api_*_zoom_auto_detect` commands keep their names (on-disk compatibility). */}
           <SettingsRow
             label="Detect meetings"
-            description="When a video call starts, offer to record it."
+            description="When a Zoom, Teams or Google Meet call starts, offer to record it."
             control={
               <Switch
                 checked={zoomAutoDetect}

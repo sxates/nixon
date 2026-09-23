@@ -58,6 +58,11 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
   notification as well as in Nixon, whether or not Nixon is in front; answering either one
   clears the other. If macOS notifications are off for Nixon, the prompt says so and
   **Enable** takes you to the setting.
+- **Nixon offers to record Teams and Google Meet calls too, not just Zoom.** When a Teams
+  call starts, or a browser call starts while a meeting on your calendar is under way, you
+  get the same "Record this meeting?" prompt, named for the app. A browser using your
+  microphone with no meeting on your calendar (or one you hid from Today) is left alone.
+  Only a Zoom call ending stops a recording; muting in Teams or Meet never does.
 - **"Starting now" alerts with Google Calendar alone.** If Google Calendar is your only
   connected calendar, you now get the five-minute and "starting now — Join & Record" alerts
   too.
@@ -292,6 +297,12 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 - `notif_remove` command (capability-gated like every UNUserNotificationCenter call) backs
   the detected-call prompt's cross-dismiss; `ZoomAutoDetect` is now `MeetingAutoDetect` and
   reads an optional `platform` from the still-`zoom-meeting-*` events (specs/0074 W5).
+- Meeting detection moved from `zoom/monitor.rs` to `meeting_detect/` (specs/0074 W6): a pure
+  `classify` over Core Audio's client-process list (pid, bundle id, running-input) plus the
+  Zoom helpers, a calendar corroboration probe, and an Accessibility window-title check that
+  runs only when Accessibility is already granted. Events renamed to `meeting-detected` /
+  `meeting-ended` with a `platform` field. The Teams and browser signals are provisional
+  until the `meeting_detect_spike` diagnostic (an ignored test) is run during real calls.
 
 ## [0.8.0] - 2026-09-20
 - Screenshots: a `today-week` shot, so the Week view is covered (its parity regressions went

@@ -1,11 +1,16 @@
 /**
- * The detected-call prompt's wording and wire shape (specs/0074 W5).
+ * The detected-call prompt's wording and wire shape (specs/0074 W5 + W6).
  *
- * The backend emits one event when a call starts and one when it ends. Only Zoom is
- * detected today; W6 adds Teams and Google Meet and names the app in an optional
- * `platform` field. An event without one is Zoom, so the prompt reads the same as before
- * until the backend starts sending it.
+ * The backend emits `meeting-detected` when a Zoom, Teams or Google Meet call starts and
+ * `meeting-ended` when it ends, naming the app in `platform`. An event without one is Zoom
+ * (the only detector before W6).
  */
+
+/** Backend event: a call started (not recording, detection on). */
+export const MEETING_DETECTED_EVENT = 'meeting-detected';
+
+/** Backend event: the detected call ended. */
+export const MEETING_ENDED_EVENT = 'meeting-ended';
 
 /** Payload of the meeting detected / ended events. */
 export interface MeetingDetectEvent {
@@ -39,4 +44,14 @@ export const NOTIFICATION_SETTINGS_ROUTE = '/settings?tab=general';
 /** Banner id for one detection: `nixon-detected-<backend timestamp>`. */
 export function detectedBannerId(event?: MeetingDetectEvent | null): string {
   return `nixon-detected-${event?.timestamp_ms ?? Date.now()}`;
+}
+
+/**
+ * Does this call ending stop a recording? Only Zoom's (or an event that names no platform,
+ * which is Zoom). Zoom tears its meeting helpers down on leave; Teams and browsers may let go
+ * of the microphone on mute, a device switch or a breakout, and stopping a recording on mute
+ * is far worse than not stopping it at hang-up. For them, the end only takes the prompt down.
+ */
+export function endStopsRecording(platform?: string | null): boolean {
+  return (platform ?? 'zoom').trim().toLowerCase() === 'zoom';
 }

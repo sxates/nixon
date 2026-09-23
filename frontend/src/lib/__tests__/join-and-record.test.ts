@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 // specs/0029 WS2.1 — the pending-join race. `joinAndRecord` must stash the calendar
 // identity BEFORE opening Zoom and BEFORE the awaited `api_create_meeting`, because
-// opening Zoom trips the backend zoom-meeting-detected prompt: any start path that
+// opening Zoom trips the backend meeting-detected prompt: any start path that
 // wins during the create/delay window consumes the stash, and a missing stash minted
 // a date-stamped, attendee-less row. The SQLite id is reconciled into the stash when
 // the create resolves; a consume that raced the create awaits it via

@@ -15,12 +15,14 @@
  * once per session, with an Enable action to the notification permission row. An unbundled
  * dev build cannot notify at all and has nothing to enable, so it stays quiet about it.
  *
- * On the ended event: if Nixon is recording, run the SAME full two-part stop as "Stop &
- * summarize" (`requestFullRecordingStop`, specs/0024 WS1.1); otherwise do nothing.
+ * On the ended event: if Nixon is recording AND the call was Zoom, run the SAME full
+ * two-part stop as "Stop & summarize" (`requestFullRecordingStop`, specs/0024 WS1.1). A Teams
+ * or Meet end only takes the prompt down (specs/0074 W6: those apps may let go of the
+ * microphone on mute, and a recording must never stop on mute).
  *
- * The events keep their `zoom-meeting-*` names for now; the payload's optional `platform`
- * (absent = Zoom) names the app in the copy. The backend emits `detected` only on the
- * idle → in-meeting transition, while not recording and with the setting on.
+ * The payload's `platform` (absent = Zoom) names the app in the copy. The backend emits
+ * `meeting-detected` only on the idle → in-call transition, while not recording and with the
+ * setting on.
  */
 
 import { useCallback, useEffect, useRef } from 'react';
@@ -38,6 +40,9 @@ import { requestFullRecordingStop } from '@/lib/recording-stop';
 import { peekPendingJoinMeeting } from '@/lib/calendar';
 import {
   type MeetingDetectEvent,
+  MEETING_DETECTED_EVENT,
+  MEETING_ENDED_EVENT,
+  endStopsRecording,
   detectedTitle,
   detectedBannerId,
   DETECTED_BODY,
@@ -183,16 +188,16 @@ export default function MeetingAutoDetect() {
       showToast(title, true);
     };
 
-    const disposeDetected = safeListen<MeetingDetectEvent>('zoom-meeting-detected', (event) => {
+    const disposeDetected = safeListen<MeetingDetectEvent>(MEETING_DETECTED_EVENT, (event) => {
       console.log('[MeetingAutoDetect] Meeting detected');
       void onDetected(event?.payload);
     });
 
-    const disposeEnded = safeListen<MeetingDetectEvent>('zoom-meeting-ended', () => {
+    const disposeEnded = safeListen<MeetingDetectEvent>(MEETING_ENDED_EVENT, (event) => {
       console.log('[MeetingAutoDetect] Meeting ended');
       // The meeting is over: nothing left to ask.
       closePrompt();
-      if (!isRecordingRef.current) return;
+      if (!isRecordingRef.current || !endStopsRecording(event?.payload?.platform)) return;
 
       // Same full two-part stop as "Stop & summarize" (specs/0024 WS1.1): backend
       // `stop_recording` (stops the tap, flushes the WAV), then post-stop processing.

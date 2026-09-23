@@ -94,7 +94,7 @@ describe('the OS banner always goes out', () => {
   it('notifies even while Nixon is focused', async () => {
     vi.spyOn(document, 'hasFocus').mockReturnValue(true);
     render(<MeetingAutoDetect />);
-    emit('zoom-meeting-detected');
+    emit('meeting-detected');
     await settle();
     expect(h.notifyMock).toHaveBeenCalledTimes(1);
     const options = h.notifyMock.mock.calls[0][0];
@@ -107,7 +107,7 @@ describe('the OS banner always goes out', () => {
   it('stays silent while a Join & Record is armed', async () => {
     h.pendingJoinMock.mockReturnValue({ id: 'e1' });
     render(<MeetingAutoDetect />);
-    emit('zoom-meeting-detected');
+    emit('meeting-detected');
     await settle();
     expect(h.notifyMock).not.toHaveBeenCalled();
     expect(h.toastMock).not.toHaveBeenCalled();
@@ -117,7 +117,7 @@ describe('the OS banner always goes out', () => {
 describe('the copy names the app', () => {
   it('is Zoom when the payload does not say', async () => {
     render(<MeetingAutoDetect />);
-    emit('zoom-meeting-detected');
+    emit('meeting-detected');
     await settle();
     expect(lastToast()[0]).toBe('Zoom call detected');
     expect(h.notifyMock.mock.calls[0][0].title).toBe('Zoom call detected');
@@ -125,7 +125,7 @@ describe('the copy names the app', () => {
 
   it('uses the platform the payload names', async () => {
     render(<MeetingAutoDetect />);
-    emit('zoom-meeting-detected', { timestamp_ms: 5, kind: 'detected', platform: 'teams' });
+    emit('meeting-detected', { timestamp_ms: 5, kind: 'detected', platform: 'teams' });
     await settle();
     expect(lastToast()[0]).toBe('Teams call detected');
     expect(h.notifyMock.mock.calls[0][0].title).toBe('Teams call detected');
@@ -135,7 +135,7 @@ describe('the copy names the app', () => {
 describe('acting on one prompt takes the other down', () => {
   it('Record in the toast removes the banner and starts recording once', async () => {
     render(<MeetingAutoDetect />);
-    emit('zoom-meeting-detected');
+    emit('meeting-detected');
     await settle();
     lastToast()[1].action.onClick();
     expect(h.removeMock).toHaveBeenCalledWith('nixon-detected-111');
@@ -144,7 +144,7 @@ describe('acting on one prompt takes the other down', () => {
 
   it('Ignore in the toast removes the banner without recording', async () => {
     render(<MeetingAutoDetect />);
-    emit('zoom-meeting-detected');
+    emit('meeting-detected');
     await settle();
     lastToast()[1].cancel.onClick();
     expect(h.removeMock).toHaveBeenCalledWith('nixon-detected-111');
@@ -154,7 +154,7 @@ describe('acting on one prompt takes the other down', () => {
 
   it('Record on the banner dismisses the toast and starts recording', async () => {
     render(<MeetingAutoDetect />);
-    emit('zoom-meeting-detected');
+    emit('meeting-detected');
     await settle();
     h.notifyMock.mock.calls[0][0].onRecord();
     expect(h.toastMock.dismiss).toHaveBeenCalledWith(lastToast()[1].id);
@@ -165,7 +165,7 @@ describe('acting on one prompt takes the other down', () => {
     let resolveNotify: (ok: boolean) => void = () => {};
     h.notifyMock.mockReturnValue(new Promise<boolean>((r) => (resolveNotify = r)));
     render(<MeetingAutoDetect />);
-    emit('zoom-meeting-detected');
+    emit('meeting-detected');
     lastToast()[1].cancel.onClick();
     resolveNotify(true);
     await settle();
@@ -174,9 +174,9 @@ describe('acting on one prompt takes the other down', () => {
 
   it('a second call replaces the first prompt in place and takes its banner down', async () => {
     render(<MeetingAutoDetect />);
-    emit('zoom-meeting-detected');
+    emit('meeting-detected');
     await settle();
-    emit('zoom-meeting-detected', { timestamp_ms: 444, kind: 'detected' });
+    emit('meeting-detected', { timestamp_ms: 444, kind: 'detected' });
     await settle();
     expect(h.removeMock).toHaveBeenCalledWith('nixon-detected-111');
     // Dismissing then re-creating the same sonner id would take the new toast down too.
@@ -186,16 +186,16 @@ describe('acting on one prompt takes the other down', () => {
 
   it('the meeting ending takes the banner down', async () => {
     render(<MeetingAutoDetect />);
-    emit('zoom-meeting-detected');
+    emit('meeting-detected');
     await settle();
-    emit('zoom-meeting-ended', { timestamp_ms: 222, kind: 'ended' });
+    emit('meeting-ended', { timestamp_ms: 222, kind: 'ended' });
     expect(h.removeMock).toHaveBeenCalledWith('nixon-detected-111');
     expect(h.stopMock).not.toHaveBeenCalled(); // not recording: nothing to stop
   });
 
   it('a recording started some other way takes the banner down', async () => {
     const { rerender } = render(<MeetingAutoDetect />);
-    emit('zoom-meeting-detected');
+    emit('meeting-detected');
     await settle();
     recording = true;
     rerender(<MeetingAutoDetect />);
@@ -207,7 +207,7 @@ describe('a banner that could not be sent', () => {
   it('says notifications are off, with Enable leading to the permission row', async () => {
     h.notifyMock.mockResolvedValue(false);
     render(<MeetingAutoDetect />);
-    emit('zoom-meeting-detected');
+    emit('meeting-detected');
     await settle();
     const [, options] = lastToast();
     expect(descriptionText(options)).toContain('macOS notifications are off for Nixon');
@@ -220,10 +220,10 @@ describe('a banner that could not be sent', () => {
   it('says so once per session', async () => {
     h.notifyMock.mockResolvedValue(false);
     render(<MeetingAutoDetect />);
-    emit('zoom-meeting-detected');
+    emit('meeting-detected');
     await settle();
     lastToast()[1].cancel.onClick();
-    emit('zoom-meeting-detected', { timestamp_ms: 333, kind: 'detected' });
+    emit('meeting-detected', { timestamp_ms: 333, kind: 'detected' });
     await settle();
     expect(descriptionText(lastToast()[1])).toBe('Record this meeting?');
   });
@@ -232,7 +232,7 @@ describe('a banner that could not be sent', () => {
     h.notifyMock.mockResolvedValue(false);
     h.capabilityMock.mockResolvedValue({ supported: false, reason: 'unbundled' });
     render(<MeetingAutoDetect />);
-    emit('zoom-meeting-detected');
+    emit('meeting-detected');
     await settle();
     expect(descriptionText(lastToast()[1])).toBe('Record this meeting?');
   });
@@ -240,7 +240,7 @@ describe('a banner that could not be sent', () => {
   it('does not reopen a prompt the user already answered', async () => {
     h.notifyMock.mockResolvedValue(false);
     render(<MeetingAutoDetect />);
-    emit('zoom-meeting-detected');
+    emit('meeting-detected');
     lastToast()[1].cancel.onClick();
     const before = h.toastMock.mock.calls.length;
     await settle();
@@ -252,7 +252,32 @@ describe('the meeting ending while recording', () => {
   it('runs the full stop', async () => {
     recording = true;
     render(<MeetingAutoDetect />);
-    emit('zoom-meeting-ended', { timestamp_ms: 9, kind: 'ended' });
+    emit('meeting-ended', { timestamp_ms: 9, kind: 'ended' });
     expect(h.stopMock).toHaveBeenCalledTimes(1);
+  });
+
+  // specs/0074 W6: only a Zoom end stops a recording. Teams and browsers may let go of the
+  // microphone on mute, and a recording must never stop on mute.
+  it('runs the full stop when the call was Zoom', async () => {
+    recording = true;
+    render(<MeetingAutoDetect />);
+    emit('meeting-ended', { timestamp_ms: 9, kind: 'ended', platform: 'zoom' });
+    expect(h.stopMock).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(['teams', 'meet'])('keeps recording when a %s call ends', async (platform) => {
+    recording = true;
+    render(<MeetingAutoDetect />);
+    emit('meeting-ended', { timestamp_ms: 9, kind: 'ended', platform });
+    expect(h.stopMock).not.toHaveBeenCalled();
+  });
+
+  it('a Teams call ending still takes its prompt down', async () => {
+    render(<MeetingAutoDetect />);
+    emit('meeting-detected', { timestamp_ms: 12, kind: 'detected', platform: 'teams' });
+    await settle();
+    emit('meeting-ended', { timestamp_ms: 13, kind: 'ended', platform: 'teams' });
+    expect(h.toastMock.dismiss).toHaveBeenCalledWith('meeting-detected');
+    expect(h.removeMock).toHaveBeenCalledWith('nixon-detected-12');
   });
 });
