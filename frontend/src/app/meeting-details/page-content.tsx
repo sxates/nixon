@@ -44,6 +44,7 @@ export default function PageContent({
   summaryData,
   shouldAutoGenerate = false,
   onAutoGenerateComplete,
+  isProcessingInBacklog = false,
   onMeetingUpdated,
   onRefetchTranscripts,
   // specs/0033 — search deep-link: open the Transcript tab and scroll to this segment.
@@ -64,6 +65,8 @@ export default function PageContent({
   summaryData: Summary | null;
   shouldAutoGenerate?: boolean;
   onAutoGenerateComplete?: () => void;
+  /** The deferred backlog has this meeting queued or running (it owns the summary). */
+  isProcessingInBacklog?: boolean;
   onMeetingUpdated?: () => Promise<void>;
   onRefetchTranscripts?: () => Promise<void>;
   deepLinkSegmentId?: string | null;
@@ -304,6 +307,7 @@ export default function PageContent({
     modelConfig,
     generateSummary: summaryGeneration.handleGenerateSummary,
     onAutoGenerateComplete,
+    isProcessingInBacklog,
   });
 
   return (

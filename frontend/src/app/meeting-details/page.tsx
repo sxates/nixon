@@ -554,6 +554,7 @@ function MeetingDetailsContent() {
     summaryData={meetingSummary}
     shouldAutoGenerate={shouldAutoGenerate}
     onAutoGenerateComplete={() => setShouldAutoGenerate(false)}
+    isProcessingInBacklog={isMeetingInFlight(backlogItems, meetingId)}
     onMeetingUpdated={async () => {
       // Refetch meeting details to get updated title from backend
       await fetchMeetingDetails();
