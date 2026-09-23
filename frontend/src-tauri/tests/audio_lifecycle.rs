@@ -735,11 +735,35 @@ async fn a_compressor_tick_during_a_move_skips_that_meeting_only() {
 
 // -- task 11: the launch.rs hook (sabotage #9) --------------------------------------------------
 
+/// Point this test process's app-data directory at a temp dir, so nothing reads the real
+/// profile: diarization settings default (off), and placeholder model files of the minimum
+/// size make `ensure_models` a no-op (no download). Nothing ever loads them — a pass fails
+/// at decode first.
+fn isolated_app_data() -> &'static Path {
+    static DIR: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+    DIR.get_or_init(|| {
+        let dir =
+            std::env::temp_dir().join(format!("nixon-lifecycle-appdata-{}", std::process::id()));
+        let models = dir.join("models").join("diarization");
+        std::fs::create_dir_all(&models).unwrap();
+        for (name, size) in [
+            ("segmentation.onnx", 4u64 << 20),
+            ("nemo_en_titanet_large.onnx", 90u64 << 20),
+        ] {
+            let f = std::fs::File::create(models.join(name)).unwrap();
+            f.set_len(size).unwrap(); // sparse: no real disk use
+        }
+        app_lib::app_paths::init(dir.clone());
+        dir
+    })
+}
+
 async fn app_with_db() -> (
     tauri::App<tauri::test::MockRuntime>,
     SqlitePool,
     tempfile::TempDir,
 ) {
+    isolated_app_data();
     let dir = tempfile::tempdir().unwrap();
     let db_path = dir.path().join("t.sqlite").to_string_lossy().to_string();
     let db_manager = DatabaseManager::new(&db_path, &db_path).await.unwrap();
@@ -749,13 +773,19 @@ async fn app_with_db() -> (
     (app, pool, dir)
 }
 
-/// A diarization pass that errors (here: no system channel anywhere) must leave the meeting
+/// A diarization pass that errors (here: an undecodable system channel) must leave the meeting
 /// `failed`, which only the hook in `diarization/launch.rs` writes.
 #[tokio::test]
 async fn a_failed_identification_run_is_recorded_by_the_launch_hook() {
     let (app, pool, db_dir) = app_with_db().await;
-    let dir = folder(db_dir.path(), "no-channels", "completed", &["audio.mp4"]);
-    // Created long ago with a unique title, so the NULL-channel fallback matches nothing.
+    // A system channel that isn't audio: the pass resolves it from the row (never scanning a
+    // recordings root) and fails decoding it.
+    let dir = folder(
+        db_dir.path(),
+        "bad-channel",
+        "completed",
+        &["audio.mp4", "system.wav"],
+    );
     sqlx::query(
         "INSERT INTO meetings (id, title, created_at, updated_at, folder_path) \
          VALUES ('launch-hook', 'lifecycle-launch-hook-fixture', '2001-01-01T00:00:00Z', \
@@ -817,4 +847,101 @@ async fn a_successful_identification_marks_the_meeting_processed() {
     let row = state::load_row(&pool, "ok").await.unwrap().unwrap();
     assert!(row.speakers_identified_at.is_some());
     assert_eq!(row.state(), AudioState::Processed);
+}
+
+// -- review fix round 1 ------------------------------------------------------------------------
+
+/// A delete that leaves files behind is not a purge: no `purged` state, no purged id (the
+/// meeting page would otherwise say the audio is gone).
+#[tokio::test]
+async fn a_delete_that_leaves_files_behind_is_not_reported_as_purged() {
+    use std::os::unix::fs::PermissionsExt;
+    let pool = pool_with_schema().await;
+    let tmp = tempfile::tempdir().unwrap();
+    let dir = folder(tmp.path(), "stuck", "completed", &["audio.mp4", "mic.wav"]);
+    meeting(&pool, "stuck", 3, Some(&dir), Some("processed"), 9).await;
+    std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o555)).unwrap();
+
+    let outcome = apply_one(&pool, "stuck", AFTER, Utc::now(), &SweepOptions::default()).await;
+    let report = sweep::run_sweep(&pool, AFTER, Utc::now(), &SweepOptions::default()).await;
+    std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+    assert!(
+        matches!(outcome.unwrap(), ApplyOutcome::PurgeIncomplete(_)),
+        "a folder that kept its files is an incomplete purge"
+    );
+    let report = report.unwrap();
+    assert!(
+        report.purged_ids.is_empty(),
+        "nothing to announce as purged"
+    );
+    assert_eq!(report.meetings_purged, 0);
+    assert_eq!(
+        audio_state(&pool, "stuck").await.as_deref(),
+        Some("processed")
+    );
+    assert!(dir.join("audio.mp4").exists());
+}
+
+/// A pending meeting with a finalized folder, a mix only (so speaker identification never
+/// applies), and `rows` transcript rows.
+async fn pending_mix_only(app_pool: &SqlitePool, root: &Path, id: &str, rows: usize) {
+    let dir = folder(root, id, "completed", &["audio.mp4"]);
+    meeting(app_pool, id, 0, Some(&dir), None, rows).await;
+}
+
+/// Review fix 3: a retranscription that "succeeds" with a sparse result (an engine misfire)
+/// is not proof the meeting is transcribed — unless it was the deliberate deferred run.
+#[tokio::test]
+async fn a_sparse_retranscription_outside_deferred_processing_keeps_the_meeting_pending() {
+    let (app, pool, db_dir) = app_with_db().await;
+    pending_mix_only(&pool, db_dir.path(), "misfire", 1).await;
+    app_lib::audio::lifecycle::on_transcript_replaced(app.handle(), "misfire", 1).await;
+    assert_eq!(audio_state(&pool, "misfire").await, None, "audio kept");
+
+    // The same sparse result from the deferred run (the meeting carried `defer`) is final.
+    pending_mix_only(&pool, db_dir.path(), "deferred-run", 1).await;
+    set_mode(&pool, "deferred-run", Some("defer")).await;
+    app_lib::audio::lifecycle::on_transcript_replaced(app.handle(), "deferred-run", 1).await;
+    assert_eq!(
+        audio_state(&pool, "deferred-run").await.as_deref(),
+        Some("processed")
+    );
+    let mode: Option<String> =
+        sqlx::query_scalar("SELECT processing_mode FROM meetings WHERE id = 'deferred-run'")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(mode, None, "the pass clears the deferred marker");
+
+    // A full transcript is final whatever surface ran it.
+    pending_mix_only(&pool, db_dir.path(), "enhanced", 5).await;
+    app_lib::audio::lifecycle::on_transcript_replaced(app.handle(), "enhanced", 5).await;
+    assert_eq!(
+        audio_state(&pool, "enhanced").await.as_deref(),
+        Some("processed")
+    );
+}
+
+/// Review fix 4: clearing the processing marker is not, by itself, evidence of a transcript.
+#[tokio::test]
+async fn clearing_the_marker_needs_a_completed_transcript_pass_for_a_sparse_meeting() {
+    let (app, pool, db_dir) = app_with_db().await;
+    pending_mix_only(&pool, db_dir.path(), "no-pass", 0).await;
+    app_lib::audio::lifecycle::reevaluate_after_backlog(app.handle(), "no-pass").await;
+    assert_eq!(
+        audio_state(&pool, "no-pass").await,
+        None,
+        "no pass ran: still pending"
+    );
+
+    // The backlog's own pass (sparse, no marker) then its final clear: processed.
+    pending_mix_only(&pool, db_dir.path(), "silent", 0).await;
+    app_lib::audio::lifecycle::on_transcript_replaced(app.handle(), "silent", 0).await;
+    assert_eq!(audio_state(&pool, "silent").await, None);
+    app_lib::audio::lifecycle::reevaluate_after_backlog(app.handle(), "silent").await;
+    assert_eq!(
+        audio_state(&pool, "silent").await.as_deref(),
+        Some("processed")
+    );
 }

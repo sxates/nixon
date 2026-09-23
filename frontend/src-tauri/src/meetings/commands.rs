@@ -317,7 +317,8 @@ pub async fn api_set_meeting_processing_mode<R: Runtime>(
         return Err("Meeting not found".to_string());
     }
     if mode.is_none() {
-        // specs/0072: the backlog clears `defer` last — the meeting's transcription is done.
+        // specs/0072: the backlog clears `defer` last. A sparse transcript is only taken as
+        // final when a transcription pass for this meeting completed (server-side evidence).
         crate::audio::lifecycle::reevaluate_after_backlog(&_app, &meeting_id).await;
     }
     Ok(())

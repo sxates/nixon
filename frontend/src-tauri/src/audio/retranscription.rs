@@ -535,10 +535,8 @@ async fn run_retranscription<R: Runtime>(
 
     replace_meeting_transcripts(app_state.db_manager.pool(), &meeting_id, &segments).await?;
 
-    // The transcript now exists — the meeting is no longer "awaiting deferred
-    // transcription", whatever surface ran this pass (1.10 feedback).
-    clear_deferred_marker_after_transcription(app_state.db_manager.pool(), &meeting_id).await;
-    super::lifecycle::on_transcript_replaced(&app, &meeting_id).await;
+    // Clears the deferred marker (1.10 feedback) and moves the audio lifecycle (specs/0072).
+    super::lifecycle::on_transcript_replaced(&app, &meeting_id, segments.len()).await;
 
     // Write updated transcripts.json and metadata.json to the meeting folder
     emit_progress(

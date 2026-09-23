@@ -49,7 +49,10 @@ pub enum ApplyOutcome {
         delete: bool,
         had_audio: bool,
     },
+    /// Every audio file is gone; `audio_state` is now `purged`.
     Purged(PurgeStats),
+    /// Some files resisted deletion: state unchanged, the next tick retries.
+    PurgeIncomplete(PurgeStats),
     Compressed(CompressOutcome),
     /// The compressor failed; the WAVs are untouched.
     CompressFailed(String),
@@ -191,9 +194,11 @@ async fn delete_leased(
         (stats, state::deletable_files(&folder).len())
     })
     .await?;
-    if left == 0 {
-        state::mark_purged(pool, meeting_id).await?;
-    } // else a file resisted deletion: stay as we are, the next tick retries
+    if left > 0 {
+        log::warn!("Audio sweep: {left} file(s) of meeting {meeting_id} resisted deletion");
+        return Ok(ApplyOutcome::PurgeIncomplete(stats));
+    }
+    state::mark_purged(pool, meeting_id).await?;
 
     log::info!(
         "Audio sweep: deleted {} file(s), {:.1} MB, for meeting {meeting_id}",
@@ -265,6 +270,7 @@ pub async fn run_sweep(
                 }
                 report.purged_ids.push(row.id);
             }
+            Ok(ApplyOutcome::PurgeIncomplete(stats)) => report.bytes_freed += stats.bytes_freed,
             Ok(ApplyOutcome::Busy {
                 delete: true,
                 had_audio: true,

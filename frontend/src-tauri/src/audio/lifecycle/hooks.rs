@@ -185,26 +185,67 @@ pub async fn on_diarization_outcome<R: Runtime>(app: &AppHandle<R>, meeting_id: 
     }
 }
 
-/// The transcript rows were replaced (`retranscription.rs`): speaker labels are stale, and a
-/// pending meeting may now be processed.
-pub async fn on_transcript_replaced<R: Runtime>(app: &AppHandle<R>, meeting_id: &str) {
-    let Some(pool) = pool(app) else { return };
-    if let Err(e) = state::clear_speakers_identified(&pool, meeting_id).await {
-        log::warn!("Audio lifecycle: {e:#}");
-    }
-    let pending = matches!(
-        state::load_row(&pool, meeting_id).await,
-        Ok(Some(row)) if row.state() == AudioState::Pending
-    );
-    if pending {
-        reevaluate_and_apply(app, meeting_id, true).await;
+/// Meetings a transcription pass completed for this session: the server-side evidence
+/// [`reevaluate_after_backlog`] requires before it treats a sparse transcript as final.
+static TRANSCRIPT_PASSES: std::sync::LazyLock<std::sync::Mutex<std::collections::HashSet<String>>> =
+    std::sync::LazyLock::new(Default::default);
+
+fn record_transcript_pass(meeting_id: &str) {
+    if let Ok(mut set) = TRANSCRIPT_PASSES.lock() {
+        set.insert(meeting_id.to_string());
     }
 }
 
-/// The backlog cleared a meeting's `defer` marker (`api_set_meeting_processing_mode(None)`):
-/// its transcription is done.
+fn take_transcript_pass(meeting_id: &str) -> bool {
+    TRANSCRIPT_PASSES
+        .lock()
+        .map(|mut set| set.remove(meeting_id))
+        .unwrap_or(false)
+}
+
+/// A transcription pass replaced the meeting's transcript rows (`retranscription.rs`, with
+/// `segments` rows). Clears the deferred marker (every surface's pass is final, 1.10
+/// feedback) and the stale speaker labels. A pending meeting may now be processed — but a
+/// sparse result (below `MIN_TRANSCRIPT_SEGMENTS`, e.g. an engine misfire) only counts as
+/// transcribed when the pass was the deliberate deferred-processing run, i.e. the meeting
+/// carried a `defer`/`live` marker. Otherwise it stays pending and keeps its audio.
+pub async fn on_transcript_replaced<R: Runtime>(
+    app: &AppHandle<R>,
+    meeting_id: &str,
+    segments: usize,
+) {
+    let Some(pool) = pool(app) else { return };
+    let row = state::load_row(&pool, meeting_id).await.ok().flatten();
+    let marked = row
+        .as_ref()
+        .is_some_and(|r| matches!(r.processing_mode.as_deref(), Some("defer") | Some("live")));
+    crate::audio::retranscription::clear_deferred_marker_after_transcription(&pool, meeting_id)
+        .await;
+    if let Err(e) = state::clear_speakers_identified(&pool, meeting_id).await {
+        log::warn!("Audio lifecycle: {e:#}");
+    }
+    record_transcript_pass(meeting_id);
+    if !row.is_some_and(|r| r.state() == AudioState::Pending) {
+        return;
+    }
+    if marked || segments as i64 >= super::MIN_TRANSCRIPT_SEGMENTS {
+        reevaluate_and_apply(app, meeting_id, true).await;
+    } else {
+        log::info!(
+            "Audio lifecycle: meeting {meeting_id} transcribed to {segments} segment(s) outside \
+             deferred processing; keeping it pending"
+        );
+    }
+}
+
+/// The backlog cleared a meeting's `defer` marker (`api_set_meeting_processing_mode(None)`).
+/// The caller is not trusted to mean "transcription is done": a sparse transcript counts as
+/// final only when a transcription pass completed for this meeting in this session
+/// ([`on_transcript_replaced`] ran). Otherwise the meeting is reevaluated normally, and a
+/// sparse one stays pending (the backlog offers it again).
 pub async fn reevaluate_after_backlog<R: Runtime>(app: &AppHandle<R>, meeting_id: &str) {
-    reevaluate_and_apply(app, meeting_id, true).await;
+    let transcribed = take_transcript_pass(meeting_id);
+    reevaluate_and_apply(app, meeting_id, transcribed).await;
 }
 
 /// A resumed recording starts a new segment (called under the meeting's Recording lease).
