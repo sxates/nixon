@@ -43,8 +43,6 @@ interface MeetingTabPanelsProps {
   onSaveModelConfig: (config?: ModelConfig) => Promise<void>;
   /** Registers the summary toolbar's model-settings opener with the page. */
   onRegisterModalOpen: (openFn: () => void) => void;
-  customPrompt: string;
-  onPromptChange: (value: string) => void;
   isRecording: boolean;
   // specs/0033 — search deep-link: scroll the Transcript tab to this segment.
   deepLinkSegmentId?: string | null;
@@ -94,8 +92,6 @@ export function MeetingTabPanels({
   setModelConfig,
   onSaveModelConfig,
   onRegisterModalOpen,
-  customPrompt,
-  onPromptChange,
   isRecording,
   deepLinkSegmentId,
   onDeepLinkConsumed,
@@ -144,13 +140,11 @@ export function MeetingTabPanels({
           onSaveModelConfig={onSaveModelConfig}
           onGenerateSummary={summaryGeneration.handleGenerateSummary}
           onStopGeneration={summaryGeneration.handleStopGeneration}
-          customPrompt={customPrompt}
           onSaveSummary={meetingData.handleSaveSummary}
           onSummaryChange={meetingData.handleSummaryChange}
           onDirtyChange={meetingData.setIsSummaryDirty}
           summaryError={summaryGeneration.summaryError}
           onRegenerateSummary={summaryGeneration.handleRegenerateSummary}
-          getSummaryStatusMessage={summaryGeneration.getSummaryStatusMessage}
           availableTemplates={templates.availableTemplates}
           selectedTemplate={templates.selectedTemplate}
           onTemplateSelect={templates.handleTemplateSelection}
@@ -182,8 +176,6 @@ export function MeetingTabPanels({
         <TranscriptPanel
           className="flex w-full min-h-[40vh] min-w-0 flex-col"
           transcripts={meetingData.transcripts}
-          customPrompt={customPrompt}
-          onPromptChange={onPromptChange}
           onCopyTranscript={copyOperations.handleCopyTranscript}
           onOpenMeetingFolder={meetingOperations.handleOpenMeetingFolder}
           isRecording={isRecording}

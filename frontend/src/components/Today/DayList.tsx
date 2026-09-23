@@ -1,24 +1,19 @@
 'use client';
 
 import { useMemo } from 'react';
-import { MoreHorizontal, EyeOff, Pencil, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import type { DayAgendaItem } from '@/lib/day-agenda';
 import { formatClockTime } from '@/lib/calendar';
 import {
   itemVisualState,
   canJoinItem,
-  canEditManualItem,
   canRecordManualItem,
   type TimelineContext,
 } from '@/lib/today-timeline';
+import { RecordingBadge } from '@/components/RecordingBadge';
 import { StateChip, barClass, blockClasses } from './TimelineBlock';
+import { AgendaAttendees } from './AgendaAttendees';
+import { AgendaRowMenu } from './AgendaRowMenu';
 
 interface DayListProps {
   /** Already filtered of dismissed rows (the caller's `visibleItems`). */
@@ -91,14 +86,6 @@ export function DayList({
         const state = itemVisualState(item, ctx);
         const canJoin = canJoinItem(item, ctx);
         const canRecord = canRecordManualItem(item, ctx);
-        const canEdit = canEditManualItem(item);
-        // Same semantics as `DayTimeline`'s inline `canHide` (specs/0026): only an
-        // UNrecorded calendar row — never a recording or the live session.
-        const canHide =
-          item.source === 'calendar' &&
-          !item.status.recorded &&
-          !item.meetingId &&
-          ctx.recordingThisId !== item.id;
         const start = new Date(item.startTime);
         const validStart = !Number.isNaN(start.getTime());
         const title = item.title?.trim() || 'Untitled meeting';
@@ -133,12 +120,11 @@ export function DayList({
                 }`}
               >
                 {title}
-                {item.attendeeCount > 0 && (
-                  <span className="ml-1.5 truncate text-[12px] font-normal text-muted-foreground">
-                    · {item.attendeeCount} attendee{item.attendeeCount === 1 ? '' : 's'}
-                  </span>
-                )}
               </span>
+              {/* Faces instead of "· 3 attendees", and the live meeting reads as live —
+                  parity with All Meetings (owner feedback 2026-09-21). */}
+              <AgendaAttendees item={item} className="hidden sm:flex" />
+              {ctx.recordingThisId === item.id && <RecordingBadge />}
               {canJoin ? (
                 <Button
                   variant="brand"
@@ -166,49 +152,11 @@ export function DayList({
               ) : (
                 <StateChip state={state} />
               )}
-              {(canHide || canEdit) && (
-                <span
-                  onClick={(e) => e.stopPropagation()}
-                  onKeyDown={(e) => e.stopPropagation()}
-                  className="flex-shrink-0"
-                >
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <button
-                        type="button"
-                        aria-label="Event options"
-                        title="Event options"
-                        className="inline-flex h-5 w-5 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100"
-                      >
-                        <MoreHorizontal className="h-3.5 w-3.5" />
-                      </button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      {canEdit && (
-                        <>
-                          <DropdownMenuItem onSelect={() => onEdit(item)}>
-                            <Pencil className="mr-2 h-4 w-4" />
-                            Edit
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onSelect={() => onDelete(item)}
-                            className="text-destructive focus:text-destructive"
-                          >
-                            <Trash2 className="mr-2 h-4 w-4" />
-                            Delete
-                          </DropdownMenuItem>
-                        </>
-                      )}
-                      {canHide && (
-                        <DropdownMenuItem onSelect={() => onHide(item)}>
-                          <EyeOff className="mr-2 h-4 w-4" />
-                          Hide from timeline
-                        </DropdownMenuItem>
-                      )}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </span>
-              )}
+              <AgendaRowMenu
+                item={item}
+                ctx={ctx}
+                actions={{ onHide, onEdit, onDelete }}
+              />
             </div>
           </li>
         );

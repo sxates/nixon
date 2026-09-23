@@ -28,7 +28,7 @@ import { motion } from 'framer-motion';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { invoke } from '@tauri-apps/api/core';
 import { toast } from 'sonner';
-import { ChevronDown, ChevronRight, Clock, Loader2, Sparkles, Star, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, Loader2, Sparkles, Star, Trash2 } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -37,6 +37,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { AnswerMarkdown } from '@/components/AskAI/AnswerMarkdown';
+import { CopyAnswerButton } from '@/components/AskAI/CopyAnswerButton';
 import { SourcesList } from '@/components/AskAI/SourcesList';
 import {
   buildScope,
@@ -64,11 +65,18 @@ import type { Person } from '@/types';
 import { PageHeader } from '@/components/ui/page-header';
 
 const DATE_PRESETS: Array<{ value: DatePreset; label: string }> = [
-  { value: 'all', label: 'All time' },
-  { value: '30d', label: '30d' },
   { value: '7d', label: '7d' },
+  { value: '30d', label: '30d' },
+  { value: 'all', label: 'All time' },
   { value: 'custom', label: 'Custom' },
 ];
+
+/**
+ * Owner feedback 2026-09-21: "'All time' is probably too broad of a default time frame,
+ * lets make the default 7d." It also makes every first answer cheaper — the scope bounds
+ * how many meetings the engine gathers before it calls the model.
+ */
+const DEFAULT_PRESET: DatePreset = '7d';
 
 type Phase = 'idle' | 'running' | 'done' | 'error';
 
@@ -88,7 +96,7 @@ function AskPageContent() {
 
   // ?q= pre-fills the question (⌘K hands its typed query over).
   const [question, setQuestion] = useState(() => searchParams.get('q') ?? '');
-  const [preset, setPreset] = useState<DatePreset>('all');
+  const [preset, setPreset] = useState<DatePreset>(DEFAULT_PRESET);
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
   const [personId, setPersonId] = useState<string | null>(null);
@@ -105,8 +113,11 @@ function AskPageContent() {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [savedQuestions, setSavedQuestions] = useState<SavedQuestion[]>([]);
   const [saving, setSaving] = useState(false);
-  // Id of the history entry currently shown read-only (so its row can highlight).
-  const [viewedHistoryId, setViewedHistoryId] = useState<string | null>(null);
+  // Which history entry is expanded in place, or null. Owner feedback 2026-09-21: "in the
+  // history, I'd like to expand each historical question in-line with the answer, instead of
+  // having it replace the question/answer area at the top." An accordion — one open at a
+  // time — so a long history never becomes a wall of answers.
+  const [expandedHistoryId, setExpandedHistoryId] = useState<string | null>(null);
 
   // Active run id, or null. Events for any other id are stale and ignored.
   const runIdRef = useRef<string | null>(null);
@@ -176,7 +187,6 @@ function AskPageContent() {
         runIdRef.current = null;
         setCancelling(false);
         setAnswer({ markdown: event.payload.answerMarkdown, sources: event.payload.sources });
-        setViewedHistoryId(null); // this is the live answer, not a reloaded one
         setPhase('done');
         // The backend already persisted this run (fire-and-forget); pull it in.
         void refreshHistory();
@@ -244,7 +254,9 @@ function AskPageContent() {
     if (override) setQuestion(override.question);
     setPhase('running');
     setAnswer(null);
-    setViewedHistoryId(null);
+    // Collapse any open history row: a new run is about to fill the card above, and two
+    // answers on screen with no indication which is which is the confusion this replaced.
+    setExpandedHistoryId(null);
     setRunError(null);
     setCancelling(false);
     setProgress({ runId: '', stage: 'gathering', current: 0, total: 0 });
@@ -298,24 +310,36 @@ function AskPageContent() {
     }
   }, [cancelling]);
 
-  // --- WS2.a: reload a prior Q&A read-only ---------------------------------
-  // Reuses the exact answer/sources render below by populating `answer` from the
-  // stored markdown + parsed sources; `viewedHistoryId` marks it as a reload
-  // (highlights the row) rather than a fresh live run. No re-answer happens.
-  const viewHistoryEntry = useCallback((entry: AskAiHistoryEntry) => {
-    if (runIdRef.current) return; // don't clobber an in-flight run
-    setQuestion(entry.question);
-    setAnswer({ markdown: entry.answerMarkdown, sources: parseSources(entry.sourcesJson) });
-    setViewedHistoryId(entry.id);
-    setRunError(null);
-    setProgress(null);
-    setPhase('done');
+  // --- WS2.a: read a prior Q&A in place ------------------------------------
+  // It used to load the stored answer into the TOP card, which made that card mean two
+  // different things and needed a banner to say which. Now the row opens under itself and
+  // the top card is only ever the question you just asked (owner feedback 2026-09-21).
+  //
+  // Nothing here touches the run state, so expanding a history entry mid-run is harmless —
+  // it no longer has anything to clobber.
+  const toggleHistoryEntry = useCallback((entry: AskAiHistoryEntry) => {
+    setExpandedHistoryId((current) => (current === entry.id ? null : entry.id));
   }, []);
 
-  // `?historyId=<id>` (or the sentinel `latest`) opens a specific history entry
-  // read-only on load — the screenshot pipeline's deep link into an already-answered
-  // Ask AI run, mirroring the meeting-details `?tab=` pattern. Applied at most once so
-  // it never fights a user's own click or typing afterward.
+  // Re-ask a past question with the question box, so it runs against today's meetings and
+  // lands in the live card like any other run.
+  const askAgain = useCallback(
+    (entry: AskAiHistoryEntry) => {
+      setQuestion(entry.question);
+      setExpandedHistoryId(null);
+      // The CURRENT scope, not the one the answer was produced under: "ask again" means
+      // "against what I'm looking at now". Re-running a stored scope verbatim is what a
+      // saved question is for.
+      void startRun({ question: entry.question, scope });
+    },
+    [scope, startRun],
+  );
+
+  // `?historyId=<id>` (or the sentinel `latest`) opens a specific history entry on load —
+  // the screenshot pipeline's deep link into an already-answered Ask AI run, mirroring the
+  // meeting-details `?tab=` pattern. Since the row expands in place rather than filling the
+  // top card, this also opens the History section so the target is actually on screen.
+  // Applied at most once so it never fights a user's own click or typing afterward.
   const historyDeepLinkAppliedRef = useRef(false);
   useEffect(() => {
     if (historyDeepLinkAppliedRef.current) return;
@@ -324,20 +348,21 @@ function AskPageContent() {
     const entry = wanted === 'latest' ? history[0] : history.find((h) => h.id === wanted);
     if (!entry) return;
     historyDeepLinkAppliedRef.current = true;
-    viewHistoryEntry(entry);
-  }, [searchParams, history, viewHistoryEntry]);
+    setHistoryOpen(true);
+    setExpandedHistoryId(entry.id);
+  }, [searchParams, history]);
 
   const deleteHistoryEntry = useCallback(
     async (id: string) => {
       try {
         await deleteAskAiHistory(id);
-        if (viewedHistoryId === id) setViewedHistoryId(null);
+        if (expandedHistoryId === id) setExpandedHistoryId(null);
         await refreshHistory();
       } catch (err) {
         toast.error(err instanceof Error ? err.message : 'Could not delete that history entry.');
       }
     },
-    [refreshHistory, viewedHistoryId],
+    [refreshHistory, expandedHistoryId],
   );
 
   // --- WS2.b: star the current question, re-run / delete a saved one -------
@@ -369,8 +394,15 @@ function AskPageContent() {
     [refreshSaved],
   );
 
+  // Owner feedback 2026-09-21: "I'm not sure how the 'who' filter works - does that search
+  // only transcript segments from a particular speaker?" It does not, and the label was the
+  // whole problem. `AggregationScope.person_id` selects MEETINGS the person was in — on the
+  // roster (`meeting_participants`) or actually speaking (`speakers.person_id`), union
+  // semantics — and then the question is answered over those whole meetings. So the control
+  // says so.
+  const personName = personId === null ? null : people.find((p) => p.id === personId)?.displayName;
   const personLabel =
-    personId === null ? 'Anyone' : (people.find((p) => p.id === personId)?.displayName ?? 'Person');
+    personId === null ? 'Any meeting' : `Meetings with ${personName ?? 'this person'}`;
 
   return (
     <motion.div
@@ -412,93 +444,12 @@ function AskPageContent() {
               className="w-full bg-transparent text-[15px] text-foreground outline-none placeholder:text-muted-foreground"
             />
 
-            {/* Scope row: date preset + optional person. Defaults to all
-                meetings, ranked by relevance to the question. */}
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <div
-                role="group"
-                aria-label="Filter by date"
-                className="inline-flex items-center rounded-lg border border-border bg-muted p-0.5"
-              >
-                {DATE_PRESETS.map(({ value, label }) => {
-                  const active = preset === value;
-                  return (
-                    <button
-                      key={value}
-                      type="button"
-                      aria-pressed={active}
-                      onClick={() => setPreset(value)}
-                      className={cn(
-                        'rounded-md px-3 py-1 text-xs font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                        active
-                          ? 'bg-card text-foreground shadow-sm'
-                          : 'text-muted-foreground hover:text-foreground',
-                      )}
-                    >
-                      {label}
-                    </button>
-                  );
-                })}
-              </div>
-
-              {preset === 'custom' && (
-                <div className="inline-flex items-center gap-1.5">
-                  <input
-                    type="date"
-                    value={customFrom}
-                    onChange={(e) => setCustomFrom(e.target.value)}
-                    aria-label="From date"
-                    className="h-[30px] rounded-lg border border-border bg-card px-2 text-xs text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  />
-                  <span className="text-xs text-muted-foreground">to</span>
-                  <input
-                    type="date"
-                    value={customTo}
-                    onChange={(e) => setCustomTo(e.target.value)}
-                    aria-label="To date"
-                    className="h-[30px] rounded-lg border border-border bg-card px-2 text-xs text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  />
-                </div>
-              )}
-
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button
-                    type="button"
-                    aria-label="Filter by person"
-                    className="inline-flex h-[30px] items-center gap-1.5 rounded-lg border border-border bg-card px-3 text-xs font-semibold text-foreground transition-colors hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  >
-                    {personLabel}
-                    <ChevronDown size={13} aria-hidden="true" className="text-muted-foreground" />
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start">
-                  <DropdownMenuItem onSelect={() => setPersonId(null)}>Anyone</DropdownMenuItem>
-                  {people.length > 0 && <DropdownMenuSeparator />}
-                  {people.map((p) => (
-                    <DropdownMenuItem key={p.id} onSelect={() => setPersonId(p.id)}>
-                      {p.displayName}
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-
-            <div className="mt-4 flex flex-wrap items-end justify-between gap-3 border-t border-border pt-3">
-              <p className="u-meta min-w-0 flex-1">
-                Answers come from your configured summary model and list their sources.
-              </p>
+            {/* Owner feedback 2026-09-21: "Input at the very top, full width, but then
+                below that Ask/Save on the left, then the filter options on the right in the
+                same area." The actions and the scope used to be on two separate rows with a
+                rule between them, which put Ask a long way from the thing it acts on. */}
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
               <div className="flex flex-shrink-0 items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => void saveCurrentQuestion()}
-                  disabled={!trimmedQuestion || saving}
-                  title="Save this question to re-run later against fresh data"
-                  className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-border bg-card px-3 text-sm font-semibold text-foreground transition-colors hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:text-muted-foreground"
-                >
-                  <Star size={14} aria-hidden="true" />
-                  Save
-                </button>
                 <button
                   type="button"
                   onClick={() => void startRun()}
@@ -513,8 +464,94 @@ function AskPageContent() {
                   <Sparkles size={14} aria-hidden="true" />
                   Ask
                 </button>
+                <button
+                  type="button"
+                  onClick={() => void saveCurrentQuestion()}
+                  disabled={!trimmedQuestion || saving}
+                  title="Save this question to re-run later against fresh data"
+                  className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-border bg-card px-3 text-sm font-semibold text-foreground transition-colors hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:text-muted-foreground"
+                >
+                  <Star size={14} aria-hidden="true" />
+                  Save
+                </button>
+              </div>
+
+              {/* Scope: which meetings the question may draw from. */}
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                <div
+                  role="group"
+                  aria-label="Filter by date"
+                  className="inline-flex items-center rounded-lg border border-border bg-muted p-0.5"
+                >
+                  {DATE_PRESETS.map(({ value, label }) => {
+                    const active = preset === value;
+                    return (
+                      <button
+                        key={value}
+                        type="button"
+                        aria-pressed={active}
+                        onClick={() => setPreset(value)}
+                        className={cn(
+                          'rounded-md px-3 py-1 text-xs font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                          active
+                            ? 'bg-card text-foreground shadow-sm'
+                            : 'text-muted-foreground hover:text-foreground',
+                        )}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {preset === 'custom' && (
+                  <div className="inline-flex items-center gap-1.5">
+                    <input
+                      type="date"
+                      value={customFrom}
+                      onChange={(e) => setCustomFrom(e.target.value)}
+                      aria-label="From date"
+                      className="h-[30px] rounded-lg border border-border bg-card px-2 text-xs text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    />
+                    <span className="text-xs text-muted-foreground">to</span>
+                    <input
+                      type="date"
+                      value={customTo}
+                      onChange={(e) => setCustomTo(e.target.value)}
+                      aria-label="To date"
+                      className="h-[30px] rounded-lg border border-border bg-card px-2 text-xs text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    />
+                  </div>
+                )}
+
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      type="button"
+                      aria-label="Filter by the meetings someone was in"
+                      title="Answer from meetings this person was in — on the invite or actually speaking. It does not narrow the answer to their lines."
+                      className="inline-flex h-[30px] max-w-[15rem] items-center gap-1.5 rounded-lg border border-border bg-card px-3 text-xs font-semibold text-foreground transition-colors hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      <span className="truncate">{personLabel}</span>
+                      <ChevronDown size={13} aria-hidden="true" className="flex-shrink-0 text-muted-foreground" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onSelect={() => setPersonId(null)}>Any meeting</DropdownMenuItem>
+                    {people.length > 0 && <DropdownMenuSeparator />}
+                    {people.map((p) => (
+                      <DropdownMenuItem key={p.id} onSelect={() => setPersonId(p.id)}>
+                        Meetings with {p.displayName}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             </div>
+
+            <p className="u-meta mt-3 border-t border-border pt-2.5">
+              Answers come from your configured summary model and list their sources.
+            </p>
           </div>
 
           {/* Run progress */}
@@ -545,16 +582,15 @@ function AskPageContent() {
             </div>
           )}
 
-          {/* Answer + sources. When `viewedHistoryId` is set the card is a
-              read-only reload of a prior Q&A (WS2.a), otherwise the live answer. */}
+          {/* The answer to the question you just asked. Owner feedback 2026-09-21 made this
+              card live-run-only: a history entry now expands where it sits, so this card
+              stopped being two things at once and lost the "Saved answer from your history"
+              banner that existed to tell them apart. */}
           {phase === 'done' && answer && (
             <div className="mt-4 rounded-[3px] border border-border bg-card p-6 shadow-sm">
-              {viewedHistoryId && (
-                <p className="u-meta mb-3 flex items-center gap-1.5 border-b border-border pb-3">
-                  <Clock size={12} aria-hidden="true" />
-                  Saved answer from your history — ask again to refresh it
-                </p>
-              )}
+              <div className="mb-3 flex justify-end">
+                <CopyAnswerButton markdown={answer.markdown} />
+              </div>
               <AnswerMarkdown markdown={answer.markdown} sources={answer.sources} />
               <SourcesList sources={answer.sources} />
             </div>
@@ -629,44 +665,79 @@ function AskPageContent() {
                 <div className="flex flex-col gap-1.5">
                   {history.map((entry) => {
                     const date = formatMeetingDate(entry.createdAt);
-                    const active = viewedHistoryId === entry.id;
+                    const open = expandedHistoryId === entry.id;
                     return (
                       <div
                         key={entry.id}
                         className={cn(
-                          'group flex items-center gap-2 rounded-lg border bg-card px-3 py-2 shadow-sm transition-colors',
-                          active ? 'border-brand/40' : 'border-border',
+                          'group rounded-lg border bg-card shadow-sm transition-colors',
+                          open ? 'border-brand/40' : 'border-border',
                         )}
                       >
-                        <button
-                          type="button"
-                          onClick={() => viewHistoryEntry(entry)}
-                          title="Reload this answer"
-                          className="flex min-w-0 flex-1 items-baseline gap-2 text-left focus:outline-none"
-                        >
-                          <span
-                            className={cn(
-                              'min-w-0 flex-1 truncate text-[13.5px]',
-                              active
-                                ? 'font-semibold text-brand'
-                                : 'font-medium text-foreground group-hover:text-brand',
-                            )}
+                        <div className="flex items-center gap-2 px-3 py-2">
+                          <button
+                            type="button"
+                            onClick={() => toggleHistoryEntry(entry)}
+                            aria-expanded={open}
+                            title={open ? 'Collapse this answer' : 'Show this answer'}
+                            className="flex min-w-0 flex-1 items-baseline gap-2 text-left focus:outline-none"
                           >
-                            {entry.question}
-                          </span>
-                          {date && (
-                            <span className="flex-shrink-0 text-xs text-muted-foreground">{date}</span>
-                          )}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => void deleteHistoryEntry(entry.id)}
-                          title="Delete from history"
-                          aria-label="Delete from history"
-                          className="flex-shrink-0 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-destructive focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                        >
-                          <Trash2 size={13} aria-hidden="true" />
-                        </button>
+                            <ChevronRight
+                              size={13}
+                              aria-hidden="true"
+                              className={cn(
+                                'self-center flex-shrink-0 text-muted-foreground transition-transform',
+                                open && 'rotate-90',
+                              )}
+                            />
+                            <span
+                              className={cn(
+                                'min-w-0 flex-1 truncate text-[13.5px]',
+                                open
+                                  ? 'font-semibold text-brand'
+                                  : 'font-medium text-foreground group-hover:text-brand',
+                              )}
+                            >
+                              {entry.question}
+                            </span>
+                            {date && (
+                              <span className="flex-shrink-0 text-xs text-muted-foreground">{date}</span>
+                            )}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void deleteHistoryEntry(entry.id)}
+                            title="Delete from history"
+                            aria-label="Delete from history"
+                            className="flex-shrink-0 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-destructive focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          >
+                            <Trash2 size={13} aria-hidden="true" />
+                          </button>
+                        </div>
+                        {/* The answer, in place. Sources included — the citation chips are
+                            the point of an Ask AI answer, and Copy strips them for you. */}
+                        {open && (
+                          <div className="border-t border-border px-4 pb-4 pt-3">
+                            <div className="mb-2 flex items-center justify-end gap-2">
+                              <CopyAnswerButton markdown={entry.answerMarkdown} />
+                              <button
+                                type="button"
+                                onClick={() => askAgain(entry)}
+                                disabled={phase === 'running'}
+                                title="Ask this again against your current meetings"
+                                className="inline-flex h-7 flex-shrink-0 items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 text-xs font-semibold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:text-muted-foreground/50"
+                              >
+                                <Sparkles size={13} aria-hidden="true" />
+                                Ask again
+                              </button>
+                            </div>
+                            <AnswerMarkdown
+                              markdown={entry.answerMarkdown}
+                              sources={parseSources(entry.sourcesJson)}
+                            />
+                            <SourcesList sources={parseSources(entry.sourcesJson)} />
+                          </div>
+                        )}
                       </div>
                     );
                   })}

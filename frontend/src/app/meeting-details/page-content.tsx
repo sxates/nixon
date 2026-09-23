@@ -44,6 +44,7 @@ export default function PageContent({
   summaryData,
   shouldAutoGenerate = false,
   onAutoGenerateComplete,
+  isProcessingInBacklog = false,
   onMeetingUpdated,
   onRefetchTranscripts,
   // specs/0033 — search deep-link: open the Transcript tab and scroll to this segment.
@@ -64,6 +65,8 @@ export default function PageContent({
   summaryData: Summary | null;
   shouldAutoGenerate?: boolean;
   onAutoGenerateComplete?: () => void;
+  /** The deferred backlog has this meeting queued or running (it owns the summary). */
+  isProcessingInBacklog?: boolean;
   onMeetingUpdated?: () => Promise<void>;
   onRefetchTranscripts?: () => Promise<void>;
   deepLinkSegmentId?: string | null;
@@ -89,7 +92,6 @@ export default function PageContent({
   const searchParams = useSearchParams();
 
   // State
-  const [customPrompt, setCustomPrompt] = useState<string>('');
   // Notes-only meetings (spec 0015) have no recording/transcript/audio: drop the
   // Transcript tab and default to My notes. Recorded/imported meetings are unchanged.
   const isNotesOnly = meeting.origin === 'notes_only';
@@ -304,6 +306,7 @@ export default function PageContent({
     modelConfig,
     generateSummary: summaryGeneration.handleGenerateSummary,
     onAutoGenerateComplete,
+    isProcessingInBacklog,
   });
 
   return (
@@ -458,8 +461,6 @@ export default function PageContent({
             setModelConfig={setModelConfig}
             onSaveModelConfig={handleSaveModelConfig}
             onRegisterModalOpen={handleRegisterModalOpen}
-            customPrompt={customPrompt}
-            onPromptChange={setCustomPrompt}
             isRecording={isRecording}
             deepLinkSegmentId={deepLinkSegmentId}
             onDeepLinkConsumed={onDeepLinkConsumed}

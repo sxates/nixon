@@ -5,6 +5,7 @@
 // camelCase wire shape match existing command conventions (see `api_*`).
 
 use crate::calendar::eventkit::{self, UpcomingMeeting};
+use crate::database::repositories::dismissed_calendar_event::DismissedCalendarEventsRepository;
 
 /// Default look-ahead window for upcoming meetings (hours) when the frontend
 /// doesn't specify one.
@@ -76,6 +77,46 @@ pub async fn api_get_upcoming_meetings<R: tauri::Runtime>(
             .map_err(|e| format!("Calendar read task failed: {e}"))?
     };
 
-    log::info!("api_get_upcoming_meetings -> {} meeting(s)", meetings.len());
+    let total = meetings.len();
+    let meetings = drop_dismissed(&app, meetings).await;
+    log::info!(
+        "api_get_upcoming_meetings -> {} meeting(s) ({} hidden)",
+        meetings.len(),
+        total - meetings.len()
+    );
     Ok(meetings)
+}
+
+/// Remove the events the user has hidden from their agenda (specs/0026).
+///
+/// Added 2026-09-21. This command is what `CalendarAlerts` polls to fire the T-5 prep
+/// notification and the T-0 "starting now — Join & Record" notification, and it never read
+/// the dismissal set — only `day_agenda` did. So an event you hid from Today (the owner's
+/// example: "Lunch") still produced both banners, which is precisely backwards: clearing
+/// something off your agenda is how you say you don't want to record it.
+///
+/// An unresolvable pool means "filter nothing": a notification you didn't want is a far
+/// smaller failure than a missing notification for a meeting that is starting.
+async fn drop_dismissed<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+    meetings: Vec<UpcomingMeeting>,
+) -> Vec<UpcomingMeeting> {
+    let Some(pool) = crate::calendar::google::sync::db_pool(app) else {
+        log::warn!("api_get_upcoming_meetings: no DB pool, cannot filter hidden events");
+        return meetings;
+    };
+    let dismissed = match DismissedCalendarEventsRepository::all(&pool).await {
+        Ok(set) => set,
+        Err(e) => {
+            log::warn!("api_get_upcoming_meetings: could not read hidden events ({e}); showing all");
+            return meetings;
+        }
+    };
+    if dismissed.is_empty() {
+        return meetings;
+    }
+    meetings
+        .into_iter()
+        .filter(|m| !crate::calendar::day_agenda::is_event_dismissed(m, &dismissed))
+        .collect()
 }

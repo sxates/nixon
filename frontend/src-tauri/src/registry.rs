@@ -217,6 +217,7 @@ pub fn invoke_handler() -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Sen
         // Language preference commands
         audio::capture_commands::set_language_preference,
         // Notification system commands (specs/0068 — the surface macOS answers).
+        crate::diagnostics::api_log_frontend,
         notifications::os_commands::notif_capability,
         notifications::os_commands::notif_authorization_status,
         notifications::os_commands::notif_request_authorization,

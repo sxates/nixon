@@ -34,6 +34,7 @@ pub mod app_paths;
 pub mod audio;
 pub mod calendar;
 pub mod config;
+pub mod diagnostics;
 pub mod data_migration;
 pub mod database;
 pub mod dev_fixtures;
@@ -139,6 +140,14 @@ pub fn run() {
                 // Keep OS-integration modules verbose enough to debug.
                 .level_for("app_lib::zoom", log::LevelFilter::Debug)
                 .level_for("app_lib::calendar", log::LevelFilter::Debug)
+                // The plugin defaults to a 40 KB file with `KeepOne`, which DISCARDS the
+                // file on rotation. That is far too small to hold one recording — a single
+                // session's VAD lines alone exceeded it — so by the time anyone looked, the
+                // session they wanted was gone. It blocked two investigations on 2026-09-21:
+                // the duration-accounting bug (specs/0071 W5) is diagnosed purely from a log
+                // line, and that line had already been rotated away both times.
+                .max_file_size(8_000_000)
+                .rotation_strategy(tauri_plugin_log::RotationStrategy::KeepSome(3))
                 .targets([
                     tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::LogDir {
                         file_name: None,

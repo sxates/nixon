@@ -11,7 +11,6 @@ import {
   layoutTimeline,
   itemVisualState,
   canJoinItem,
-  canEditManualItem,
   canRecordManualItem,
   dayLabel,
   type TimelineBounds,
@@ -126,16 +125,11 @@ export function DayTimeline({
             lane={lane}
             laneCount={laneCount}
             canJoin={canJoinItem(item, ctx)}
-            // canHide semantics from the retired DayAgenda (specs/0026): only an
-            // UNrecorded calendar row — never a recording or the live session.
-            canHide={
-              item.source === 'calendar' &&
-              !item.status.recorded &&
-              !item.meetingId &&
-              ctx.recordingThisId !== item.id
-            }
-            canEdit={canEditManualItem(item)}
             canRecord={canRecordManualItem(item, ctx)}
+            // The Hide/Edit/Delete gate moved into AgendaRowMenu (2026-09-21), which
+            // derives it from the item + ctx — the week view was missing the menu
+            // entirely because each view carried its own copy of these rules.
+            ctx={ctx}
             onSelect={onSelect}
             onJoin={onJoin}
             onHide={onHide}

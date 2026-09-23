@@ -90,6 +90,8 @@ export function useRecordingStop(
 
   // Guard to prevent duplicate/concurrent stop calls (e.g., from UI and tray simultaneously)
   const stopInProgressRef = useRef(false);
+  // A completed stop hands the transcript clear to the recorder's unmount (see below).
+  const clearOnLeaveRef = useRef(false);
 
   // Deferred promise that resolves with the `recording-stopped` event payload.
   //
@@ -561,22 +563,15 @@ export function useRecordingStop(
           // Mark as completed
           setStatus(RecordingStatus.COMPLETED);
 
-          // Show success toast with navigation option
-          toast.success('Recording saved successfully!', {
-            description: `${freshTranscripts.length} transcript segments saved.`,
-            action: {
-              label: 'View Meeting',
-              onClick: () => {
-                router.push(`/meeting-details?id=${meetingId}`);
-              }
-            },
-            duration: 10000,
-          });
+          // No "saved" toast: the move to the meeting page below is the confirmation.
 
           // Auto-navigate after a short delay with source parameter
           setTimeout(() => {
             router.push(`/meeting-details?id=${meetingId}&source=recording`);
-            clearTranscripts()
+            // Cleared when the recorder unmounts (below), not here: the push is a transition,
+            // so clearing now left the recorder on screen with zero segments — it rendered the
+            // fresh-meeting "Welcome to Nixon!" state until the meeting page arrived.
+            clearOnLeaveRef.current = true;
 
             // Reset to IDLE after navigation
             setStatus(RecordingStatus.IDLE);
@@ -617,7 +612,6 @@ export function useRecordingStop(
     setStatus,
     transcriptsRef,
     flushBuffer,
-    clearTranscripts,
     meetingTitle,
     markMeetingAsSaved,
     refetchMeetings,
@@ -632,6 +626,13 @@ export function useRecordingStop(
     ensureRecordingStoppedDeferred,
     enqueueMeeting,
   ]);
+
+  // Set only by a completed stop, so leaving the recorder MID-recording keeps its transcript.
+  const clearTranscriptsRef = useRef(clearTranscripts);
+  clearTranscriptsRef.current = clearTranscripts;
+  useEffect(() => () => {
+    if (clearOnLeaveRef.current) clearTranscriptsRef.current();
+  }, []);
 
   // Expose handleRecordingStop function to window for Rust callbacks
   const handleRecordingStopRef = useRef(handleRecordingStop);

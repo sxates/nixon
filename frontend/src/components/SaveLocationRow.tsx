@@ -13,6 +13,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { SettingsRow } from '@/components/ui/settings';
+import { tildePath } from '@/lib/format-path';
 import type { RecordingPreferences } from './RecordingSettings';
 
 interface SaveLocationRowProps {
@@ -46,7 +47,13 @@ export function SaveLocationRow({ preferences, setPreferences, onSave }: SaveLoc
     if (!picked) return; // user cancelled
 
     const previous = preferences;
-    const newPreferences = { ...preferences, save_folder: picked };
+    // `save_folder_user_chosen` marks this as a deliberate choice, which is what stops the
+    // debug build's startup re-point from undoing it on the next launch.
+    const newPreferences = {
+      ...preferences,
+      save_folder: picked,
+      save_folder_user_chosen: true,
+    };
     setPreferences(newPreferences);
     try {
       await invoke('set_recording_preferences', { preferences: newPreferences });
@@ -65,8 +72,11 @@ export function SaveLocationRow({ preferences, setPreferences, onSave }: SaveLoc
     <SettingsRow
       label="Save location"
       description={
-        <span className="break-all">
-          {preferences.save_folder || 'Default folder'}
+        // Rendered through `tildePath` so the row never puts the user's account name on
+        // screen (it reached a committed screenshot once). The full path is one hover away,
+        // and every path we ACT on below is the unabbreviated `save_folder`.
+        <span className="break-all" title={preferences.save_folder || undefined}>
+          {preferences.save_folder ? tildePath(preferences.save_folder) : 'Default folder'}
         </span>
       }
       control={

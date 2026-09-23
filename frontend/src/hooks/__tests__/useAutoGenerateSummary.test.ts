@@ -15,6 +15,7 @@ const params = (over: Record<string, unknown> = {}) => ({
   transcriptCount: 3,
   modelConfig,
   generateSummary: vi.fn().mockResolvedValue(undefined),
+  isProcessingInBacklog: false,
   ...over,
 });
 
@@ -66,5 +67,33 @@ describe('useAutoGenerateSummary — origin (specs/0063 W3 Task 6b)', () => {
     renderHook(() => useAutoGenerateSummary(p));
     await waitFor(() => expect(p.generateSummary).toHaveBeenCalled());
     expect(p.generateSummary).toHaveBeenCalledWith('', { background: true });
+  });
+});
+
+describe('useAutoGenerateSummary — the deferred backlog owns the meeting', () => {
+  beforeEach(() => invokeMock.mockReset());
+
+  // Measured 2026-09-23: the page's gate saw an empty backlog at 03:31:32 and armed; the
+  // drain picked the meeting up at 03:31:37; the page fired its own summary at 03:31:39
+  // anyway. Two runs of the same meeting, and the second one stranded the page's progress.
+  it('does not generate when the backlog is processing the meeting', async () => {
+    const p = params({ isProcessingInBacklog: true });
+    renderHook(() => useAutoGenerateSummary(p));
+    await new Promise((r) => setTimeout(r, 20));
+    expect(p.generateSummary).not.toHaveBeenCalled();
+  });
+
+  it('re-checks at fire time: a drain that starts during the audio probe wins', async () => {
+    let resolveProbe: (v: boolean) => void = () => {};
+    invokeMock.mockReturnValue(new Promise<boolean>((r) => { resolveProbe = r; }));
+    const p = params({ transcriptCount: 0, folderPath: '/tmp/rec', isProcessingInBacklog: false });
+    const { rerender } = renderHook((props: typeof p) => useAutoGenerateSummary(props), {
+      initialProps: p,
+    });
+    await waitFor(() => expect(invokeMock).toHaveBeenCalled());
+    rerender({ ...p, isProcessingInBacklog: true });
+    resolveProbe(true);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(p.generateSummary).not.toHaveBeenCalled();
   });
 });

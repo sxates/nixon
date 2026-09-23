@@ -96,21 +96,48 @@ describe('DayList (specs/0069 W4)', () => {
       expect(onHide).toHaveBeenCalledWith(item);
     });
 
-    it('renders no ⋯ menu at all once that calendar event is recorded', () => {
+    // Owner feedback 2026-09-23: a recorded meeting's menu offers what All Meetings offers
+    // (Delete meeting) — and still never Hide, which for a recording would be deleting it.
+    it('offers Delete meeting, not Hide, once that calendar event is recorded', async () => {
       const item = at('09:00', 'Standup', {
         meetingId: 'meeting-1',
         status: { recorded: true, transcribed: true, summarized: false, speakersIdentified: false },
       });
       render(<DayList {...base} items={[item]} />);
-      expect(screen.queryByRole('button', { name: 'Event options' })).not.toBeInTheDocument();
+
+      const trigger = screen.getByRole('button', { name: 'Event options' });
+      trigger.focus();
+      fireEvent.keyDown(trigger, { key: 'Enter' });
+      expect(await screen.findByText('Delete meeting')).toBeInTheDocument();
+      expect(screen.queryByText('Hide from timeline')).not.toBeInTheDocument();
     });
   });
 
   // fix round 1 Finding 2 — field-by-field parity pass against `TimelineBlock`: the
   // attendee count was surfaced there and silently dropped here.
-  it('surfaces the attendee count next to the title, same as the grid', () => {
+  //
+  // Owner feedback 2026-09-21 turned the bare count into the avatar cluster All Meetings
+  // uses. A count with no preview rows to draw faces from (a cache entry predating
+  // `DayAgendaItem.attendees`) still falls back to the plain text, so nothing is lost.
+  it('falls back to the plain attendee count when there are no preview rows', () => {
     const item = at('09:00', 'Standup', { attendeeCount: 3 });
     render(<DayList {...base} items={[item]} />);
     expect(screen.getByText(/3 attendees/)).toBeInTheDocument();
+  });
+
+  it('shows faces and a name summary when the roster has preview rows', () => {
+    const item = at('09:00', 'Standup', {
+      attendeeCount: 3,
+      attendees: [
+        { name: 'Maya Okafor', email: 'maya@example.com', isCurrentUser: false },
+        { name: 'Tomas Lindqvist', email: 'tomas@example.com', isCurrentUser: false },
+        { name: 'Me', email: 'me@example.com', isCurrentUser: true },
+      ],
+    });
+    render(<DayList {...base} items={[item]} />);
+    // Owner excluded from the display (specs/0038 WS8.b), so 3 - 1 = 2 people: one named
+    // plus "+1".
+    expect(screen.getByText('Maya Okafor, +1')).toBeInTheDocument();
+    expect(screen.queryByText(/attendees/)).toBeNull();
   });
 });

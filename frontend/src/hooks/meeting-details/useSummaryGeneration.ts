@@ -55,26 +55,6 @@ export function useSummaryGeneration({
   // specs/0029 WS7.2: which local STT provider to use for deferred transcription.
   const { transcriptModelConfig } = useConfig();
 
-  // Helper to get status message
-  const getSummaryStatusMessage = useCallback((status: SummaryStatus) => {
-    switch (status) {
-      case 'processing':
-        return 'Processing transcript...';
-      case 'summarizing':
-        return 'Generating summary...';
-      case 'regenerating':
-        return 'Regenerating summary...';
-      case 'speaker_refresh':
-        return 'Updating with speaker names…';
-      case 'completed':
-        return 'Summary completed';
-      case 'error':
-        return 'Error generating summary';
-      default:
-        return '';
-    }
-  }, []);
-
   // specs/0041 WS2: when offline diarization lands AFTER the auto-summary already ran,
   // the backend regenerates the (speakerless, pristine) summary itself and emits
   // `summary-refresh-started` the moment the regeneration actually kicks off — on the
@@ -170,12 +150,6 @@ export function useSummaryGeneration({
       }
 
       console.log('Processing transcript with template:', selectedTemplate);
-
-      // Show toast notification for generation start
-      toast.info(`${isRegeneration ? 'Regenerating' : 'Generating'} summary...`, {
-        description: `Using ${modelConfig.provider}/${modelConfig.model}`,
-        duration: 3000,
-      });
 
       // Resolve explicit metadata override first; Auto detects the transcript
       // language. For a notes-grounded summary there's no transcript to detect
@@ -321,12 +295,6 @@ export function useSummaryGeneration({
                 description: `${chunkStatus.failed_chunks} of ${chunkStatus.total_chunks} transcript section${chunkStatus.total_chunks === 1 ? '' : 's'} could not be processed, so some content may be missing. Regenerating may recover it.`,
                 duration: 8000,
               });
-            } else {
-              // Show success toast
-              toast.success('Summary generated successfully!', {
-                description: 'Your meeting summary is ready',
-                duration: 4000,
-              });
             }
 
             if (meetingName && onMeetingUpdated) {
@@ -384,12 +352,6 @@ export function useSummaryGeneration({
 
           setAiSummary(formattedSummary);
           setSummaryStatus('completed');
-
-          // Show success toast
-          toast.success('Summary generated successfully!', {
-            description: 'Your meeting summary is ready',
-            duration: 4000,
-          });
 
           if (meetingName && onMeetingUpdated) {
             await onMeetingUpdated();
@@ -508,13 +470,7 @@ export function useSummaryGeneration({
           provider: retranscriptionProviderFor(transcriptModelConfig?.provider),
         });
 
-        const ok = await completion;
-        if (ok) {
-          toast.success('Transcript ready', {
-            description: 'Meeting audio transcribed — generating the summary now.',
-          });
-        }
-        return ok;
+        return await completion;
       } catch (error) {
         console.error('Failed to start deferred transcription:', error);
         toast.error('Could not transcribe the meeting audio', {
@@ -810,6 +766,5 @@ export function useSummaryGeneration({
     handleGenerateSummary,
     handleRegenerateSummary,
     handleStopGeneration,
-    getSummaryStatusMessage,
   };
 }

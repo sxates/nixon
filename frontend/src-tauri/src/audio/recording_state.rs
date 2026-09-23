@@ -5,6 +5,7 @@ use std::time::Instant;
 use tokio::sync::mpsc;
 
 use super::buffer_pool::AudioBufferPool;
+use super::recording_duration::DurationAccounting;
 use super::devices::AudioDevice;
 
 /// Device type for audio chunks
@@ -128,6 +129,9 @@ pub struct RecordingState {
 
     // Recording start time for accurate timestamps
     recording_start: Mutex<Option<Instant>>,
+    /// The duration accounting captured the moment recording ended, so the save path can
+    /// still read it after `cleanup()` has wiped the clocks (specs/0071 W5 follow-up).
+    final_duration: Mutex<Option<DurationAccounting>>,
     // Pause time tracking
     pause_start: Mutex<Option<Instant>>,
     total_pause_duration: Mutex<std::time::Duration>,
@@ -151,6 +155,7 @@ impl RecordingState {
             error_callback: Mutex::new(None),
             stats: Mutex::new(RecordingStats::default()),
             recording_start: Mutex::new(None),
+            final_duration: Mutex::new(None),
             pause_start: Mutex::new(None),
             total_pause_duration: Mutex::new(std::time::Duration::ZERO),
         })
@@ -160,6 +165,8 @@ impl RecordingState {
     pub fn start_recording(&self) -> Result<()> {
         self.is_recording.store(true, Ordering::SeqCst);
         *self.recording_start.lock().unwrap() = Some(Instant::now());
+        // A new session must not inherit the previous one's captured duration.
+        *self.final_duration.lock().unwrap() = None;
         self.error_count.store(0, Ordering::SeqCst);
         self.recoverable_error_count.store(0, Ordering::SeqCst);
         *self.last_error.lock().unwrap() = None;
@@ -167,6 +174,20 @@ impl RecordingState {
     }
 
     pub fn stop_recording(&self) {
+        // FIRST, before anything below clears a clock: capture what the recording's duration
+        // actually was.
+        //
+        // `cleanup()` (called from the stop path via `stop_streams_only`) wipes
+        // `recording_start`, and it runs BEFORE `save_recording_only` reads the duration — so
+        // the save saw `None` and `recording_saver.rs` fell back to the last transcript
+        // segment's end time, i.e. "when speech last stopped" rather than "how long we
+        // recorded". A meeting with trailing silence, or a paused transcript, therefore
+        // stored a plausible-looking wrong number (63.19s for 67.22s of audio; 68.85s for
+        // 114.6s). Never overwritten with `None`, so the second `stop_recording()` that
+        // `cleanup()` performs cannot destroy what the first one captured.
+        if let Some(acct) = self.duration_accounting() {
+            *self.final_duration.lock().unwrap() = Some(acct);
+        }
         self.is_recording.store(false, Ordering::SeqCst);
         self.is_paused.store(false, Ordering::SeqCst);
         super::mute_gate::set_muted(false); // clear the Zoom-mute gate (specs/0049)
@@ -424,6 +445,67 @@ impl RecordingState {
         self.total_pause_duration.lock().unwrap().as_secs_f64()
     }
 
+    /// The duration that gets stored, having first logged every term behind it.
+    ///
+    /// One call rather than a log statement beside each `get_active_recording_duration()`:
+    /// the logging belongs to the number, and `recording_manager.rs` sits exactly on the
+    /// 800-line cap (specs/0065), so it cannot afford four lines per stop path for something
+    /// this mechanical.
+    pub fn duration_for_save(&self, context: &str) -> Option<f64> {
+        // Live state first (a save that somehow runs before cleanup), then the value captured
+        // at `stop_recording`. The log fires in EVERY branch, including the one where there is
+        // nothing to report — the first version of this only logged inside `if let Some(..)`,
+        // which made it silent in exactly the case that was broken.
+        if let Some(acct) = self.duration_accounting() {
+            acct.log(context, "live state");
+            return Some(acct.active);
+        }
+        if let Some(acct) = *self.final_duration.lock().unwrap() {
+            acct.log(context, "captured at stop");
+            return Some(acct.active);
+        }
+        log::warn!(
+            "recording duration accounting [{context}]: no clocks and no captured value — \
+             the saver will fall back to the last transcript segment's end time, which \
+             measures when speech stopped, not how long the recording ran"
+        );
+        None
+    }
+
+    /// Every input to [`Self::get_active_recording_duration`], so a wrong recorded duration
+    /// can be attributed instead of guessed at.
+    ///
+    /// specs/0071 W5. A recording on 2026-09-21 stored `duration_seconds: 68.85` for 114.6s
+    /// of audio (ffmpeg-measured on all three files). The arithmetic here is
+    /// `elapsed - pauses - current_pause`, so the 46-second shortfall is either a short
+    /// `elapsed` or ~46s that accrued as pause — and those have completely different causes.
+    /// It could not be told apart after the fact: the Zoom mute gate is exonerated (it gates
+    /// the mic and never pauses), `pause_recording` has only the HOLD caller, and the
+    /// session's log had been truncated past the recording.
+    ///
+    /// So this is deliberately NOT a fix. It is the evidence the next occurrence needs.
+    pub fn duration_accounting(&self) -> Option<DurationAccounting> {
+        self.recording_start.lock().unwrap().map(|start| {
+            let elapsed = start.elapsed().as_secs_f64();
+            let pauses = self.get_total_pause_duration();
+            let current_pause = if self.is_paused() {
+                self.pause_start
+                    .lock()
+                    .unwrap()
+                    .map(|p| p.elapsed().as_secs_f64())
+                    .unwrap_or(0.0)
+            } else {
+                0.0
+            };
+            DurationAccounting {
+                elapsed,
+                pauses,
+                current_pause,
+                active: elapsed - pauses - current_pause,
+            }
+        })
+    }
+
     pub fn get_current_pause_duration(&self) -> Option<f64> {
         if self.is_paused() {
             self.pause_start
@@ -480,6 +562,7 @@ impl Default for RecordingState {
             error_callback: Mutex::new(None),
             stats: Mutex::new(RecordingStats::default()),
             recording_start: Mutex::new(None),
+            final_duration: Mutex::new(None),
             pause_start: Mutex::new(None),
             total_pause_duration: Mutex::new(std::time::Duration::ZERO),
         }
@@ -548,3 +631,4 @@ mod mute_gate_tests {
         );
     }
 }
+

@@ -23,7 +23,6 @@ const base = {
   isModelConfigLoading: false,
   onGenerateSummary: vi.fn(async () => {}),
   onStopGeneration: vi.fn(),
-  customPrompt: '',
   availableTemplates: [
     { id: 'auto', name: 'Auto', description: 'Derived from the transcript' },
     { id: 'standup', name: 'Standup', description: 'Standup notes' },

@@ -47,6 +47,18 @@ pub struct RecordingPreferences {
     /// previously-stored preferences deserializing (as `true`).
     #[serde(default = "default_low_power_on_battery")]
     pub low_power_on_battery: bool,
+    /// The user picked this `save_folder` by hand (Settings → Recording → Change…), as
+    /// opposed to it having come from the probe.
+    ///
+    /// Exists only so the debug re-point in [`init_recordings_root`] can tell "nobody ever
+    /// chose this" from "a developer pointed this build somewhere on purpose". The store
+    /// holds only the resulting path, so the intent is not otherwise recoverable.
+    ///
+    /// `#[serde(default)]` means every existing preferences file reads as "not chosen",
+    /// which is the safe answer for a debug profile and irrelevant in a release build,
+    /// where the re-point never runs.
+    #[serde(default)]
+    pub save_folder_user_chosen: bool,
 }
 
 /// serde default for [`RecordingPreferences::live_transcription_enabled`].
@@ -72,6 +84,7 @@ impl Default for RecordingPreferences {
             retention_days: None,
             live_transcription_enabled: true,
             low_power_on_battery: true,
+            save_folder_user_chosen: false,
         }
     }
 }
@@ -102,6 +115,16 @@ const RECORDINGS_DIR: &str = "nixon-recordings";
 /// Folder name inherited from the meetily fork, kept for installs that already
 /// have one.
 const LEGACY_RECORDINGS_DIR: &str = "meetily-recordings";
+
+/// Folder name for the DEBUG build ("Dev Nixon", identifier `ai.vinyl.app.debug`).
+///
+/// ADR-0004 isolates dev from production in every other respect — separate SQLite DB,
+/// settings, single-instance lock, TCC permissions — but the recordings root was resolved by
+/// the same probe for both, so on a machine with a pre-0057 install the dev build wrote into
+/// `~/Movies/meetily-recordings` alongside the owner's real meetings. Which is how the
+/// owner's actual home path, under the *fork's* name, ended up legible in a screenshot
+/// committed to a public repo (owner feedback 2026-09-21).
+const DEV_RECORDINGS_DIR: &str = "nixon-recordings-dev";
 
 /// Resolve the default recordings folder inside `base`.
 ///
@@ -170,21 +193,105 @@ pub fn recordings_root() -> PathBuf {
 
 /// Load the persisted preference once at startup and seed the cache. Failure to load
 /// leaves the probe fallback in place (logged).
+///
+/// In a DEBUG build this also re-points a `save_folder` that was never chosen by hand —
+/// see [`repoint_dev_root`].
 pub async fn init_recordings_root<R: Runtime>(app: &AppHandle<R>) {
     match load_recording_preferences(app).await {
-        Ok(prefs) => set_recordings_root(prefs.save_folder),
+        Ok(prefs) => {
+            let prefs = repoint_dev_root(app, prefs).await;
+            set_recordings_root(prefs.save_folder);
+        }
         Err(e) => {
             warn!("recordings root: could not load preferences, using default probe: {e}")
         }
     }
 }
 
+/// Move a debug build off a production recordings folder, once.
+///
+/// Changing [`default_recordings_folder_for_profile`] alone moves nothing on a machine that
+/// has already run Nixon: the persisted `save_folder` is authoritative (specs/0057 Plan 2),
+/// and every debug profile that existed before this change has the legacy path stored in it.
+///
+/// Three things make this safe to do automatically:
+///
+///  - It is gated on [`is_dev_build`]. A release build never reaches it, so no user's
+///    recordings folder is ever moved out from under them.
+///  - It respects `save_folder_user_chosen`. A developer who deliberately pointed the dev
+///    build at a folder keeps it.
+///  - It PERSISTS through [`save_recording_preferences`] rather than only seeding the cache.
+///    `fs_guard::allowed_fs_roots` re-reads the store on every call, so a cache-only change
+///    would leave the webview's allow-list pointing at the old root while writes went to the
+///    new one.
+///
+/// Existing dev recordings are not moved. They stay readable because `fs_guard` also
+/// allow-lists the release root in debug builds.
+async fn repoint_dev_root<R: Runtime>(
+    app: &AppHandle<R>,
+    prefs: RecordingPreferences,
+) -> RecordingPreferences {
+    if !is_dev_build() || prefs.save_folder_user_chosen {
+        return prefs;
+    }
+    let wanted = get_default_recordings_folder();
+    if prefs.save_folder == wanted {
+        return prefs;
+    }
+    info!(
+        "recordings root: dev build re-pointed from {:?} to {:?} (ADR-0004 isolation)",
+        prefs.save_folder, wanted
+    );
+    let mut next = prefs;
+    next.save_folder = wanted;
+    if let Err(e) = save_recording_preferences(app, &next).await {
+        // Persisting is the whole point — without it `fs_guard` and the write root
+        // disagree. Fall back to the stored value rather than run in that split state.
+        warn!("recordings root: could not persist the dev re-point ({e}); keeping the stored folder");
+        return load_recording_preferences(app).await.unwrap_or(next);
+    }
+    next
+}
+
+/// Resolve the default recordings folder for a given build profile.
+///
+/// `dev` short-circuits the monotone legacy/new probe entirely. That probe exists to protect
+/// a production install whose persisted `save_folder` already points at the fork's folder
+/// (specs/0057 Plan 2 — flipping the write root would orphan recordings). The debug profile
+/// has no such data to protect, so inheriting the rule bought it nothing and cost it the
+/// isolation ADR-0004 promises.
+///
+/// Split from [`default_recordings_folder_in`] rather than folded into it with a `cfg!`,
+/// because `cargo test` runs WITH `debug_assertions` — a `cfg!` inside the policy would make
+/// the production-behaviour tests untestable, which is the sort of thing that gets noticed
+/// after it ships.
+fn default_recordings_folder_for_profile(base: &Path, dev: bool) -> PathBuf {
+    if dev {
+        return base.join(DEV_RECORDINGS_DIR);
+    }
+    default_recordings_folder_in(base)
+}
+
+/// Is this a debug ("Dev Nixon") build?
+fn is_dev_build() -> bool {
+    cfg!(debug_assertions)
+}
+
 /// Get the default recordings folder based on platform.
 ///
-/// See [`default_recordings_folder_in`] for why an existing
-/// `meetily-recordings` folder still wins.
+/// See [`default_recordings_folder_in`] for why an existing `meetily-recordings` folder
+/// still wins in a release build, and [`default_recordings_folder_for_profile`] for why the
+/// debug build opts out of that rule.
 fn get_default_recordings_folder() -> PathBuf {
-    default_recordings_folder_in(&platform_recordings_base())
+    default_recordings_folder_for_profile(&platform_recordings_base(), is_dev_build())
+}
+
+/// The folder a RELEASE build would resolve to, regardless of this build's profile.
+///
+/// Used only by `fs_guard` in debug builds, to keep pre-existing dev recordings readable
+/// after the re-point below moves the write root. Never a write target.
+pub(crate) fn release_default_recordings_folder() -> PathBuf {
+    default_recordings_folder_for_profile(&platform_recordings_base(), false)
 }
 
 /// Ensure the recordings directory exists
@@ -433,6 +540,101 @@ mod tests {
         );
 
         std::fs::remove_dir_all(&base).ok();
+    }
+
+    // -- the debug build's own recordings root (owner feedback 2026-09-21) -------------
+    //
+    // The monotone legacy/new probe above protects a production install whose persisted
+    // save_folder already points at the fork's folder. The debug profile has no such data,
+    // so it opted out — which is also how the owner's real home path, under the *fork's*
+    // name, ended up legible in a screenshot committed to a public repo.
+    //
+    // These pass `dev` explicitly rather than relying on the build flag: `cargo test` runs
+    // WITH debug_assertions, so a `cfg!` inside the policy would make the production cases
+    // above impossible to test.
+
+    #[test]
+    fn a_dev_build_gets_its_own_folder_on_a_fresh_machine() {
+        let base = tempdir("dev-fresh");
+
+        assert_eq!(
+            default_recordings_folder_for_profile(&base, true),
+            base.join(DEV_RECORDINGS_DIR)
+        );
+
+        std::fs::remove_dir_all(&base).ok();
+    }
+
+    /// The case that produced the leak: a machine carrying a pre-0057 install. The release
+    /// probe must keep choosing the legacy folder, and the dev build must not.
+    #[test]
+    fn a_dev_build_ignores_a_legacy_folder_the_release_build_would_take() {
+        let base = tempdir("dev-legacy");
+        std::fs::create_dir_all(base.join(LEGACY_RECORDINGS_DIR)).unwrap();
+
+        assert_eq!(
+            default_recordings_folder_for_profile(&base, false),
+            base.join(LEGACY_RECORDINGS_DIR),
+            "release still honours the persisted legacy folder (specs/0057 Plan 2)"
+        );
+        assert_eq!(
+            default_recordings_folder_for_profile(&base, true),
+            base.join(DEV_RECORDINGS_DIR),
+            "the dev build has no production data to protect"
+        );
+
+        std::fs::remove_dir_all(&base).ok();
+    }
+
+    #[test]
+    fn a_dev_build_ignores_a_nixon_folder_too() {
+        // Not just the legacy name: the dev root is its own folder either way, so dev and
+        // production recordings can never land in the same directory.
+        let base = tempdir("dev-nixon");
+        std::fs::create_dir_all(base.join(RECORDINGS_DIR)).unwrap();
+
+        assert_eq!(
+            default_recordings_folder_for_profile(&base, true),
+            base.join(DEV_RECORDINGS_DIR)
+        );
+        assert_ne!(
+            default_recordings_folder_for_profile(&base, true),
+            default_recordings_folder_for_profile(&base, false)
+        );
+
+        std::fs::remove_dir_all(&base).ok();
+    }
+
+    #[test]
+    fn the_dev_folder_is_named_for_nixon_not_the_fork() {
+        assert!(DEV_RECORDINGS_DIR.starts_with("nixon-"));
+        assert!(!DEV_RECORDINGS_DIR.contains("meetily"));
+        assert_ne!(DEV_RECORDINGS_DIR, RECORDINGS_DIR, "dev is its own folder");
+    }
+
+    /// `#[serde(default)]` on the new marker is what keeps every preferences file written
+    /// before 2026-09-21 deserializing — and it must default to "not chosen", or the debug
+    /// re-point would decline to run on exactly the profiles that need it.
+    #[test]
+    fn an_older_preferences_file_reads_as_not_user_chosen() {
+        let prefs: RecordingPreferences = serde_json::from_str(
+            r#"{"save_folder":"/Users/x/Movies/meetily-recordings","auto_save":true}"#,
+        )
+        .unwrap();
+        assert!(!prefs.save_folder_user_chosen);
+    }
+
+    #[test]
+    fn a_hand_picked_folder_round_trips_as_user_chosen() {
+        let prefs: RecordingPreferences = serde_json::from_str(
+            r#"{"save_folder":"/Volumes/Audio","auto_save":true,"save_folder_user_chosen":true}"#,
+        )
+        .unwrap();
+        assert!(prefs.save_folder_user_chosen);
+        // And survives a serialize/deserialize round trip, since that is how it is stored.
+        let again: RecordingPreferences =
+            serde_json::from_str(&serde_json::to_string(&prefs).unwrap()).unwrap();
+        assert!(again.save_folder_user_chosen);
     }
 
     #[test]

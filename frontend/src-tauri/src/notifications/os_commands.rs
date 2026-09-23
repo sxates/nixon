@@ -85,6 +85,9 @@ pub async fn recording_banner<R: tauri::Runtime>(
         body: body.to_string(),
         category: Some(CATEGORY_PLAIN.to_string()),
         user_info: HashMap::new(),
+        // None => the category's default (transient). A recording-started banner is news,
+        // not a decision, so it has no business sitting on screen until dismissed.
+        auto_dismiss_ms: None,
     }) {
         log::debug!("notifications: recording banner not delivered: {error}");
     }

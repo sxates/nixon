@@ -9,27 +9,47 @@ import {
   type TimelineContext,
   type TimelineVisualState,
 } from '@/lib/today-timeline';
+import { RecordingBadge } from '@/components/RecordingBadge';
 import { StateChip } from './TimelineBlock';
+import { AgendaAttendees } from './AgendaAttendees';
+import { AgendaRowMenu, type AgendaRowActions } from './AgendaRowMenu';
 
 /** One compact meeting row inside a week-view day card (specs/0038 WS4). */
 function WeekRow({
   item,
   state,
+  ctx,
+  isRecordingThis,
   onSelect,
+  actions,
 }: {
   item: DayAgendaItem;
   state: TimelineVisualState;
+  ctx: TimelineContext;
+  isRecordingThis: boolean;
   onSelect: (item: DayAgendaItem) => void;
+  actions: AgendaRowActions;
 }) {
   const start = new Date(item.startTime);
   const validStart = !Number.isNaN(start.getTime());
   const title = item.title?.trim() || 'Untitled meeting';
   return (
-    <button
-      type="button"
+    // A `div` with `role="button"`, not a real `<button>` — the `…` menu is a button of its
+    // own, and a button inside a button is invalid HTML that browsers silently un-nest
+    // (which is how the week row lost its menu in the first place). Same treatment
+    // `DayList` already uses for the same reason.
+    <div
+      role="button"
+      tabIndex={0}
       onClick={() => onSelect(item)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onSelect(item);
+        }
+      }}
       title={title}
-      className="flex w-full items-center gap-3 px-4 py-2 text-left transition-colors hover:bg-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className="group flex w-full cursor-pointer items-center gap-3 px-4 py-2 text-left transition-colors hover:bg-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
       <span className="w-[52px] flex-shrink-0 text-[11px] tabular-nums text-muted-foreground">
         {validStart ? formatClockTime(start) : '--:--'}
@@ -41,8 +61,14 @@ function WeekRow({
       >
         {title}
       </span>
+      {/* Faces instead of nothing, and the live meeting reads as live — the two things
+          All Meetings had and Today didn't (owner feedback 2026-09-21). Week rows are the
+          narrowest of the three views, so the cluster is capped tighter. */}
+      <AgendaAttendees item={item} max={2} className="hidden sm:flex" />
+      {isRecordingThis && <RecordingBadge />}
       <StateChip state={state} />
-    </button>
+      <AgendaRowMenu item={item} ctx={ctx} actions={actions} />
+    </div>
   );
 }
 
@@ -51,6 +77,10 @@ function WeekRow({
  * days, each a card of compact meeting rows reusing the day view's phase styling
  * (`itemVisualState` / `StateChip`). Clicking a day header drops into its day view;
  * clicking a row routes exactly like the day timeline (`onSelectItem`).
+ *
+ * Since 2026-09-21 the rows also carry the attendee cluster, the recording marker and the
+ * `…` menu the other two views have — the view was built read-only and the owner could see
+ * a meeting here but not hide it.
  */
 export function WeekView({
   weekDays,
@@ -59,6 +89,7 @@ export function WeekView({
   now,
   onSelectItem,
   onOpenDay,
+  actions,
 }: {
   weekDays: string[];
   weekItems: DayAgendaItem[][];
@@ -66,6 +97,7 @@ export function WeekView({
   now: Date;
   onSelectItem: (item: DayAgendaItem) => void;
   onOpenDay: (dateKey: string) => void;
+  actions: AgendaRowActions;
 }) {
   const todayKey = localDateKey(now);
   return (
@@ -109,7 +141,10 @@ export function WeekView({
                     key={it.id}
                     item={it}
                     state={itemVisualState(it, ctx)}
+                    ctx={ctx}
+                    isRecordingThis={ctx.recordingThisId === it.id}
                     onSelect={onSelectItem}
+                    actions={actions}
                   />
                 ))}
               </div>

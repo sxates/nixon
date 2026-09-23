@@ -19,6 +19,9 @@ use crate::calendar::eventkit::{self, Attendee, UpcomingMeeting};
 use crate::database::models::MeetingStatusRow;
 use crate::database::repositories::dismissed_calendar_event::DismissedCalendarEventsRepository;
 use crate::database::repositories::meeting::MeetingsRepository;
+use crate::database::repositories::meeting_participant::{
+    AttendeePreviewRow, MeetingParticipantsRepository,
+};
 use crate::state::AppState;
 
 /// Max attendees embedded inline per item (the full count is `attendee_count`).
@@ -175,6 +178,43 @@ pub(crate) fn stable_dismiss_key(event: &UpcomingMeeting) -> Option<String> {
         .map(|ext| format!("ext:{ext}@{}", event.starts_at))
 }
 
+/// Both keys a dismissal for this event may be stored under.
+///
+/// `.0` is the sync-stable key preferred for NEW dismissals ([`stable_dismiss_key`]); `.1`
+/// is the legacy key — the event's own identifier, as the agenda exposes it for an
+/// unrecorded calendar row, or a synthetic hash when the provider gave no id. A read must
+/// accept EITHER, or a dismissal made before the stable key existed silently stops working
+/// (specs/0029 WS6.2). When there is no external identifier both are the legacy key.
+pub(crate) fn dismissal_keys(event: &UpcomingMeeting) -> (String, String) {
+    let legacy = if event.id.trim().is_empty() {
+        synthetic_event_id(&event.title, &event.starts_at)
+    } else {
+        event.id.clone()
+    };
+    let stable = stable_dismiss_key(event).unwrap_or_else(|| legacy.clone());
+    (stable, legacy)
+}
+
+/// Has the user hidden this calendar event from their agenda (specs/0026)?
+///
+/// Extracted from `build_agenda` on 2026-09-21 because it had exactly one copy and needed
+/// three: `api_get_upcoming_meetings` (which drives the T-5 prep and T-0 join notifications)
+/// and `prep_jobs::upcoming_for_horizon` (which spends an LLM call per event generating a
+/// prep brief) both read the raw calendar and never consulted the dismissal set at all. So
+/// hiding "Lunch" removed it from Today and still bought you two banners and a summary.
+///
+/// Note this asks ONLY about the dismissal keys. The agenda additionally requires that the
+/// event matched no recording — recording something means you wanted it — but that is a fact
+/// only the agenda builder has, so it stays a condition at its call site. Both new callers
+/// look at strictly upcoming events, which by definition have no recording yet.
+pub(crate) fn is_event_dismissed(
+    event: &UpcomingMeeting,
+    dismissed: &std::collections::HashSet<String>,
+) -> bool {
+    let (stable, legacy) = dismissal_keys(event);
+    dismissed.contains(&stable) || dismissed.contains(&legacy)
+}
+
 /// Build today's unified agenda. Pure given its inputs, so it is unit-testable
 /// without EventKit/DB: takes today's calendar events and today's recorded
 /// meetings (with status), plus an attendee fetcher invoked only for calendar
@@ -234,21 +274,15 @@ fn build_agenda(
             .take(MAX_INLINE_ATTENDEES)
             .collect();
 
-        // Legacy dismissal key: the event's own identifier (the id the agenda exposes for an
-        // unrecorded calendar row), independent of whether it later matched a recording.
-        let event_key = if event.id.trim().is_empty() {
-            synthetic_event_id(&event.title, &event.starts_at)
-        } else {
-            event.id.clone()
-        };
-        // Preferred (sync-stable) key for NEW dismissals; reads accept either, so
-        // dismissals stored under the legacy `eventIdentifier` keep working even
-        // after a provider re-sync would have orphaned them (specs/0029 WS6.2).
-        let dismiss_key = stable_dismiss_key(&event).unwrap_or_else(|| event_key.clone());
+        // `.1` is the legacy key — the event's own identifier (the id the agenda exposes
+        // for an unrecorded calendar row), independent of whether it later matched a
+        // recording. `.0` is the sync-stable key written for NEW dismissals.
+        let (dismiss_key, event_key) = dismissal_keys(&event);
 
-        // Only an UNrecorded calendar item can be "dismissed" — if you recorded it, you want it.
-        let is_dismissed = meeting_id.is_none()
-            && (dismissed.contains(&dismiss_key) || dismissed.contains(&event_key));
+        // Only an UNrecorded calendar item can be "dismissed" — if you recorded it, you
+        // want it. That half of the rule lives here rather than in `is_event_dismissed`,
+        // because only the agenda knows whether an event claimed a recording.
+        let is_dismissed = meeting_id.is_none() && is_event_dismissed(&event, dismissed);
 
         let id = meeting_id.clone().unwrap_or_else(|| event_key.clone());
 
@@ -411,8 +445,55 @@ pub async fn api_get_day_agenda<R: Runtime>(
             .unwrap_or_default()
     });
 
+    // A meeting recorded without an invite has no calendar attendees, but it may well have a
+    // roster — the people named on it, the same rows All Meetings shows faces from.
+    let mut items = items;
+    match MeetingParticipantsRepository::attendee_previews(pool).await {
+        Ok(rows) => fill_roster_attendees(&mut items, rows),
+        Err(e) => log::warn!("Failed to load meeting rosters for the agenda (continuing): {e}"),
+    }
+
     log::info!("api_get_day_agenda -> {} item(s)", items.len());
     Ok(items)
+}
+
+/// Give every agenda item that belongs to a meeting but carries no calendar attendees its
+/// meeting roster instead. Calendar attendees win where both exist: the invite is the
+/// meeting's own guest list, and it is what the rest of the row was matched on.
+///
+/// Owner report 2026-09-23: Today drew no faces for a recording with three named
+/// participants, while All Meetings drew them — Today only ever read calendar invites.
+fn fill_roster_attendees(items: &mut [DayAgendaItem], rows: Vec<AttendeePreviewRow>) {
+    let mut rosters: std::collections::HashMap<String, (Vec<Attendee>, u32)> =
+        std::collections::HashMap::new();
+    for row in rows {
+        let entry = rosters
+            .entry(row.meeting_id)
+            .or_insert_with(|| (Vec::new(), row.total.max(0) as u32));
+        entry.0.push(Attendee {
+            name: row.display_name,
+            email: row.email,
+            is_current_user: row.is_current_user != 0,
+            is_distribution_list: false,
+            photo_data_uri: None,
+        });
+    }
+    for item in items.iter_mut() {
+        if !item.attendees.is_empty() {
+            continue;
+        }
+        let Some(meeting_id) = item.meeting_id.as_deref() else {
+            continue;
+        };
+        if let Some((attendees, total)) = rosters.get(meeting_id) {
+            item.attendees = attendees
+                .iter()
+                .take(MAX_INLINE_ATTENDEES)
+                .cloned()
+                .collect();
+            item.attendee_count = *total;
+        }
+    }
 }
 
 /// Hide a calendar event from the agenda (specs/0026). `event_id` is the agenda item's id for

@@ -1,5 +1,6 @@
 use super::*;
 use crate::database::models::{DateTimeUtc, ManualScheduledRow};
+use crate::database::repositories::meeting_participant::AttendeePreviewRow;
 
 fn rec(id: &str, title: &str, created: DateTime<Utc>, folder: bool) -> MeetingStatusRow {
     MeetingStatusRow {
@@ -325,4 +326,181 @@ fn manual_entries_are_appended_and_sorted_but_never_matched() {
     assert!(!calendar_item.status.recorded);
     assert!(calendar_item.meeting_id.is_none());
     assert!(items.windows(2).all(|w| w[0].start_time <= w[1].start_time));
+}
+
+// -- `is_event_dismissed`: the predicate two more callers now share ----------
+//
+// Extracted 2026-09-21 because `api_get_upcoming_meetings` (which drives the T-5 prep and
+// T-0 join notifications) and `prep_jobs::upcoming_for_horizon` (an LLM call per event)
+// both read the raw calendar and never consulted the dismissal set. Hiding "Lunch" removed
+// it from Today and still bought two banners and a prep brief.
+
+#[test]
+fn is_event_dismissed_honours_the_legacy_key() {
+    let t0 = Utc.with_ymd_and_hms(2026, 9, 21, 12, 0, 0).unwrap();
+    let event = evt("ev-lunch", "Lunch", t0);
+    let mut dismissed = std::collections::HashSet::new();
+    dismissed.insert("ev-lunch".to_string());
+    assert!(is_event_dismissed(&event, &dismissed));
+}
+
+#[test]
+fn is_event_dismissed_honours_the_stable_key() {
+    let t0 = Utc.with_ymd_and_hms(2026, 9, 21, 12, 0, 0).unwrap();
+    let event = evt_ext("ev-lunch", "ical-lunch", "Lunch", t0);
+    let mut dismissed = std::collections::HashSet::new();
+    dismissed.insert(format!("ext:ical-lunch@{}", t0.to_rfc3339()));
+    assert!(is_event_dismissed(&event, &dismissed));
+}
+
+/// The case that rots silently: a dismissal written before the stable key existed, stored
+/// under the event identifier, on an event that now HAS an external id. A read that only
+/// checked the stable key would quietly start notifying again.
+#[test]
+fn is_event_dismissed_honours_a_legacy_key_on_an_event_with_an_external_id() {
+    let t0 = Utc.with_ymd_and_hms(2026, 9, 21, 12, 0, 0).unwrap();
+    let event = evt_ext("ek-abc", "ical-lunch", "Lunch", t0);
+    let mut dismissed = std::collections::HashSet::new();
+    dismissed.insert("ek-abc".to_string());
+    assert!(
+        is_event_dismissed(&event, &dismissed),
+        "a pre-0029 dismissal must keep working"
+    );
+}
+
+#[test]
+fn is_event_dismissed_uses_the_synthetic_key_when_the_provider_gave_no_id() {
+    let t0 = Utc.with_ymd_and_hms(2026, 9, 21, 12, 0, 0).unwrap();
+    let event = evt("", "Lunch", t0);
+    let mut dismissed = std::collections::HashSet::new();
+    dismissed.insert(synthetic_event_id("Lunch", &t0.to_rfc3339()));
+    assert!(is_event_dismissed(&event, &dismissed));
+}
+
+#[test]
+fn is_event_dismissed_is_false_for_an_event_nobody_hid() {
+    let t0 = Utc.with_ymd_and_hms(2026, 9, 21, 12, 0, 0).unwrap();
+    let event = evt_ext("ev-standup", "ical-standup", "Standup", t0);
+    let mut dismissed = std::collections::HashSet::new();
+    dismissed.insert("ev-lunch".to_string());
+    assert!(!is_event_dismissed(&event, &dismissed));
+}
+
+/// A recurring event's dismissal is per-occurrence: the external id is shared by the whole
+/// series, so hiding Monday's stand-up must not hide Tuesday's.
+#[test]
+fn is_event_dismissed_does_not_leak_across_occurrences_of_a_series() {
+    let mon = Utc.with_ymd_and_hms(2026, 9, 21, 9, 0, 0).unwrap();
+    let tue = Utc.with_ymd_and_hms(2026, 9, 22, 9, 0, 0).unwrap();
+    let mut dismissed = std::collections::HashSet::new();
+    dismissed.insert(format!("ext:ical-standup@{}", mon.to_rfc3339()));
+
+    assert!(is_event_dismissed(
+        &evt_ext("occ-mon", "ical-standup", "Standup", mon),
+        &dismissed
+    ));
+    assert!(!is_event_dismissed(
+        &evt_ext("occ-tue", "ical-standup", "Standup", tue),
+        &dismissed
+    ));
+}
+
+#[test]
+fn dismissal_keys_reports_stable_then_legacy() {
+    let t0 = Utc.with_ymd_and_hms(2026, 9, 21, 12, 0, 0).unwrap();
+    let (stable, legacy) = dismissal_keys(&evt_ext("ek-abc", "ical-x", "Lunch", t0));
+    assert_eq!(stable, format!("ext:ical-x@{}", t0.to_rfc3339()));
+    assert_eq!(legacy, "ek-abc");
+
+    // With no external id both are the legacy key, so a caller can treat them uniformly.
+    let (stable, legacy) = dismissal_keys(&evt("ek-abc", "Lunch", t0));
+    assert_eq!(stable, "ek-abc");
+    assert_eq!(legacy, "ek-abc");
+}
+
+fn roster_row(meeting_id: &str, name: &str, owner: bool, total: i64) -> AttendeePreviewRow {
+    AttendeePreviewRow {
+        meeting_id: meeting_id.to_string(),
+        display_name: name.to_string(),
+        email: Some(format!("{}@x.com", name.to_lowercase())),
+        is_current_user: owner as i64,
+        total,
+    }
+}
+
+// Owner report 2026-09-23: a recording with named participants showed no faces on Today,
+// while All Meetings showed them. Today only read calendar invites; a meeting recorded
+// without one got `attendees: []` even though its roster was sitting in
+// `meeting_participants`.
+#[test]
+fn a_recording_without_an_invite_shows_its_roster() {
+    let t0 = Utc.with_ymd_and_hms(2026, 6, 25, 9, 0, 0).unwrap();
+    let mut items = build_agenda(
+        vec![],
+        vec![rec("m1", "Product sync", t0, true)],
+        vec![],
+        &std::collections::HashSet::new(),
+        |_, _| vec![],
+    );
+    fill_roster_attendees(
+        &mut items,
+        vec![
+            roster_row("m1", "Maya", false, 3),
+            roster_row("m1", "Tomas", false, 3),
+        ],
+    );
+
+    let names: Vec<&str> = items[0].attendees.iter().map(|a| a.name.as_str()).collect();
+    assert_eq!(names, ["Maya", "Tomas"]);
+    assert_eq!(items[0].attendee_count, 3);
+    assert_eq!(items[0].attendees[0].email.as_deref(), Some("maya@x.com"));
+}
+
+#[test]
+fn calendar_attendees_win_over_the_roster() {
+    let t0 = Utc.with_ymd_and_hms(2026, 6, 25, 9, 0, 0).unwrap();
+    let invitee = Attendee {
+        name: "From invite".into(),
+        email: None,
+        is_current_user: false,
+        is_distribution_list: false,
+        photo_data_uri: None,
+    };
+    let mut items = build_agenda(
+        vec![evt("ev1", "Standup", t0)],
+        vec![rec("m1", "Standup", t0, true)],
+        vec![],
+        &std::collections::HashSet::new(),
+        |_, _| vec![invitee.clone()],
+    );
+    fill_roster_attendees(
+        &mut items,
+        vec![roster_row("m1", "Roster person", false, 1)],
+    );
+
+    assert_eq!(items[0].attendees.len(), 1);
+    assert_eq!(items[0].attendees[0].name, "From invite");
+}
+
+#[test]
+fn the_owner_flag_survives_and_unrelated_rows_are_ignored() {
+    let t0 = Utc.with_ymd_and_hms(2026, 6, 25, 9, 0, 0).unwrap();
+    let mut items = build_agenda(
+        vec![],
+        vec![rec("m1", "1:1", t0, true)],
+        vec![],
+        &std::collections::HashSet::new(),
+        |_, _| vec![],
+    );
+    fill_roster_attendees(
+        &mut items,
+        vec![
+            roster_row("m1", "You", true, 2),
+            roster_row("other", "Stranger", false, 1),
+        ],
+    );
+
+    assert_eq!(items[0].attendees.len(), 1);
+    assert!(items[0].attendees[0].is_current_user);
+    assert_eq!(items[0].attendee_count, 2);
 }

@@ -166,6 +166,31 @@ export interface TimelineContext {
   recordingThisId: string | null;
 }
 
+/**
+ * The agenda row that is the live recording (the backend doesn't know "live"): the first
+ * row whose meeting is one of `liveIds`, else the first whose title matches. Searches EVERY
+ * list it is given — the Week view draws from `weekItems`, and searching only the day's
+ * `items` left it without a recording marker (owner report 2026-09-23).
+ */
+export function findRecordingRowId(
+  lists: DayAgendaItem[][],
+  live: { isRecording: boolean; liveIds: (string | null | undefined)[]; liveTitle: string | null },
+): string | null {
+  if (!live.isRecording) return null;
+  const all = lists.flat();
+  for (const liveId of live.liveIds) {
+    if (!liveId) continue;
+    const byId = all.find((it) => it.meetingId && it.meetingId === liveId);
+    if (byId) return byId.id;
+  }
+  const title = live.liveTitle?.trim().toLowerCase();
+  if (title) {
+    const byTitle = all.find((it) => it.title?.trim().toLowerCase() === title);
+    if (byTitle) return byTitle.id;
+  }
+  return null;
+}
+
 /** Visual bucket for an item's block styling. */
 export function itemVisualState(item: DayAgendaItem, ctx: TimelineContext): TimelineVisualState {
   const { now, isRecording, recordingThisId } = ctx;
@@ -181,7 +206,11 @@ export function itemVisualState(item: DayAgendaItem, ctx: TimelineContext): Time
     return canJoin ? 'now-joinable' : 'now';
   }
   if (phase === 'past') {
-    return item.status.recorded || item.meetingId ? 'past-recorded' : 'past-unrecorded';
+    // `meetingId` alone counts as recorded for recordings and claimed events — but NOT for a
+    // meeting added in Nixon, which always carries its own placeholder row: that read
+    // "RECORDED" the moment its time passed, recording or not (owner report 2026-09-23).
+    const hasRecording = item.status.recorded || (!!item.meetingId && item.source !== 'manual');
+    return hasRecording ? 'past-recorded' : 'past-unrecorded';
   }
   return 'upcoming';
 }
@@ -289,6 +318,15 @@ export function canEditManualItem(item: DayAgendaItem): boolean {
 }
 
 /**
+ * Whether a timeline item can be deleted as a recorded meeting — what All Meetings' `…`
+ * offers for it. Never the live recording. Owner feedback 2026-09-23: on Today only
+ * unrecorded meetings had a menu at all.
+ */
+export function canDeleteRecordedItem(item: DayAgendaItem, ctx: TimelineContext): boolean {
+  return !!item.meetingId && item.status.recorded && ctx.recordingThisId !== item.id;
+}
+
+/**
  * Whether a timeline item should show an explicit "Record" button (specs/0069 W3): a
  * manual entry, not yet recorded, with no recording already in progress anywhere.
  *
@@ -303,10 +341,18 @@ export function canEditManualItem(item: DayAgendaItem): boolean {
  * hasn't happened yet. `handleRecordManual` (in `page.tsx`) now sends the actual `now`
  * as the start when recording early, and only the scheduled start once it has passed
  * (matching Join & Record's calendar behavior, specs/0015) — so recording early can no
- * longer misdate the row, and a manual entry can offer Record from the moment it exists.
+ * longer misdate the row, and a manual entry can offer Record from the moment it exists —
+ * until it ends.
  */
 export function canRecordManualItem(item: DayAgendaItem, ctx: TimelineContext): boolean {
-  return item.source === 'manual' && !item.status.recorded && !ctx.isRecording;
+  return (
+    item.source === 'manual' &&
+    !item.status.recorded &&
+    !ctx.isRecording &&
+    // Early is fine (above); after the meeting has ended, Record on its row is noise — the
+    // followup-a change dropped this half of the gate by accident (owner feedback 2026-09-23).
+    itemPhase(item, ctx.now, ctx.recordingThisId) !== 'past'
+  );
 }
 
 // ---------------------------------------------------------------------------

@@ -21,12 +21,10 @@ import type { BuiltInModelInfo } from '@/lib/builtin-ai';
  */
 export function useSummaryGenerationGuards({
   modelConfig,
-  customPrompt,
   onGenerateSummary,
   onNeedsModelSettings,
 }: {
   modelConfig: ModelConfig;
-  customPrompt: string;
   onGenerateSummary: (customPrompt: string) => Promise<void>;
   /** Open the model-settings dialog — every failure path below ends here. */
   onNeedsModelSettings: () => void;
@@ -56,7 +54,7 @@ export function useSummaryGenerationGuards({
 
       if (isReady) {
         // Model is available, proceed with generation
-        onGenerateSummary(customPrompt);
+        onGenerateSummary('');
         return;
       }
 
@@ -127,7 +125,7 @@ export function useSummaryGenerationGuards({
     } finally {
       setIsCheckingModels(false);
     }
-  }, [modelConfig.model, customPrompt, onGenerateSummary, onNeedsModelSettings]);
+  }, [modelConfig.model, onGenerateSummary, onNeedsModelSettings]);
 
   const generate = useCallback(async () => {
     // Handle built-in AI provider
@@ -138,7 +136,7 @@ export function useSummaryGenerationGuards({
 
     // Only check for Ollama provider
     if (modelConfig.provider !== 'ollama') {
-      onGenerateSummary(customPrompt);
+      onGenerateSummary('');
       return;
     }
 
@@ -158,7 +156,7 @@ export function useSummaryGenerationGuards({
       }
 
       // Models are available, proceed with generation
-      onGenerateSummary(customPrompt);
+      onGenerateSummary('');
     } catch (error) {
       console.error('Error checking Ollama models:', error);
       const errorMessage = error instanceof Error ? error.message : String(error);
@@ -188,7 +186,6 @@ export function useSummaryGenerationGuards({
   }, [
     modelConfig.provider,
     modelConfig.ollamaEndpoint,
-    customPrompt,
     onGenerateSummary,
     onNeedsModelSettings,
     checkBuiltInAIModelsAndGenerate,

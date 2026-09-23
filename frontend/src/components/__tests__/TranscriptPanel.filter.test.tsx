@@ -17,7 +17,12 @@ vi.mock('../MeetingDetails/TranscriptButtonGroup', () => ({
   TranscriptButtonGroup: () => null,
 }));
 vi.mock('@/contexts/DeferredBacklogProvider', () => ({
-  useBacklog: () => ({ enqueueMeeting: vi.fn() }),
+  // `view` is required since specs/0071 W3 — the panel asks whether its own meeting is
+  // being processed so it can say so, which the real provider has always supplied.
+  useBacklog: () => ({
+    view: { items: [], pendingCount: 0, processing: false, active: null, activeOrdinal: 0, total: 0 },
+    enqueueMeeting: vi.fn(),
+  }),
 }));
 
 import { TranscriptPanel } from '@/components/MeetingDetails/TranscriptPanel';
@@ -57,8 +62,6 @@ function renderPanel(props: Partial<React.ComponentProps<typeof TranscriptPanel>
     <TooltipProvider>
       <TranscriptPanel
         transcripts={[]}
-        customPrompt=""
-        onPromptChange={vi.fn()}
         onCopyTranscript={vi.fn()}
         onOpenMeetingFolder={vi.fn().mockResolvedValue(undefined)}
         isRecording={false}

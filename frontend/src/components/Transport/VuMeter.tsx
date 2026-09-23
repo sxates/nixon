@@ -91,11 +91,17 @@ export function VuMeter({
   const angle = ANGLE_MIN + vuToArcFraction(needleDb) * (ANGLE_MAX - ANGLE_MIN);
   return (
     <div
-      className={cn('flex flex-col items-center gap-1.5', className)}
+      className={cn('flex flex-col items-center', className)}
       role="img"
       aria-label={`${label} level ${Math.round(needleDb)} VU`}
     >
-      <div className="relative h-[78px] w-[180px] overflow-hidden rounded-[2px] bg-well shadow-[inset_0_1px_2px_rgba(0,0,0,0.6),inset_0_-1px_0_hsl(var(--bevel-hi))]">
+      {/* 132×57 keeps the original 180×78 drawing exactly — same viewBox, same arc, same
+          pivot — scaled to 0.733. Owner feedback 2026-09-21: the meter bridge was making the
+          record header tall enough to push the transcript down the page, and two meters is
+          the one thing on that header that can give back height without losing information.
+          The in-SVG font sizes below are pre-divided by that scale so the engraving still
+          renders at its intended pixel size. */}
+      <div className="relative h-[57px] w-[132px] overflow-hidden rounded-[2px] bg-well shadow-[inset_0_1px_2px_rgba(0,0,0,0.6),inset_0_-1px_0_hsl(var(--bevel-hi))]">
         <svg viewBox="0 0 180 78" className="block h-full w-full">
           <path d="M30.3 44.9 A78 78 0 0 1 119.2 22.7" className="stroke-engrave" strokeWidth="1" fill="none" />
           <path d="M119.2 22.7 A78 78 0 0 1 149.7 44.9" className="stroke-meter-over" strokeWidth="2.5" fill="none" />
@@ -108,7 +114,7 @@ export function VuMeter({
             <path d="M119.2 22.7 L117 28.3" />
             <path d="M145.1 39.9 L140.9 44.1" />
           </g>
-          <g className="fill-engrave font-narrow" fontSize="8" textAnchor="middle">
+          <g className="fill-engrave font-narrow" fontSize="10.9" textAnchor="middle">
             <text x="22.6" y="40">-20</text>
             <text x="46" y="20">-10</text>
             <text x="67.2" y="12">-7</text>
@@ -130,16 +136,32 @@ export function VuMeter({
             x="90"
             y="72"
             className="fill-engrave font-sans"
-            fontSize="9"
+            fontSize="12.3"
             fontWeight="600"
-            letterSpacing="1.5"
+            letterSpacing="2"
             textAnchor="middle"
           >
             VU
           </text>
+          {/* The channel label lives INSIDE the well, bottom-right, sharing the VU
+              engraving's baseline (owner feedback 2026-09-21) — it used to be a separate
+              `u-section-label` span below the meter, which cost the header a whole text row
+              per channel for something that belongs on the faceplate anyway. `role="img"` +
+              `aria-label` on the wrapper still carries it for assistive tech, so this text
+              is decorative. */}
+          <text
+            x="175"
+            y="72"
+            className="fill-engrave font-sans"
+            fontSize="11"
+            fontWeight="600"
+            letterSpacing="1.4"
+            textAnchor="end"
+          >
+            {label.toUpperCase()}
+          </text>
         </svg>
       </div>
-      <span className="u-section-label">{label}</span>
     </div>
   );
 }

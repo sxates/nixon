@@ -89,6 +89,17 @@ export interface VirtualizedTranscriptViewProps {
      *  caller (TranscriptPanel) also surfaces a toast. Absent => no pencil/edit
      *  affordance on any row (e.g. while recording, or with no meetingId). */
     onEditText?: (id: string, text: string) => Promise<boolean>;
+
+    /**
+     * Is live transcription actually running? Defaults to `true`, so every existing call
+     * site is unchanged.
+     *
+     * specs/0071 W2 — the "Listening…" indicator below was gated on `isRecording` alone, so
+     * it pulsed away through a 27.8-second window in which the user had paused the
+     * transcript and VAD/STT were detached. The recording WAS running; the transcript was
+     * not. Those are different facts and the indicator only knew one of them.
+     */
+    liveTranscription?: boolean;
 }
 
 // Threshold for enabling virtualization (below this, use simple rendering)
@@ -115,6 +126,7 @@ export const VirtualizedTranscriptView: React.FC<VirtualizedTranscriptViewProps>
     unprocessed = false,
     onProcessNow,
     onEditText,
+    liveTranscription = true,
 }) => {
     // Create scroll ref first - shared between virtualizer and auto-scroll hook
     const scrollRef = useRef<HTMLDivElement>(null);
@@ -130,9 +142,11 @@ export const VirtualizedTranscriptView: React.FC<VirtualizedTranscriptViewProps>
         getScrollElement: () => scrollRef.current,
         // Initial estimate only — real heights are measured per-row via
         // `virtualizer.measureElement` (data-index ref below), so variable-height
-        // rows (avatar + header + multi-line text) never overlap. Bumped from 60
-        // to account for the taller avatar/header layout.
-        estimateSize: () => 84,
+        // rows (avatar + header + multi-line text) never overlap. Back down from 84
+        // now that consecutive lines by one speaker share a single header and carry no
+        // divider (owner feedback 2026-09-21): most rows in a diarized transcript are
+        // continuation lines, which are roughly a third of the old height.
+        estimateSize: () => 56,
         overscan: 10, // Render extra items above/below viewport
         onChange: () => {
             startTransition(() => {
@@ -240,6 +254,27 @@ export const VirtualizedTranscriptView: React.FC<VirtualizedTranscriptViewProps>
             };
         });
     }, [segments, overlay, textOverlay]);
+
+    // Which rows continue the previous row's speaker run (owner feedback 2026-09-21 — one
+    // avatar + name per run of consecutive lines by the same speaker, instead of per line).
+    //
+    // Two deliberate choices:
+    //  - Derived from `displaySegments`, NOT `segments`, so an optimistic speaker
+    //    reassignment regroups the run on the click rather than at the next refetch.
+    //  - A line with no speaker key never continues a run. Undiarized transcripts (live
+    //    recording before diarization, imports that were never diarized) therefore render
+    //    exactly as they did before this change; merging them would put one "Speaker"
+    //    header at the top of hundreds of lines and leave everything scrolled past it
+    //    unlabelled.
+    const runContinuation = useMemo(() => {
+        const flags: boolean[] = [];
+        for (let i = 0; i < displaySegments.length; i++) {
+            const key = displaySegments[i].speaker;
+            const prevKey = i > 0 ? displaySegments[i - 1].speaker : null;
+            flags.push(!!key && !!prevKey && key === prevKey);
+        }
+        return flags;
+    }, [displaySegments]);
 
     // Drop a text-overlay entry once the re-fetched segments actually carry the
     // edited text (the background reconcile in TranscriptPanel lands it) — same
@@ -599,6 +634,7 @@ export const VirtualizedTranscriptView: React.FC<VirtualizedTranscriptViewProps>
                                         selectionActive={selectionActive}
                                         onToggleSelect={handleToggleSelect}
                                         userEdited={segment.userEdited}
+                                        continuesRun={runContinuation[virtualRow.index]}
                                         onEditText={onEditText ? handleEditText : undefined}
                                     />
                                 </div>
@@ -622,7 +658,9 @@ export const VirtualizedTranscriptView: React.FC<VirtualizedTranscriptViewProps>
                         </div>
                     )}
 
-                    {/* Listening indicator when recording */}
+                    {/* Recording indicator. specs/0071 W2 — it says which of the two
+                        things is happening, because "the recording stopped" is the fear a
+                        paused transcript creates and it is not what happened. */}
                     {!isStopping && isRecording && !isPaused && !isProcessing && segments.length > 0 && (
                         <motion.div
                             initial={{ opacity: 0 }}
@@ -630,8 +668,17 @@ export const VirtualizedTranscriptView: React.FC<VirtualizedTranscriptViewProps>
                             exit={{ opacity: 0 }}
                             className="flex items-center gap-2 mt-4 text-muted-foreground"
                         >
-                            <div className="w-2 h-2 bg-brand rounded-full animate-pulse"></div>
-                            <span className="text-sm">Listening...</span>
+                            <div
+                                className={cn(
+                                    'w-2 h-2 rounded-full',
+                                    liveTranscription ? 'bg-brand animate-pulse' : 'bg-muted-foreground/50',
+                                )}
+                            ></div>
+                            <span className="text-sm">
+                                {liveTranscription
+                                    ? 'Listening...'
+                                    : 'Transcript paused — audio is still recording'}
+                            </span>
                         </motion.div>
                     )}
                 </>
@@ -666,6 +713,7 @@ export const VirtualizedTranscriptView: React.FC<VirtualizedTranscriptViewProps>
                                         selectionActive={selectionActive}
                                         onToggleSelect={handleToggleSelect}
                                         userEdited={segment.userEdited}
+                                        continuesRun={runContinuation[index]}
                                         onEditText={onEditText ? handleEditText : undefined}
                                     />
                                 </motion.div>
@@ -689,7 +737,9 @@ export const VirtualizedTranscriptView: React.FC<VirtualizedTranscriptViewProps>
                         </div>
                     )}
 
-                    {/* Listening indicator when recording */}
+                    {/* Recording indicator. specs/0071 W2 — it says which of the two
+                        things is happening, because "the recording stopped" is the fear a
+                        paused transcript creates and it is not what happened. */}
                     {!isStopping && isRecording && !isPaused && !isProcessing && segments.length > 0 && (
                         <motion.div
                             initial={{ opacity: 0 }}
@@ -697,8 +747,17 @@ export const VirtualizedTranscriptView: React.FC<VirtualizedTranscriptViewProps>
                             exit={{ opacity: 0 }}
                             className="flex items-center gap-2 mt-4 text-muted-foreground"
                         >
-                            <div className="w-2 h-2 bg-brand rounded-full animate-pulse"></div>
-                            <span className="text-sm">Listening...</span>
+                            <div
+                                className={cn(
+                                    'w-2 h-2 rounded-full',
+                                    liveTranscription ? 'bg-brand animate-pulse' : 'bg-muted-foreground/50',
+                                )}
+                            ></div>
+                            <span className="text-sm">
+                                {liveTranscription
+                                    ? 'Listening...'
+                                    : 'Transcript paused — audio is still recording'}
+                            </span>
                         </motion.div>
                     )}
                 </>

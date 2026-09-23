@@ -4,6 +4,7 @@ pub mod decoder;
 pub mod encode;
 pub mod ffmpeg;
 pub mod vad;
+pub mod vad_split;
 
 // Modularized device management
 pub mod capture;
@@ -42,6 +43,7 @@ pub mod recording_manager;
 pub mod recording_preferences;
 pub mod recording_recovery; // specs/0037: crash/quit recovery scan for resume
 pub mod recording_saver;
+pub mod recording_duration;
 pub mod recording_state;
 pub mod retranscription_channels; // 1.10 feedback: channel tags for batch retranscription (deferred "You" attribution)
 pub mod retranscription_engines; // engine get-or-init for batch retranscription (size-ratchet split)

@@ -11,7 +11,9 @@ import {
   routeForItem,
   canJoinItem,
   canEditManualItem,
+  canDeleteRecordedItem,
   canRecordManualItem,
+  findRecordingRowId,
   assignLanes,
   layoutTimeline,
   hourLabel,
@@ -245,6 +247,21 @@ describe('itemVisualState', () => {
     expect(itemVisualState(missed, ctx({ now }))).toBe('past-unrecorded');
   });
 
+  // Owner report 2026-09-23: three meetings added in Nixon and never recorded read
+  // "RECORDED" on Today once their time passed. A manual entry always carries its own
+  // placeholder `meetingId`, which the `|| item.meetingId` fallback took as a recording.
+  it('a past meeting added in Nixon and never recorded is not "recorded"', () => {
+    const now = new Date(2026, 6, 4, 12, 0);
+    const it = manualItem({ startTime: iso(9), endTime: iso(10) });
+    expect(itemVisualState(it, ctx({ now }))).toBe('past-unrecorded');
+  });
+
+  it('a recorded meeting added in Nixon still reads recorded', () => {
+    const now = new Date(2026, 6, 4, 12, 0);
+    const it = manualItem({ startTime: iso(9), endTime: iso(10), recorded: true });
+    expect(itemVisualState(it, ctx({ now }))).toBe('past-recorded');
+  });
+
   it('flags the live recording', () => {
     const now = new Date(2026, 6, 4, 12, 0);
     const live = item({ id: 'live', source: 'recording', startTime: iso(11, 55), meetingId: 'm1' });
@@ -346,6 +363,13 @@ describe('canRecordManualItem (specs/0069 W3, fix round 1 Finding 1; gate droppe
   // The default manualItem() runs 10:00–11:00 (from item()'s defaults).
   const nowDuring = new Date(2026, 6, 4, 10, 30); // inside the window
   const nowBefore = new Date(2026, 6, 4, 9, 0); // well before start
+
+  // Owner feedback 2026-09-23: dropping the phase gate (to allow recording EARLY) also left
+  // Record on every added meeting after it had ended — never asked for.
+  it('is false once the entry has ended', () => {
+    const nowAfter = new Date(2026, 6, 4, 12, 0);
+    expect(canRecordManualItem(manualItem(), ctx({ now: nowAfter }))).toBe(false);
+  });
 
   it('is true for an unrecorded manual entry in its "now" window when nothing else is recording', () => {
     expect(canRecordManualItem(manualItem(), ctx({ now: nowDuring }))).toBe(true);
@@ -546,5 +570,62 @@ describe('hourLabel', () => {
     expect(hourLabel(12)).toBe('12 PM');
     expect(hourLabel(13)).toBe('1 PM');
     expect(hourLabel(0)).toBe('12 AM');
+  });
+});
+
+describe('findRecordingRowId', () => {
+  const live = item({ id: 'row-live', source: 'recording', meetingId: 'm-live', title: 'Standup' });
+  const other = item({ id: 'row-other', meetingId: 'm-other', title: 'Other' });
+
+  it('is null when nothing is recording', () => {
+    expect(findRecordingRowId([[live]], { isRecording: false, liveIds: ['m-live'], liveTitle: null })).toBeNull();
+  });
+
+  // Owner report 2026-09-23: no animated reels in the Week view while recording. The lookup
+  // only searched the single day's `items`; Week draws from `weekItems`.
+  it('finds the live meeting in any of the lists it is given', () => {
+    const found = findRecordingRowId([[], [other], [live]], {
+      isRecording: true,
+      liveIds: ['m-live'],
+      liveTitle: null,
+    });
+    expect(found).toBe('row-live');
+  });
+
+  it('prefers an id match, then falls back to the live title', () => {
+    expect(
+      findRecordingRowId([[other, live]], { isRecording: true, liveIds: [null, 'm-other'], liveTitle: 'Standup' }),
+    ).toBe('row-other');
+    expect(
+      findRecordingRowId([[other, live]], { isRecording: true, liveIds: [null], liveTitle: ' standup ' }),
+    ).toBe('row-live');
+  });
+});
+
+// Owner feedback 2026-09-23: on List and Week only unrecorded meetings had a `…` menu. A
+// recorded meeting now offers what All Meetings offers for it — Delete meeting.
+describe('canDeleteRecordedItem', () => {
+  const recorded = item({
+    id: 'm1',
+    source: 'recording',
+    meetingId: 'm1',
+    status: { recorded: true, transcribed: true, summarized: true, speakersIdentified: true },
+  });
+
+  it('allows a recorded meeting', () => {
+    expect(canDeleteRecordedItem(recorded, ctx())).toBe(true);
+  });
+
+  it('never the meeting being recorded right now', () => {
+    expect(canDeleteRecordedItem(recorded, ctx({ isRecording: true, recordingThisId: 'm1' }))).toBe(false);
+  });
+
+  it('not an unrecorded calendar event or an unrecorded manual entry — those have Hide / Edit', () => {
+    expect(canDeleteRecordedItem(item({}), ctx())).toBe(false);
+    expect(canDeleteRecordedItem(manualItem(), ctx())).toBe(false);
+  });
+
+  it('a manual entry that was recorded is a recorded meeting', () => {
+    expect(canDeleteRecordedItem(manualItem({ recorded: true }), ctx())).toBe(true);
   });
 });

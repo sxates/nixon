@@ -409,7 +409,8 @@ impl RecordingManager {
         debug!("Saving recording with transcript chunks");
 
         // Get actual recording duration from state
-        let recording_duration = self.state.get_active_recording_duration();
+        // specs/0071 W5 — logs every term behind the number, not just the number.
+        let recording_duration = self.state.duration_for_save("save_recording_only");
         info!("Recording duration from state: {:?}s", recording_duration);
 
         // Save the recording with actual duration
@@ -442,7 +443,7 @@ impl RecordingManager {
         info!("Stopping recording manager");
 
         // Get recording duration BEFORE stopping (important!)
-        let recording_duration = self.state.get_active_recording_duration();
+        let recording_duration = self.state.duration_for_save("stop_and_save");
         info!("Recording duration before stop: {:?}s", recording_duration);
 
         // Stop recording state first

@@ -245,6 +245,10 @@ export function TranscriptPanel({
             isStopping={isStopping}
             enableStreaming={isRecording}
             showConfidence={true}
+            // specs/0071 W2 — so the in-list indicator can say "Transcript paused" rather
+            // than "Listening…" while VAD/STT are detached. Already resolved above with the
+            // stored-preference fallback, so it is correct before the first event lands.
+            liveTranscription={liveTranscriptionEnabled}
           />
         </div>
       )}

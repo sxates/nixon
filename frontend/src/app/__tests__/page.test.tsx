@@ -223,7 +223,9 @@ describe('handleRecordManual startsAt (fix round 2, specs/0069 followup a)', () 
   });
 
   it('sends the scheduled start as startedAt once it has already passed', async () => {
-    mockNow = new Date('2026-09-20T16:00:00.000Z'); // 30 min after the window ended
+    // Mid-meeting: the start has passed but the entry hasn't ended. (This used to run 30 min
+    // AFTER the window, where Record no longer shows — owner feedback 2026-09-23.)
+    mockNow = new Date('2026-09-20T15:10:00.000Z');
     render(<Home />);
 
     fireEvent.click(await screen.findByRole('button', { name: 'Record' }));

@@ -17,6 +17,14 @@ use tauri::{AppHandle, Emitter, Manager, Runtime};
 /// Global flag to track if retranscription is in progress
 static RETRANSCRIPTION_IN_PROGRESS: AtomicBool = AtomicBool::new(false);
 
+/// Which meeting the in-progress retranscription belongs to.
+///
+/// The flag alone could only say "something is running", which never answered the question
+/// that matters to a caller: *is the thing already running the thing I asked for?* See
+/// [`start_retranscription_command`] for why that distinction decides whether a meeting ends
+/// up summarized.
+static RETRANSCRIPTION_MEETING: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+
 /// Global flag to signal cancellation
 static RETRANSCRIPTION_CANCELLED: AtomicBool = AtomicBool::new(false);
 
@@ -26,21 +34,31 @@ struct RetranscriptionGuard;
 
 impl RetranscriptionGuard {
     /// Create guard and set flag atomically
-    fn acquire() -> Result<Self, String> {
+    fn acquire(meeting_id: &str) -> Result<Self, String> {
         if RETRANSCRIPTION_IN_PROGRESS
             .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
             .is_err()
         {
             return Err("Retranscription already in progress".to_string());
         }
+        *RETRANSCRIPTION_MEETING.lock().unwrap() = Some(meeting_id.to_string());
         Ok(RetranscriptionGuard)
     }
 }
 
 impl Drop for RetranscriptionGuard {
     fn drop(&mut self) {
+        *RETRANSCRIPTION_MEETING.lock().unwrap() = None;
         RETRANSCRIPTION_IN_PROGRESS.store(false, Ordering::SeqCst);
     }
+}
+
+/// The meeting currently being retranscribed, if any.
+fn retranscription_in_progress_for() -> Option<String> {
+    if !RETRANSCRIPTION_IN_PROGRESS.load(Ordering::SeqCst) {
+        return None;
+    }
+    RETRANSCRIPTION_MEETING.lock().unwrap().clone()
 }
 
 /// VAD redemption time in milliseconds - bridges natural pauses in speech
@@ -94,7 +112,7 @@ pub async fn start_retranscription<R: Runtime>(
     provider: Option<String>,
 ) -> Result<RetranscriptionResult> {
     // Acquire guard - ensures flag is cleared even on panic/early return
-    let _guard = RetranscriptionGuard::acquire().map_err(|e| anyhow!(e))?;
+    let _guard = RetranscriptionGuard::acquire(&meeting_id).map_err(|e| anyhow!(e))?;
 
     RETRANSCRIPTION_CANCELLED.store(false, Ordering::SeqCst);
 
@@ -709,6 +727,10 @@ fn write_retranscription_metadata(
 pub struct RetranscriptionStarted {
     pub meeting_id: String,
     pub message: String,
+    /// This call did not start anything — a pass for this same meeting was already running
+    /// and the caller should keep waiting for it. Never an error: the work is happening.
+    #[serde(default)]
+    pub already_running: bool,
 }
 
 // Start retranscription (Beta gated using configContext.betaFeatures)
@@ -721,8 +743,38 @@ pub async fn start_retranscription_command<R: Runtime>(
     model: Option<String>,
     provider: Option<String>,
 ) -> Result<RetranscriptionStarted, String> {
-    // Check if retranscription is already in progress (guard will be acquired in start_retranscription)
-    if RETRANSCRIPTION_IN_PROGRESS.load(Ordering::SeqCst) {
+    // Is the thing already running the thing this caller asked for?
+    //
+    // Measured 2026-09-21: the app remounts a few seconds after a recording stops, which
+    // hands the deferred backlog a fresh controller whose "one drain at a time" guard is a
+    // per-instance ref and therefore starts out false. Its mount refresh finds the
+    // still-marked meeting and starts a SECOND drain over the one the first controller had
+    // already begun — and the first controller's JavaScript died with the old React tree, so
+    // the surviving drain is the only thing that can finish the job.
+    //
+    // Returning `Err` told that survivor its retranscription had FAILED, so it abandoned the
+    // meeting with no diarization and no summary while the work it wanted ran to completion
+    // in the background. For the SAME meeting the honest answer is "yes, that is already
+    // happening": the caller registered its completion listener before calling, so it simply
+    // keeps waiting and picks the chain up when the in-flight pass emits.
+    //
+    // A DIFFERENT meeting is still a refusal — otherwise the caller would wait out its whole
+    // timeout for an event about someone else's work.
+    if let Some(running) = retranscription_in_progress_for() {
+        if running == meeting_id {
+            log::info!(
+                "retranscription for {meeting_id} is already running — the caller will wait \
+                 for it rather than start a second pass"
+            );
+            return Ok(RetranscriptionStarted {
+                meeting_id,
+                message: "Retranscription already in progress for this meeting".to_string(),
+                already_running: true,
+            });
+        }
+        log::warn!(
+            "retranscription refused for {meeting_id}: {running} is already being retranscribed"
+        );
         return Err("Retranscription already in progress".to_string());
     }
 
@@ -751,6 +803,7 @@ pub async fn start_retranscription_command<R: Runtime>(
     Ok(RetranscriptionStarted {
         meeting_id,
         message: "Retranscription started".to_string(),
+        already_running: false,
     })
 }
 
@@ -947,5 +1000,94 @@ mod tests {
         // Non-audio formats
         assert!(!AUDIO_EXTENSIONS.contains(&"txt"));
         assert!(!AUDIO_EXTENSIONS.contains(&"pdf"));
+    }
+}
+
+#[cfg(test)]
+mod in_progress_guard_tests {
+    use super::*;
+
+    // Measured 2026-09-21. The app remounts a few seconds after a recording stops, so the
+    // deferred backlog gets a fresh controller whose "one drain at a time" guard is a
+    // per-instance ref starting at false. Its mount refresh (AUTOSTART_DEBOUNCE_MS = 5s)
+    // starts a SECOND drain over the one already running:
+    //
+    //   04:37:31 [fe:backlog] drain starting with 1 item(s)
+    //   04:37:40 [fe:backlog] drain starting with 1 item(s)      <- fresh controller
+    //   04:37:40 [fe:backlog] ... wait threw: "Retranscription already in progress"
+    //   04:37:40 [fe:backlog] ... retranscription returned 'error' — no diarize, no summary
+    //
+    // The first controller's JavaScript died with the old React tree, so the survivor was the
+    // only thing that could finish the job — and it gave up because a healthy in-flight pass
+    // looked like a failure.
+
+    /// Serialises these tests: the guard is process-global and cargo runs tests in parallel.
+    static TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    fn clear() {
+        *RETRANSCRIPTION_MEETING.lock().unwrap() = None;
+        RETRANSCRIPTION_IN_PROGRESS.store(false, Ordering::SeqCst);
+    }
+
+    #[test]
+    fn nothing_is_in_progress_when_the_flag_is_down() {
+        let _lock = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        clear();
+        assert_eq!(retranscription_in_progress_for(), None);
+    }
+
+    #[test]
+    fn the_guard_reports_which_meeting_holds_it() {
+        let _lock = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        clear();
+        let guard = RetranscriptionGuard::acquire("meeting-a").expect("acquires");
+        assert_eq!(retranscription_in_progress_for().as_deref(), Some("meeting-a"));
+        drop(guard);
+        assert_eq!(
+            retranscription_in_progress_for(),
+            None,
+            "dropping the guard releases the meeting too, not just the flag"
+        );
+    }
+
+    #[test]
+    fn a_second_acquire_is_refused_while_one_is_held() {
+        let _lock = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        clear();
+        let _held = RetranscriptionGuard::acquire("meeting-a").expect("first acquires");
+        assert!(
+            RetranscriptionGuard::acquire("meeting-b").is_err(),
+            "the pass itself is still serialised — only the COMMAND's answer changed"
+        );
+        clear();
+    }
+
+    /// The distinction the fix turns on: a caller asking for the meeting already running is
+    /// asking for something that is happening, and must be told so rather than refused.
+    #[test]
+    fn the_same_meeting_is_distinguishable_from_a_different_one() {
+        let _lock = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        clear();
+        let _held = RetranscriptionGuard::acquire("meeting-a").expect("acquires");
+        let running = retranscription_in_progress_for().expect("something is running");
+        assert_eq!(running, "meeting-a", "the caller can compare against its own id");
+        assert_ne!(running, "meeting-b");
+        clear();
+    }
+
+    #[test]
+    fn a_panicking_pass_still_releases_the_meeting() {
+        let _lock = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        clear();
+        let result = std::panic::catch_unwind(|| {
+            let _guard = RetranscriptionGuard::acquire("meeting-a").expect("acquires");
+            panic!("boom");
+        });
+        assert!(result.is_err(), "the pass panicked");
+        assert_eq!(
+            retranscription_in_progress_for(),
+            None,
+            "RAII drop must clear the meeting, or every later caller is refused forever"
+        );
     }
 }

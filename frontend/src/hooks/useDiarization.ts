@@ -223,6 +223,24 @@ export function useDiarization({
       },
     );
 
+    // Owner feedback 2026-09-21 — the transcript no longer waits for the whole pass. The
+    // backend emits this once the clusters are persisted (generic "Speaker 1/2/3" appear)
+    // and again once the voiceprint matches are applied (real names appear), so the last
+    // stretch of a long run stops looking frozen.
+    //
+    // Deliberately reuses the SAME refetch callback `diarization-complete` uses: the
+    // refetch preserves the pagination window and scroll position (specs/0041 WS7.2), which
+    // is the property that makes running it mid-pass safe. It shows no toast — three
+    // "Speakers identified" toasts per run would be worse than the silence it replaced —
+    // and it never touches `isRunning`, because the pass is still going.
+    const disposeSpeakersUpdated = safeListen<{ meeting_id?: string; stage?: string }>(
+      'diarization-speakers-updated',
+      (event) => {
+        if (event.payload.meeting_id !== meetingId) return;
+        void Promise.resolve(onCompleteRef.current?.());
+      },
+    );
+
     const disposeComplete = safeListen<DiarizationCompletePayload>(
       'diarization-complete',
       (event) => {
@@ -233,22 +251,6 @@ export function useDiarization({
         setDownloadProgress(null);
         isDownloadingRef.current = false;
         resetProgressGuard(null, -1);
-        const count = event.payload.speaker_count;
-        const found =
-          count === 1 ? '1 speaker found.' : `${count} speakers found.`;
-        // Surface the basis when we seeded an estimate from the calendar, so the
-        // user understands why the count is constrained (specs/0011 calendar-seed).
-        const seeded = event.payload.seededSpeakerCount;
-        let basis = '';
-        if (
-          event.payload.speakerCountSource === 'calendar' &&
-          typeof seeded === 'number'
-        ) {
-          basis = ` Estimated ${seeded} speakers from calendar.`;
-        }
-        toast.success('Speakers identified', {
-          description: `${found}${basis}`,
-        });
         void Promise.resolve(onCompleteRef.current?.());
       },
     );
@@ -273,6 +275,7 @@ export function useDiarization({
       cancelled = true;
       disposeProgress();
       disposeDownloadProgress();
+      disposeSpeakersUpdated();
       disposeComplete();
       disposeError();
     };

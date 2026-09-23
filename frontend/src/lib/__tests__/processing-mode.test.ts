@@ -64,15 +64,46 @@ describe('effectiveLiveTranscription', () => {
   });
 });
 
+// specs/0071 W1 — the chip is labelled with the ACTION, not the state. It used to read
+// `Live` / `Deferred`: the owner read "Live" as "make it live", pressed it mid-meeting, and
+// the transcript stopped. A button whose two neighbours (Participants, the template picker)
+// both do the thing written on them cannot be labelled with its own state.
 describe('modeChipDisplay', () => {
-  it('shows Live with no battery glyph when transcribing live', () => {
-    expect(modeChipDisplay(true, false)).toEqual({ label: 'Live', showBatteryGlyph: false });
-    expect(modeChipDisplay(true, true)).toEqual({ label: 'Live', showBatteryGlyph: false });
+  it('offers to PAUSE while transcribing live, with no battery glyph', () => {
+    expect(modeChipDisplay(true, false)).toEqual({
+      label: 'Pause transcript',
+      showBatteryGlyph: false,
+    });
+    expect(modeChipDisplay(true, true)).toEqual({
+      label: 'Pause transcript',
+      showBatteryGlyph: false,
+    });
   });
-  it('shows Deferred with a battery glyph only when deferred AND on battery', () => {
-    expect(modeChipDisplay(false, true)).toEqual({ label: 'Deferred', showBatteryGlyph: true });
-    expect(modeChipDisplay(false, false)).toEqual({ label: 'Deferred', showBatteryGlyph: false });
-    expect(modeChipDisplay(false, null)).toEqual({ label: 'Deferred', showBatteryGlyph: false });
+
+  it('offers to RESUME while deferred, with a battery glyph only when on battery', () => {
+    expect(modeChipDisplay(false, true)).toEqual({
+      label: 'Resume transcript',
+      showBatteryGlyph: true,
+    });
+    expect(modeChipDisplay(false, false)).toEqual({
+      label: 'Resume transcript',
+      showBatteryGlyph: false,
+    });
+    expect(modeChipDisplay(false, null)).toEqual({
+      label: 'Resume transcript',
+      showBatteryGlyph: false,
+    });
+  });
+
+  // The regression that matters: whatever the label says must be what the click does, so
+  // the label must never be the name of the state the session is currently in.
+  it('never labels the chip with its own current state', () => {
+    for (const live of [true, false]) {
+      const { label } = modeChipDisplay(live, false);
+      expect(label).not.toBe('Live');
+      expect(label).not.toBe('Deferred');
+      expect(label.startsWith(live ? 'Pause' : 'Resume')).toBe(true);
+    }
   });
 });
 

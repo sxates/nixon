@@ -120,7 +120,54 @@ pub struct DeliverRequest {
     /// category, and nothing here needs to outlive the running app.
     #[serde(default)]
     pub user_info: HashMap<String, String>,
+    /// Take this notification back down — off the screen and out of Notification Center —
+    /// after this many milliseconds. `None` leaves it until the user dismisses it.
+    ///
+    /// **Why this exists instead of a style flag.** Owner feedback 2026-09-21: "Is it
+    /// possible to control which OS notifications are transient, and which ones are
+    /// persistent? The 'meeting starts now - join & record' should be persistent, but all
+    /// others transient." macOS offers no such control. Banner-vs-Alert is one app-wide
+    /// toggle in System Settings, `UNNotificationInterruptionLevel::TimeSensitive` needs an
+    /// Apple-granted entitlement Nixon does not have, and specs/0068 already established
+    /// (see [`CATEGORY_MEETING`]) that no Info.plist key or category option changes the
+    /// style either — both were tried.
+    ///
+    /// So the app is set to **Alerts**, where everything persists, and Nixon removes the
+    /// ones that should not have. Inverting the problem is the only lever the platform
+    /// actually gives us.
+    ///
+    /// Left unset, [`default_auto_dismiss_ms`] decides from the category — which is the
+    /// normal case, so no caller has to remember.
+    #[serde(default)]
+    pub auto_dismiss_ms: Option<u64>,
 }
+
+/// How long a banner of this category should last before Nixon takes it back down.
+///
+/// Exactly one kind of Nixon notification survives until dismissed: the one telling you a
+/// meeting has started, because that is the single moment where missing the banner means
+/// missing the recording. Everything else goes on its own.
+///
+/// A constant rather than a setting: the user already has the one setting that matters
+/// (Alerts vs Banners, in System Settings), and a second control for "which of my alerts
+/// are really alerts" would be asking them to do the app's job.
+///
+/// Pure, so the policy is unit-testable without a notification centre.
+pub fn default_auto_dismiss_ms(category: Option<&str>) -> Option<u64> {
+    match category {
+        // "Starting now — Join & Record", and its link-less twin. Stays put.
+        Some(CATEGORY_MEETING) | Some(CATEGORY_RECORD) => None,
+        // The T-5 warning: if you missed it, the T-0 alert is coming and reuses the same
+        // notification id, so it replaces this one anyway.
+        Some(CATEGORY_PREP) => Some(TRANSIENT_MS),
+        // Recording started/stopped, and anything else.
+        _ => Some(TRANSIENT_MS),
+    }
+}
+
+/// How long a transient banner stays. Long enough to read a title and a line of body,
+/// short enough that a stack of them never accumulates.
+pub const TRANSIENT_MS: u64 = 8_000;
 
 /// What the user did with a banner.
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -280,8 +327,67 @@ mod tests {
             body: "b".into(),
             category: Some(CATEGORY_PLAIN.into()),
             user_info: HashMap::new(),
+            auto_dismiss_ms: None,
         })
         .is_err());
+        // The auto-dismiss path (2026-09-21) reaches the framework too, on a delay. Its
+        // task re-checks the gate before touching `UNUserNotificationCenter`, and a request
+        // that never delivered never schedules one — so a refused deliver must leave
+        // nothing behind that could abort the process 8 seconds later.
+        assert!(deliver(DeliverRequest {
+            id: "t-dismiss".into(),
+            title: "t".into(),
+            body: "b".into(),
+            category: Some(CATEGORY_PREP.into()),
+            user_info: HashMap::new(),
+            auto_dismiss_ms: Some(1),
+        })
+        .is_err());
+    }
+
+    // Owner feedback 2026-09-21: "the 'meeting starts now - join & record' should be
+    // persistent, but all others transient." macOS has no per-notification style, so this
+    // policy — plus the programmatic removal it drives — is the whole implementation.
+    #[test]
+    fn only_the_meeting_is_starting_alerts_persist() {
+        assert_eq!(
+            default_auto_dismiss_ms(Some(CATEGORY_MEETING)),
+            None,
+            "\"starting now — Join & Record\" must survive until dismissed"
+        );
+        assert_eq!(
+            default_auto_dismiss_ms(Some(CATEGORY_RECORD)),
+            None,
+            "the link-less twin of the same moment, same stakes"
+        );
+    }
+
+    #[test]
+    fn every_other_category_goes_on_its_own() {
+        assert_eq!(default_auto_dismiss_ms(Some(CATEGORY_PREP)), Some(TRANSIENT_MS));
+        assert_eq!(default_auto_dismiss_ms(Some(CATEGORY_PLAIN)), Some(TRANSIENT_MS));
+        // An unregistered category still delivers (macOS drops the buttons, not the
+        // banner), so it needs a policy rather than falling through to "persist forever".
+        assert_eq!(default_auto_dismiss_ms(Some("nixon.something.new")), Some(TRANSIENT_MS));
+        assert_eq!(default_auto_dismiss_ms(None), Some(TRANSIENT_MS));
+    }
+
+    #[test]
+    fn transient_is_long_enough_to_read_and_short_enough_not_to_stack() {
+        assert!((4_000..=15_000).contains(&TRANSIENT_MS));
+    }
+
+    #[test]
+    fn auto_dismiss_ms_is_an_optional_override_on_the_wire() {
+        let default: DeliverRequest =
+            serde_json::from_str(r#"{"id":"a1","title":"T","body":"B"}"#).unwrap();
+        assert_eq!(default.auto_dismiss_ms, None, "absent => the category decides");
+
+        let explicit: DeliverRequest = serde_json::from_str(
+            r#"{"id":"a1","title":"T","body":"B","autoDismissMs":2500}"#,
+        )
+        .unwrap();
+        assert_eq!(explicit.auto_dismiss_ms, Some(2500));
     }
 
     #[test]

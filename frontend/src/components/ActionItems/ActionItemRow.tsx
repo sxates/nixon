@@ -195,7 +195,7 @@ export function ActionItemRow({
               {item.description}
             </button>
             {collapsedMeta && (
-              <span className="flex-shrink-0 truncate text-[11px] text-muted-foreground group-hover:hidden group-focus-within:hidden">
+              <span className="flex-shrink-0 truncate text-[11px] text-muted-foreground group-hover:hidden group-has-[:focus-visible]:hidden">
                 {collapsedMeta}
               </span>
             )}
@@ -206,7 +206,7 @@ export function ActionItemRow({
           className={cn(
             'mt-1 flex-wrap items-center gap-1.5',
             compact
-              ? 'hidden group-hover:flex group-focus-within:flex'
+              ? 'hidden group-hover:flex group-has-[:focus-visible]:flex'
               : 'flex',
           )}
         >

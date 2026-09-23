@@ -605,3 +605,44 @@ describe('useRecordingStop — 0051 WS2 durable defer marker + acknowledged hand
     expect(enqueueMeetingMock).not.toHaveBeenCalled();
   });
 });
+
+describe('useRecordingStop — the recorder never shows an empty transcript on the way out', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.useFakeTimers();
+    clearStopRecordingResult();
+    transcriptsRef.current = [{ text: 'part' }];
+    sessionStorage.clear();
+    sessionStorage.setItem('last_recording_folder_path', '/recordings/x');
+    getTranscriptionStatus.mockResolvedValue({ is_processing: false, chunks_in_queue: 0, last_activity_ms: 0 });
+    saveMeeting.mockResolvedValue({ meeting_id: 'meeting-x' });
+    getMeeting.mockResolvedValue({ id: 'meeting-x', title: 'My Meeting' });
+    applyPinned.mockResolvedValue(true);
+    invokeMock.mockResolvedValue(undefined);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  // Owner report 2026-09-23: after a stop, "Welcome to Nixon!" flashed before the meeting
+  // page appeared. The transcripts were cleared in the same tick as `router.push`, but the
+  // push is a transition — the recorder stayed on screen with zero segments and rendered the
+  // fresh-meeting empty state until the next page arrived (seconds, in dev).
+  it('clears the transcripts when the recorder unmounts, not when navigation is requested', async () => {
+    const { result, unmount } = renderHook(() => useRecordingStop(vi.fn(), vi.fn()));
+    await runStop(result.current.handleRecordingStop);
+
+    expect(routerPush).toHaveBeenCalledWith('/meeting-details?id=meeting-x&source=recording');
+    expect(clearTranscripts).not.toHaveBeenCalled();
+
+    unmount();
+    expect(clearTranscripts).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaving the recorder mid-recording keeps the live transcript', () => {
+    const { unmount } = renderHook(() => useRecordingStop(vi.fn(), vi.fn()));
+    unmount();
+    expect(clearTranscripts).not.toHaveBeenCalled();
+  });
+});

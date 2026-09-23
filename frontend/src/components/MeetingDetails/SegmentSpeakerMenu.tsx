@@ -46,8 +46,10 @@ export function SegmentSpeakerMenu({
       <DropdownMenuTrigger asChild>
         <button
           type="button"
-          // Hidden until the row is hovered (group/segment), so it doesn't clutter.
-          className="ml-0.5 rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground focus:opacity-100 group-hover/segment:opacity-100"
+          // Hidden until the row is hovered (group/segment), so it doesn't clutter. Keyboard
+          // focus and an open menu also show it — but not plain `focus:`, which a mouse click
+          // leaves behind, keeping the icon lit after the pointer has gone.
+          className="ml-0.5 rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground focus-visible:opacity-100 data-[state=open]:opacity-100 group-hover/segment:opacity-100"
           title="Move this line to another speaker"
           aria-label="Move this line to another speaker"
         >

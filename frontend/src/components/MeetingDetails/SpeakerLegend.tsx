@@ -424,7 +424,7 @@ function SpeakerChip({
             {speaker.displayName}
             <Pencil
               size={10}
-              className="text-muted-foreground opacity-0 transition-opacity group-hover/chip:opacity-100 group-focus-within/chip:opacity-100"
+              className="text-muted-foreground opacity-0 transition-opacity group-hover/chip:opacity-100 group-has-[:focus-visible]/chip:opacity-100"
             />
           </button>
         </PopoverTrigger>

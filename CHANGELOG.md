@@ -19,9 +19,178 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 ## [Unreleased]
 
-_(nothing yet)_
+### Added
+
+- **A transcript you can actually read.** Consecutive lines from one speaker now form a
+  single block under one name, with each line's timestamp on the right. The same meeting
+  takes a fraction of the scrolling, and the speaker names are still one click from being
+  corrected.
+- **Speakers appear while Nixon is still identifying them**, instead of all at once at the
+  end. The numbered speakers show up as soon as they are worked out, and the real names land
+  as each voice is recognised — and the button now says what it is doing rather than sitting
+  on 100%.
+- **Copy an Ask AI answer as plain prose.** The Copy button on an answer leaves the meeting
+  references behind, so it pastes cleanly into a message or a doc.
+- **Ask AI history opens where it sits.** Click a past question and its answer expands
+  underneath, with its own Copy and **Ask again** — no more losing the question you were
+  about to ask.
+- **Faces on Today.** Meetings on your day show who is in them and mark the one being
+  recorded, the way All Meetings already did.
+- **A summary tells you when it is preliminary.** A summary written before Nixon has
+  finished identifying who spoke now says so above it — "Preliminary summary — speakers will
+  be added when available" — until the version with names replaces it.
+- **Delete a recorded meeting from Today.** Every meeting on Agenda, List and Week now has
+  a ⋯ menu: recorded ones offer **Delete meeting**, the same as All Meetings.
+
+### Changed
+
+- **The transcript's pause button says what it will do.** The control on the recording header
+  used to be labelled with the mode you were already in — "Live" — so pressing it stopped the
+  transcript. It now reads **Pause transcript** while running and **Resume transcript** while
+  paused, and the state it used to carry is on the transport rail with everything else.
+- **Nothing claims to be listening when it isn't.** Pause the transcript and the transcript
+  area says so — and says that audio is still recording, which is the thing you actually want
+  to know. The rail says "Transcript paused" on every screen.
+- **A meeting tells you when it is being processed.** Stopping a meeting whose transcript was
+  paused at any point queues a full re-transcribe and a fresh summary; the meeting now shows
+  that it is queued, re-transcribing or summarizing, instead of showing an old transcript and
+  saying nothing for minutes.
+- **The meter in the footer follows the whole meeting.** It used to go dead whenever your
+  mic was muted in Zoom, even though the other side of the call was still being recorded.
+  Muting your mic now only changes the words next to it.
+- **A tighter recording screen.** The meter bridge is smaller and carries its channel labels
+  inside the meters, the duplicated status line is gone, and the three controls read
+  Participants, Live, Template — all the same size.
+- **Participants fold up.** A meeting with four or more people opens with a row of faces and
+  a summary instead of three rows of names; one click shows everyone.
+- **Today's views read Agenda, List, Week**, and the week view now has the same ⋯ menu as the
+  other two, so you can hide or edit a meeting from any of them.
+- **Ask AI's box is laid out around the question.** The question spans the full width, with
+  Ask and Save under it on the left and the filters on the right. Answers now default to the
+  last 7 days rather than all time, and the person filter says what it does — it picks the
+  *meetings* someone was in.
+- **Copy and Open folder moved into the transcript's ⋯ menu**, so the row shows the actions
+  worth taking while a transcript is being worked on.
+- **Settings shows your save location as `~/Movies/…`**, without your account name.
+- **Ending a meeting is quiet.** Stopping a recording no longer stacks up "saved",
+  "generating summary", "speakers identified" and "summary ready" pop-ups. Nixon takes you to
+  the meeting and the tape rewinds while it works; you only hear from it if something needs
+  your attention.
+- **Your notes are the context for a summary.** The "Add context for AI summary" box at the
+  bottom of the transcript is gone; the notes you keep on a meeting already go into every
+  summary, and they are somewhere you can find them.
+- **Calmer meeting tabs.** Enhance and Regenerate Summary are ordinary buttons again, the
+  edit and reassign controls on a transcript line disappear as soon as the pointer leaves,
+  and a summary's status sits above it instead of under pages of text.
+
+### Fixed
+
+- **A meeting that ends with the transcript running now processes itself.** If you paused the
+  transcript partway through a meeting and resumed it, stopping used to tell you to process
+  the audio by hand — and the **Process now** button did nothing when you tried. Both went
+  through the same broken check, which could never succeed for any meeting. Stopping now
+  transcribes and summarizes on its own, the way a meeting you never paused always did.
+- **A summary generated in the background now appears without reopening the meeting.** The
+  meeting page read the summary once when you opened it, so one produced afterwards by
+  background processing sat in the database unseen until you navigated away and back.
+- **A meeting that was being processed no longer gets abandoned halfway.** Nixon could end
+  up with two processing runs for the same meeting; the second saw the first's work already
+  underway, took that for a failure, and gave up — leaving the meeting transcribed but never
+  summarized. It now recognises its own work in progress and waits for it.
+- **A meeting's length is recorded correctly.** The stored duration was taken after the
+  recording's clocks had already been cleared, so it fell back to the moment speech last
+  stopped — a meeting with quiet at the end, or a paused transcript, came out shorter than it
+  was (63 seconds recorded as a 67-second meeting; 69 for a 115-second one).
+- **Hiding a meeting on Today now actually hides it.** Clearing something off your day —
+  lunch, a hold, anything you are not recording — no longer sends you a reminder to prep for
+  it or to join it, and no longer spends a summary working out what it was about.
+- **Only the alert that matters waits for you.** "A meeting is starting" stays on screen
+  until you deal with it; every other Nixon banner now clears itself after a few seconds.
+  Set Nixon to **Alerts** in System Settings → Notifications and Settings will tell you the
+  rest.
+- **A finished summary replaces "writing your summary".** When a meeting was summarized by
+  background processing while its page was open, the page could keep saying it was still
+  writing — over a summary that had already finished. It now shows the summary as soon as
+  it is ready.
+- **A meeting is summarized once when it ends.** The meeting page and background processing
+  could both start a summary of the same meeting, doing the work twice and renaming the
+  meeting twice. The page now leaves a meeting to background processing once it has it.
+- **No "Welcome to Nixon!" flash when a meeting ends.** The recording screen emptied its
+  transcript a moment before the meeting page replaced it, briefly showing the screen for a
+  brand-new meeting on the way out.
+- **Faces on every meeting on Today.** A meeting recorded without a calendar invite now
+  shows the people named on it, the way All Meetings does.
+- **The meeting you are recording is marked in the Week view** too, and appears on Today
+  as soon as recording starts.
+- **A meeting you added in Nixon says whether it was recorded.** Once its time had passed
+  it read "Recorded" whether you had recorded it or not, and it kept offering a Record
+  button long after it was over. Record now shows until the meeting ends.
+
+### Internal
+
+- Spec 0071 covers the follow-up from an owner recording on 2026-09-21: three of the four
+  reported faults were the app working as designed and failing to say so (the chip's label,
+  the "Listening" indicator, and a silent 3min19s `'process-now'` repass after stop). Root
+  causes established from the recording's own files.
+- The VAD now splits a speech run longer than 30s — Whisper's own encoder window — into
+  contiguous pieces at emission rather than handing over one oversized unit; an offline
+  re-pass had produced a single 108.7-second segment. Split at emission, not by cutting
+  mid-run, because `SpeechEnd` carries its own samples alongside the parallel accumulation
+  and reconciling the two is how 0046 and 0051 both got scrambled clocks. `vad_split.rs` is a
+  new module because `vad.rs` was at the size cap.
+- `useDeferredBacklog.enqueueMeeting` read `folder_path` off `api_get_meeting`, whose
+  `MeetingDetails` has no such field — so it returned `no-folder-path` for every meeting,
+  ever. It now asks `api_get_meeting_metadata`, which carries it (and costs less, since it
+  does not serialize every transcript). The periodic refresh path was unaffected because
+  `api_list_deferred_meetings` is camelCase and matches its TS type — which is also the real
+  reason a stop took 3min19s to summarize: a failed handoff, then the refresh eventually
+  noticing the marker, not retranscription cost. The hook had no tests; it has five now,
+  built on the real IPC payload shapes.
+- Log files were capped at the plugin's default 40 KB with `KeepOne`, which discards on
+  rotation — smaller than one recording produces, so two investigations found the session
+  they wanted already gone. Now 8 MB, keeping the last three.
+- The `[fe:backlog]` instrumentation paid for itself immediately: it showed the app
+  remounting ~9s after a stop (recovery/onboarding/model-config burst at 04:37:35), which
+  hands the backlog a fresh controller whose one-drain-at-a-time guard is a per-instance ref
+  starting at false. `AUTOSTART_DEBOUNCE_MS` (5s) then fired its mount refresh at 04:37:40 and
+  started a second drain over the first — and the first controller's JavaScript had died with
+  the old React tree, so the survivor was the only thing that could finish the job.
+  `start_retranscription_command` now tracks WHICH meeting holds the guard: the same meeting
+  gets `already_running: true` (keep waiting — the listener was registered before the call, so
+  the in-flight pass's completion event settles it), a different meeting is still refused.
+- `RecordingState::stop_recording` now captures the duration accounting before anything
+  clears it. `cleanup()` (via `stop_streams_only`) wipes `recording_start` and runs BEFORE
+  `save_recording_only` reads it, so the save got `None` and `recording_saver.rs:1299` fell
+  back to the last transcript segment's `audio_end_time`. That is the whole root cause of the
+  wrong durations, and it is now covered by tests that reproduce the stop path's ordering.
+  `recording_duration.rs` is a new module because `recording_state.rs` hit the size cap.
+- `api_log_frontend` + `lib/app-log.ts`: the frontend can write into the app log file. The
+  deferred-backlog drain sequences retranscribe → diarize → summarize entirely in TypeScript,
+  so none of its decisions were recorded anywhere — when a meeting retranscribed and then
+  never summarized, the log showed the Rust work succeeding and then nothing. Every drain step
+  and every wait result is now logged, as is `start_retranscription_command`'s
+  already-in-progress refusal, which was the one silent exit from the pipeline: the caller's
+  invoke rejects, the wait reports 'error', and the meeting is abandoned undiarized and
+  unsummarized while the work runs fine under whoever holds the guard.
+- A recording logs every term behind its stored duration (elapsed / pauses / active). One
+  recording stored 68.85s for 114.6s of ffmpeg-measured audio; that is **not fixed** — the
+  mute gate is exonerated, `pause_recording` has only the HOLD caller, and the session's log
+  had been truncated, so this is the evidence the next occurrence needs.
+- Specs 0070 covers the four functional items of this batch (progressive speaker reveal,
+  dismissed events reaching the notifier and the prep-brief generator, notification lifetime,
+  the dev recordings root). The other eleven were presentation and were built without a spec.
+- The debug build writes recordings to `nixon-recordings-dev` instead of inheriting the
+  production probe's legacy folder; `fs_guard` allow-lists the release root in debug builds
+  so pre-existing dev recordings stay readable.
+- Removed two committed screenshots that leaked the maintainer's own path and email address;
+  `docs/screenshots/README.md` now names the review step that missed them.
+- Three shared Today components (`AgendaRowMenu`, `AgendaAttendees`, `RecordingBadge`) so the
+  three views cannot drift apart again. First tests for `WeekView` and the Ask AI page.
 
 ## [0.8.0] - 2026-09-20
+- Screenshots: a `today-week` shot, so the Week view is covered (its parity regressions went
+  unseen for a release without one), and the sidebar's DEV row is hidden whole in shot
+  mode — hiding only the badge left an empty row that lifted Settings and Queue.
 
 ### Added
 

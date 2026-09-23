@@ -184,3 +184,76 @@ describe('useDiarization — WS3.1 persistent status & concurrency guard', () =>
     expect(result.current.progressPct).toBe(3);
   });
 });
+
+// Owner feedback 2026-09-21 — "Is it possible to update the transcript with speakers as
+// they get identified… instead of waiting to the very end?" The backend now emits
+// `diarization-speakers-updated` once the clusters are persisted and again once the
+// voiceprint matches are applied, so the transcript stops being frozen for the last
+// stretch of a run.
+describe('useDiarization — progressive speaker reveal', () => {
+  const fireSpeakersUpdated = (payload: { meeting_id?: string; stage?: string }) => {
+    act(() => {
+      listeners.get('diarization-speakers-updated')?.({ payload });
+    });
+  };
+
+  it('refetches the transcript on a speakers-updated event for this meeting', async () => {
+    const onComplete = vi.fn();
+    renderHook(() => useDiarization({ meetingId: 'm1', onComplete }));
+    await waitFor(() => expect(listeners.has('diarization-speakers-updated')).toBe(true));
+
+    fireSpeakersUpdated({ meeting_id: 'm1', stage: 'attributing' });
+    expect(onComplete).toHaveBeenCalledTimes(1);
+
+    // Twice per run: clusters, then the applied gallery matches.
+    fireSpeakersUpdated({ meeting_id: 'm1', stage: 'labelling' });
+    expect(onComplete).toHaveBeenCalledTimes(2);
+  });
+
+  it('ignores a speakers-updated event for a different meeting', async () => {
+    const onComplete = vi.fn();
+    renderHook(() => useDiarization({ meetingId: 'm1', onComplete }));
+    await waitFor(() => expect(listeners.has('diarization-speakers-updated')).toBe(true));
+
+    fireSpeakersUpdated({ meeting_id: 'm2', stage: 'attributing' });
+    expect(onComplete).not.toHaveBeenCalled();
+  });
+
+  // Unlike `diarization-complete`, this fires mid-pass — so it must not end the run or
+  // clear the stage, or the button would go idle while sherpa's work is still being written.
+  it('does not end the run or show a toast', async () => {
+    const onComplete = vi.fn();
+    const { result } = renderHook(() => useDiarization({ meetingId: 'm1', onComplete }));
+    await waitFor(() => expect(listeners.has('diarization-speakers-updated')).toBe(true));
+
+    fireProgress({ meeting_id: 'm1', stage: 'attributing' });
+    expect(result.current.isRunning).toBe(true);
+
+    fireSpeakersUpdated({ meeting_id: 'm1', stage: 'attributing' });
+    expect(result.current.isRunning).toBe(true);
+    expect(result.current.stage).toBe('attributing');
+    expect(toast.success).not.toHaveBeenCalled();
+  });
+
+  // The stages reported after sherpa returns carry no percentage, so the button shows a
+  // named stage instead of sitting on "Identifying… 100%" (which reads as hung).
+  it('reports the post-sherpa stages with no percentage', async () => {
+    const { result } = renderHook(() => useDiarization({ meetingId: 'm1' }));
+    await waitFor(() => expect(listeners.has('diarization-progress')).toBe(true));
+
+    fireProgress({ meeting_id: 'm1', stage: 'diarizing', pct: 100 });
+    expect(result.current.progressPct).toBe(100);
+
+    fireProgress({ meeting_id: 'm1', stage: 'attributing' });
+    expect(result.current.stage).toBe('attributing');
+    expect(result.current.progressPct).toBeNull();
+
+    fireProgress({ meeting_id: 'm1', stage: 'matching known voices' });
+    expect(result.current.stage).toBe('matching known voices');
+    expect(result.current.progressPct).toBeNull();
+
+    fireProgress({ meeting_id: 'm1', stage: 'labelling' });
+    expect(result.current.stage).toBe('labelling');
+    expect(result.current.progressPct).toBeNull();
+  });
+});
