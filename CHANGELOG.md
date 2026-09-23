@@ -139,6 +139,12 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 ### Internal
 
+- Spec 0072 W0: codec round-trips for the eval harnesses (`tests/eval_codec/`).
+  `NIXON_EVAL_CODEC=opus<k>|flac` scores diarization after a channel re-encode and
+  `NIXON_WER_CODEC=aac<k>` scores transcription after a mix re-encode. The gate chose Opus
+  24 kbps for the channels (macro DER 7.93% vs 8.07% baseline, every pin held) and AAC
+  64 kbps for the mix (Parakeet pooled WER 10.6%, vs 10.7% at today's 192 kbps). Numbers are
+  in ADR-0014.
 - Spec 0073 W1: a per-meeting folder lease (`audio/folder_lease.rs`) is now the one
   exclusion primitive for meeting folders. The recording saver, retranscription,
   diarization, the retention sweep, the transcript save's `folder_path` write-back, meeting

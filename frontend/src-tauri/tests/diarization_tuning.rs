@@ -53,6 +53,8 @@ use app_lib::diarization::sherpa::{
 };
 use app_lib::diarization::Diarizer;
 
+mod eval_codec;
+
 const SAMPLE_RATE: u32 = 16_000;
 
 const SEGMENTATION_FILE: &str = "segmentation.onnx";
@@ -384,6 +386,9 @@ fn sweep_consolidation() {
 // cargo test --features metal --test diarization_tuning \
 //     eval_regression_gate -- --ignored --nocapture
 // ```
+//
+// specs/0072 W0: prefix either with `NIXON_EVAL_CODEC=opus24` (or `opus32`, `opus48`,
+// `flac`) to score the audio after a codec round-trip; see `tests/eval_codec/`.
 // ===========================================================================
 
 use std::collections::HashMap;
@@ -556,9 +561,32 @@ fn ffmpeg_bin() -> Option<PathBuf> {
     app_lib::audio::ffmpeg::find_ffmpeg_path()
 }
 
+/// specs/0072 W0: `NIXON_EVAL_CODEC` (`opus24`, `opus32`, `opus48`, `flac`, …) scores the
+/// 16 kHz WAV after a round-trip through that codec — what the post-processing channel
+/// compressor would leave on disk. Unset = baseline.
+fn codec_under_test() -> Option<eval_codec::Codec> {
+    eval_codec::Codec::from_env("NIXON_EVAL_CODEC")
+}
+
+/// The 16 kHz mono WAV the eval diarizes: the baseline conversion below, then (with
+/// `NIXON_EVAL_CODEC`) a cached round-trip `{stem}.16k-mono.{codec}.wav`.
+fn ensure_wav(sample: &EvalSample) -> PathBuf {
+    let wav = ensure_base_wav(sample);
+    let Some(codec) = codec_under_test() else {
+        return wav;
+    };
+    let stem = format!(
+        "{}.16k-mono",
+        sample.mp4.file_stem().unwrap().to_string_lossy()
+    );
+    let ffmpeg = ffmpeg_bin().expect("ffmpeg binary (bundled, PATH, or auto-install)");
+    eval_codec::round_trip_cached(&ffmpeg, codec, &wav, &sample.cache_dir, &stem)
+        .unwrap_or_else(|e| panic!("{} round-trip failed for {stem}: {e}", codec.tag()))
+}
+
 /// Convert the sample's mp4 to 16 kHz mono s16 WAV via ffmpeg, cached in the
 /// sample's `.eval-cache/` so re-runs skip the conversion.
-fn ensure_wav(sample: &EvalSample) -> PathBuf {
+fn ensure_base_wav(sample: &EvalSample) -> PathBuf {
     let stem = sample.mp4.file_stem().unwrap().to_string_lossy();
     let wav = sample.cache_dir.join(format!("{stem}.16k-mono.wav"));
     if wav.exists() {
@@ -635,9 +663,13 @@ fn eval_embedding_model(model_dir: &Path) -> (PathBuf, String) {
 fn raw_diarization_cached(sample: &EvalSample, model_dir: &Path) -> TurnsEmb {
     let threshold = eval_raw_threshold();
     let (embedding_model, model_tag) = eval_embedding_model(model_dir);
-    let cache = sample
-        .cache_dir
-        .join(format!("raw-diar.{model_tag}th{threshold}.v1.json"));
+    // Each codec's audio gets its own raw pass; baseline keeps the untagged name.
+    let codec_tag = codec_under_test()
+        .map(|c| format!("{}.", c.tag()))
+        .unwrap_or_default();
+    let cache = sample.cache_dir.join(format!(
+        "raw-diar.{model_tag}{codec_tag}th{threshold}.v1.json"
+    ));
     if let Ok(bytes) = std::fs::read(&cache) {
         if let Ok(raw) = serde_json::from_slice::<RawDiarization>(&bytes) {
             if (raw.threshold - threshold).abs() < f32::EPSILON {
@@ -1375,6 +1407,8 @@ const EVAL_PINNED_DER: &[(&str, bool, f64)] = &[
 fn eval_regression_gate() {
     let Some(data) = eval_setup() else { return };
     let mut failures = Vec::new();
+    // specs/0072 W0: macro DER per mode, the number the codec gate compares.
+    let mut macro_der: HashMap<bool, Vec<f64>> = HashMap::new();
     for (sample, raw) in &data {
         let true_n = sample.reference.true_speaker_count();
         for &(substr, at_most, max_der) in EVAL_PINNED_DER {
@@ -1399,12 +1433,25 @@ fn eval_regression_gate() {
                 s.pred_speakers,
                 true_n
             );
+            macro_der.entry(at_most).or_default().push(s.der);
             if s.der > max_der {
                 failures.push(format!(
                     "{} [{mode}]: DER {:.4} > pinned {max_der:.4}",
                     sample.name, s.der
                 ));
             }
+        }
+    }
+    let codec = codec_under_test().map_or("baseline".to_string(), |c| c.tag());
+    for (at_most, mode) in [(false, "ad-hoc"), (true, "invite")] {
+        let v = macro_der.get(&at_most).cloned().unwrap_or_default();
+        if !v.is_empty() {
+            let mean = v.iter().sum::<f64>() / v.len() as f64;
+            eprintln!(
+                "gate macro [{codec}, {mode}]: DER {:.2}% over {} files",
+                mean * 100.0,
+                v.len()
+            );
         }
     }
     assert!(failures.is_empty(), "DER regression(s): {failures:?}");
