@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { invoke } from '@tauri-apps/api/core';
 import { toast } from 'sonner';
 import { useRecordingState } from '@/contexts/RecordingStateContext';
+import { createSummaryPoller, type SummaryPoller } from '@/lib/summary-polling';
 
 /** localStorage key for the persisted sidebar collapse preference ('1' | '0'). */
 const SIDEBAR_COLLAPSED_KEY = 'nixon.sidebar.collapsed';
@@ -73,12 +74,13 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
   const [meetings, setMeetings] = useState<CurrentMeeting[]>([]);
   const [sidebarItems, setSidebarItems] = useState<SidebarItem[]>([]);
   const [isMeetingActive, setIsMeetingActive] = useState(false);
-  // Summary-poll intervals live in a ref (not state) so the mount-only unmount cleanup below
-  // closes over a *stable* container. Previously these were held in state and the cleanup
-  // effect depended on that state, so every add/remove re-ran the effect and its teardown
-  // cleared ALL concurrent polls — one meeting's poll starting/stopping killed the others
-  // (spec 0028, High). A ref decouples "which polls exist" from the component lifecycle.
-  const activeSummaryPollsRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
+  // One summary poll per meeting, shared by everyone waiting on it (lib/summary-polling.ts).
+  // Held in a ref so the mount-only unmount cleanup below closes over a stable poller (spec
+  // 0028, High: a state-held map re-ran that teardown on every add/remove and killed polls).
+  const pollerRef = useRef<SummaryPoller | null>(null);
+  if (!pollerRef.current) {
+    pollerRef.current = createSummaryPoller((meetingId) => invoke('api_get_summary', { meetingId }));
+  }
 
   // Use recording state from RecordingStateContext (single source of truth)
   const { isRecording } = useRecordingState();
@@ -204,90 +206,29 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
     }
   }, [fetchMeetings, router]);
 
-  // Summary polling management
+  // Summary polling management. The processId is only logged: the poll reads the meeting's
+  // summary row, and a second caller on the same meeting joins the existing poll rather than
+  // replacing it (which is what used to strand the meeting page — see lib/summary-polling.ts).
   const startSummaryPolling = React.useCallback((
     meetingId: string,
     processId: string,
     onUpdate: (result: any) => void
   ) => {
-    // Stop existing poll for this meeting if any
-    if (activeSummaryPollsRef.current.has(meetingId)) {
-      clearInterval(activeSummaryPollsRef.current.get(meetingId)!);
-    }
-
     console.log(`📊 Starting polling for meeting ${meetingId}, process ${processId}`);
-
-    let pollCount = 0;
-    const MAX_POLLS = 200; // ~16.5 minutes at 5-second intervals (slightly longer than backend's 15-min timeout to avoid race conditions)
-
-    const pollInterval = setInterval(async () => {
-      pollCount++;
-
-      // Timeout safety: Stop after 10 minutes
-      if (pollCount >= MAX_POLLS) {
-        console.warn(`⏱️ Polling timeout for ${meetingId} after ${MAX_POLLS} iterations`);
-        clearInterval(pollInterval);
-        activeSummaryPollsRef.current.delete(meetingId);
-        onUpdate({
-          status: 'error',
-          error: 'Summary generation timed out after 15 minutes. Please try again or check your model configuration.'
-        });
-        return;
-      }
-      try {
-        const result = await invoke('api_get_summary', {
-          meetingId: meetingId,
-        }) as any;
-
-        console.log(`📊 Polling update for ${meetingId}:`, result.status);
-
-        // Call the update callback with result
-        onUpdate(result);
-
-        // Stop polling if completed, error, failed, cancelled, or idle (after initial processing)
-        if (result.status === 'completed' || result.status === 'error' || result.status === 'failed' || result.status === 'cancelled') {
-          console.log(`Polling completed for ${meetingId}, status: ${result.status}`);
-          clearInterval(pollInterval);
-          activeSummaryPollsRef.current.delete(meetingId);
-        } else if (result.status === 'idle' && pollCount > 1) {
-          // If we get 'idle' after polling started, process completed/disappeared
-          console.log(`Process completed or not found for ${meetingId}, stopping poll`);
-          clearInterval(pollInterval);
-          activeSummaryPollsRef.current.delete(meetingId);
-        }
-      } catch (error) {
-        console.error(`Polling error for ${meetingId}:`, error);
-        // Report error to callback
-        onUpdate({
-          status: 'error',
-          error: error instanceof Error ? error.message : 'Unknown error'
-        });
-        clearInterval(pollInterval);
-        activeSummaryPollsRef.current.delete(meetingId);
-      }
-    }, 5000); // Poll every 5 seconds
-
-    activeSummaryPollsRef.current.set(meetingId, pollInterval);
+    pollerRef.current?.start(meetingId, onUpdate);
   }, []);
 
   const stopSummaryPolling = React.useCallback((meetingId: string) => {
-    const pollInterval = activeSummaryPollsRef.current.get(meetingId);
-    if (pollInterval) {
-      console.log(`⏹️ Stopping polling for meeting ${meetingId}`);
-      clearInterval(pollInterval);
-      activeSummaryPollsRef.current.delete(meetingId);
-    }
+    console.log(`⏹️ Stopping polling for meeting ${meetingId}`);
+    pollerRef.current?.stop(meetingId);
   }, []);
 
-  // Cleanup all polling intervals on unmount ONLY. Depending on the interval map here (as the
-  // old code did) made this teardown fire on every poll add/remove and clear every concurrent
-  // poll; a mount-only effect over the stable ref clears intervals exactly once, at unmount.
+  // Stop every poll at unmount only (a mount-only effect over the stable ref).
   useEffect(() => {
-    const polls = activeSummaryPollsRef.current;
+    const poller = pollerRef.current;
     return () => {
       console.log('🧹 Cleaning up all summary polling intervals');
-      polls.forEach(interval => clearInterval(interval));
-      polls.clear();
+      poller?.stopAll();
     };
   }, []);
 

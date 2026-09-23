@@ -93,6 +93,10 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
   until you deal with it; every other Nixon banner now clears itself after a few seconds.
   Set Nixon to **Alerts** in System Settings → Notifications and Settings will tell you the
   rest.
+- **A finished summary replaces "writing your summary".** When a meeting was summarized by
+  background processing while its page was open, the page could keep saying it was still
+  writing — over a summary that had already finished. It now shows the summary as soon as
+  it is ready.
 
 ### Internal
 
