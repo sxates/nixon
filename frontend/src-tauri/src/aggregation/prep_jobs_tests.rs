@@ -318,3 +318,117 @@ async fn retry_prep_regenerates_a_manually_linked_brief() {
         "one fresh row for this brief: {view:?}"
     );
 }
+
+/// Poll until `done` holds (a spawned generation settles), up to 5 s.
+async fn settle(registry: &LlmTaskRegistry, done: impl Fn(&LlmActivityView) -> bool) -> bool {
+    for _ in 0..100 {
+        if done(&registry.view()) {
+            return true;
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    false
+}
+
+/// Review fix (a): Retry on a brief the pass has only QUEUED takes the row over and runs it
+/// now, at Interactive — and the pass does not generate the brief a second time.
+#[tokio::test]
+async fn retry_takes_over_a_brief_the_pass_has_queued() {
+    let f = fixture().await;
+    let events = three_recurring(&f.pool).await;
+    let (planned, _) = plan_pass(f.app.handle(), &f.pool, &events[..1]).await;
+    let target = planned[0].0.clone();
+    let pass_row = f.registry.view().queued[0].id;
+
+    // An earlier failure of the same brief, which the user retries.
+    let t = Arc::clone(&f.registry).start_for(
+        TaskKind::PrepBrief,
+        Origin::Background,
+        "Preparing brief",
+        Some(target.clone()),
+    );
+    let failed_id = f.registry.view().running[0].id;
+    t.finish(Err("provider timed out".into()));
+    crate::llm_activity::retry::retry_task(f.app.handle(), failed_id)
+        .await
+        .unwrap();
+
+    let ran = settle(&f.registry, |v| {
+        v.history
+            .iter()
+            .any(|r| r.meeting_id.as_deref() == Some(target.as_str()))
+    })
+    .await;
+    assert!(ran, "the retry must run now, not wait behind the pass");
+    assert!(
+        f.registry.view().history.iter().all(|r| r.id != pass_row),
+        "the retry ran as its own row, not the pass's"
+    );
+
+    let failed = execute_pass(f.app.handle(), &f.pool, planned).await;
+    assert_eq!(failed, 0, "the pass must skip a brief that was taken over");
+    let view = f.registry.view();
+    assert_eq!(
+        prep_rows_for(&view, &target),
+        1,
+        "one generation, not two: {view:?}"
+    );
+}
+
+/// Review fix (b): a Regenerate or series link while the pass is RUNNING a brief cancels the
+/// pass's run and drops its row, so the replacement runs instead of being dropped as a
+/// duplicate (and the pass cannot write a brief from the pre-link priors).
+#[tokio::test]
+async fn regenerate_supersedes_a_brief_the_pass_is_running() {
+    let f = fixture().await;
+    let events = three_recurring(&f.pool).await;
+    let (mut planned, _) = plan_pass(f.app.handle(), &f.pool, &events[..1]).await;
+    let (target, handle) = planned.remove(0);
+    // The pass reaches the brief: exactly what execute_pass does before generating.
+    let (_run, pass_cancel) = claim_for_pass(&target, handle.as_ref()).expect("claim");
+    let pass_task = handle.unwrap().start();
+    let pass_id = f.registry.view().running[0].id;
+
+    crate::aggregation::prep_commands::cancel_run(f.app.handle(), &target);
+    crate::aggregation::prep_commands::spawn_generation(
+        f.app.handle(),
+        target.clone(),
+        true,
+        crate::summary::llm_gate::Priority::Interactive,
+    )
+    .await;
+
+    assert!(pass_cancel.is_cancelled(), "the pass's run is superseded");
+    let view = f.registry.view();
+    assert_eq!(
+        prep_rows_for(&view, &target),
+        1,
+        "the regenerate has its row: {view:?}"
+    );
+    assert!(view.running.iter().all(|t| t.id != pass_id));
+
+    pass_task.finish(Err("cancelled".into()));
+    assert!(
+        f.registry.view().history.iter().all(|r| r.id != pass_id),
+        "a superseded run leaves no failure behind"
+    );
+}
+
+/// Review Minor #2: the row exists before `enqueue_brief`'s first await (the label lookup),
+/// so a Regenerate's `cancel_run` can never land between a click's claim and its row.
+#[tokio::test]
+async fn enqueue_brief_queues_before_its_first_await() {
+    let f = fixture().await;
+    let fut = enqueue_brief(f.app.handle(), &f.pool, "m-sync");
+    futures::pin_mut!(fut);
+    let _ = futures::poll!(fut.as_mut());
+    assert_eq!(
+        f.registry.view().queued.len(),
+        1,
+        "queued on the first poll"
+    );
+    let Slot::Queued(Some(h)) = fut.await else {
+        panic!("expected a row");
+    };
+    assert!(h.is_queued());
+}

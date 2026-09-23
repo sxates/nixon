@@ -13,6 +13,7 @@
 use crate::aggregation::commands::configured_summary_model;
 use crate::aggregation::engine::Stage;
 use crate::aggregation::execute_pre_call_prep;
+use crate::aggregation::prep_commands::{claim_for_pass, finish_run};
 use crate::calendar::eventkit::{self, UpcomingMeeting};
 use crate::database::repositories::dismissed_calendar_event::DismissedCalendarEventsRepository;
 use crate::database::repositories::meeting::MeetingsRepository;
@@ -176,11 +177,19 @@ pub(crate) async fn execute_pass<R: Runtime>(
     pool: &SqlitePool,
     planned: Vec<PlannedBrief>,
 ) -> usize {
-    let cancel = CancellationToken::new();
     let mut failed = 0usize;
     for (target_id, handle) in planned {
+        // Claimed like a manual run, so a Regenerate or link supersedes it; `None` when a
+        // click took the brief over while it waited.
+        let Some((run_id, cancel)) = claim_for_pass(&target_id, handle.as_ref()) else {
+            continue;
+        };
         let result =
             generate_brief_for_target(app, pool, &target_id, false, &cancel, |_| {}, handle).await;
+        finish_run(&target_id, &run_id);
+        if cancel.is_cancelled() {
+            continue; // superseded; the replacement run reports
+        }
         if !matches!(result, Ok(false)) {
             briefs_updated(app);
         }
@@ -253,12 +262,17 @@ pub(crate) async fn enqueue_brief<R: Runtime>(
     else {
         return Slot::Queued(None);
     };
-    let label = brief_task_label(pool, target_meeting_id).await;
+    // Queue before the first await, so nothing separates a caller's PREP_RUNS claim from
+    // its row (a Regenerate's cancel_run then always finds both); name it afterwards.
     let meeting = Some(target_meeting_id.to_string());
-    match registry.enqueue_for(TaskKind::PrepBrief, Origin::Background, label, meeting) {
-        Some(handle) => Slot::Queued(Some(handle)),
-        None => Slot::Busy,
-    }
+    let generic = "Preparing brief";
+    let Some(handle) =
+        registry.enqueue_for(TaskKind::PrepBrief, Origin::Background, generic, meeting)
+    else {
+        return Slot::Busy;
+    };
+    handle.relabel(brief_task_label(pool, target_meeting_id).await);
+    Slot::Queued(Some(handle))
 }
 
 /// What a brief needs, decided before any task starts (specs/0074 W3) — so a pass over
@@ -501,7 +515,14 @@ async fn generate_brief_inner<R: Runtime, P: Fn(Stage)>(
         }
     };
 
-    match execute_pre_call_prep(pool, &prior, llm, budget_tokens, cancel, on_progress).await {
+    let outcome =
+        execute_pre_call_prep(pool, &prior, llm, budget_tokens, cancel, on_progress).await;
+    if cancel.is_cancelled() {
+        // Superseded by a Regenerate or a series link: the replacement writes the brief. A
+        // stale answer or a "failed" here would overwrite or penalise it.
+        return Err(anyhow::anyhow!("prep brief generation was superseded"));
+    }
+    match outcome {
         Ok(answer) => {
             let sources_json =
                 serde_json::to_string(&answer.sources).unwrap_or_else(|_| "[]".into());

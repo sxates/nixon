@@ -39,7 +39,7 @@ static PREP_RUNS: Lazy<Mutex<HashMap<String, (String, CancellationToken)>>> =
 
 /// Registers a run for `meeting_id` and returns its `(run_id, token)`, or `None` if one is
 /// already in flight (caller should not start a second).
-fn try_register(meeting_id: &str) -> Option<(String, CancellationToken)> {
+pub(crate) fn try_register(meeting_id: &str) -> Option<(String, CancellationToken)> {
     let mut runs = PREP_RUNS.lock().expect("prep run registry poisoned");
     if runs.contains_key(meeting_id) {
         return None;
@@ -52,7 +52,7 @@ fn try_register(meeting_id: &str) -> Option<(String, CancellationToken)> {
 
 /// Removes the registry entry for `meeting_id` ONLY if it still belongs to `run_id` — so a
 /// finishing (possibly cancelled) run never clobbers a newer run that replaced it.
-fn finish_run(meeting_id: &str, run_id: &str) {
+pub(crate) fn finish_run(meeting_id: &str, run_id: &str) {
     let mut runs = PREP_RUNS.lock().expect("prep run registry poisoned");
     if runs.get(meeting_id).map(|(rid, _)| rid.as_str()) == Some(run_id) {
         runs.remove(meeting_id);
@@ -68,9 +68,24 @@ pub(crate) fn is_generating(meeting_id: &str) -> bool {
         .contains_key(meeting_id)
 }
 
+/// The background pass's claim on one brief as it starts it (specs/0074 W3). Registered in
+/// `PREP_RUNS` like a manual run, so `cancel_run` supersedes the pass too. `None` when a
+/// manual run holds the brief, or a click took over the pass's queued row.
+pub(crate) fn claim_for_pass(
+    meeting_id: &str,
+    handle: Option<&crate::llm_activity::QueuedHandle>,
+) -> Option<(String, CancellationToken)> {
+    let (run_id, token) = try_register(meeting_id)?;
+    if handle.is_some_and(|h| !h.is_queued()) {
+        finish_run(meeting_id, &run_id);
+        return None;
+    }
+    Some((run_id, token))
+}
+
 /// Cancels an in-flight generation for `meeting_id` (used before a forced regenerate), and
 /// drops its queue row so the replacement can take its place instead of deduping against it.
-fn cancel_run<R: Runtime>(app: &AppHandle<R>, meeting_id: &str) {
+pub(crate) fn cancel_run<R: Runtime>(app: &AppHandle<R>, meeting_id: &str) {
     let removed = PREP_RUNS
         .lock()
         .expect("prep run registry poisoned")
@@ -145,14 +160,26 @@ pub(crate) async fn spawn_generation<R: Runtime>(
         finish_run(&meeting_id, &run_id);
         return;
     };
+    // A click the user is waiting on (Retry, Regenerate, link) takes over a brief the pass
+    // has only queued, instead of waiting behind the whole pass at background priority.
+    if force || priority == Priority::Interactive {
+        if let Some(state) = app.try_state::<crate::llm_activity::LlmActivityState>() {
+            state
+                .0
+                .forget_queued(crate::llm_activity::TaskKind::PrepBrief, &meeting_id);
+        }
+    }
     let queued = match enqueue_brief(app, &pool, &meeting_id).await {
         Slot::Queued(handle) => handle,
         Slot::Busy => {
-            // The background pass has it queued or running and will announce it when done.
+            // Something else is already generating it and will announce it when done.
             finish_run(&meeting_id, &run_id);
             return;
         }
     };
+    if cancel.is_cancelled() {
+        return; // superseded while the label was read; the newer run owns the brief
+    }
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
         let progress_app = app.clone();
@@ -395,7 +422,8 @@ pub async fn api_link_meeting_to_series<R: Runtime>(
 
     // Warm the target's brief right away so the open Prep tab fills in.
     cancel_run(&app, &target_meeting_id);
-    spawn_generation(&app, target_meeting_id, false, Priority::Background).await;
+    // A click the user waits on: it takes over a brief the pass only has queued.
+    spawn_generation(&app, target_meeting_id, false, Priority::Interactive).await;
     // Nudge any open Prep views to re-read (the linked-meetings list changed even where no
     // brief regeneration happens).
     let _ = app.emit("prep-briefs-updated", ());

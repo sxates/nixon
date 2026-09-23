@@ -73,15 +73,27 @@ impl LlmTaskRegistry {
     /// just cancelled to make way for a replacement. Its handle's later finish finds nothing
     /// and records nothing, so a superseded run is neither a failure nor a duplicate.
     pub fn forget(&self, kind: TaskKind, meeting_id: &str) {
+        self.remove_matching(kind, meeting_id, true);
+    }
+
+    /// Drop only a QUEUED entry — a click the user is waiting on takes over work the pass has
+    /// planned but not started. The pass then finds its handle no longer queued and skips it.
+    pub fn forget_queued(&self, kind: TaskKind, meeting_id: &str) {
+        self.remove_matching(kind, meeting_id, false);
+    }
+
+    fn remove_matching(&self, kind: TaskKind, meeting_id: &str, running_too: bool) {
         let matches =
             |k: TaskKind, m: &Option<String>| k == kind && m.as_deref() == Some(meeting_id);
         let mut inner = self.lock();
         inner
             .queued
             .retain(|(_, t)| !matches(t.kind, &t.meeting_id));
-        inner
-            .running
-            .retain(|(_, t)| !matches(t.kind, &t.meeting_id));
+        if running_too {
+            inner
+                .running
+                .retain(|(_, t)| !matches(t.kind, &t.meeting_id));
+        }
         drop(inner);
         self.notify();
     }
@@ -101,6 +113,25 @@ pub struct QueuedHandle {
 }
 
 impl QueuedHandle {
+    /// Still waiting — false once taken over or forgotten.
+    pub fn is_queued(&self) -> bool {
+        self.registry
+            .lock()
+            .queued
+            .iter()
+            .any(|(_, t)| t.id == self.id)
+    }
+
+    /// Replace the row's label (queued first, named once the title is read).
+    pub fn relabel(&self, label: String) {
+        let mut inner = self.registry.lock();
+        if let Some((_, t)) = inner.queued.iter_mut().find(|(_, t)| t.id == self.id) {
+            t.label = label;
+        }
+        drop(inner);
+        self.registry.notify();
+    }
+
     /// Move queued → running under the same id, in one lock so a concurrent enqueue never
     /// sees the task in neither list.
     pub fn start(mut self) -> TaskHandle {
@@ -239,6 +270,21 @@ mod tests {
         assert_eq!(v.history.len(), 1);
         assert_eq!(v.history[0].meeting_id.as_deref(), Some("bad"));
         assert!(v.has_failure);
+    }
+
+    #[test]
+    fn forget_queued_leaves_a_running_task_alone() {
+        let r = reg();
+        let waiting = prep(&r, "m1").unwrap();
+        let _running = prep(&r, "m2").unwrap().start();
+        r.forget_queued(TaskKind::PrepBrief, "m1");
+        r.forget_queued(TaskKind::PrepBrief, "m2");
+        assert!(!waiting.is_queued(), "the queued row was taken over");
+        assert_eq!(
+            r.view().running.len(),
+            1,
+            "a running task is not taken over"
+        );
     }
 
     #[test]
