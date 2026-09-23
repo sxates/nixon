@@ -15,10 +15,15 @@ pub struct AudioInput {
     pub device: Arc<AudioDevice>,
 }
 
+/// AAC-LC bitrate of the meeting mix (`audio.mp4` and its checkpoints), specs/0072 W0: 64 kbps
+/// scored the same WER as 192 kbps at a third of the size.
+pub const MIX_AAC_BITRATE: u32 = 64_000;
+
 pub fn encode_single_audio(
     data: &[u8],
     sample_rate: u32,
     channels: u16,
+    bitrate: u32,
     output_path: &Path,
 ) -> anyhow::Result<()> {
     debug!(
@@ -50,7 +55,7 @@ pub fn encode_single_audio(
             "-c:a",
             "aac",
             "-b:a",
-            "192k", // Increased from 64k for better audio quality (especially for speech)
+            &bitrate.to_string(),
             "-profile:a",
             "aac_low", // Use AAC-LC profile for better compatibility
             "-movflags",
@@ -102,4 +107,42 @@ pub fn encode_single_audio(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Acceptance 9 (specs/0072): the mix is written at `MIX_AAC_BITRATE`, not the old 192k.
+    /// Noise makes the encoder spend its whole budget, so the file size measures the bitrate.
+    #[test]
+    fn the_mix_is_encoded_at_the_mix_bitrate() {
+        if which::which("ffmpeg").is_err() {
+            eprintln!("SKIP the_mix_is_encoded_at_the_mix_bitrate: no ffmpeg on PATH");
+            return;
+        }
+        let secs = 6.0_f64;
+        let mut seed = 0x2545_f491_u32;
+        let noise: Vec<f32> = (0..(48_000.0 * secs) as usize)
+            .map(|_| {
+                seed = seed.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+                (seed >> 8) as f32 / (1u32 << 24) as f32 * 0.6 - 0.3
+            })
+            .collect();
+        let dir = tempfile::tempdir().unwrap();
+        let out = dir.path().join("audio.mp4");
+        encode_single_audio(
+            bytemuck::cast_slice(&noise),
+            48_000,
+            1,
+            MIX_AAC_BITRATE,
+            &out,
+        )
+        .unwrap();
+        let kbps = std::fs::metadata(&out).unwrap().len() as f64 * 8.0 / secs / 1000.0;
+        assert!(
+            (48.0..96.0).contains(&kbps),
+            "mix written at ~{kbps:.0} kbps"
+        );
+    }
 }

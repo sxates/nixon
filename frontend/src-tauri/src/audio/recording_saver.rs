@@ -8,6 +8,7 @@ use tokio::sync::mpsc;
 use tokio::sync::Mutex as AsyncMutex;
 
 use super::audio_processing::create_meeting_folder;
+use super::channel_files;
 use super::channel_writer::{MIC_CHANNEL_FILENAME, SYSTEM_CHANNEL_FILENAME};
 use super::ffmpeg::find_ffmpeg_path;
 use super::incremental_saver::IncrementalAudioSaver;
@@ -835,15 +836,13 @@ impl RecordingSaver {
                 Self::rename_journaled(folder, MEETING_AUDIO_FILENAME, &scoped, rename_journal);
                 seg.audio_file = scoped;
             }
-            if seg.system_wav == SYSTEM_CHANNEL_FILENAME {
-                let scoped = format!("system_seg{:02}.wav", seg.index);
-                Self::rename_journaled(folder, SYSTEM_CHANNEL_FILENAME, &scoped, rename_journal);
-                seg.system_wav = scoped;
-            }
-            if seg.mic_wav == MIC_CHANNEL_FILENAME {
-                let scoped = format!("mic_seg{:02}.wav", seg.index);
-                Self::rename_journaled(folder, MIC_CHANNEL_FILENAME, &scoped, rename_journal);
-                seg.mic_wav = scoped;
+            // A kept meeting's channels may be compressed (`system.opus`, specs/0072).
+            for (name, stem) in [(&mut seg.system_wav, "system"), (&mut seg.mic_wav, "mic")] {
+                if *name == format!("{stem}.wav") {
+                    let plain = channel_files::plain_channel_name(folder, stem);
+                    *name = channel_files::scoped_channel_name(&plain, seg.index);
+                    Self::rename_journaled(folder, &plain, name, rename_journal);
+                }
             }
         }
 
@@ -1375,16 +1374,6 @@ impl RecordingSaver {
                     .iter()
                     .map(|s| folder.join(&s.audio_file))
                     .collect();
-                let system_inputs: Vec<PathBuf> = metadata
-                    .segments
-                    .iter()
-                    .map(|s| folder.join(&s.system_wav))
-                    .collect();
-                let mic_inputs: Vec<PathBuf> = metadata
-                    .segments
-                    .iter()
-                    .map(|s| folder.join(&s.mic_wav))
-                    .collect();
 
                 let audio_out = folder.join(MEETING_AUDIO_FILENAME);
                 if let Err(e) = ffmpeg_concat(&audio_inputs, &audio_out) {
@@ -1393,15 +1382,9 @@ impl RecordingSaver {
                 }
                 meeting_audio_path = audio_out;
 
-                // Per-channel WAV concat is best-effort: diarization may have been off for
-                // some/all segments, so missing inputs are skipped rather than fatal.
-                if let Err(e) = ffmpeg_concat(&system_inputs, &folder.join(SYSTEM_CHANNEL_FILENAME))
-                {
-                    warn!("Failed to concat system.wav segments: {}", e);
-                }
-                if let Err(e) = ffmpeg_concat(&mic_inputs, &folder.join(MIC_CHANNEL_FILENAME)) {
-                    warn!("Failed to concat mic.wav segments: {}", e);
-                }
+                // Per-channel concat is best-effort (missing segments are skipped) and decodes,
+                // since a kept segment may be Opus by now (specs/0072).
+                channel_files::concat_segment_channels(&folder, &metadata.segments);
             }
 
             metadata.status = "completed".to_string();
@@ -1483,10 +1466,10 @@ impl Default for RecordingSaver {
 
 /// Concatenate `inputs` (in order) into `output` using the FFmpeg concat demuxer with
 /// stream copy — the same fast, no-re-encode path `IncrementalAudioSaver` uses to merge
-/// checkpoints. Works for both the segment `.mp4` audio and the per-channel `.wav` files
-/// (identical PCM format → the WAV muxer writes a correct combined header). Inputs that
-/// do not exist on disk are skipped (per-channel WAVs may be absent when diarization was
-/// off); with nothing left to concat this is a no-op.
+/// checkpoints, for the segment `.mp4` audio and checkpoint chunks (channel files, which
+/// may be Opus, go through `channel_files::concat_segment_channels`). Inputs that do not
+/// exist on disk are skipped (a purged meeting's segments); with nothing left to concat
+/// this is a no-op.
 fn ffmpeg_concat(inputs: &[PathBuf], output: &Path) -> Result<()> {
     let existing: Vec<&PathBuf> = inputs.iter().filter(|p| p.exists()).collect();
     if existing.is_empty() {

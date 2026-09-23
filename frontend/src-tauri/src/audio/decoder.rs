@@ -20,7 +20,7 @@ use super::audio_processing::{audio_to_mono, resample, resample_audio};
 use super::ffmpeg::find_ffmpeg_path;
 
 /// Extensions requiring ffmpeg pre-conversion (Symphonia lacks these demuxers/codecs)
-const FFMPEG_ONLY_EXTENSIONS: &[&str] = &["mkv", "webm", "wma"];
+const FFMPEG_ONLY_EXTENSIONS: &[&str] = &["mkv", "webm", "wma", "opus"];
 
 /// Progress callback for long-running operations
 /// Returns current progress (0-100) and a message
@@ -328,16 +328,14 @@ fn convert_to_wav_with_ffmpeg(
         .ok_or_else(|| anyhow!("Invalid temp path (non-UTF8)"))?;
 
     let mut command = Command::new(&ffmpeg_path);
+    command.args(["-i", input_str, "-vn", "-acodec", "pcm_s16le"]); // PCM WAV, video stripped
+                                                                    // specs/0072: Opus always decodes at 48 kHz; channels were 16 kHz mono, which is what
+                                                                    // every reader wants, so decode straight to it (a third of the temp file and memory).
+    if input_str.to_lowercase().ends_with(".opus") {
+        command.args(["-ar", "16000", "-ac", "1"]);
+    }
     command
-        .args([
-            "-i",
-            input_str,
-            "-vn", // Strip video tracks
-            "-acodec",
-            "pcm_s16le", // Output PCM WAV (Symphonia handles natively)
-            "-y",        // Overwrite without prompt
-            output_str,
-        ])
+        .args(["-y", output_str]) // Overwrite without prompt
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());

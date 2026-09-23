@@ -23,6 +23,7 @@ pub mod batch_processor;
 pub mod buffer_pool;
 pub mod capture_commands; // specs/0042 WS1: top-level recording/device/language commands (from lib.rs)
 pub mod channel_attribution; // specs/0029 WS3.4 / 0055: per-window capture-channel classification + per-segment views
+pub mod channel_files; // specs/0072 W2: channel readers resolve .wav or .opus; decoding joins/mixes
 pub mod channel_writer; // NEW (specs/0010): per-channel 16kHz mono WAVs for diarization
 pub mod deferred_backlog; // low-power-mode spec §5: backlog query for meetings awaiting deferred processing
 pub mod device_monitor; // NEW: Device disconnect/reconnect monitoring
@@ -33,6 +34,7 @@ pub mod incremental_saver; // NEW: Incremental audio saving with checkpoints
 pub mod level_monitor;
 pub mod live_meter; // specs/0057 §3.2: per-channel + mixed live meter feed (split from pipeline.rs)
 pub mod live_toggle; // low-power-mode spec §§3-4: session live/defer toggle state
+pub mod meeting_audio; // specs/0072 W2: the mix to (re)transcribe; never one channel alone
 pub mod meeting_folder; // specs/0073 W1: ownership check + folder copy helper
 pub mod mute_gate; // specs/0049: owner-mic gate for Zoom-mute
 pub mod pipeline;

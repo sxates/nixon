@@ -26,8 +26,8 @@ pub use hooks::{
 /// WS7.2): its audio may be the only record of it. Part of the backlog predicate.
 pub const MIN_TRANSCRIPT_SEGMENTS: i64 = 3;
 
-/// Whether the sweep compresses kept channel WAVs to Opus. Off until every channel reader
-/// (speaker identification, owner turns, retranscription channel tags) resolves `.opus`
-/// (0072 W2); the W2 change that teaches them flips this. The policy, the compressor and
-/// the one-meeting-per-tick backfill are already in place behind it.
-pub const COMPRESSION_ENABLED: bool = false;
+/// Whether the sweep compresses kept channel WAVs to Opus. On since 0072 W2 taught every
+/// channel reader (speaker identification, owner turns, retranscription channel tags, the
+/// resume join, the channels-only mix) to resolve `.opus`. Existing meetings are backfilled
+/// one per hourly tick, never while recording (Q4).
+pub const COMPRESSION_ENABLED: bool = true;

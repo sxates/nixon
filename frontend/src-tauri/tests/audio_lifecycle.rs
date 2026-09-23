@@ -674,7 +674,7 @@ async fn a_kept_meeting_is_compressed_by_the_sweep_but_never_while_recording() {
         ApplyOutcome::Nothing
     );
     assert!(dir.join("mic.wav").exists());
-    // Production default today: compression off (consumers read .opus from W2).
+    // Compression needs asking for (the scheduled options do, see the backfill test).
     assert_eq!(
         apply_one(&pool, "keep", days, Utc::now(), &SweepOptions::default())
             .await
@@ -693,6 +693,61 @@ async fn a_kept_meeting_is_compressed_by_the_sweep_but_never_while_recording() {
         audio_state(&pool, "keep").await.as_deref(),
         Some("processed")
     );
+}
+
+/// Task 20 (Q4), with the options the hourly tick and the post-processing hook use: kept
+/// meetings are compressed one per tick, oldest first, never while recording, and a meeting
+/// whose compression failed isn't retried every tick.
+#[tokio::test]
+async fn the_backfill_compresses_one_kept_meeting_per_tick_and_never_while_recording() {
+    let Some(ff) = ffmpeg() else { return };
+    let pool = pool_with_schema().await;
+    let tmp = tempfile::tempdir().unwrap();
+    let mut dirs = Vec::new();
+    for (id, age) in [
+        ("backfill-bad", 12),
+        ("backfill-old", 10),
+        ("backfill-new", 5),
+    ] {
+        let dir = folder(tmp.path(), id, "completed", &["audio.mp4"]);
+        tone_wav(&ff, &dir.join("mic.wav"), 1.0, 300);
+        tone_wav(&ff, &dir.join("system.wav"), 1.0, 500);
+        meeting(&pool, id, age, Some(&dir), Some("processed"), 9).await;
+        dirs.push(dir);
+    }
+    std::fs::write(dirs[0].join("system.wav"), b"not audio").unwrap(); // fails to encode
+    let compressed = |d: &PathBuf| d.join("mic.opus").exists() && !d.join("mic.wav").exists();
+    let tick = |recording: bool| {
+        let (pool, ff) = (pool.clone(), ff.clone());
+        async move {
+            let opts = SweepOptions::scheduled(recording, Some(ff));
+            sweep::run_sweep(&pool, AudioRetention::Forever, Utc::now(), &opts)
+                .await
+                .unwrap()
+                .meetings_compressed
+        }
+    };
+
+    assert_eq!(tick(true).await, 0, "never while recording");
+    assert!(!dirs.iter().any(compressed));
+    assert_eq!(tick(false).await, 1);
+    assert!(
+        compressed(&dirs[1]) && !compressed(&dirs[2]),
+        "oldest good one first"
+    );
+    assert!(
+        dirs[0].join("mic.wav").exists(),
+        "a failed meeting keeps its WAVs"
+    );
+    // Even once it could succeed, the failed meeting waits for the next launch.
+    tone_wav(&ff, &dirs[0].join("system.wav"), 1.0, 500);
+    assert_eq!(
+        tick(false).await,
+        1,
+        "the failed one doesn't hold the backfill"
+    );
+    assert!(compressed(&dirs[2]) && !compressed(&dirs[0]));
+    assert_eq!(tick(false).await, 0, "and isn't re-encoded every tick");
 }
 
 /// 0073 task 25: a compressor tick during a move of meeting X skips X and does the rest.

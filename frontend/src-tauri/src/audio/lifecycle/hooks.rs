@@ -76,12 +76,10 @@ pub(crate) async fn saved_policy<R: Runtime>(app: &AppHandle<R>) -> Option<Audio
 /// Options for a scheduled pass (and the post-processing hook): compress at most one
 /// meeting, never while recording, only when compression is switched on.
 pub(crate) async fn scheduled_options() -> SweepOptions {
-    SweepOptions {
-        compress: super::COMPRESSION_ENABLED,
-        compress_limit: 1,
-        recording_active: crate::audio::recording_commands::is_recording().await,
-        ffmpeg: crate::audio::ffmpeg::find_ffmpeg_path(),
-    }
+    SweepOptions::scheduled(
+        crate::audio::recording_commands::is_recording().await,
+        crate::audio::ffmpeg::find_ffmpeg_path(),
+    )
 }
 
 /// Apply the saved policy to one meeting in the background, retrying while its folder is

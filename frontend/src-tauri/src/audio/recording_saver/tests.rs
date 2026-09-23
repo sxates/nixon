@@ -1,5 +1,7 @@
 use super::*;
 
+mod compressed_resume; // specs/0072 W2
+
 fn sample_metadata(segments: Vec<RecordingSegment>) -> MeetingMetadata {
     MeetingMetadata {
         version: "1.0".to_string(),

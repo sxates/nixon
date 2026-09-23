@@ -229,3 +229,42 @@ fn sync_dir(dir: &Path) {
         let _ = d.sync_all();
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Spec risk "Intel ffmpeg": only the arm64 sidecar was probed for `libopus`. A sidecar
+    /// without it would keep every meeting's WAVs forever, so a swap must fail CI instead.
+    /// Skips when no sidecar has been downloaded into `binaries/` (build.rs does that).
+    #[test]
+    fn the_bundled_ffmpeg_has_the_libopus_encoder() {
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("binaries");
+        let sidecars: Vec<PathBuf> = std::fs::read_dir(dir)
+            .into_iter()
+            .flat_map(|d| d.flatten().map(|e| e.path()))
+            .filter(|p| {
+                p.file_name()
+                    .is_some_and(|n| n.to_string_lossy().starts_with("ffmpeg-"))
+            })
+            .collect();
+        if sidecars.is_empty() {
+            eprintln!("SKIP the_bundled_ffmpeg_has_the_libopus_encoder: no sidecar in binaries/");
+            return;
+        }
+        for ffmpeg in sidecars {
+            let out = Command::new(&ffmpeg)
+                .args(["-hide_banner", "-encoders"])
+                .output()
+                .unwrap();
+            let listing = String::from_utf8_lossy(&out.stdout);
+            assert!(
+                listing
+                    .lines()
+                    .any(|l| l.split_whitespace().nth(1) == Some(CHANNEL_OPUS_ARGS[1])),
+                "{} has no libopus encoder",
+                ffmpeg.display()
+            );
+        }
+    }
+}

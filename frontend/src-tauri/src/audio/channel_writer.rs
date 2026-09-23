@@ -116,6 +116,9 @@ impl WindowDownsampler {
     }
 }
 
+/// Readers use these (`.wav` or the compressed `.opus`, specs/0072); writers use `*_channel_wav`.
+pub use super::channel_files::{mic_channel_path, system_channel_path};
+
 /// Resolve the system-channel WAV for a finished meeting's folder.
 ///
 /// This is the file the diarization pipeline (the next slice) consumes. The meeting

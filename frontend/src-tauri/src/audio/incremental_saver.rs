@@ -143,6 +143,7 @@ impl IncrementalAudioSaver {
             bytemuck::cast_slice(&audio_data),
             self.sample_rate,
             1, // mono
+            super::encode::MIX_AAC_BITRATE,
             &checkpoint_path,
         )?;
 

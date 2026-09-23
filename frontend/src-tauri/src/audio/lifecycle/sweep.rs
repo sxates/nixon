@@ -23,13 +23,37 @@ use crate::audio::folder_lease::{current_holder, try_acquire, LeaseHolder};
 /// What one sweep may do besides deleting.
 #[derive(Debug, Clone, Default)]
 pub struct SweepOptions {
-    /// Compress kept WAV channels (off until every channel reader understands `.opus`).
+    /// Compress kept WAV channels (see [`super::COMPRESSION_ENABLED`]).
     pub compress: bool,
     /// At most this many meetings compressed per sweep (backfill is one per tick, Q4).
     pub compress_limit: usize,
     /// A recording is in progress: don't compress (deletes still run, they're cheap).
     pub recording_active: bool,
     pub ffmpeg: Option<PathBuf>,
+}
+
+impl SweepOptions {
+    /// What the hourly tick and the post-processing hook run with: compression as switched
+    /// on, one meeting per tick (the backfill, Q4), none while a recording is in progress.
+    pub fn scheduled(recording_active: bool, ffmpeg: Option<PathBuf>) -> Self {
+        Self {
+            compress: super::COMPRESSION_ENABLED,
+            compress_limit: 1,
+            recording_active,
+            ffmpeg,
+        }
+    }
+}
+
+/// Meetings whose compression failed this session. The sweep doesn't retry them until the
+/// next launch, so one bad meeting can't hold the one-per-tick backfill or re-encode an hour
+/// of audio every tick.
+static COMPRESS_FAILED: std::sync::Mutex<Vec<String>> = std::sync::Mutex::new(Vec::new());
+
+fn compress_failed_before(meeting_id: &str) -> bool {
+    COMPRESS_FAILED
+        .lock()
+        .is_ok_and(|failed| failed.iter().any(|id| id == meeting_id))
 }
 
 /// What a purge removed.
@@ -259,7 +283,9 @@ pub async fn run_sweep(
     let mut report = RetentionReport::default();
     for row in state::list_rows(pool).await? {
         let opts_now = SweepOptions {
-            compress: opts.compress && report.meetings_compressed < opts.compress_limit,
+            compress: opts.compress
+                && report.meetings_compressed < opts.compress_limit
+                && !compress_failed_before(&row.id),
             ..opts.clone()
         };
         match apply_one(pool, &row.id, policy, now, &opts_now).await {
@@ -276,6 +302,11 @@ pub async fn run_sweep(
                 had_audio: true,
             }) => report.skipped_busy += 1,
             Ok(ApplyOutcome::Compressed(o)) if o.files > 0 => report.meetings_compressed += 1,
+            Ok(ApplyOutcome::CompressFailed(_)) => {
+                if let Ok(mut failed) = COMPRESS_FAILED.lock() {
+                    failed.push(row.id);
+                }
+            }
             Ok(_) => {}
             Err(e) => log::warn!("Audio sweep: meeting {}: {e:#}", row.id),
         }

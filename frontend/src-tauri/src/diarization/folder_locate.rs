@@ -8,7 +8,7 @@ use anyhow::{anyhow, Result};
 use chrono::{DateTime, Utc};
 use std::path::{Path, PathBuf};
 
-use crate::audio::channel_writer::system_channel_wav;
+use crate::audio::channel_writer::{system_channel_path, system_channel_wav};
 use crate::diarization::folder_match::best_folder_match;
 
 /// Bare directory names directly under `root` (files / non-UTF8 names skipped). A root
@@ -25,8 +25,8 @@ fn folder_names(root: &Path) -> Vec<String> {
 }
 
 /// Match the meeting's folder by `created_at`/`title` across `roots` and return it iff it
-/// actually contains a `system.wav`. When the matched name exists under several roots, the
-/// first root (in `roots` order) whose copy has a `system.wav` wins.
+/// actually contains a system channel (`system.wav`, or `.opus` once compressed). When the
+/// matched name exists under several roots, the first root (in `roots` order) with one wins.
 pub fn locate_recording_folder_in(
     created_at: DateTime<Utc>,
     title: &str,
@@ -61,7 +61,7 @@ pub fn locate_recording_folder_in(
         .map(|r| r.join(&name))
         .filter(|f| f.is_dir())
         .collect();
-    if let Some(folder) = holders.iter().find(|f| system_channel_wav(f).exists()) {
+    if let Some(folder) = holders.iter().find(|f| system_channel_path(f).is_some()) {
         return Ok(folder.clone());
     }
     let folder = holders
@@ -109,6 +109,18 @@ mod tests {
         let roots = [current.path().to_path_buf(), earlier.path().to_path_buf()];
         let found = locate_recording_folder_in(created, "", &roots).unwrap();
         assert_eq!(found, folder);
+    }
+
+    /// specs/0072: a meeting whose kept channels were compressed is still found.
+    #[test]
+    fn a_folder_with_a_compressed_system_channel_is_found() {
+        let root = tempfile::tempdir().unwrap();
+        let created = Utc.with_ymd_and_hms(2026, 7, 5, 17, 0, 47).unwrap();
+        let folder = root.path().join(default_folder_name(created));
+        std::fs::create_dir_all(&folder).unwrap();
+        std::fs::write(folder.join("system.opus"), b"OggS").unwrap();
+        let found = locate_recording_folder_in(created, "", &[root.path().to_path_buf()]);
+        assert_eq!(found.unwrap(), folder);
     }
 
     #[test]

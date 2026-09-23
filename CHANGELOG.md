@@ -49,6 +49,8 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 ### Changed
 
+- **Recordings take about a sixth of the disk space.** Audio you keep is stored compressed
+  once a meeting has been processed.
 - **Recordings stay on this Mac's own drive.** A USB stick, SD card, disk image or network
   drive can't be chosen as the recordings folder, so a drive that goes away can't break a
   recording.
@@ -141,6 +143,15 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 ### Internal
 
+- Spec 0072 W2: compression is on (`lifecycle::COMPRESSION_ENABLED`). Every channel reader
+  resolves `.wav` then `.opus` (`audio/channel_files.rs`: diarization, owner turns,
+  retranscription channel tags, the recordings-root fallback scan); `.opus` decodes through
+  ffmpeg at 16 kHz mono. A resume scopes compressed channels (`system_seg00.opus`) and joins
+  channel segments by decoding. `find_audio_file` (now `audio/meeting_audio.rs`) never picks
+  a channel file and mixes a channels-only folder. The mix is written at 64 kbps
+  (`MIX_AAC_BITRATE`). Capture always saves the mix whatever the retention setting. The
+  backfill skips a meeting whose compression failed until the next launch. A unit test
+  checks the bundled ffmpeg has `libopus`.
 - Spec 0072 W1: the audio lifecycle (`audio/lifecycle/`). A migration adds
   `meetings.audio_state` (NULL/processed/failed/purged) and `speakers_identified_at`, and
   backfills `processed` for every meeting not awaiting transcription. Rust writes the state

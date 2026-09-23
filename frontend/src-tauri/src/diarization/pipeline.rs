@@ -33,7 +33,7 @@ use anyhow::{anyhow, Context, Result};
 use std::path::PathBuf;
 use tauri::{AppHandle, Emitter, Manager, Runtime};
 
-use crate::audio::channel_writer::system_channel_wav;
+use crate::audio::channel_writer::{system_channel_path, system_channel_wav};
 use crate::database::repositories::speaker::{SpeakerIdentitySnapshot, SpeakersRepository};
 use crate::database::repositories::transcript_speaker_overrides::TranscriptSpeakerOverridesRepository;
 use crate::diarization::align::{
@@ -190,16 +190,15 @@ async fn resolve_system_wav<R: Runtime>(app: &AppHandle<R>, meeting_id: &str) ->
     .with_context(|| format!("look up meeting {meeting_id}"))?
     .ok_or_else(|| anyhow!("meeting {meeting_id} not found"))?;
 
-    // Happy path: stored folder with a real system.wav.
+    // Happy path: stored folder with a system channel (`system.wav`, or `.opus` once kept
+    // audio is compressed, specs/0072).
     if let Some(folder) = meta.folder_path.as_deref() {
-        let wav = system_channel_wav(std::path::Path::new(folder));
-        if wav.exists() {
+        if let Some(wav) = system_channel_path(std::path::Path::new(folder)) {
             return Ok(wav);
         }
         log::warn!(
-            "meeting {meeting_id} folder_path is set ({folder}) but {} is missing; \
-             falling back to a recordings-root scan",
-            wav.display()
+            "meeting {meeting_id} folder_path is set ({folder}) but has no system channel; \
+             falling back to a recordings-root scan"
         );
     }
 
@@ -207,7 +206,7 @@ async fn resolve_system_wav<R: Runtime>(app: &AppHandle<R>, meeting_id: &str) ->
     let resolved = super::folder_locate::locate_recording_folder(&meta).with_context(|| {
         format!("locate recording folder for meeting {meeting_id} (folder_path was unusable)")
     })?;
-    let wav = system_channel_wav(&resolved);
+    let wav = system_channel_path(&resolved).unwrap_or_else(|| system_channel_wav(&resolved));
 
     // Opportunistic backfill so we don't re-scan next time. Best-effort: log + continue.
     let folder_str = resolved.to_string_lossy().to_string();

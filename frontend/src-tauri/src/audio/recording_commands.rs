@@ -332,7 +332,7 @@ pub async fn start_recording_with_meeting_name<R: Runtime>(
 
     // Load recording preferences to get auto_save, live-transcription AND device prefs
     let (
-        auto_save,
+        _auto_save, // specs/0072: logged only; capture no longer reads it
         live_transcription_enabled,
         low_power_on_battery,
         preferred_mic_name,
@@ -452,7 +452,7 @@ pub async fn start_recording_with_meeting_name<R: Runtime>(
         .start_recording(
             microphone_device,
             system_device,
-            auto_save,
+            true, // specs/0072: capture always saves; the audio lifecycle applies retention
             live_diarizer,
             live_stt,
         )
@@ -597,7 +597,7 @@ pub async fn start_recording_with_devices_and_meeting<R: Runtime>(
             .await?;
 
     // Load recording preferences to check auto_save + live-transcription settings
-    let (auto_save, live_transcription_enabled, low_power_on_battery) =
+    let (_auto_save, live_transcription_enabled, low_power_on_battery) =
         match super::recording_preferences::load_recording_preferences(&app).await {
             Ok(prefs) => {
                 info!(
@@ -722,7 +722,7 @@ pub async fn start_recording_with_devices_and_meeting<R: Runtime>(
         .start_recording(
             mic_device,
             system_device,
-            auto_save,
+            true, // specs/0072: capture always saves; the audio lifecycle applies retention
             live_diarizer,
             live_stt,
         )

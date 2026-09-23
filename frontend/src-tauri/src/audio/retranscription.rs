@@ -3,7 +3,6 @@
 use super::common::{
     create_transcript_segments_with_words, split_segment_at_silence, write_transcripts_json,
 };
-use super::constants::AUDIO_EXTENSIONS;
 use crate::audio::decoder::decode_audio_file;
 use crate::audio::vad::get_speech_chunks_with_progress;
 use crate::state::AppState;
@@ -164,45 +163,6 @@ pub async fn start_retranscription<R: Runtime>(
     result
 }
 
-/// Find audio file in meeting folder
-/// Tries common names first, then scans for any file with an audio extension
-fn find_audio_file(folder: &Path) -> Result<PathBuf> {
-    let candidates = [
-        "audio.mp4",
-        "audio.m4a",
-        "audio.wav",
-        "audio.mp3",
-        "audio.flac",
-        "audio.ogg",
-        "recording.mp4",
-        "audio.mkv",
-        "audio.webm",
-        "audio.wma",
-    ];
-
-    for name in candidates {
-        let path = folder.join(name);
-        if path.exists() {
-            return Ok(path);
-        }
-    }
-
-    // Fallback: scan folder for any file with an audio extension
-    if let Ok(entries) = std::fs::read_dir(folder) {
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if let Some(ext) = path.extension() {
-                let ext = ext.to_string_lossy().to_lowercase();
-                if AUDIO_EXTENSIONS.contains(&ext.as_str()) {
-                    return Ok(path);
-                }
-            }
-        }
-    }
-
-    Err(anyhow!("No audio file found in: {}", folder.display()))
-}
-
 /// Internal function to run retranscription
 async fn run_retranscription<R: Runtime>(
     app: AppHandle<R>,
@@ -213,7 +173,8 @@ async fn run_retranscription<R: Runtime>(
     provider: Option<String>,
 ) -> Result<RetranscriptionResult> {
     let folder_path = PathBuf::from(&meeting_folder_path);
-    let audio_path = find_audio_file(&folder_path)?;
+    let audio = super::meeting_audio::find_audio_file(&folder_path)?; // a temp mix lives as long
+    let audio_path = audio.path.clone();
 
     // Determine which provider to use (default to whisper)
     let use_parakeet = provider.as_deref() == Some("parakeet");
@@ -552,11 +513,7 @@ async fn run_retranscription<R: Runtime>(
     }
 
     // Find audio filename for metadata
-    let audio_filename = audio_path
-        .file_name()
-        .and_then(|n| n.to_str())
-        .unwrap_or("audio.mp4")
-        .to_string();
+    let audio_filename = audio.name.clone();
 
     if let Err(e) =
         write_retranscription_metadata(&folder_path, &meeting_id, duration_seconds, &audio_filename)
@@ -921,89 +878,6 @@ mod tests {
     fn test_vad_redemption_time_constant() {
         // Batch processing uses 2000ms to bridge natural pauses in full-file VAD
         assert_eq!(VAD_REDEMPTION_TIME_MS, 2000);
-    }
-
-    #[test]
-    fn test_find_audio_file_common_candidates() {
-        let dir = tempfile::tempdir().unwrap();
-
-        // No audio file → error
-        assert!(find_audio_file(dir.path()).is_err());
-
-        // Create audio.mp4 — should be found first
-        std::fs::write(dir.path().join("audio.mp4"), b"fake").unwrap();
-        let found = find_audio_file(dir.path()).unwrap();
-        assert_eq!(found.file_name().unwrap(), "audio.mp4");
-    }
-
-    #[test]
-    fn test_find_audio_file_non_mp4_extensions() {
-        let dir = tempfile::tempdir().unwrap();
-
-        // Create audio.wav (imported as .wav, not .mp4)
-        std::fs::write(dir.path().join("audio.wav"), b"fake").unwrap();
-        let found = find_audio_file(dir.path()).unwrap();
-        assert_eq!(found.file_name().unwrap(), "audio.wav");
-    }
-
-    #[test]
-    fn test_find_audio_file_fallback_scan() {
-        let dir = tempfile::tempdir().unwrap();
-
-        // Create a file with an audio extension but non-standard name
-        std::fs::write(dir.path().join("my_recording.flac"), b"fake").unwrap();
-        // Also add a non-audio file that should be ignored
-        std::fs::write(dir.path().join("notes.txt"), b"text").unwrap();
-
-        let found = find_audio_file(dir.path()).unwrap();
-        assert_eq!(found.file_name().unwrap(), "my_recording.flac");
-    }
-
-    #[test]
-    fn test_find_audio_file_priority_order() {
-        let dir = tempfile::tempdir().unwrap();
-
-        // Create both audio.m4a and audio.mp4 — mp4 should win (listed first in candidates)
-        std::fs::write(dir.path().join("audio.m4a"), b"fake").unwrap();
-        std::fs::write(dir.path().join("audio.mp4"), b"fake").unwrap();
-        let found = find_audio_file(dir.path()).unwrap();
-        assert_eq!(found.file_name().unwrap(), "audio.mp4");
-    }
-
-    #[test]
-    fn test_find_audio_file_empty_folder() {
-        let dir = tempfile::tempdir().unwrap();
-        let result = find_audio_file(dir.path());
-        assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("No audio file found"));
-    }
-
-    #[test]
-    fn test_find_audio_file_nonexistent_folder() {
-        let result = find_audio_file(Path::new("/nonexistent/path/12345"));
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_audio_extensions_constant() {
-        // Verify all expected formats are covered
-        assert!(AUDIO_EXTENSIONS.contains(&"mp4"));
-        assert!(AUDIO_EXTENSIONS.contains(&"m4a"));
-        assert!(AUDIO_EXTENSIONS.contains(&"wav"));
-        assert!(AUDIO_EXTENSIONS.contains(&"mp3"));
-        assert!(AUDIO_EXTENSIONS.contains(&"flac"));
-        assert!(AUDIO_EXTENSIONS.contains(&"ogg"));
-        assert!(AUDIO_EXTENSIONS.contains(&"aac"));
-        // FFmpeg-backed formats
-        assert!(AUDIO_EXTENSIONS.contains(&"mkv"));
-        assert!(AUDIO_EXTENSIONS.contains(&"webm"));
-        assert!(AUDIO_EXTENSIONS.contains(&"wma"));
-        // Non-audio formats
-        assert!(!AUDIO_EXTENSIONS.contains(&"txt"));
-        assert!(!AUDIO_EXTENSIONS.contains(&"pdf"));
     }
 }
 

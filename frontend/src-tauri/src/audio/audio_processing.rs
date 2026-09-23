@@ -797,6 +797,7 @@ pub fn write_audio_to_file_with_meeting_name(
             bytemuck::cast_slice(audio),
             sample_rate,
             1,
+            super::encode::MIX_AAC_BITRATE,
             Path::new(&file_path),
         )?;
     }
