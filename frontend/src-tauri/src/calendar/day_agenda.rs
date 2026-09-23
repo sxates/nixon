@@ -19,6 +19,9 @@ use crate::calendar::eventkit::{self, Attendee, UpcomingMeeting};
 use crate::database::models::MeetingStatusRow;
 use crate::database::repositories::dismissed_calendar_event::DismissedCalendarEventsRepository;
 use crate::database::repositories::meeting::MeetingsRepository;
+use crate::database::repositories::meeting_participant::{
+    AttendeePreviewRow, MeetingParticipantsRepository,
+};
 use crate::state::AppState;
 
 /// Max attendees embedded inline per item (the full count is `attendee_count`).
@@ -442,8 +445,55 @@ pub async fn api_get_day_agenda<R: Runtime>(
             .unwrap_or_default()
     });
 
+    // A meeting recorded without an invite has no calendar attendees, but it may well have a
+    // roster — the people named on it, the same rows All Meetings shows faces from.
+    let mut items = items;
+    match MeetingParticipantsRepository::attendee_previews(pool).await {
+        Ok(rows) => fill_roster_attendees(&mut items, rows),
+        Err(e) => log::warn!("Failed to load meeting rosters for the agenda (continuing): {e}"),
+    }
+
     log::info!("api_get_day_agenda -> {} item(s)", items.len());
     Ok(items)
+}
+
+/// Give every agenda item that belongs to a meeting but carries no calendar attendees its
+/// meeting roster instead. Calendar attendees win where both exist: the invite is the
+/// meeting's own guest list, and it is what the rest of the row was matched on.
+///
+/// Owner report 2026-09-23: Today drew no faces for a recording with three named
+/// participants, while All Meetings drew them — Today only ever read calendar invites.
+fn fill_roster_attendees(items: &mut [DayAgendaItem], rows: Vec<AttendeePreviewRow>) {
+    let mut rosters: std::collections::HashMap<String, (Vec<Attendee>, u32)> =
+        std::collections::HashMap::new();
+    for row in rows {
+        let entry = rosters
+            .entry(row.meeting_id)
+            .or_insert_with(|| (Vec::new(), row.total.max(0) as u32));
+        entry.0.push(Attendee {
+            name: row.display_name,
+            email: row.email,
+            is_current_user: row.is_current_user != 0,
+            is_distribution_list: false,
+            photo_data_uri: None,
+        });
+    }
+    for item in items.iter_mut() {
+        if !item.attendees.is_empty() {
+            continue;
+        }
+        let Some(meeting_id) = item.meeting_id.as_deref() else {
+            continue;
+        };
+        if let Some((attendees, total)) = rosters.get(meeting_id) {
+            item.attendees = attendees
+                .iter()
+                .take(MAX_INLINE_ATTENDEES)
+                .cloned()
+                .collect();
+            item.attendee_count = *total;
+        }
+    }
 }
 
 /// Hide a calendar event from the agenda (specs/0026). `event_id` is the agenda item's id for

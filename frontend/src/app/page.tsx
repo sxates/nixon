@@ -32,12 +32,15 @@ import { useTranscripts } from '@/contexts/TranscriptContext';
 import { useSidebar } from '@/components/Sidebar/SidebarProvider';
 import type { DayAgendaItem } from '@/lib/day-agenda';
 import { joinAndRecord, resolveRecordingStartsAt } from '@/lib/calendar';
+import { DeleteMeetingDialog } from '@/components/MeetingDetails/DeleteMeetingDialog';
 import {
   routeForItem,
   openMeetingUrl,
   localDateKey,
   parseLocalDateKey,
   dayLabel,
+  findRecordingRowId,
+  canEditManualItem,
   type TimelineContext,
 } from '@/lib/today-timeline';
 import { prepRouteForEvent } from '@/lib/prep';
@@ -61,6 +64,9 @@ function HomeView() {
   // `editing` mode and a dedicated confirm dialog, both driven by the target item.
   const [editingItem, setEditingItem] = useState<DayAgendaItem | null>(null);
   const [deletingItem, setDeletingItem] = useState<DayAgendaItem | null>(null);
+  // A RECORDED meeting deleted from its row — All Meetings' dialog, which also removes the
+  // recording on disk. Manual entries keep their own dialog above.
+  const [deletingRecorded, setDeletingRecorded] = useState<DayAgendaItem | null>(null);
 
   const {
     items,
@@ -86,19 +92,15 @@ function HomeView() {
 
   const liveTitle = meetingTitle && meetingTitle !== '+ New Call' ? meetingTitle.trim() : null;
   // Which timeline row is the live recording (the backend doesn't know "live").
-  const recordingThisId = useMemo(() => {
-    if (!isRecording) return null;
-    for (const liveId of [activeRecordingMeetingId, currentMeetingId]) {
-      if (!liveId) continue;
-      const byId = items.find((it) => it.meetingId && it.meetingId === liveId);
-      if (byId) return byId.id;
-    }
-    if (liveTitle) {
-      const byTitle = items.find((it) => it.title?.trim().toLowerCase() === liveTitle.toLowerCase());
-      if (byTitle) return byTitle.id;
-    }
-    return null;
-  }, [isRecording, activeRecordingMeetingId, currentMeetingId, liveTitle, items]);
+  const recordingThisId = useMemo(
+    () =>
+      findRecordingRowId([items, ...weekItems], {
+        isRecording,
+        liveIds: [activeRecordingMeetingId, currentMeetingId],
+        liveTitle,
+      }),
+    [isRecording, activeRecordingMeetingId, currentMeetingId, liveTitle, items, weekItems],
+  );
 
   const ctx: TimelineContext = useMemo(
     () => ({ now, isRecording, recordingThisId }),
@@ -199,7 +201,11 @@ function HomeView() {
   );
 
   const handleEditManual = useCallback((item: DayAgendaItem) => setEditingItem(item), []);
-  const handleDeleteManual = useCallback((item: DayAgendaItem) => setDeletingItem(item), []);
+  const handleDeleteManual = useCallback(
+    (item: DayAgendaItem) =>
+      canEditManualItem(item) ? setDeletingItem(item) : setDeletingRecorded(item),
+    [],
+  );
 
   // Add and Edit share one dialog instance (AddMeetingDialog's `editing` prop); closing
   // either clears both so the next open starts clean.
@@ -298,6 +304,21 @@ function HomeView() {
           void refresh();
         }}
       />
+
+      {deletingRecorded?.meetingId && (
+        <DeleteMeetingDialog
+          open
+          onOpenChange={(open) => {
+            if (!open) setDeletingRecorded(null);
+          }}
+          meetingId={deletingRecorded.meetingId}
+          meetingTitle={deletingRecorded.title}
+          onDeleted={() => {
+            setDeletingRecorded(null);
+            void refresh();
+          }}
+        />
+      )}
 
       {/* Toolbar — date nav + Day/Week toggle + quick actions; fixed above the scroll region. */}
       <TodayToolbar

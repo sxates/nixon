@@ -23,6 +23,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import type { DayAgendaItem } from '@/lib/day-agenda';
 import {
+  canDeleteRecordedItem,
   canEditManualItem,
   type TimelineContext,
 } from '@/lib/today-timeline';
@@ -58,7 +59,10 @@ export function AgendaRowMenu({
 }) {
   const canEdit = canEditManualItem(item);
   const canHide = canHideItem(item, ctx);
-  if (!canEdit && !canHide) return null;
+  const canDelete = canDeleteRecordedItem(item, ctx);
+  // Nothing to offer — but keep the slot, so the chips of rows with and without a menu line
+  // up (owner report 2026-09-23: the Week view's RECORDED chips stepped in and out).
+  if (!canEdit && !canHide && !canDelete) return <span aria-hidden="true" className="h-5 w-5 flex-shrink-0" />;
 
   return (
     // The row itself is clickable (it opens the meeting), so the menu swallows its own
@@ -94,6 +98,15 @@ export function AgendaRowMenu({
                 Delete
               </DropdownMenuItem>
             </>
+          )}
+          {canDelete && (
+            <DropdownMenuItem
+              onSelect={() => actions.onDelete(item)}
+              className="text-destructive focus:text-destructive"
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              Delete meeting
+            </DropdownMenuItem>
           )}
           {canHide && (
             <DropdownMenuItem onSelect={() => actions.onHide(item)}>

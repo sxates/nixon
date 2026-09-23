@@ -1,5 +1,6 @@
 use super::*;
 use crate::database::models::{DateTimeUtc, ManualScheduledRow};
+use crate::database::repositories::meeting_participant::AttendeePreviewRow;
 
 fn rec(id: &str, title: &str, created: DateTime<Utc>, folder: bool) -> MeetingStatusRow {
     MeetingStatusRow {
@@ -415,4 +416,91 @@ fn dismissal_keys_reports_stable_then_legacy() {
     let (stable, legacy) = dismissal_keys(&evt("ek-abc", "Lunch", t0));
     assert_eq!(stable, "ek-abc");
     assert_eq!(legacy, "ek-abc");
+}
+
+fn roster_row(meeting_id: &str, name: &str, owner: bool, total: i64) -> AttendeePreviewRow {
+    AttendeePreviewRow {
+        meeting_id: meeting_id.to_string(),
+        display_name: name.to_string(),
+        email: Some(format!("{}@x.com", name.to_lowercase())),
+        is_current_user: owner as i64,
+        total,
+    }
+}
+
+// Owner report 2026-09-23: a recording with named participants showed no faces on Today,
+// while All Meetings showed them. Today only read calendar invites; a meeting recorded
+// without one got `attendees: []` even though its roster was sitting in
+// `meeting_participants`.
+#[test]
+fn a_recording_without_an_invite_shows_its_roster() {
+    let t0 = Utc.with_ymd_and_hms(2026, 6, 25, 9, 0, 0).unwrap();
+    let mut items = build_agenda(
+        vec![],
+        vec![rec("m1", "Product sync", t0, true)],
+        vec![],
+        &std::collections::HashSet::new(),
+        |_, _| vec![],
+    );
+    fill_roster_attendees(
+        &mut items,
+        vec![
+            roster_row("m1", "Maya", false, 3),
+            roster_row("m1", "Tomas", false, 3),
+        ],
+    );
+
+    let names: Vec<&str> = items[0].attendees.iter().map(|a| a.name.as_str()).collect();
+    assert_eq!(names, ["Maya", "Tomas"]);
+    assert_eq!(items[0].attendee_count, 3);
+    assert_eq!(items[0].attendees[0].email.as_deref(), Some("maya@x.com"));
+}
+
+#[test]
+fn calendar_attendees_win_over_the_roster() {
+    let t0 = Utc.with_ymd_and_hms(2026, 6, 25, 9, 0, 0).unwrap();
+    let invitee = Attendee {
+        name: "From invite".into(),
+        email: None,
+        is_current_user: false,
+        is_distribution_list: false,
+        photo_data_uri: None,
+    };
+    let mut items = build_agenda(
+        vec![evt("ev1", "Standup", t0)],
+        vec![rec("m1", "Standup", t0, true)],
+        vec![],
+        &std::collections::HashSet::new(),
+        |_, _| vec![invitee.clone()],
+    );
+    fill_roster_attendees(
+        &mut items,
+        vec![roster_row("m1", "Roster person", false, 1)],
+    );
+
+    assert_eq!(items[0].attendees.len(), 1);
+    assert_eq!(items[0].attendees[0].name, "From invite");
+}
+
+#[test]
+fn the_owner_flag_survives_and_unrelated_rows_are_ignored() {
+    let t0 = Utc.with_ymd_and_hms(2026, 6, 25, 9, 0, 0).unwrap();
+    let mut items = build_agenda(
+        vec![],
+        vec![rec("m1", "1:1", t0, true)],
+        vec![],
+        &std::collections::HashSet::new(),
+        |_, _| vec![],
+    );
+    fill_roster_attendees(
+        &mut items,
+        vec![
+            roster_row("m1", "You", true, 2),
+            roster_row("other", "Stranger", false, 1),
+        ],
+    );
+
+    assert_eq!(items[0].attendees.len(), 1);
+    assert!(items[0].attendees[0].is_current_user);
+    assert_eq!(items[0].attendee_count, 2);
 }

@@ -176,6 +176,9 @@ export function useDayAgenda() {
     const interval = window.setInterval(() => void refresh(), REFRESH_INTERVAL_MS);
     // Move the now-line / re-classify phases roughly every minute.
     const clock = window.setInterval(() => setNow(new Date()), 60 * 1000);
+    // A recording started without an invite has no row until the agenda re-reads — and no
+    // row means no recording marker (owner report 2026-09-23).
+    const disposeStarted = safeListen('recording-started', () => void refresh());
     const disposeStopped = safeListen('recording-stopped', () => void refresh());
     const disposeDiarized = safeListen('diarization-complete', () => void refresh());
     // A background prep pass may have changed a brief (specs/0036) — cheap re-read.
@@ -184,6 +187,7 @@ export function useDayAgenda() {
       window.removeEventListener('focus', onFocus);
       window.clearInterval(interval);
       window.clearInterval(clock);
+      disposeStarted();
       disposeStopped();
       disposeDiarized();
       disposePrep();

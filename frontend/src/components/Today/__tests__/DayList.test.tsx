@@ -96,13 +96,20 @@ describe('DayList (specs/0069 W4)', () => {
       expect(onHide).toHaveBeenCalledWith(item);
     });
 
-    it('renders no ⋯ menu at all once that calendar event is recorded', () => {
+    // Owner feedback 2026-09-23: a recorded meeting's menu offers what All Meetings offers
+    // (Delete meeting) — and still never Hide, which for a recording would be deleting it.
+    it('offers Delete meeting, not Hide, once that calendar event is recorded', async () => {
       const item = at('09:00', 'Standup', {
         meetingId: 'meeting-1',
         status: { recorded: true, transcribed: true, summarized: false, speakersIdentified: false },
       });
       render(<DayList {...base} items={[item]} />);
-      expect(screen.queryByRole('button', { name: 'Event options' })).not.toBeInTheDocument();
+
+      const trigger = screen.getByRole('button', { name: 'Event options' });
+      trigger.focus();
+      fireEvent.keyDown(trigger, { key: 'Enter' });
+      expect(await screen.findByText('Delete meeting')).toBeInTheDocument();
+      expect(screen.queryByText('Hide from timeline')).not.toBeInTheDocument();
     });
   });
 

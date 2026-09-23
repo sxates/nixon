@@ -39,6 +39,8 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 - **A summary tells you when it is preliminary.** A summary written before Nixon has
   finished identifying who spoke now says so above it — "Preliminary summary — speakers will
   be added when available" — until the version with names replaces it.
+- **Delete a recorded meeting from Today.** Every meeting on Agenda, List and Week now has
+  a ⋯ menu: recorded ones offer **Delete meeting**, the same as All Meetings.
 
 ### Changed
 
@@ -116,6 +118,13 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 - **No "Welcome to Nixon!" flash when a meeting ends.** The recording screen emptied its
   transcript a moment before the meeting page replaced it, briefly showing the screen for a
   brand-new meeting on the way out.
+- **Faces on every meeting on Today.** A meeting recorded without a calendar invite now
+  shows the people named on it, the way All Meetings does.
+- **The meeting you are recording is marked in the Week view** too, and appears on Today
+  as soon as recording starts.
+- **A meeting you added in Nixon says whether it was recorded.** Once its time had passed
+  it read "Recorded" whether you had recorded it or not, and it kept offering a Record
+  button long after it was over. Record now shows until the meeting ends.
 
 ### Internal
 

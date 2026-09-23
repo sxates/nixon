@@ -89,14 +89,18 @@ describe('WeekView row actions', () => {
     expect(screen.queryByText('Hide from timeline')).not.toBeInTheDocument();
   });
 
-  it('carries no menu for a recorded meeting — hiding one would be deleting it', () => {
+  // Owner feedback 2026-09-23: recorded meetings get All Meetings' Delete meeting — and
+  // still no Hide, which for a recording would be deleting it.
+  it('offers Delete meeting, not Hide, for a recorded meeting', async () => {
     renderWeek([
       event('Product sync', {
         meetingId: 'meeting-2',
         status: { recorded: true, transcribed: true, summarized: false, speakersIdentified: false },
       }),
     ]);
-    expect(screen.queryByRole('button', { name: 'Event options' })).not.toBeInTheDocument();
+    openRowMenu();
+    expect(await screen.findByText('Delete meeting')).toBeInTheDocument();
+    expect(screen.queryByText('Hide from timeline')).not.toBeInTheDocument();
   });
 
   it('opening the menu does not also route the row', async () => {
