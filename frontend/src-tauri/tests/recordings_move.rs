@@ -17,7 +17,8 @@ use app_lib::audio::recordings_move::plan::staging_path;
 use app_lib::audio::recordings_move::roots::{roots_for_profile, MoveRoots, ProfileRootsInput};
 use app_lib::audio::recordings_move::runner::{
     build_plan, gather, precheck, resume_from_journal, start_run, GatherDecision, MoveEnv,
-    MoveFinished, MoveReporter, MoveState, MoveStatus, NoReporter, STOP_RECORDING_FIRST,
+    MoveFinished, MoveReporter, MoveState, MoveStatus, NoReporter, RunError, JOURNAL_WRITE_FAILED,
+    STOP_RECORDING_FIRST,
 };
 use app_lib::database::repositories::meeting::MeetingsRepository;
 use sqlx::SqlitePool;
@@ -88,7 +89,12 @@ impl Harness {
     async fn run(&self, opts: ExecOptions) -> Result<MoveFinished, Crashed> {
         let plan = build_plan(&self.pool, &self.roots).await.unwrap();
         let guard = self.state.try_begin().unwrap();
-        start_run(&self.env(opts, &NoReporter), &plan, guard).await
+        start_run(&self.env(opts, &NoReporter), &plan, guard)
+            .await
+            .map_err(|e| match e {
+                RunError::Crashed(c) => c,
+                other => panic!("the run didn't start: {other:?}"),
+            })
     }
 
     async fn resume(&self) -> Option<MoveFinished> {
@@ -808,4 +814,67 @@ async fn a_debug_gather_never_touches_the_production_recordings_folder() {
     assert_eq!(stored_folder(&h.pool, &prod_id).await, Some(s(&prod_src)));
     assert!(!h.new.join("Dev meeting in prod").exists());
     assert!(!h.new.join("Crashed in prod").exists());
+}
+
+// -- fix round 1: no move without a journal; a lost journal still reconciles row 5 -----------
+
+#[tokio::test]
+async fn a_move_refuses_to_start_when_its_journal_cannot_be_written() {
+    let mut h = Harness::new().await;
+    let (id, src) = meeting(&h.pool, &h.old, "Unjournaled").await;
+    let original = contents(&src);
+    // The journal's folder is a plain file, so the journal can't be written.
+    let blocker = h.base().join("not-a-folder");
+    std::fs::write(&blocker, b"file").unwrap();
+    h.journal = blocker.join(JOURNAL_FILE);
+
+    let plan = build_plan(&h.pool, &h.roots).await.unwrap();
+    let guard = h.state.try_begin().unwrap();
+    let result = start_run(&h.env(ExecOptions::default(), &NoReporter), &plan, guard).await;
+
+    match result {
+        Err(RunError::NoJournal(why)) => assert!(why.starts_with(JOURNAL_WRITE_FAILED), "{why}"),
+        other => panic!("the move must not start without its journal: {other:?}"),
+    }
+    assert_untouched(&h, &id, &src, &original).await;
+    assert!(!h.new.join("Unjournaled").exists(), "nothing was moved");
+    assert!(!h.state.is_running(), "the move slot is free again");
+
+    // The startup gather reports it as a reason instead of moving.
+    h.roots = release_roots(&h.new, &h.new, &[h.old.clone()], &[]);
+    let env = h.env(ExecOptions::default(), &NoReporter);
+    let (decision, _, finished) = gather(&env, true, false).await.unwrap();
+    assert!(
+        matches!(&decision, GatherDecision::Blocked(why) if why.starts_with(JOURNAL_WRITE_FAILED)),
+        "{decision:?}"
+    );
+    assert!(finished.is_none());
+    assert_untouched(&h, &id, &src, &original).await;
+}
+
+#[tokio::test]
+async fn a_lost_journal_after_a_same_volume_rename_is_reconciled_by_the_gather() {
+    let mut h = Harness::new().await;
+    let (id, src) = meeting(&h.pool, &h.old, "Renamed").await;
+    let original = contents(&src);
+    let crashed = h
+        .run(ExecOptions {
+            fail_at: Some(FailPoint::AfterRename),
+            ..ExecOptions::default()
+        })
+        .await;
+    assert_eq!(crashed, Err(Crashed(FailPoint::AfterRename)));
+    // Recovery row 5, and the journal is gone (damaged beyond reading, deleted, …).
+    std::fs::remove_file(&h.journal).unwrap();
+    assert!(!src.exists());
+    assert_eq!(stored_folder(&h.pool, &id).await, Some(s(&src)));
+
+    h.roots = release_roots(&h.new, &h.new, &[h.old.clone()], &[]);
+    let env = h.env(ExecOptions::default(), &NoReporter);
+    let (decision, plan, finished) = gather(&env, true, false).await.unwrap();
+
+    assert_eq!(decision, GatherDecision::Run);
+    assert_eq!(plan.missing, 0, "not reported missing");
+    assert_eq!(finished.unwrap().moved, 1);
+    assert_moved(&h, &id, &src, &h.new.join("Renamed"), &original).await;
 }

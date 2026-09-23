@@ -274,19 +274,42 @@ pub fn precheck(
     Ok(())
 }
 
-/// Record the run in the journal, then move every folder. See [`run_units`].
+/// Refusal when the journal can't be written (before anything moved).
+pub const JOURNAL_WRITE_FAILED: &str =
+    "Nixon couldn't save its record of the move, so nothing was moved.";
+
+/// Why [`start_run`] didn't finish.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RunError {
+    /// The journal couldn't be written, so the run never started (user-facing reason).
+    NoJournal(String),
+    /// An injected fail point stopped the run (tests only).
+    Crashed(Crashed),
+}
+
+/// Write the journal for `plan`. A move must not start without one: after a crash between
+/// a same-volume rename and the row update, only the journal says where the folder went
+/// (the source no longer exists, so a plan from the rows alone would report it missing).
+/// `Err` is user-facing copy.
+pub fn write_journal(path: &Path, plan: &MovePlan) -> Result<(), String> {
+    let journal = Journal::new(plan.target.clone(), plan.units.clone());
+    journal::write(path, &journal).map_err(|e| {
+        log::error!("recordings move: couldn't write the journal, not moving: {e:#}");
+        format!("{JOURNAL_WRITE_FAILED} ({e:#})")
+    })
+}
+
+/// Record the run in the journal, then move every folder (see [`run_units`]). Refuses to
+/// start when the journal can't be written.
 pub async fn start_run(
     env: &MoveEnv<'_>,
     plan: &MovePlan,
     guard: RunGuard,
-) -> Result<MoveFinished, Crashed> {
-    let journal = Journal::new(plan.target.clone(), plan.units.clone());
-    if let Err(e) = journal::write(env.journal, &journal) {
-        // Without a journal a crash still recovers through the gather (fs + rows), so
-        // this is logged rather than fatal.
-        log::error!("recordings move: couldn't write the journal: {e:#}");
-    }
-    run_units(env, plan.units.clone(), guard).await
+) -> Result<MoveFinished, RunError> {
+    write_journal(env.journal, plan).map_err(RunError::NoJournal)?;
+    run_units(env, plan.units.clone(), guard)
+        .await
+        .map_err(RunError::Crashed)
 }
 
 /// Finish a move a crash interrupted: reconcile every folder the journal names, then
@@ -497,8 +520,9 @@ pub async fn gather(
         ));
     };
     env.state.set_gather_blocked(None);
-    let finished = start_run(env, &plan, guard)
-        .await
-        .map_err(|c| anyhow::anyhow!("the gather stopped at {:?}", c.0))?;
-    Ok((decision, plan, Some(finished)))
+    match start_run(env, &plan, guard).await {
+        Ok(finished) => Ok((decision, plan, Some(finished))),
+        Err(RunError::NoJournal(why)) => Ok((GatherDecision::Blocked(why), plan, None)),
+        Err(RunError::Crashed(c)) => Err(anyhow::anyhow!("the gather stopped at {:?}", c.0)),
+    }
 }

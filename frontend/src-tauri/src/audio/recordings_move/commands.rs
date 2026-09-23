@@ -22,8 +22,8 @@ use super::journal;
 use super::plan::MovePlan;
 use super::roots::{profile_roots, MoveRoots};
 use super::runner::{
-    build_plan, gather, precheck, resume_from_journal, start_run, GatherDecision, MoveEnv,
-    MoveFinished, MoveReporter, MoveStatus, RunGuard, MOVE_ALREADY_RUNNING, MOVE_STATE,
+    build_plan, gather, precheck, resume_from_journal, run_units, write_journal, GatherDecision,
+    MoveEnv, MoveFinished, MoveReporter, MoveStatus, RunGuard, MOVE_ALREADY_RUNNING, MOVE_STATE,
 };
 use crate::audio::meeting_folder::canonical_or_lexical;
 use crate::audio::recording_preferences::{
@@ -118,7 +118,8 @@ async fn forget_removed_roots<R: Runtime>(app: &AppHandle<R>, removed: &[PathBuf
     }
 }
 
-/// Run `plan` in the background with the claimed `guard`, then tidy the preferences.
+/// Run `plan` (its journal already written) in the background with the claimed `guard`,
+/// then tidy the preferences.
 fn spawn_run<R: Runtime>(app: AppHandle<R>, roots: MoveRoots, plan: MovePlan, guard: RunGuard) {
     tauri::async_runtime::spawn(async move {
         let Ok(pool) = pool(&app) else { return };
@@ -134,7 +135,7 @@ fn spawn_run<R: Runtime>(app: AppHandle<R>, roots: MoveRoots, plan: MovePlan, gu
             state: &MOVE_STATE,
             reporter: &reporter,
         };
-        if let Ok(finished) = start_run(&env, &plan, guard).await {
+        if let Ok(finished) = run_units(&env, plan.units, guard).await {
             forget_removed_roots(&app, &finished.removed_roots).await;
         }
     });
@@ -185,6 +186,17 @@ pub async fn api_change_recordings_folder<R: Runtime>(
         }
         return Err(why);
     }
+    // No move starts without its journal (see `write_journal`); written before the folder
+    // preference so a refusal here changes nothing.
+    let journal_path = journal::default_path();
+    if !plan.is_empty() {
+        if let Err(why) = write_journal(&journal_path, &plan) {
+            if created {
+                let _ = std::fs::remove_dir(&target);
+            }
+            return Err(why);
+        }
+    }
 
     // Persist the new folder FIRST: new recordings land there from now on, so a recording
     // started mid-move never joins the move.
@@ -199,9 +211,10 @@ pub async fn api_change_recordings_folder<R: Runtime>(
     prefs.save_folder = target;
     prefs.save_folder_user_chosen = true;
     prefs.recordings_gathered_once = true;
-    save_recording_preferences(&app, &prefs)
-        .await
-        .map_err(|e| format!("Failed to save recording preferences: {e}"))?;
+    if let Err(e) = save_recording_preferences(&app, &prefs).await {
+        journal::delete(&journal_path);
+        return Err(format!("Failed to save recording preferences: {e}"));
+    }
     MOVE_STATE.set_gather_blocked(None);
 
     if !plan.is_empty() {
@@ -222,7 +235,14 @@ pub async fn api_gather_recordings<R: Runtime>(app: AppHandle<R>) -> Result<(), 
         .map_err(|e| format!("Couldn't look through your recordings: {e:#}"))?;
     let recording = crate::audio::recording_commands::is_recording().await;
     precheck(&plan, &roots, recording, &crate::app_paths::app_data_dir())?;
-    mark_gathered(&app).await?;
+    let journal_path = journal::default_path();
+    if !plan.is_empty() {
+        write_journal(&journal_path, &plan)?;
+    }
+    if let Err(why) = mark_gathered(&app).await {
+        journal::delete(&journal_path);
+        return Err(why);
+    }
     MOVE_STATE.set_gather_blocked(None);
     if !plan.is_empty() {
         spawn_run(app, roots, plan, guard);

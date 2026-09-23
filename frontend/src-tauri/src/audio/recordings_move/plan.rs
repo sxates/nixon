@@ -148,6 +148,8 @@ pub fn plan_move(
     }
 
     let mut units: Vec<MoveUnit> = Vec::new();
+    // Target entries by the meeting id in their metadata, read only if a source is missing.
+    let mut target_ids: Option<BTreeMap<String, PathBuf>> = None;
     for (folder, group) in &groups {
         let n = group.len();
         if folder.starts_with(target) {
@@ -158,6 +160,22 @@ pub fn plan_move(
             continue;
         }
         if !fs.exists(folder) {
+            // Recovery row 5 without a journal: a same-volume rename finished but the row
+            // update didn't. The folder is in the target under a name whose metadata names
+            // one of these meetings; reconcile (point the rows at it) instead of "missing".
+            let index = target_ids.get_or_insert_with(|| {
+                fs.entries(target)
+                    .into_iter()
+                    .filter_map(|e| fs.meeting_id_of(&e).map(|id| (id, e)))
+                    .collect()
+            });
+            if let Some(found) = group.iter().find_map(|r| index.get(&r.meeting_id)) {
+                let ids: Vec<String> = group.iter().map(|r| r.meeting_id.clone()).collect();
+                let mut unit = new_unit(folder.clone(), ids.clone(), ids, &group[0].title);
+                unit.dst = found.clone();
+                units.push(unit);
+                continue;
+            }
             plan.missing += n;
             continue;
         }
@@ -202,8 +220,16 @@ pub fn plan_move(
     units.sort_by(|a, b| a.src.cmp(&b.src));
     let mut taken_names: BTreeSet<String> = BTreeSet::new();
     let mut meeting_ids: BTreeSet<&str> = BTreeSet::new();
+    // Destinations found above (row-5 reconciles) keep their names.
+    for unit in units.iter().filter(|u| !u.dst.as_os_str().is_empty()) {
+        if let Some(name) = unit.dst.file_name() {
+            taken_names.insert(name.to_string_lossy().into_owned());
+        }
+    }
     for unit in &mut units {
-        unit.dst = destination(unit, target, &mut taken_names, fs);
+        if unit.dst.as_os_str().is_empty() {
+            unit.dst = destination(unit, target, &mut taken_names, fs);
+        }
         unit.bytes = fs.bytes(&unit.src);
         unit.same_volume = fs.same_volume(&unit.src, target);
         unit.elsewhere = !roots.known.iter().any(|r| unit.src.starts_with(r));

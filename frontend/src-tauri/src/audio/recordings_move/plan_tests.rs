@@ -239,3 +239,22 @@ fn staging_sits_next_to_the_destination() {
         PathBuf::from("/new/.nixon-moving-Weekly sync")
     );
 }
+
+#[test]
+fn a_missing_source_whose_folder_is_already_in_the_target_is_reconciled() {
+    // Same-volume rename done, row update lost, journal lost: the row names /old/Sync, which
+    // is gone; /new/Sync (2) carries the meeting's id.
+    let fs = FakeFs::default()
+        .folder("/new/Sync (2)", Some("a"))
+        .folder("/new/Other", Some("z"));
+    let plan = plan_move(&[row("a", Some("/old/Sync"))], &[], &roots(), &fs);
+    assert_eq!(plan.missing, 0);
+    assert_eq!(plan.units.len(), 1);
+    assert_eq!(plan.units[0].src, PathBuf::from("/old/Sync"));
+    assert_eq!(plan.units[0].dst, PathBuf::from("/new/Sync (2)"));
+    assert_eq!(plan.units[0].update_ids, vec!["a"]);
+
+    // A missing source with no trace in the target is still missing.
+    let plan = plan_move(&[row("b", Some("/old/Gone"))], &[], &roots(), &fs);
+    assert_eq!((plan.missing, plan.units.len()), (1, 0));
+}
