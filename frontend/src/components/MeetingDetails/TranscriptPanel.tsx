@@ -42,6 +42,8 @@ interface TranscriptPanelProps {
   meetingId?: string;
   meetingFolderPath?: string | null;
   onRefetchTranscripts?: () => Promise<void>;
+  /** The meeting's `origin` (spec 0015), for the "…" menu's audio-setup gating. */
+  meetingOrigin?: string | null;
 
   /** The shared speaker controller (specs/0019 WS2.1), owned by the page since
    *  specs/0057 Plan 3 — the channel strip moved above the tabs, so the legend and
@@ -95,6 +97,7 @@ export function TranscriptPanel({
   meetingId,
   meetingFolderPath,
   onRefetchTranscripts,
+  meetingOrigin,
   speakersController,
   scrollToSegmentId,
   isScrollTargetVisible = true,
@@ -383,6 +386,7 @@ export function TranscriptPanel({
           meetingId={meetingId}
           meetingFolderPath={meetingFolderPath}
           onRefetchTranscripts={onRefetchTranscripts}
+          meetingOrigin={meetingOrigin}
         />
       </div>
 

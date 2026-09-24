@@ -27,6 +27,7 @@ interface MeetingTabPanelsProps {
     title: string;
     created_at: string;
     folder_path?: string | null;
+    origin?: string | null;
   };
   isScheduled: boolean;
   isNotesOnly: boolean;
@@ -197,6 +198,7 @@ export function MeetingTabPanels({
           // Retranscription props
           meetingId={meeting.id}
           meetingFolderPath={meeting.folder_path}
+          meetingOrigin={meeting.origin}
           onRefetchTranscripts={onRefetchTranscripts}
           speakersController={speakersController}
           speakerFilter={speakerFilter}

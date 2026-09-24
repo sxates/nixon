@@ -8,10 +8,13 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Loader2, MoreHorizontal } from 'lucide-react';
 import { RetranscribeDialog } from './RetranscribeDialog';
+import { AudioSetupSubmenu } from './AudioSetupSubmenu';
+import { useAudioSetup, type AudioSetupOverride } from '@/hooks/useAudioSetup';
 import { useBacklog } from '@/contexts/DeferredBacklogProvider';
 import { useDiarization } from '@/hooks/useDiarization';
 import { SPARSE_TRANSCRIPT_SEGMENTS } from '@/lib/deferred-transcription';
@@ -31,6 +34,9 @@ interface TranscriptButtonGroupProps {
   meetingId?: string;
   meetingFolderPath?: string | null;
   onRefetchTranscripts?: () => Promise<void>;
+  /** The meeting's `origin` (spec 0015). Imported audio has no separate mic channel, so
+   *  "Who was on the mic?" is hidden for it (specs/0078). Absent = recorded. */
+  meetingOrigin?: string | null;
 }
 
 
@@ -41,6 +47,7 @@ export function TranscriptButtonGroup({
   meetingId,
   meetingFolderPath,
   onRefetchTranscripts,
+  meetingOrigin,
 }: TranscriptButtonGroupProps) {
   const { view, enqueueMeeting } = useBacklog();
   const [showRetranscribeDialog, setShowRetranscribeDialog] = useState(false);
@@ -139,6 +146,24 @@ export function TranscriptButtonGroup({
   const handleIdentifySpeakers = useCallback(() => {
     void identifySpeakers();
   }, [identifySpeakers]);
+
+  // "Who was on the mic?" (specs/0078). Only for a recording of our own whose channels
+  // are still on disk: an import is one mixed file, and a notes-only meeting has no
+  // audio (and no transcript tab) at all. Choosing re-runs the pass through the same
+  // controller as "Identify speakers", so its progress shows on that button.
+  const audioSetup = useAudioSetup(meetingId);
+  const offerAudioSetup =
+    !!meetingId &&
+    meetingOrigin !== 'imported' &&
+    meetingOrigin !== 'notes_only' &&
+    !speakersGoneTitle;
+  const setAudioSetup = audioSetup.setOverride;
+  const handleChooseAudioSetup = useCallback(
+    (next: AudioSetupOverride) => {
+      void identifySpeakers(() => setAudioSetup(next));
+    },
+    [identifySpeakers, setAudioSetup],
+  );
 
   return (
     <div className="flex items-center justify-start gap-2">
@@ -259,6 +284,16 @@ export function TranscriptButtonGroup({
             <DropdownMenuItem onSelect={() => void onOpenMeetingFolder()}>
               Open folder
             </DropdownMenuItem>
+            {offerAudioSetup && (
+              <>
+                <DropdownMenuSeparator />
+                <AudioSetupSubmenu
+                  setup={audioSetup.setup}
+                  disabled={isDiarizing || transcriptCount === 0}
+                  onChoose={handleChooseAudioSetup}
+                />
+              </>
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
       </ButtonGroup>
