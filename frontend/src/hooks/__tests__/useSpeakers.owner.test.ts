@@ -5,12 +5,22 @@ import { renderHook, act, waitFor } from '@testing-library/react';
 // the right command, then the same refresh an assign does (speakers + the transcript via
 // onMutated), and a friendly toast on failure.
 
-const { invokeMock, toastMock } = vi.hoisted(() => ({
+const { invokeMock, toastMock, listeners } = vi.hoisted(() => ({
   invokeMock: vi.fn(),
   toastMock: { success: vi.fn(), error: vi.fn() },
+  listeners: [] as { event: string; cb: (e: { payload: unknown }) => void }[],
 }));
 vi.mock('@tauri-apps/api/core', () => ({ invoke: invokeMock }));
-vi.mock('@/lib/safe-listen', () => ({ safeListen: vi.fn(() => () => {}) }));
+vi.mock('@/lib/safe-listen', () => ({
+  safeListen: vi.fn((event: string, cb: (e: { payload: unknown }) => void) => {
+    const entry = { event, cb };
+    listeners.push(entry);
+    return () => {
+      const i = listeners.indexOf(entry);
+      if (i >= 0) listeners.splice(i, 1);
+    };
+  }),
+}));
 vi.mock('sonner', () => ({ toast: toastMock }));
 
 import { useSpeakers } from '@/hooks/useSpeakers';
@@ -19,6 +29,7 @@ let failMark = false;
 
 beforeEach(() => {
   vi.clearAllMocks();
+  listeners.length = 0;
   failMark = false;
   invokeMock.mockImplementation(async (cmd: string) => {
     switch (cmd) {
@@ -44,6 +55,30 @@ describe('useSpeakers owner actions (specs/0078)', () => {
   it('exposes the meeting audio setup', async () => {
     const { result } = renderHook(() => useSpeakers({ meetingId: 'm1' }));
     await waitFor(() => expect(result.current.audioSetup?.resolved).toBe('room'));
+  });
+
+  it('one diarization-complete listener updates the setup from the payload', async () => {
+    const { result } = renderHook(() => useSpeakers({ meetingId: 'm1' }));
+    await waitFor(() => expect(result.current.audioSetup?.resolved).toBe('room'));
+    const complete = listeners.filter((l) => l.event === 'diarization-complete');
+    expect(complete).toHaveLength(1);
+
+    act(() =>
+      complete[0].cb({
+        payload: { meeting_id: 'm1', audioSetup: 'call', audioSetupSource: 'detected' },
+      }),
+    );
+    expect(result.current.audioSetup).toEqual({ override: 'auto', resolved: 'call' });
+  });
+
+  it('setAudioSetup updates the controller state the owner actions read', async () => {
+    const { result } = renderHook(() => useSpeakers({ meetingId: 'm1' }));
+    await waitFor(() => expect(result.current.audioSetup?.override).toBe('auto'));
+    await act(async () => {
+      await result.current.setAudioSetup('call');
+    });
+    expect(invokeMock).toHaveBeenCalledWith('api_set_meeting_audio_setup', { meetingId: 'm1', setup: 'call' });
+    expect(result.current.audioSetup).toEqual({ override: 'call', resolved: 'room' });
   });
 
   it('markAsMe calls the command per key, then refreshes speakers and the transcript', async () => {

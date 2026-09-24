@@ -4,11 +4,14 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 // specs/0078 W3 — "Who was on the mic?" in the transcript's "…" menu. Locks: it is
 // hidden for imported / notes-only meetings and for meetings whose channels are gone,
 // disabled while a pass runs, and a choice goes through the diarization controller
-// (so progress shows) with a start function that sets the right override.
+// (so progress shows) with a start function that sets the right override. The state and
+// the setter come in as props from the speakers controller (one instance per meeting view;
+// see TranscriptButtonGroup.sharedAudioSetup.test.tsx).
 
-const { invoke, identifySpeakers, diarization } = vi.hoisted(() => ({
+const { invoke, identifySpeakers, diarization, setAudioSetup } = vi.hoisted(() => ({
   invoke: vi.fn(),
   identifySpeakers: vi.fn(),
+  setAudioSetup: vi.fn(),
   diarization: { isRunning: false },
 }));
 
@@ -40,8 +43,6 @@ const PURGED: Audio = { mix: false, channels: false, compressed: false, state: '
 function mockBackend(audio: Audio = PRESENT) {
   invoke.mockImplementation(async (cmd: string) => {
     if (cmd === 'api_meeting_audio_status') return audio;
-    if (cmd === 'api_get_meeting_audio_setup') return { override: 'auto', resolved: 'room' };
-    if (cmd === 'api_set_meeting_audio_setup') return { started: true, alreadyRunning: false };
     return null;
   });
 }
@@ -52,6 +53,8 @@ const baseProps = {
   onOpenMeetingFolder: vi.fn().mockResolvedValue(undefined),
   meetingId: 'meeting-abc',
   meetingFolderPath: '/tmp/meetings/meeting-abc',
+  audioSetup: { override: 'auto' as const, resolved: 'room' as const },
+  onSetAudioSetup: setAudioSetup,
 };
 
 async function openMoreMenu() {
@@ -71,6 +74,7 @@ async function openMicSubmenu() {
 beforeEach(() => {
   invoke.mockReset();
   identifySpeakers.mockReset();
+  setAudioSetup.mockReset().mockResolvedValue({ started: true, alreadyRunning: false });
   diarization.isRunning = false;
   mockBackend();
 });
@@ -78,9 +82,6 @@ beforeEach(() => {
 describe('TranscriptButtonGroup — "Who was on the mic?" (specs/0078)', () => {
   it('offers the submenu for a recorded meeting, with the detected caption', async () => {
     render(<TranscriptButtonGroup {...baseProps} meetingOrigin="recorded" />);
-    await waitFor(() =>
-      expect(invoke).toHaveBeenCalledWith('api_get_meeting_audio_setup', { meetingId: 'meeting-abc' }),
-    );
     await openMoreMenu();
     await openMicSubmenu();
     expect(screen.getByRole('menuitemradio', { name: /detect automatically/i })).toHaveTextContent(
@@ -96,6 +97,20 @@ describe('TranscriptButtonGroup — "Who was on the mic?" (specs/0078)', () => {
     render(<TranscriptButtonGroup {...baseProps} meetingOrigin={origin} />);
     await openMoreMenu();
     expect(screen.queryByRole('menuitem', { name: /who was on the mic/i })).toBeNull();
+  });
+
+  it('hides the submenu when no setter is passed down', async () => {
+    render(<TranscriptButtonGroup {...baseProps} onSetAudioSetup={undefined} />);
+    await openMoreMenu();
+    expect(screen.queryByRole('menuitem', { name: /who was on the mic/i })).toBeNull();
+  });
+
+  it('does not fetch the audio setup itself (the speakers controller owns it)', async () => {
+    render(<TranscriptButtonGroup {...baseProps} />);
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith('api_meeting_audio_status', { meetingId: 'meeting-abc' }),
+    );
+    expect(invoke).not.toHaveBeenCalledWith('api_get_meeting_audio_setup', expect.anything());
   });
 
   it('hides the submenu when the meeting audio is gone', async () => {
@@ -120,9 +135,6 @@ describe('TranscriptButtonGroup — "Who was on the mic?" (specs/0078)', () => {
 
   it('a choice starts the pass through the diarization controller with the right override', async () => {
     render(<TranscriptButtonGroup {...baseProps} />);
-    await waitFor(() =>
-      expect(invoke).toHaveBeenCalledWith('api_get_meeting_audio_setup', { meetingId: 'meeting-abc' }),
-    );
     await openMoreMenu();
     const room = await openMicSubmenu();
     fireEvent.click(room);
@@ -133,9 +145,6 @@ describe('TranscriptButtonGroup — "Who was on the mic?" (specs/0078)', () => {
     await act(async () => {
       await start();
     });
-    expect(invoke).toHaveBeenCalledWith('api_set_meeting_audio_setup', {
-      meetingId: 'meeting-abc',
-      setup: 'room',
-    });
+    expect(setAudioSetup).toHaveBeenCalledWith('room');
   });
 });

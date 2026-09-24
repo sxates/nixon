@@ -14,7 +14,11 @@ import {
 import { Loader2, MoreHorizontal } from 'lucide-react';
 import { RetranscribeDialog } from './RetranscribeDialog';
 import { AudioSetupSubmenu } from './AudioSetupSubmenu';
-import { useAudioSetup, type AudioSetupOverride } from '@/hooks/useAudioSetup';
+import type {
+  AudioSetupOverride,
+  AudioSetupStartResult,
+  MeetingAudioSetup,
+} from '@/hooks/useAudioSetup';
 import { useBacklog } from '@/contexts/DeferredBacklogProvider';
 import { useDiarization } from '@/hooks/useDiarization';
 import { SPARSE_TRANSCRIPT_SEGMENTS } from '@/lib/deferred-transcription';
@@ -37,6 +41,11 @@ interface TranscriptButtonGroupProps {
   /** The meeting's `origin` (spec 0015). Imported audio has no separate mic channel, so
    *  "Who was on the mic?" is hidden for it (specs/0078). Absent = recorded. */
   meetingOrigin?: string | null;
+  /** "Who was on the mic?" state, owned by the speakers controller (`useSpeakers`) so the
+   *  submenu and the "This is me" actions read one copy. */
+  audioSetup?: MeetingAudioSetup | null;
+  /** Store an override and start the re-run. Absent = the submenu is not offered. */
+  onSetAudioSetup?: (setup: AudioSetupOverride) => Promise<AudioSetupStartResult>;
 }
 
 
@@ -48,6 +57,8 @@ export function TranscriptButtonGroup({
   meetingFolderPath,
   onRefetchTranscripts,
   meetingOrigin,
+  audioSetup = null,
+  onSetAudioSetup,
 }: TranscriptButtonGroupProps) {
   const { view, enqueueMeeting } = useBacklog();
   const [showRetranscribeDialog, setShowRetranscribeDialog] = useState(false);
@@ -151,18 +162,18 @@ export function TranscriptButtonGroup({
   // are still on disk: an import is one mixed file, and a notes-only meeting has no
   // audio (and no transcript tab) at all. Choosing re-runs the pass through the same
   // controller as "Identify speakers", so its progress shows on that button.
-  const audioSetup = useAudioSetup(meetingId);
   const offerAudioSetup =
     !!meetingId &&
+    !!onSetAudioSetup &&
     meetingOrigin !== 'imported' &&
     meetingOrigin !== 'notes_only' &&
     !speakersGoneTitle;
-  const setAudioSetup = audioSetup.setOverride;
   const handleChooseAudioSetup = useCallback(
     (next: AudioSetupOverride) => {
-      void identifySpeakers(() => setAudioSetup(next));
+      if (!onSetAudioSetup) return;
+      void identifySpeakers(() => onSetAudioSetup(next));
     },
-    [identifySpeakers, setAudioSetup],
+    [identifySpeakers, onSetAudioSetup],
   );
 
   return (
@@ -288,7 +299,7 @@ export function TranscriptButtonGroup({
               <>
                 <DropdownMenuSeparator />
                 <AudioSetupSubmenu
-                  setup={audioSetup.setup}
+                  setup={audioSetup}
                   disabled={isDiarizing || transcriptCount === 0}
                   onChoose={handleChooseAudioSetup}
                 />

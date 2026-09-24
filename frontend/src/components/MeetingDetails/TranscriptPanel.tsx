@@ -397,6 +397,8 @@ export function TranscriptPanel({
           meetingFolderPath={meetingFolderPath}
           onRefetchTranscripts={onRefetchTranscripts}
           meetingOrigin={meetingOrigin}
+          audioSetup={speakersController.audioSetup}
+          onSetAudioSetup={speakersController.setAudioSetup}
         />
       </div>
 

@@ -10,16 +10,29 @@
  * callers hand it to `useDiarization().identifySpeakers(start)` — that keeps the model
  * download, progress and error handling in the one place that already owns them.
  *
- * Re-fetched on `diarization-complete` for this meeting, because that is when
- * `resolved` changes.
+ * `resolved` changes on `diarization-complete` for this meeting. The event carries the
+ * setup the pass used (`audioSetup`) and whether it was detected or forced
+ * (`audioSetupSource`), so we apply it straight from the payload; a payload without it,
+ * or one whose source disagrees with the override we hold, falls back to a re-fetch.
+ *
+ * ONE instance per meeting view: it lives in `useSpeakers` and is passed down as props,
+ * so the owner actions, their hint and the "…" submenu all read the same state.
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { safeListen } from '@/lib/safe-listen';
 
 export type AudioSetupOverride = 'auto' | 'room' | 'call';
 export type AudioSetupResolved = 'call' | 'room' | 'hybrid';
+
+const RESOLVED_VALUES: ReadonlySet<string> = new Set<AudioSetupResolved>(['call', 'room', 'hybrid']);
+
+/** The fields of the `diarization-complete` payload this hook reads. */
+export interface DiarizationCompleteSetupPayload {
+  meeting_id?: string;
+  audioSetup?: AudioSetupResolved;
+  audioSetupSource?: 'detected' | 'override';
+}
 
 export interface MeetingAudioSetup {
   override: AudioSetupOverride;
@@ -43,6 +56,9 @@ export interface UseAudioSetupReturn {
   refetch: () => Promise<void>;
   /** Store the override and start a re-run. Rejects with the backend's message. */
   setOverride: (setup: AudioSetupOverride) => Promise<AudioSetupStartResult>;
+  /** Feed a `diarization-complete` payload in. The caller owns the listener (the speakers
+   *  controller already has one), so a meeting view subscribes once. */
+  applyDiarizationComplete: (payload: DiarizationCompleteSetupPayload) => void;
 }
 
 export function useAudioSetup(meetingId: string | undefined): UseAudioSetupReturn {
@@ -71,25 +87,54 @@ export function useAudioSetup(meetingId: string | undefined): UseAudioSetupRetur
     void refetch();
   }, [refetch]);
 
+  // Held in a ref so `applyDiarizationComplete` stays stable while comparing against the
+  // latest override.
+  const setupRef = useRef<MeetingAudioSetup | null>(null);
   useEffect(() => {
-    if (!meetingId) return;
-    return safeListen<{ meeting_id?: string }>('diarization-complete', (event) => {
-      if (event.payload.meeting_id === meetingId) void refetch();
-    });
-  }, [meetingId, refetch]);
+    setupRef.current = setup;
+  }, [setup]);
+
+  const applyDiarizationComplete = useCallback(
+    (payload: DiarizationCompleteSetupPayload) => {
+      if (!meetingId || payload.meeting_id !== meetingId) return;
+      const resolved = payload.audioSetup;
+      if (!resolved || !RESOLVED_VALUES.has(resolved)) {
+        void refetch();
+        return;
+      }
+      const held = setupRef.current;
+      const override = held?.override ?? 'auto';
+      setSetup({ override, resolved });
+      // "detected" means the stored override was "auto"; "override" means it wasn't. If
+      // that disagrees with what we hold (or we hold nothing yet), re-read the override.
+      const agrees =
+        payload.audioSetupSource === undefined ||
+        (payload.audioSetupSource === 'detected') === (override === 'auto');
+      if (!agrees || !held) void refetch();
+    },
+    [meetingId, refetch],
+  );
 
   const setOverride = useCallback(
     async (next: AudioSetupOverride) => {
       if (!meetingId) throw new Error('No meeting is open');
-      const result = await invoke<AudioSetupStartResult>('api_set_meeting_audio_setup', {
-        meetingId,
-        setup: next,
-      });
+      let result: AudioSetupStartResult;
+      try {
+        result = await invoke<AudioSetupStartResult>('api_set_meeting_audio_setup', {
+          meetingId,
+          setup: next,
+        });
+      } catch (error) {
+        // The override may have been stored before the re-run failed to start; re-read
+        // so the menu shows what the backend actually holds.
+        void refetch();
+        throw error;
+      }
       setSetup((prev) => ({ override: next, resolved: prev?.resolved ?? null }));
       return result;
     },
-    [meetingId],
+    [meetingId, refetch],
   );
 
-  return { setup, refetch, setOverride };
+  return { setup, refetch, setOverride, applyDiarizationComplete };
 }
