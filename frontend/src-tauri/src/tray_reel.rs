@@ -9,7 +9,7 @@
 //! idle. A layer never takes clicks, so the menu opens from anywhere on the icon, and Core
 //! Animation runs the blink without any work from us.
 //!
-//! Recording steps through [`REC_FRAMES`] frames 15° apart every [`FRAME_MS`], so the reel
+//! Recording steps through [`REC_FRAMES`] frames 5° apart every [`FRAME_MS`], so the reel
 //! turns at the in-app take-up hub's ~0.38 rev/s (`components/Transport/Reels.tsx`). Under
 //! Reduce Motion it holds the first frame and the HOLD light stays lit, as in the app.
 //! Paused stops the reel.
@@ -24,10 +24,11 @@ use tauri::{AppHandle, Runtime};
 
 use crate::tray::RecordingState;
 
-/// 15° a frame at ~9 fps ≈ 0.38 rev/s. The teeth repeat every 120°, so 8 frames loop.
-const FRAME_MS: u64 = 110;
+/// 5° a frame at ~27 fps ≈ 0.38 rev/s. The teeth repeat every 120°, so 24 frames loop.
+/// (It was 15° at ~9 fps, which read as choppy — owner feedback 2026-09-24.)
+const FRAME_MS: u64 = 37;
 
-const REC_FRAMES: [&[u8]; 8] = [
+const REC_FRAMES: [&[u8]; 24] = [
     include_bytes!("../icons/tray/rec-00.png"),
     include_bytes!("../icons/tray/rec-01.png"),
     include_bytes!("../icons/tray/rec-02.png"),
@@ -36,6 +37,22 @@ const REC_FRAMES: [&[u8]; 8] = [
     include_bytes!("../icons/tray/rec-05.png"),
     include_bytes!("../icons/tray/rec-06.png"),
     include_bytes!("../icons/tray/rec-07.png"),
+    include_bytes!("../icons/tray/rec-08.png"),
+    include_bytes!("../icons/tray/rec-09.png"),
+    include_bytes!("../icons/tray/rec-10.png"),
+    include_bytes!("../icons/tray/rec-11.png"),
+    include_bytes!("../icons/tray/rec-12.png"),
+    include_bytes!("../icons/tray/rec-13.png"),
+    include_bytes!("../icons/tray/rec-14.png"),
+    include_bytes!("../icons/tray/rec-15.png"),
+    include_bytes!("../icons/tray/rec-16.png"),
+    include_bytes!("../icons/tray/rec-17.png"),
+    include_bytes!("../icons/tray/rec-18.png"),
+    include_bytes!("../icons/tray/rec-19.png"),
+    include_bytes!("../icons/tray/rec-20.png"),
+    include_bytes!("../icons/tray/rec-21.png"),
+    include_bytes!("../icons/tray/rec-22.png"),
+    include_bytes!("../icons/tray/rec-23.png"),
 ];
 
 /// Bumped whenever the look changes; a running animation stops once it no longer owns the
@@ -115,7 +132,6 @@ pub fn show<R: Runtime>(app: &AppHandle<R>, look: Look) {
             set_frame(&tray, decode(REC_FRAMES[0]));
             set_light(&tray, Light::Rec);
             tauri::async_runtime::spawn(async move {
-                let frames: Vec<Image<'static>> = REC_FRAMES.iter().map(|b| decode(b)).collect();
                 let mut frame = 0usize;
                 loop {
                     tokio::time::sleep(Duration::from_millis(FRAME_MS)).await;
@@ -125,13 +141,58 @@ pub fn show<R: Runtime>(app: &AppHandle<R>, look: Look) {
                     if reduce_motion() {
                         continue; // hold the frame on screen
                     }
-                    frame = (frame + 1) % frames.len();
-                    set_frame(&tray, frames[frame].clone());
+                    frame = (frame + 1) % REC_FRAMES.len();
+                    show_rec_frame(&tray, frame, generation);
                 }
             });
         }
     }
 }
+
+/// Put recording frame `index` on the button. `TrayIcon::set_icon` re-encodes the image
+/// as a PNG and rebuilds an NSImage on every call — at 27 fps that cost ~80% of a core in
+/// a debug build — so the frames are built as template NSImages once, on the main thread,
+/// and each tick only swaps which one the button shows.
+#[cfg(target_os = "macos")]
+fn show_rec_frame<R: Runtime>(tray: &TrayIcon<R>, index: usize, generation: u64) {
+    use objc2::rc::Retained;
+    use objc2::{AnyThread, MainThreadMarker};
+    use objc2_app_kit::NSImage;
+    use objc2_foundation::{NSData, NSSize};
+    use std::cell::OnceCell;
+
+    thread_local! {
+        static FRAMES: OnceCell<Vec<Retained<NSImage>>> = const { OnceCell::new() };
+    }
+
+    let _ = tray.with_inner_tray_icon(move |inner| {
+        // The look may have changed while this hop to the main thread was queued.
+        if GENERATION.load(Ordering::SeqCst) != generation {
+            return None;
+        }
+        let mtm = MainThreadMarker::new()?;
+        let button = inner.ns_status_item()?.button(mtm)?;
+        FRAMES.with(|cell| {
+            let frames = cell.get_or_init(|| {
+                REC_FRAMES
+                    .iter()
+                    .filter_map(|bytes| {
+                        let image =
+                            NSImage::initWithData(NSImage::alloc(), &NSData::with_bytes(bytes))?;
+                        // tray-icon's size for status item images: 18pt tall.
+                        image.setSize(NSSize::new(ICON_PT, ICON_PT));
+                        image.setTemplate(true);
+                        Some(image)
+                    })
+                    .collect()
+            });
+            frames.get(index).map(|image| button.setImage(Some(image)))
+        })
+    });
+}
+
+#[cfg(not(target_os = "macos"))]
+fn show_rec_frame<R: Runtime>(_tray: &TrayIcon<R>, _index: usize, _generation: u64) {}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Light {
