@@ -35,6 +35,11 @@ interface RecordingState {
   // NEW: Lifecycle status
   status: RecordingStatus;
   statusMessage?: string;  // Optional message for current status
+
+  // specs/0075 W4: false until the first `get_recording_state` reply (success OR failure)
+  // has been applied. Right after a reload `isRecording` reads false until then, so
+  // anything that must not act on a live recording (startup recovery) waits for this.
+  synced: boolean;
 }
 
 interface RecordingStateContextType extends RecordingState {
@@ -66,6 +71,7 @@ export function RecordingStateProvider({ children }: { children: React.ReactNode
     activeDuration: null,
     status: RecordingStatus.IDLE,  // NEW: Initialize with IDLE status
     statusMessage: undefined,       // NEW: No message initially
+    synced: false,
   });
 
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -96,12 +102,15 @@ export function RecordingStateProvider({ children }: { children: React.ReactNode
         isActive: backendState.is_active,
         recordingDuration: backendState.recording_duration,
         activeDuration: backendState.active_duration,
+        synced: true,
       }));
 
       console.log('[RecordingStateContext] Synced with backend:', backendState);
     } catch (error) {
       console.error('[RecordingStateContext] Failed to sync with backend:', error);
-      // Don't update state on error - keep current state
+      // Don't update recording fields on error - keep current state. The reply still
+      // counts as the first sync (specs/0075 W4) so consumers gated on it don't wait forever.
+      setState(prev => (prev.synced ? prev : { ...prev, synced: true }));
     }
   };
 
