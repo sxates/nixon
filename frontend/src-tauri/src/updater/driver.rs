@@ -302,6 +302,7 @@ async fn install_staged<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
         }
     }
     log::info!("updater: installed {version}; restarting");
+    crate::window_state::save(app);
     app.restart();
 }
 
