@@ -4,8 +4,10 @@ import { toast } from 'sonner';
 import { safeListen } from '@/lib/safe-listen';
 import {
   getDayAgenda,
+  readDayAgenda,
   readCachedAgenda,
   cacheAgenda,
+  clearCachedAgenda,
   dismissCalendarEvent,
   undismissCalendarEvent,
   dismissKeysFor,
@@ -62,7 +64,12 @@ export function useDayAgenda() {
   // (specs/0038 feedback). Read once for the initial state; kept in sync via router.replace.
   const searchParams = useSearchParams();
 
-  const [items, setItems] = useState<DayAgendaItem[]>(() => readCachedAgenda());
+  // Seeded from the last-good cache for the day being opened (keyed by date, specs/0075
+  // W3 — never another day's rows). Only today is ever cached, so other days start empty.
+  const [items, setItems] = useState<DayAgendaItem[]>(() => {
+    const d = searchParams.get('day');
+    return readCachedAgenda(isValidDateKey(d) ? d : localDateKey());
+  });
   // Whether ANY calendar source is connected (EventKit or Google, specs/0069 W4) — null
   // until the one-shot check below resolves. Drives both the no-calendar 'list' default
   // and the "Connect your calendar" nudge gate.
@@ -128,8 +135,10 @@ export function useDayAgenda() {
 
   // Load the agenda for the selected day (or week). For TODAY's single-day view we keep
   // the anti-flicker cache fallback the home count loader used (specs/0024 WS5.1): a
-  // cold/failed read that loses all calendar items falls back to the last-good cache;
-  // a calendar-bearing read refreshes the cache. Navigated days (specs/0038 WS4) fetch
+  // cold/failed EventKit read that loses all calendar items falls back to the last-good
+  // cache; a calendar-bearing read refreshes the cache. Google (specs/0075 W3) reads a
+  // local cache and has no cold-read failure, so an empty Google read is the truth — a
+  // meeting rescheduled off today leaves today. Navigated days (specs/0038 WS4) fetch
   // straight — the last-good cache is today-scoped, so we never merge another day into it.
   const refresh = useCallback(async () => {
     if (viewMode === 'week') {
@@ -142,7 +151,9 @@ export function useDayAgenda() {
     }
 
     // `undefined` for today preserves the original None=>today call; else pass the key.
-    const agenda = await getDayAgenda(viewIsToday ? undefined : viewDate);
+    const { items: agenda, calendarSource } = await readDayAgenda(
+      viewIsToday ? undefined : viewDate,
+    );
     if (!viewIsToday) {
       setItems(agenda);
       setLoaded(true);
@@ -151,7 +162,11 @@ export function useDayAgenda() {
     setItems((prev) => {
       const freshHasCalendar = agenda.some((it) => it.source === 'calendar');
       if (freshHasCalendar) {
-        cacheAgenda(agenda);
+        cacheAgenda(viewDate, agenda);
+        return agenda;
+      }
+      if (calendarSource === 'google') {
+        clearCachedAgenda(viewDate);
         return agenda;
       }
       // No calendar items this read — keep prior calendar rows, refresh everything else.
@@ -160,7 +175,7 @@ export function useDayAgenda() {
       // taking them from `agenda` (not the cache) also means an edit/delete of a manual
       // row shows up immediately instead of showing stale cached content. Only calendar
       // rows need the cache fallback, since only EventKit has this transient-empty mode.
-      const cached = prev.length ? prev : readCachedAgenda();
+      const cached = prev.length ? prev : readCachedAgenda(viewDate);
       const keptCalendar = cached.filter((it) => it.source === 'calendar');
       if (keptCalendar.length === 0) return agenda; // genuinely nothing but recordings/manual
       const freshOther = agenda.filter((it) => it.source === 'recording' || it.source === 'manual');
@@ -183,6 +198,8 @@ export function useDayAgenda() {
     const disposeDiarized = safeListen('diarization-complete', () => void refresh());
     // A background prep pass may have changed a brief (specs/0036) — cheap re-read.
     const disposePrep = safeListen('prep-briefs-updated', () => void refresh());
+    // A Google sync pass finished (specs/0075 W1) — the local cache may have moved rows.
+    const disposeGoogle = safeListen('google-calendar-synced', () => void refresh());
     return () => {
       window.removeEventListener('focus', onFocus);
       window.clearInterval(interval);
@@ -191,6 +208,7 @@ export function useDayAgenda() {
       disposeStopped();
       disposeDiarized();
       disposePrep();
+      disposeGoogle();
     };
   }, [refresh]);
 

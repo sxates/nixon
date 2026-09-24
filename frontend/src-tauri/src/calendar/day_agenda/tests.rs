@@ -504,3 +504,18 @@ fn the_owner_flag_survives_and_unrelated_rows_are_ignored() {
     assert!(items[0].attendees[0].is_current_user);
     assert_eq!(items[0].attendee_count, 2);
 }
+
+#[test]
+fn calendar_source_serializes_to_the_frontend_wire_values() {
+    // specs/0075 W3 — the Today hook keys its anti-flicker fallback on these strings.
+    let agenda = DayAgenda {
+        items: Vec::new(),
+        calendar_source: CalendarSource::EventKit,
+    };
+    let json = serde_json::to_value(&agenda).unwrap();
+    assert_eq!(json["calendarSource"], "eventkit");
+    assert_eq!(
+        serde_json::to_value(CalendarSource::Google).unwrap(),
+        "google"
+    );
+}
