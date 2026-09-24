@@ -9,7 +9,7 @@
 //! idle. A layer never takes clicks, so the menu opens from anywhere on the icon, and Core
 //! Animation runs the blink without any work from us.
 //!
-//! Recording steps through [`REC_FRAMES`] frames 5° apart every [`FRAME_MS`], so the reel
+//! Recording steps through [`REC_FRAMES`] frames 7.5° apart every [`FRAME_MS`], so the reel
 //! turns at the in-app take-up hub's ~0.38 rev/s (`components/Transport/Reels.tsx`). Under
 //! Reduce Motion it holds the first frame and the HOLD light stays lit, as in the app.
 //! Paused stops the reel.
@@ -24,11 +24,12 @@ use tauri::{AppHandle, Runtime};
 
 use crate::tray::RecordingState;
 
-/// 5° a frame at ~27 fps ≈ 0.38 rev/s. The teeth repeat every 120°, so 24 frames loop.
-/// (It was 15° at ~9 fps, which read as choppy — owner feedback 2026-09-24.)
-const FRAME_MS: u64 = 37;
+/// 7.5° a frame at ~18 fps ≈ 0.38 rev/s. The teeth repeat every 120°, so 16 frames loop.
+/// (15° at ~9 fps read as choppy; 5° at ~27 fps cost WindowServer about 18% of a core
+/// while recording — owner chose 18 fps, 2026-09-24.)
+const FRAME_MS: u64 = 55;
 
-const REC_FRAMES: [&[u8]; 24] = [
+const REC_FRAMES: [&[u8]; 16] = [
     include_bytes!("../icons/tray/rec-00.png"),
     include_bytes!("../icons/tray/rec-01.png"),
     include_bytes!("../icons/tray/rec-02.png"),
@@ -45,14 +46,6 @@ const REC_FRAMES: [&[u8]; 24] = [
     include_bytes!("../icons/tray/rec-13.png"),
     include_bytes!("../icons/tray/rec-14.png"),
     include_bytes!("../icons/tray/rec-15.png"),
-    include_bytes!("../icons/tray/rec-16.png"),
-    include_bytes!("../icons/tray/rec-17.png"),
-    include_bytes!("../icons/tray/rec-18.png"),
-    include_bytes!("../icons/tray/rec-19.png"),
-    include_bytes!("../icons/tray/rec-20.png"),
-    include_bytes!("../icons/tray/rec-21.png"),
-    include_bytes!("../icons/tray/rec-22.png"),
-    include_bytes!("../icons/tray/rec-23.png"),
 ];
 
 /// Bumped whenever the look changes; a running animation stops once it no longer owns the
@@ -150,7 +143,7 @@ pub fn show<R: Runtime>(app: &AppHandle<R>, look: Look) {
 }
 
 /// Put recording frame `index` on the button. `TrayIcon::set_icon` re-encodes the image
-/// as a PNG and rebuilds an NSImage on every call — at 27 fps that cost ~80% of a core in
+/// as a PNG and rebuilds an NSImage on every call — at ~27 fps that cost ~80% of a core in
 /// a debug build — so the frames are built as template NSImages once, on the main thread,
 /// and each tick only swaps which one the button shows.
 #[cfg(target_os = "macos")]

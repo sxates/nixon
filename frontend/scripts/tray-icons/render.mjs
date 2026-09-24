@@ -6,7 +6,7 @@
 // shows them as template images and tints them to match the menu bar and wallpaper. The reel
 // is the app icon's reel (the take-up hub in components/Transport/Reels.tsx).
 //   idle.png          the reel at rest
-//   rec-00..23.png    the reel turned 5° per frame (the teeth repeat every 120°), with a gap
+//   rec-00..15.png    the reel turned 7.5° per frame (the teeth repeat every 120°), with a gap
 //                     cut in the flange where the red REC light sits. A template can't hold
 //                     red, so the light itself is drawn by the app over the icon
 //                     (src/tray_reel.rs); keep LIGHT in step with LIGHT_* there.
@@ -20,7 +20,7 @@ const out = join(here, '../../src-tauri/icons/tray');
 mkdirSync(out, { recursive: true });
 
 const INK = '#000';
-const FRAMES = 24;
+const FRAMES = 16;
 const STEP = 120 / FRAMES;
 // Reel centre and the REC light, in a 22×22 box.
 const C = { x: 10, y: 12 };
