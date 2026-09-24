@@ -93,6 +93,16 @@
   html[data-shot="1"] [data-dev-only],
   html[data-shot="1"] nextjs-portal { display: none !important; }
 
+  /* The record header's VU meters need room beside the title and its controls: shown only
+     when the HEADER's content box is at least 804px (a 1100px window with the sidebar open:
+     844px less its 40px of padding), so the sidebar's state counts, not just the window's
+     (owner feedback 2026-09-23). */
+  .record-header { container-type: inline-size; }
+  .record-meters { display: none; }
+  @container (min-width: 804px) {
+    .record-meters { display: flex; }
+  }
+
   /* ---- DECK (dark) — anodized charcoal, cream silkscreen. Applied by ThemeProvider. ---- */
   .dark {
     --background: 30 8% 9%;            /* #1A1816 */

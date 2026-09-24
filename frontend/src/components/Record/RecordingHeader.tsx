@@ -154,7 +154,7 @@ export function RecordingHeader({
   }, []);
 
   return (
-    <header className="flex items-start gap-x-2 border-b border-border bg-panel py-4 pl-4 pr-4 min-[900px]:pl-6 shadow-[inset_0_1px_0_hsl(var(--bevel-hi)),inset_0_-1px_0_hsl(var(--bevel-lo))]">
+    <header className="record-header flex items-start gap-x-2 border-b border-border bg-panel py-4 pl-4 pr-4 min-[900px]:pl-6 shadow-[inset_0_1px_0_hsl(var(--bevel-hi)),inset_0_-1px_0_hsl(var(--bevel-lo))]">
       {/* 0.1.0 canvas feedback: the back control is the same unboxed chevron as on meeting
           details, sitting on the title line (the header top-aligns for that; the meter
           bridge re-centres itself on the right). */}
@@ -282,10 +282,12 @@ export function RecordingHeader({
           VuMeter. Since 2026-09-23 they are as tall as the title column (57px minimum)
           rather than floating centred beside it, and the header's right padding is 16px to
           match the 16px above and below them (owner feedback).
-          Hidden below 1100px (owner feedback 2026-09-23), and the header no longer wraps:
-          wrapped under the controls, the meters' size fed back into the title column's
-          height they are sized from, and they flickered between the two positions. */}
-      <div className="flex flex-shrink-0 items-start gap-2.5 max-[1099px]:hidden">
+          Hidden when the header's content is under 804px wide (owner feedback 2026-09-23) — a
+          container query on the header, not the window, so an open or closed sidebar is
+          accounted for (globals.css `.record-meters`). The header no longer wraps: wrapped
+          under the controls, the meters' size fed back into the title column's height they
+          are sized from, and they flickered between the two positions. */}
+      <div className="record-meters flex-shrink-0 items-start gap-2.5">
         <VuMeter
           db={rmsToVu(level.mic.rms)}
           active={isRecordingActive}
