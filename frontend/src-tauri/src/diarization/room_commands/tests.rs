@@ -183,3 +183,36 @@ async fn the_override_round_trips_and_bad_input_is_refused() {
     assert!(set_audio_setup(&pool, "missing", "call").await.is_err());
     assert!(get_audio_setup(&pool, "missing").await.is_err());
 }
+
+/// specs/0078 review: "This is me" folding a cluster into an automatic "You" used to
+/// enroll `local`'s old embedding (possibly the wrong voice) instead of the voice the user
+/// just named. Both the sample and `local` now carry the confirmed cluster's embedding.
+#[tokio::test]
+async fn this_is_me_into_an_automatic_you_enrolls_the_confirmed_voice() {
+    let pool = pool_with_meeting("m1").await;
+    let wrong = [0.0, 1.0, 0.0];
+    let right = [1.0, 0.0, 0.0];
+    cluster(&pool, "m1", "local", &wrong, 2).await; // an automatic "You", never enrolled
+    cluster(&pool, "m1", "spk_0", &right, 3).await;
+
+    let out = mark_speaker_as_me(&pool, "m1", "spk_0", true)
+        .await
+        .unwrap();
+    assert!(out.rekey.merged_into_existing);
+    assert!(out.enrolled);
+
+    let right_bytes = embedding_to_bytes(&l2_normalize(&right));
+    let sample: Vec<u8> = sqlx::query_scalar(
+        "SELECT embedding FROM voiceprints WHERE person_id = ? AND source_meeting_id = 'm1'",
+    )
+    .bind(OWNER_PERSON_ID)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(sample, right_bytes, "the confirmed voice is enrolled");
+    let (_, local_bytes, _) = SpeakersRepository::get_speaker_embedding(&pool, "m1", "local")
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(local_bytes, right_bytes, "and becomes local's voice");
+}

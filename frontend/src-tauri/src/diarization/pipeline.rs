@@ -202,16 +202,17 @@ pub fn display_name_for_key(key: &str) -> String {
 /// embedding, we persist the serialized bytes + dim + [`EMBEDDING_MODEL_ID`] so the
 /// cross-meeting matcher has prior art to compare against. In a call the `local`/"You"
 /// key is never voiceprinted here (ADR-0007 §3), so it keeps a NULL embedding. In a room
-/// recording (`keep_local_embedding`, specs/0078) `local` is the owner's CLUSTER and keeps
+/// recording (`setup.owner_is_clustered()`, specs/0078) `local` is the owner's CLUSTER and keeps
 /// its embedding: the re-run carry-over and "This is me" enrollment read it, and the
 /// `is_local = 1` filters keep it out of matching. A re-run refreshes embeddings on
-/// `ON CONFLICT` (widened `upsert`).
+/// `ON CONFLICT` (widened `upsert`). `setup` is recorded in `meetings.audio_setup_resolved`
+/// in the same transaction as the speaker keys (specs/0078).
 async fn persist(
     pool: &sqlx::SqlitePool,
     meeting_id: &str,
     assignments: &[(String, String)],
     embeddings: &std::collections::HashMap<String, Vec<f32>>,
-    keep_local_embedding: bool,
+    setup: AudioSetup,
 ) -> Result<usize> {
     use crate::diarization::embedding::{embedding_to_bytes, EMBEDDING_MODEL_ID};
     use sqlx::Acquire;
@@ -266,6 +267,11 @@ async fn persist(
     TranscriptSpeakerOverridesRepository::reapply(&mut tx, meeting_id)
         .await
         .context("re-apply per-segment speaker overrides")?;
+    crate::database::repositories::meeting_audio_setup::MeetingAudioSetupRepository::set_resolved(
+        &mut *tx, meeting_id, setup,
+    )
+    .await
+    .context("record the pass's audio setup")?;
 
     tx.commit().await.context("commit segment speaker keys")?;
     // Return the dedicated connection: everything below runs on the pool, and a
@@ -278,7 +284,7 @@ async fn persist(
         let is_local = key.as_str() == LOCAL_SPEAKER_KEY;
 
         // Voiceprint only clustered speakers (a call's `local` stays NULL — ADR-0007 §3).
-        let bytes = if is_local && !keep_local_embedding {
+        let bytes = if is_local && !setup.owner_is_clustered() {
             None
         } else {
             embeddings.get(key).map(|v| embedding_to_bytes(v))
@@ -417,10 +423,11 @@ async fn restore_user_identities(
             }
         };
 
-        // Deterministic scan (sorted keys) over unclaimed new clusters.
+        // Deterministic scan (sorted keys) over unclaimed new clusters. Never `local`: in a
+        // room pass it carries the owner's embedding, and the owner's identity is fixed.
         let mut best: Option<(&str, f32)> = None;
         for key in new_keys {
-            if claimed.contains(key) {
+            if claimed.contains(key) || key == LOCAL_SPEAKER_KEY {
                 continue;
             }
             let Some(centroid) = new_embeddings.get(key) else {
@@ -661,7 +668,7 @@ pub async fn attribute_and_persist(
         .zip(keys)
         .map(|(seg, key)| (seg.id, key))
         .collect();
-    let persisted = persist(pool, meeting_id, &assignments, embeddings, room).await?;
+    let persisted = persist(pool, meeting_id, &assignments, embeddings, setup).await?;
     Ok((persisted, assignments.len()))
 }
 
@@ -679,7 +686,7 @@ pub(super) async fn run<R: Runtime>(app: AppHandle<R>, meeting_id: String) -> Re
     )
     .await;
     // specs/0078: which setup (call or room) and which track to cluster; recorded in
-    // `meetings.audio_setup_resolved` before clustering.
+    // `meetings.audio_setup_resolved` when the results persist.
     let state = app.state::<AppState>();
     let pool = state.db_manager.pool();
     let input = crate::diarization::room::resolve_diarization_input(pool, &meeting_id).await?;
@@ -751,13 +758,9 @@ pub(super) async fn run<R: Runtime>(app: AppHandle<R>, meeting_id: String) -> Re
         .await;
         (owner, None)
     } else {
-        let clip = crate::diarization::owner_turns::inject_owner_turns(
-            &app,
-            pool,
-            &meeting_id,
-            &mut turns,
-        )
-        .await;
+        let clip =
+            crate::diarization::owner_turns::inject_owner_turns(pool, &meeting_id, &mut turns)
+                .await;
         (None, clip)
     };
     drop(folder_lease); // the last audio read is done
@@ -1260,6 +1263,11 @@ mod tests {
         .execute(&pool)
         .await
         .unwrap();
+        // `persist` records the pass's setup on the meeting row (specs/0078).
+        sqlx::query("CREATE TABLE meetings (id TEXT PRIMARY KEY, audio_setup_resolved TEXT, owner_label TEXT)")
+            .execute(&pool)
+            .await
+            .unwrap();
 
         // Two timed transcript segments for meeting m1.
         for (id, s, e) in [("t1", 0.0, 4.0), ("t2", 4.0, 9.0)] {
@@ -1300,7 +1308,7 @@ mod tests {
         let emb: HashMap<String, Vec<f32>> =
             HashMap::from([("spk_0".to_string(), vec![1.0, 0.0, 0.0, 0.0])]);
 
-        persist(&pool, "m1", &assignments("spk_0"), &emb, false)
+        persist(&pool, "m1", &assignments("spk_0"), &emb, AudioSetup::Call)
             .await
             .unwrap();
         assert_eq!(
@@ -1314,7 +1322,7 @@ mod tests {
             .unwrap());
 
         // ...then a re-run persists the same clustering. The rename must survive.
-        persist(&pool, "m1", &assignments("spk_0"), &emb, false)
+        persist(&pool, "m1", &assignments("spk_0"), &emb, AudioSetup::Call)
             .await
             .unwrap();
         assert_eq!(display_name(&pool, "spk_0").await.as_deref(), Some("Priya"));
@@ -1328,7 +1336,7 @@ mod tests {
         let voice = vec![0.8, 0.6, 0.0, 0.0]; // L2-normalized
         let emb1: HashMap<String, Vec<f32>> = HashMap::from([("spk_0".to_string(), voice.clone())]);
 
-        persist(&pool, "m1", &assignments("spk_0"), &emb1, false)
+        persist(&pool, "m1", &assignments("spk_0"), &emb1, AudioSetup::Call)
             .await
             .unwrap();
         SpeakersRepository::rename(&pool, "m1", "spk_0", "Priya")
@@ -1338,7 +1346,7 @@ mod tests {
         // Re-run clusters the same voice under a DIFFERENT key. The stored
         // voiceprint must carry the rename onto the new key.
         let emb2: HashMap<String, Vec<f32>> = HashMap::from([("spk_1".to_string(), voice)]);
-        persist(&pool, "m1", &assignments("spk_1"), &emb2, false)
+        persist(&pool, "m1", &assignments("spk_1"), &emb2, AudioSetup::Call)
             .await
             .unwrap();
 
@@ -1353,7 +1361,7 @@ mod tests {
         let emb: HashMap<String, Vec<f32>> =
             HashMap::from([("spk_0".to_string(), vec![0.0, 1.0, 0.0, 0.0])]);
 
-        persist(&pool, "m1", &assignments("spk_0"), &emb, false)
+        persist(&pool, "m1", &assignments("spk_0"), &emb, AudioSetup::Call)
             .await
             .unwrap();
         assert!(SpeakersRepository::assign_to_attendee(
@@ -1366,7 +1374,7 @@ mod tests {
         .await
         .unwrap());
 
-        persist(&pool, "m1", &assignments("spk_0"), &emb, false)
+        persist(&pool, "m1", &assignments("spk_0"), &emb, AudioSetup::Call)
             .await
             .unwrap();
 
@@ -1387,7 +1395,7 @@ mod tests {
         let emb1: HashMap<String, Vec<f32>> =
             HashMap::from([("spk_0".to_string(), vec![1.0, 0.0, 0.0, 0.0])]);
 
-        persist(&pool, "m1", &assignments("spk_0"), &emb1, false)
+        persist(&pool, "m1", &assignments("spk_0"), &emb1, AudioSetup::Call)
             .await
             .unwrap();
         SpeakersRepository::rename(&pool, "m1", "spk_0", "Priya")
@@ -1398,7 +1406,7 @@ mod tests {
         // centroid: below TAU_MATCH the rename must be dropped, not misapplied.
         let emb2: HashMap<String, Vec<f32>> =
             HashMap::from([("spk_1".to_string(), vec![0.0, 0.0, 1.0, 0.0])]);
-        persist(&pool, "m1", &assignments("spk_1"), &emb2, false)
+        persist(&pool, "m1", &assignments("spk_1"), &emb2, AudioSetup::Call)
             .await
             .unwrap();
 
@@ -1463,7 +1471,7 @@ mod tests {
         // channel) and merely similar (cos 0.8, still >= TAU_MATCH) to Priya's.
         let voice = vec![1.0, 0.0, 0.0, 0.0];
         let emb: HashMap<String, Vec<f32>> = HashMap::from([("spk_0".to_string(), voice.clone())]);
-        persist(&pool, "m1", &assignments("spk_0"), &emb, false)
+        persist(&pool, "m1", &assignments("spk_0"), &emb, AudioSetup::Call)
             .await
             .unwrap();
 

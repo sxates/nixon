@@ -105,8 +105,14 @@ pub async fn apply(
         // everywhere downstream, so the cluster is re-keyed rather than linked. Like every
         // automatic label, this never enrolls a voiceprint.
         if person_id == crate::people::enroll::OWNER_PERSON_ID {
-            match SpeakersRepository::rekey_to_local(pool, meeting_id, &s.speaker_key, person_id)
-                .await
+            match SpeakersRepository::rekey_to_local(
+                pool,
+                meeting_id,
+                &s.speaker_key,
+                person_id,
+                false,
+            )
+            .await
             {
                 Ok(Some(r)) => {
                     applied += 1;

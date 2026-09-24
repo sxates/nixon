@@ -10,7 +10,8 @@
 //!   [`OWNER_BOOTSTRAP_MIN_SECS`] of speech, a clip of the longest ones is embedded with
 //!   the same [`ClusterEmbedder`] the pass uses for clusters.
 //! - **Room passes:** a single cluster is the owner (`room::label_owner_cluster` rule 1);
-//!   its cluster embedding is the sample.
+//!   its cluster embedding is the sample, unless the meeting's lines were materially
+//!   reassigned away from "You" by hand.
 //!
 //! Either way it is at most one sample per meeting, under the one "Store voiceprints"
 //! consent, back-linked to `(meeting, "local")` so "This isn't me" and "Clear all
@@ -73,12 +74,13 @@ pub(crate) fn owner_clip(
     })
 }
 
-/// Whether the owner's mic lines were materially reassigned by hand: at least
-/// `MATERIAL_CONTEST_FRACTION` of the meeting's mic-tagged rows carry a manual override
-/// pointing away from "You" (the specs/0039 WS3 contested guard, applied to the mic).
-/// Such a mic track isn't clean owner evidence. Best-effort: a read error counts as
-/// contested, so nothing is enrolled on a guess.
-async fn mic_rows_contested(pool: &SqlitePool, meeting_id: &str) -> bool {
+/// Whether the owner's lines were materially reassigned by hand: at least
+/// `MATERIAL_CONTEST_FRACTION` of the rows carry a manual override pointing away from
+/// "You" (the specs/0039 WS3 contested guard). A call counts its mic-tagged rows (the
+/// owner's by channel); a room's single cluster covers the whole meeting, so a room counts
+/// every row (`mic_only = false`). Such audio isn't clean owner evidence. Best-effort: a
+/// read error counts as contested, so nothing is enrolled on a guess.
+async fn owner_rows_contested(pool: &SqlitePool, meeting_id: &str, mic_only: bool) -> bool {
     use crate::database::repositories::transcript_speaker_overrides::MATERIAL_CONTEST_FRACTION;
     let counts: Result<(i64, i64), _> = sqlx::query_as(
         "SELECT COUNT(*),
@@ -86,10 +88,11 @@ async fn mic_rows_contested(pool: &SqlitePool, meeting_id: &str) -> bool {
                                   THEN 1 ELSE 0 END), 0)
          FROM transcripts t
          LEFT JOIN transcript_speaker_overrides o ON o.transcript_id = t.id
-         WHERE t.meeting_id = ? AND t.channel = 'microphone'",
+         WHERE t.meeting_id = ? AND (? = 0 OR t.channel = 'microphone')",
     )
     .bind(LOCAL_SPEAKER_KEY)
     .bind(meeting_id)
+    .bind(mic_only)
     .fetch_one(pool)
     .await;
     match counts {
@@ -123,7 +126,8 @@ fn embed_clip(clip: OwnerClip) -> anyhow::Result<Option<Vec<f32>>> {
     let mut embedder = ClusterEmbedder::new(&paths.embedding)?;
     let turn = SpeakerTurn {
         start: 0.0,
-        end: clip.samples.len() as f32 / 16_000.0,
+        end: clip.samples.len() as f32
+            / crate::diarization::owner_turns::OWNER_VAD_SAMPLE_RATE as f32,
         speaker: LOCAL_SPEAKER_KEY.to_string(),
     };
     Ok(embedder
@@ -133,7 +137,8 @@ fn embed_clip(clip: OwnerClip) -> anyhow::Result<Option<Vec<f32>>> {
 
 /// After a pass has persisted: enroll the owner bootstrap sample, if this pass has one.
 ///
-/// - Room pass whose owner is the single cluster: that cluster's embedding.
+/// - Room pass whose owner is the single cluster: that cluster's embedding, unless the
+///   meeting's rows are materially contested.
 /// - Call pass with an [`OwnerClip`]: the clip's embedding, unless the mic rows are
 ///   materially contested.
 /// - Anything else (an automatic room label, no clip): nothing.
@@ -144,16 +149,35 @@ pub async fn enroll_after_pass(
     embeddings: &HashMap<String, Vec<f32>>,
     clip: Option<OwnerClip>,
 ) {
+    let consent = enroll::voiceprint_consent().await;
+    enroll_after_pass_gated(pool, meeting_id, owner, embeddings, clip, consent).await;
+}
+
+/// [`enroll_after_pass`] with the consent passed in (for DB tests).
+pub(crate) async fn enroll_after_pass_gated(
+    pool: &SqlitePool,
+    meeting_id: &str,
+    owner: Option<&OwnerLabel>,
+    embeddings: &HashMap<String, Vec<f32>>,
+    clip: Option<OwnerClip>,
+    consent: bool,
+) {
+    if !consent || has_owner_sample(pool, meeting_id).await {
+        return;
+    }
     let embedding = match (owner, clip) {
         (Some(label), _) if label.rule == OwnerRule::SingleCluster => {
+            if owner_rows_contested(pool, meeting_id, false).await {
+                log::info!(
+                    "owner bootstrap: {meeting_id}'s lines are materially reassigned; skipping"
+                );
+                return;
+            }
             embeddings.get(LOCAL_SPEAKER_KEY).cloned()
         }
         (Some(_), _) => return, // an automatic label never enrolls
         (None, Some(clip)) => {
-            if !enroll::voiceprint_consent().await || has_owner_sample(pool, meeting_id).await {
-                return;
-            }
-            if mic_rows_contested(pool, meeting_id).await {
+            if owner_rows_contested(pool, meeting_id, true).await {
                 log::info!(
                     "owner bootstrap: {meeting_id}'s mic lines are materially reassigned; skipping"
                 );
@@ -182,12 +206,13 @@ pub async fn enroll_after_pass(
     let Some(embedding) = embedding else {
         return;
     };
-    match enroll::enroll_owner_sample_from_embedding(
+    match enroll::enroll_owner_sample_gated(
         pool,
         meeting_id,
         &embedding,
         EMBEDDING_MODEL_ID,
         EnrollConfidence::OwnerBootstrap,
+        consent,
     )
     .await
     {
@@ -272,16 +297,84 @@ mod tests {
             .await
             .unwrap();
         }
-        assert!(!mic_rows_contested(&pool, &meeting).await);
+        assert!(!owner_rows_contested(&pool, &meeting, true).await);
         // Pointing a mic line back at "You" is not a contest.
         Overrides::set(&pool, &meeting, "t1", LOCAL_SPEAKER_KEY)
             .await
             .unwrap();
-        assert!(!mic_rows_contested(&pool, &meeting).await);
+        assert!(!owner_rows_contested(&pool, &meeting, true).await);
         // One of two mic lines moved to someone else: 0.5, material.
         Overrides::set(&pool, &meeting, "t2", "spk_0")
             .await
             .unwrap();
-        assert!(mic_rows_contested(&pool, &meeting).await);
+        assert!(owner_rows_contested(&pool, &meeting, true).await);
+    }
+
+    /// specs/0078 review: the room single-cluster bootstrap had no contested guard. When
+    /// the user moved a material share of the meeting's lines off "You" by hand, the lone
+    /// cluster isn't clean owner evidence and nothing is enrolled.
+    #[tokio::test]
+    async fn a_contested_single_cluster_room_enrolls_nothing() {
+        use crate::database::repositories::transcript_speaker_overrides::TranscriptSpeakerOverridesRepository as Overrides;
+        use crate::diarization::room::{OwnerLabel, OwnerRule};
+        let pool = sqlx::sqlite::SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .unwrap();
+        sqlx::migrate!("./migrations").run(&pool).await.unwrap();
+        let label = OwnerLabel {
+            cluster: "spk_0".into(),
+            rule: OwnerRule::SingleCluster,
+            score: None,
+        };
+        let embeddings = HashMap::from([(LOCAL_SPEAKER_KEY.to_string(), vec![1.0, 0.0, 0.0])]);
+        let mut meetings = Vec::new();
+        for _ in 0..2 {
+            let m = crate::database::repositories::meeting::MeetingsRepository::create_meeting(
+                &pool, None, None, None, None, None,
+            )
+            .await
+            .unwrap();
+            // Room rows: untagged here, so only the all-rows count can see them.
+            for i in 0..2 {
+                sqlx::query(
+                    "INSERT INTO transcripts (id, meeting_id, transcript, timestamp, speaker)
+                     VALUES (?, ?, 'words', '2026-01-01T00:00:00Z', 'local')",
+                )
+                .bind(format!("{m}-{i}"))
+                .bind(&m)
+                .execute(&pool)
+                .await
+                .unwrap();
+            }
+            meetings.push(m);
+        }
+        let (contested, clean) = (&meetings[0], &meetings[1]);
+        Overrides::set(&pool, contested, &format!("{contested}-0"), "spk_1")
+            .await
+            .unwrap();
+
+        for m in [contested, clean] {
+            enroll_after_pass_gated(&pool, m, Some(&label), &embeddings, None, true).await;
+        }
+        let samples = |m: String| {
+            let pool = pool.clone();
+            async move {
+                sqlx::query_scalar::<_, i64>(
+                    "SELECT COUNT(*) FROM voiceprints WHERE source_meeting_id = ?",
+                )
+                .bind(m)
+                .fetch_one(&pool)
+                .await
+                .unwrap()
+            }
+        };
+        assert_eq!(samples(contested.clone()).await, 0, "contested: no sample");
+        assert_eq!(
+            samples(clean.clone()).await,
+            1,
+            "clean: the bootstrap sample"
+        );
     }
 }

@@ -5,7 +5,8 @@
 //! - [`api_set_meeting_audio_setup`] — store the override and re-run diarization.
 //! - [`api_mark_speaker_as_me`] — "This is me": re-key a cluster to the owner's `local`
 //!   key and enroll it under the one voiceprint consent.
-//! - [`api_unmark_speaker_as_me`] — "This isn't me": the inverse, for a wrong "You".
+//! - [`api_unmark_speaker_as_me`] — "This isn't me": the inverse, for a wrong "You". It
+//!   sticks: the owner stops auto-labeling clusters in this meeting until "This is me".
 //!
 //! Split out of `diarization/commands.rs`, which is at the file-size cap. The mark/unmark
 //! commands work in any meeting (call or room): they only move rows, and a later call-mode
@@ -48,9 +49,11 @@ pub async fn api_get_meeting_audio_setup<R: Runtime>(
 }
 
 /// Store the "Who was on the mic?" override (`"auto" | "room" | "call"`), then re-run
-/// diarization the same way "Identify speakers" does. Returns that command's DTO: when a
-/// pass is already running, `started` is false and the new setting applies from the next
-/// pass (the UI disables the control while one runs).
+/// diarization the same way "Identify speakers" does. Returns that command's DTO. When a
+/// pass is already running (it read the old setting), `started` is false, the caller
+/// attaches to that pass, and one more pass is queued to start when it finishes
+/// (`launch::diarize_meeting_or_queue`); its `diarization-progress` events flip the UI
+/// back to running.
 #[tauri::command]
 pub async fn api_set_meeting_audio_setup<R: Runtime>(
     app: AppHandle<R>,
@@ -63,7 +66,7 @@ pub async fn api_set_meeting_audio_setup<R: Runtime>(
             .await
             .map_err(|e| format!("{e:#}"))?;
     }
-    let started = launch::diarize_meeting(app, meeting_id);
+    let started = launch::diarize_meeting_or_queue(app, meeting_id);
     Ok(DiarizeStartDto {
         started,
         already_running: !started,
@@ -109,9 +112,11 @@ pub async fn api_unmark_speaker_as_me<R: Runtime>(
         .await
         .map_err(|e| format!("{e:#}"))?;
     log::info!(
-        "unmarked the owner in meeting {meeting_id}: now {} ({} lines), {} owner samples quarantined",
+        "unmarked the owner in meeting {meeting_id}: now {} ({} lines, {} pinned lines kept), \
+         {} owner samples quarantined",
         outcome.new_key,
         outcome.moved_lines,
+        outcome.kept_lines,
         outcome.quarantined_owner_samples
     );
     crate::summary::refresh::schedule_name_refresh(&app, pool.clone(), &meeting_id);
@@ -163,9 +168,11 @@ pub(crate) struct MarkOutcome {
 /// enrollment runs after it and is best-effort (a failure is logged, not returned), like
 /// every enroll-on-confirm path.
 ///
-/// Enrollment is skipped when this meeting already has a LIVE owner sample back-linked
-/// to `local`: marking a second cluster folds it into the same `local` row, whose
-/// embedding is the one already enrolled.
+/// The sample is the embedding of the cluster the user just confirmed, read before the
+/// re-key: folded into an existing `local`, the cluster's row is gone and `local` may
+/// still carry an automatic label's voice. Enrollment is skipped when this meeting
+/// already has a LIVE owner sample back-linked to `local` (an earlier "This is me"
+/// enrolled it).
 pub(crate) async fn mark_speaker_as_me(
     pool: &SqlitePool,
     meeting_id: &str,
@@ -189,28 +196,56 @@ pub(crate) async fn mark_speaker_as_me(
     enroll::ensure_owner_person(pool)
         .await
         .context("Couldn't set up your own person record")?;
-    let rekey = SpeakersRepository::rekey_to_local(pool, meeting_id, speaker_key, OWNER_PERSON_ID)
+    let confirmed_voice = SpeakersRepository::get_speaker_embedding(pool, meeting_id, speaker_key)
         .await
-        .context("Couldn't mark that speaker as you")?
-        .ok_or_else(|| anyhow!("That speaker is no longer in this meeting"))?;
+        .context("Couldn't read that speaker's voice")?
+        .map(|(_, bytes, model)| (bytes, model));
+    let rekey =
+        SpeakersRepository::rekey_to_local(pool, meeting_id, speaker_key, OWNER_PERSON_ID, true)
+            .await
+            .context("Couldn't mark that speaker as you")?
+            .ok_or_else(|| anyhow!("That speaker is no longer in this meeting"))?;
 
-    let enrolled = match enroll_marked_owner(pool, meeting_id, store_voiceprints).await {
-        Ok(v) => v,
-        Err(e) => {
-            log::warn!(
-                "owner enroll after \"This is me\" in {meeting_id} failed (continuing): {e:#}"
-            );
-            false
-        }
-    };
+    let enrolled =
+        match enroll_marked_owner(pool, meeting_id, confirmed_voice, store_voiceprints).await {
+            Ok(v) => v,
+            Err(e) => {
+                log::warn!(
+                    "owner enroll after \"This is me\" in {meeting_id} failed (continuing): {e:#}"
+                );
+                false
+            }
+        };
     Ok(MarkOutcome { rekey, enrolled })
 }
 
+/// Enroll `confirmed_voice` (the marked cluster's `(embedding, model)`) as an owner sample
+/// back-linked to `(meeting, local)`, under the consent gate and the same WS3 contested
+/// guard `enroll_speaker_gated` applies (specs/0039).
 async fn enroll_marked_owner(
     pool: &SqlitePool,
     meeting_id: &str,
+    confirmed_voice: Option<(Vec<u8>, Option<String>)>,
     store_voiceprints: bool,
 ) -> Result<bool> {
+    use crate::database::repositories::transcript_speaker_overrides::{
+        TranscriptSpeakerOverridesRepository, MATERIAL_CONTEST_FRACTION,
+    };
+    use crate::database::repositories::voiceprints::VoiceprintsRepository;
+    use crate::diarization::embedding::{embedding_from_bytes, EMBEDDING_MODEL_ID};
+
+    if enroll::decide_enrollment(
+        EnrollConfidence::UserConfirmed,
+        true,
+        store_voiceprints,
+        false,
+    ) != enroll::EnrollDecision::EnrollOwner
+    {
+        return Ok(false);
+    }
+    let Some((bytes, model)) = confirmed_voice else {
+        return Ok(false); // a cluster too short to embed
+    };
     let live_sample: bool = sqlx::query_scalar(
         "SELECT EXISTS(SELECT 1 FROM voiceprints
                         WHERE person_id = ? AND source_meeting_id = ? AND source_speaker_key = ?
@@ -225,16 +260,32 @@ async fn enroll_marked_owner(
     if live_sample {
         return Ok(false);
     }
-    enroll::enroll_speaker_gated(
+    let contested = TranscriptSpeakerOverridesRepository::override_fraction_for_speaker(
         pool,
         meeting_id,
         LOCAL_SPEAKER_KEY,
-        OWNER_PERSON_ID,
-        EnrollConfidence::UserConfirmed,
-        true,
-        store_voiceprints,
     )
     .await
+    .unwrap_or(0.0);
+    if contested >= MATERIAL_CONTEST_FRACTION {
+        return Ok(false);
+    }
+    let embedding = match embedding_from_bytes(&bytes) {
+        Ok(v) if !v.is_empty() && v.iter().all(|x| x.is_finite()) => v,
+        _ => return Ok(false),
+    };
+    VoiceprintsRepository::add_sample(
+        pool,
+        OWNER_PERSON_ID,
+        &embedding,
+        model.as_deref().unwrap_or(EMBEDDING_MODEL_ID),
+        Some(meeting_id),
+        Some(LOCAL_SPEAKER_KEY),
+        None,
+    )
+    .await
+    .context("insert owner voiceprint sample")?;
+    Ok(true)
 }
 
 /// "This isn't me" at the pool level.

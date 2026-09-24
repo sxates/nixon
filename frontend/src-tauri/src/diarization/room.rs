@@ -186,7 +186,8 @@ pub struct DiarizationInput {
     /// channel this is the (missing) `system.wav` path, so decoding fails exactly as it
     /// did before specs/0078.
     pub cluster_wav: PathBuf,
-    /// `None` when detection didn't run (a `Call` override) or had nothing to read.
+    /// `None` when detection didn't run (a `Room` or `Call` override) or had nothing to
+    /// read.
     pub activity: Option<ChannelActivity>,
 }
 
@@ -220,12 +221,13 @@ pub(crate) fn choose_input(
     }
 }
 
-/// Resolve the recording folder, measure the channels, apply the stored override, record
-/// the result in `meetings.audio_setup_resolved`, and log the decision. Called under the
-/// pass's folder lease.
+/// Resolve the recording folder, measure the channels, apply the stored override, and log
+/// the decision. Called under the pass's folder lease. The result is recorded in
+/// `meetings.audio_setup_resolved` only when the pass persists (`pipeline::persist`), so
+/// a pass that fails leaves the previous value in step with the previous rows.
 ///
-/// Detection decodes both tracks, one at a time, keeping only per-window RMS; it is
-/// skipped under a `Call` override, where it can't change the answer.
+/// Detection decodes both tracks, one at a time, keeping only per-window RMS; it runs
+/// only under `Auto`, since an override decides the setup whatever the tracks say.
 pub async fn resolve_diarization_input(
     pool: &SqlitePool,
     meeting_id: &str,
@@ -241,7 +243,7 @@ pub async fn resolve_diarization_input(
             AudioSetupOverride::Auto
         }
     };
-    let activity = if ovr == AudioSetupOverride::Call {
+    let activity = if ovr != AudioSetupOverride::Auto {
         None
     } else {
         let f = folder.clone();
@@ -255,14 +257,6 @@ pub async fn resolve_diarization_input(
         })
     };
     let input = choose_input(folder, ovr, activity);
-
-    match MeetingAudioSetupRepository::set_resolved(pool, meeting_id, input.setup).await {
-        Ok(true) => {}
-        Ok(false) => {
-            log::warn!("diarization: no meeting row to record the audio setup for {meeting_id}")
-        }
-        Err(e) => log::warn!("diarization: couldn't record the audio setup for {meeting_id}: {e}"),
-    }
     log::info!(
         "diarization audio setup for {meeting_id}: {} ({}, override {}); room detection {}; \
          activity: {}",
@@ -433,8 +427,9 @@ async fn prior_local_embedding(pool: &SqlitePool, meeting_id: &str) -> Option<Ve
 }
 
 /// Find the owner among a room pass's clusters and re-key that cluster to `local`, in
-/// memory, before split/align/persist (see [`choose_owner_cluster`] for the rules). An
-/// automatic label never enrolls; the single-cluster bootstrap enrollment happens after
+/// memory, before split/align/persist (see [`choose_owner_cluster`] for the rules). After
+/// "This isn't me" in this meeting (`meetings.owner_label = 'rejected'`) only rule 1 (a
+/// single cluster) applies. An automatic label never enrolls; the single-cluster bootstrap enrollment happens after
 /// persist (`owner_bootstrap`).
 pub async fn label_owner_cluster(
     pool: &SqlitePool,
@@ -444,7 +439,13 @@ pub async fn label_owner_cluster(
     corroborating_emails: &[String],
 ) -> Option<OwnerLabel> {
     let keys = cluster_keys(turns);
-    let (voiceprint, prior) = if keys.len() > 1 {
+    // "This isn't me" (specs/0078): the user rejected an automatic "You" here, so only the
+    // single-cluster rule may label one. Best-effort: a read error counts as rejected.
+    let rejected = keys.len() > 1
+        && MeetingAudioSetupRepository::owner_label_rejected(pool, meeting_id)
+            .await
+            .unwrap_or(true);
+    let (voiceprint, prior) = if keys.len() > 1 && !rejected {
         (
             owner_voiceprint_match(pool, meeting_id, &keys, embeddings, corroborating_emails).await,
             prior_local_embedding(pool, meeting_id).await,
@@ -465,9 +466,14 @@ pub async fn label_owner_cluster(
             );
         }
         None => log::info!(
-            "diarization: room pass for {meeting_id}: owner not identified among {} cluster(s); \
+            "diarization: room pass for {meeting_id}: owner not identified among {} cluster(s){}; \
              all stay \"Speaker N\"",
-            keys.len()
+            keys.len(),
+            if rejected {
+                " (\"This isn't me\" rules out the voiceprint and carry-over)"
+            } else {
+                ""
+            }
         ),
     }
     label

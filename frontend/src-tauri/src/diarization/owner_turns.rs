@@ -9,7 +9,6 @@
 
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
-use tauri::{AppHandle, Runtime};
 
 use crate::audio::common::ChannelTag;
 use crate::audio::pipeline::{classify_window_channel, dominant_channel_for_span};
@@ -25,7 +24,7 @@ const BLEED_WINDOW_MS: f64 = 600.0;
 
 /// Owner/system tracks are compared in the 16 kHz mono whisper time base that
 /// `DecodedAudio::to_whisper_format` produces (both channels are decoded that way).
-const OWNER_VAD_SAMPLE_RATE: usize = 16_000;
+pub(crate) const OWNER_VAD_SAMPLE_RATE: usize = 16_000;
 
 /// Drop owner speech intervals that are actually remote audio bleeding from the
 /// speakers into the mic (spec 0047). On speakers (no headphones), the remote
@@ -131,10 +130,7 @@ pub fn speech_segments_to_owner_turns(segments: &[SpeechSegment]) -> Vec<Speaker
 /// owner turns. Returns an EMPTY vec on any problem (missing mic WAV, decode
 /// error) so diarization behaves exactly as before when the owner track is
 /// unavailable — never fatal.
-pub async fn owner_turns_for_meeting<R: Runtime>(
-    _app: &AppHandle<R>,
-    meeting_folder: &Path,
-) -> Vec<SpeakerTurn> {
+pub async fn owner_turns_for_meeting(meeting_folder: &Path) -> Vec<SpeakerTurn> {
     owner_turns_and_clip(meeting_folder).await.0
 }
 
@@ -261,8 +257,7 @@ fn merge_owner_turns(turns: &mut Vec<SpeakerTurn>, owner: Vec<SpeakerTurn>) {
 /// clustering and the cap. A no-op when the folder or mic WAV is unavailable (see
 /// [`owner_turns_for_meeting`]). Returns the owner-voiceprint bootstrap clip for the
 /// pass to embed after persist (specs/0078 W5).
-pub async fn inject_owner_turns<R: Runtime>(
-    _app: &AppHandle<R>,
+pub async fn inject_owner_turns(
     pool: &sqlx::SqlitePool,
     meeting_id: &str,
     turns: &mut Vec<SpeakerTurn>,

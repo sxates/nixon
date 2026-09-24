@@ -59,13 +59,6 @@ impl ChannelRmsProfile {
         }
     }
 
-    /// A mic-only profile, for a meeting with no system channel file (specs/0078).
-    pub fn from_mic_track(mic: &[f32], sample_rate: u32) -> Self {
-        let mut profile = Self::from_tracks(mic, &[], sample_rate);
-        profile.system_present = false;
-        profile
-    }
-
     /// Load the channel files for room detection (specs/0078). Unlike [`Self::load`]
     /// there is no mixed-file duration to check against: the two tracks are only
     /// compared with each other. `None` when the mic channel is missing, or when either
@@ -329,11 +322,6 @@ mod tests {
         assert!((a.system_longest_run_secs - 3.0).abs() < 1e-3, "{a:?}");
         assert!((a.mic_active_secs - 9.0).abs() < 1e-3, "{a:?}");
         assert!(a.system_present);
-
-        let solo = ChannelRmsProfile::from_mic_track(&mic, RATE).activity();
-        assert!(!solo.system_present);
-        assert_eq!(solo.system_active_secs, 0.0);
-        assert!((solo.mic_active_secs - 9.0).abs() < 1e-3);
     }
 
     #[test]

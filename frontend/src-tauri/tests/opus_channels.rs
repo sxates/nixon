@@ -116,9 +116,7 @@ async fn owner_turns_come_from_a_compressed_mic_channel() {
         Some(dir.path().join("mic.opus"))
     );
 
-    let app = tauri::test::mock_app();
-    let turns =
-        app_lib::diarization::owner_turns::owner_turns_for_meeting(app.handle(), dir.path()).await;
+    let turns = app_lib::diarization::owner_turns::owner_turns_for_meeting(dir.path()).await;
     assert!(!turns.is_empty(), "the owner's speech became turns");
 }
 

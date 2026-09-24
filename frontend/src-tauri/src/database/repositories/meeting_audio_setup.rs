@@ -57,21 +57,55 @@ impl MeetingAudioSetupRepository {
         Ok(res.rows_affected() > 0)
     }
 
-    /// Record the setup a diarization pass is running with. Written at the start of the
-    /// pass, before clustering. `Ok(false)` when the meeting doesn't exist.
-    pub async fn set_resolved(
-        pool: &SqlitePool,
+    /// Record the setup a diarization pass ran with, as part of persisting its results
+    /// (`pipeline::persist` calls this inside the transaction that writes the speaker
+    /// keys, so a failed pass leaves the previous value). The pass rebuilds the speaker
+    /// rows, so a "This is me" confirmation (`owner_label = 'confirmed'`) no longer
+    /// describes the new `local` and is cleared; a "This isn't me" rejection is sticky.
+    /// `Ok(false)` when the meeting doesn't exist.
+    pub async fn set_resolved<'e, E>(
+        executor: E,
         meeting_id: &str,
         setup: AudioSetup,
-    ) -> Result<bool, sqlx::Error> {
-        let res = sqlx::query("UPDATE meetings SET audio_setup_resolved = ? WHERE id = ?")
-            .bind(setup.as_str())
-            .bind(meeting_id)
-            .execute(pool)
-            .await?;
+    ) -> Result<bool, sqlx::Error>
+    where
+        E: sqlx::Executor<'e, Database = sqlx::Sqlite>,
+    {
+        let res = sqlx::query(
+            "UPDATE meetings SET
+                audio_setup_resolved = ?,
+                owner_label = CASE WHEN owner_label = ? THEN NULL ELSE owner_label END
+             WHERE id = ?",
+        )
+        .bind(setup.as_str())
+        .bind(OWNER_LABEL_CONFIRMED)
+        .bind(meeting_id)
+        .execute(executor)
+        .await?;
         Ok(res.rows_affected() > 0)
     }
+
+    /// Whether the user said "This isn't me" in this meeting (`owner_label = 'rejected'`).
+    /// While it holds, the owner is not a gallery candidate for this meeting's clusters
+    /// and the previous "You" doesn't carry over; only the single-cluster rule still
+    /// labels a "You". `false` for a missing meeting.
+    pub async fn owner_label_rejected(
+        pool: &SqlitePool,
+        meeting_id: &str,
+    ) -> Result<bool, sqlx::Error> {
+        let label: Option<Option<String>> =
+            sqlx::query_scalar("SELECT owner_label FROM meetings WHERE id = ?")
+                .bind(meeting_id)
+                .fetch_optional(pool)
+                .await?;
+        Ok(label.flatten().as_deref() == Some(OWNER_LABEL_REJECTED))
+    }
 }
+
+/// `meetings.owner_label` after "This is me" (written by `rekey_to_local`).
+pub const OWNER_LABEL_CONFIRMED: &str = "confirmed";
+/// `meetings.owner_label` after "This isn't me" (written by `rekey_from_local`).
+pub const OWNER_LABEL_REJECTED: &str = "rejected";
 
 #[cfg(test)]
 mod tests {

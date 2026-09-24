@@ -63,13 +63,20 @@ pub async fn compute_suggestions_with_emails(
 }
 
 /// Whether the owner competes for this meeting's clusters: the last pass clustered the
-/// owner (room/hybrid) and no speaker is "You" yet. Best-effort: any read error means no.
+/// owner (room/hybrid), the user hasn't said "This isn't me" here, and no speaker is
+/// "You" yet. Without the rejection check, the refetch right after "This isn't me" would
+/// re-key the same cluster straight back to "You". Best-effort: any read error means no.
 async fn owner_is_a_candidate(pool: &SqlitePool, meeting_id: &str) -> bool {
     let clustered = matches!(
         MeetingAudioSetupRepository::get(pool, meeting_id).await,
         Ok(Some(s)) if s.resolved.is_some_and(|r| r.owner_is_clustered())
     );
-    if !clustered {
+    if !clustered
+        || !matches!(
+            MeetingAudioSetupRepository::owner_label_rejected(pool, meeting_id).await,
+            Ok(false)
+        )
+    {
         return false;
     }
     let has_local: Result<bool, _> = sqlx::query_scalar(

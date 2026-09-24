@@ -7,11 +7,59 @@
 //! `pipeline.rs` is size-capped (specs/0042 WS6 file-size ratchet) with no
 //! headroom left for new code.
 
+use std::collections::HashSet;
+use std::sync::{Mutex, MutexGuard, OnceLock};
+
 use tauri::{AppHandle, Emitter, Manager, Runtime};
 
 use super::pipeline::{registry_finish, registry_try_begin, run, EVENT_ERROR};
 use crate::database::repositories::meeting::MeetingsRepository;
 use crate::state::AppState;
+
+/// Meetings whose in-flight pass started before a setting it reads changed (specs/0078:
+/// the "Who was on the mic?" override), so one more pass runs when it finishes.
+fn pending_reruns() -> MutexGuard<'static, HashSet<String>> {
+    static PENDING: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
+    PENDING
+        .get_or_init(|| Mutex::new(HashSet::new()))
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+}
+
+/// [`diarize_meeting`], or, when a pass is already in flight, queue one more pass to start
+/// as soon as it finishes (success or failure). For a changed input the running pass
+/// already read (specs/0078). Returns whether a pass started now; on `false` the caller
+/// attaches to the running pass, and the follow-up announces itself with the usual
+/// `diarization-progress` events.
+///
+/// The pending lock is held across the slot check so the running pass can't finish in
+/// between and miss the mark: it releases its slot before it looks for a re-run.
+pub fn diarize_meeting_or_queue<R: Runtime>(app: AppHandle<R>, meeting_id: String) -> bool {
+    let mut pending = pending_reruns();
+    if diarize_meeting(app, meeting_id.clone()) {
+        return true;
+    }
+    log::info!("diarization for {meeting_id} is running; queued one more pass after it");
+    pending.insert(meeting_id);
+    false
+}
+
+/// After a pass ends: start the queued re-run, if one was asked for. Returns whether one
+/// was pending. If another pass has claimed the slot meanwhile, it started after the
+/// change, so it already reads the new input and the re-run is dropped.
+fn start_pending_rerun<R: Runtime>(app: &AppHandle<R>, meeting_id: &str) -> bool {
+    if !pending_reruns().remove(meeting_id) {
+        return false;
+    }
+    if diarize_meeting(app.clone(), meeting_id.to_string()) {
+        log::info!("diarization for {meeting_id}: started the queued re-run");
+    } else {
+        log::info!(
+            "diarization for {meeting_id}: a newer pass is already running; queued re-run dropped"
+        );
+    }
+    true
+}
 
 /// Run offline diarization for a saved meeting on a background task, emitting
 /// `diarization-{progress,complete,error}`. Returns immediately after spawning.
@@ -76,6 +124,7 @@ pub fn diarize_meeting<R: Runtime>(app: AppHandle<R>, meeting_id: String) -> boo
                 serde_json::json!({ "meeting_id": meeting_id, "error": format!("{e:#}") }),
             );
         }
+        start_pending_rerun(&app, &meeting_id);
     });
     true
 }
@@ -129,5 +178,36 @@ mod tests {
             message.contains("already running"),
             "the message has to say why nothing started, got: {message}"
         );
+    }
+
+    /// specs/0078 review: changing "Who was on the mic?" while a pass runs used to do
+    /// nothing, because that pass had already read the old setting. It now queues exactly
+    /// one follow-up, which the end of the running pass consumes.
+    #[tokio::test]
+    async fn a_launch_refused_as_running_queues_one_rerun_for_the_end_of_the_pass() {
+        let meeting_id = "m-rerun-queued";
+        assert!(registry_try_begin(meeting_id), "the test holds the slot");
+        let app = tauri::test::mock_app();
+
+        assert!(!diarize_meeting_or_queue(
+            app.handle().clone(),
+            meeting_id.into()
+        ));
+        assert!(!diarize_meeting_or_queue(
+            app.handle().clone(),
+            meeting_id.into()
+        ));
+        assert!(pending_reruns().contains(meeting_id), "a re-run is queued");
+
+        // The pass ends. The slot is still held here, so the re-run's launch is refused
+        // (no real pass spawns), but the queued mark is consumed exactly once.
+        assert!(start_pending_rerun(app.handle(), meeting_id));
+        assert!(
+            !start_pending_rerun(app.handle(), meeting_id),
+            "only one re-run"
+        );
+        assert!(!pending_reruns().contains(meeting_id));
+
+        registry_finish(meeting_id, "done", 100);
     }
 }

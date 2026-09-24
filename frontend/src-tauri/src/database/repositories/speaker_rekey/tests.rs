@@ -175,7 +175,7 @@ async fn fresh_rekey_moves_the_cluster_onto_local() {
     sample(&pool, "vp-other", "p-1", "m1", "spk_0").await;
     sample(&pool, "vp-owner", OWNER, "m1", "spk_0").await;
 
-    let out = SpeakersRepository::rekey_to_local(&pool, "m1", "spk_0", OWNER)
+    let out = SpeakersRepository::rekey_to_local(&pool, "m1", "spk_0", OWNER, true)
         .await
         .unwrap()
         .expect("the cluster exists");
@@ -235,7 +235,7 @@ async fn rekey_merges_into_an_existing_local_row() {
     speaker(&pool, "m2", "local", "You", true, Some(EMB_B)).await;
     speaker(&pool, "m2", "spk_0", "Speaker 1", false, Some(EMB_A)).await;
 
-    let out = SpeakersRepository::rekey_to_local(&pool, "m1", "spk_0", OWNER)
+    let out = SpeakersRepository::rekey_to_local(&pool, "m1", "spk_0", OWNER, true)
         .await
         .unwrap()
         .unwrap();
@@ -257,7 +257,8 @@ async fn rekey_merges_into_an_existing_local_row() {
         "the cluster row is folded away"
     );
 
-    SpeakersRepository::rekey_to_local(&pool, "m2", "spk_0", OWNER)
+    // An automatic owner label never replaces local's own embedding.
+    SpeakersRepository::rekey_to_local(&pool, "m2", "spk_0", OWNER, false)
         .await
         .unwrap()
         .unwrap();
@@ -269,20 +270,62 @@ async fn rekey_merges_into_an_existing_local_row() {
     );
 }
 
+/// "This is me" into an automatic `local` (a cluster the owner's voiceprint or the
+/// carry-over picked): the voice the user just confirmed becomes local's embedding. Into
+/// a `local` the user confirmed earlier, the earlier confirmation stands.
+#[tokio::test]
+async fn a_confirmed_merge_replaces_an_automatic_locals_embedding() {
+    let pool = pool().await;
+    for m in ["auto", "confirmed"] {
+        meeting(&pool, m).await;
+        speaker(&pool, m, "local", "You", true, Some(EMB_B)).await;
+        speaker(&pool, m, "spk_0", "Speaker 1", false, Some(EMB_A)).await;
+    }
+    sqlx::query("UPDATE meetings SET owner_label = 'confirmed' WHERE id = 'confirmed'")
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    for m in ["auto", "confirmed"] {
+        let out = SpeakersRepository::rekey_to_local(&pool, m, "spk_0", OWNER, true)
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(out.merged_into_existing);
+        assert!(row(&pool, m, "spk_0").await.is_none());
+        let label: Option<String> =
+            sqlx::query_scalar("SELECT owner_label FROM meetings WHERE id = ?")
+                .bind(m)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(label.as_deref(), Some("confirmed"), "{m}");
+    }
+    let (_, _, person, _, emb, _) = row(&pool, "auto", "local").await.unwrap();
+    assert_eq!(person.as_deref(), Some(OWNER));
+    assert_eq!(emb.as_deref(), Some(EMB_A), "the confirmed voice wins");
+    let (_, _, _, _, emb, _) = row(&pool, "confirmed", "local").await.unwrap();
+    assert_eq!(
+        emb.as_deref(),
+        Some(EMB_B),
+        "an earlier confirmation stands"
+    );
+}
+
 #[tokio::test]
 async fn rekey_of_a_missing_speaker_changes_nothing() {
     let pool = pool().await;
     meeting(&pool, "m1").await;
     line(&pool, "m1", "t0", "spk_9").await;
     assert_eq!(
-        SpeakersRepository::rekey_to_local(&pool, "m1", "spk_9", OWNER)
+        SpeakersRepository::rekey_to_local(&pool, "m1", "spk_9", OWNER, true)
             .await
             .unwrap(),
         None
     );
     assert_eq!(line_key(&pool, "t0").await.as_deref(), Some("spk_9"));
     assert_eq!(
-        SpeakersRepository::rekey_to_local(&pool, "m1", "local", OWNER)
+        SpeakersRepository::rekey_to_local(&pool, "m1", "local", OWNER, true)
             .await
             .unwrap(),
         None,
@@ -319,14 +362,28 @@ async fn unmark_moves_local_to_the_next_free_key_and_quarantines_owner_samples()
         out,
         RekeyFromLocal {
             new_key: "spk_4".into(),
-            moved_lines: 2,
+            moved_lines: 1,
+            kept_lines: 1,
             quarantined_owner_samples: 1,
         }
     );
     assert_eq!(line_key(&pool, "t0").await.as_deref(), Some("spk_4"));
     assert_eq!(line_key(&pool, "t1").await.as_deref(), Some("spk_0"));
-    assert_eq!(override_key(&pool, "t2").await, "spk_4");
-    assert!(row(&pool, "m1", "local").await.is_none());
+    // The user pinned t2 to "You" by hand: the line and its override stay theirs, and a
+    // fresh "You" row (no embedding) keeps it named.
+    assert_eq!(line_key(&pool, "t2").await.as_deref(), Some("local"));
+    assert_eq!(override_key(&pool, "t2").await, "local");
+    let (name, is_local, person, _, emb, _) = row(&pool, "m1", "local").await.unwrap();
+    assert_eq!(
+        (name.as_str(), is_local, person, emb),
+        ("You", 1, None, None)
+    );
+    let label: Option<String> =
+        sqlx::query_scalar("SELECT owner_label FROM meetings WHERE id = 'm1'")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(label.as_deref(), Some("rejected"));
     let (name, is_local, person, _, emb, _) = row(&pool, "m1", "spk_4").await.unwrap();
     assert_eq!(name, "Speaker 5");
     assert_eq!(is_local, 0);
@@ -347,7 +404,21 @@ async fn unmark_moves_local_to_the_next_free_key_and_quarantines_owner_samples()
         (Some("local".into()), false),
         "another meeting's owner sample is untouched"
     );
+}
 
+/// Without hand-pinned lines, "This isn't me" leaves no `local` row behind.
+#[tokio::test]
+async fn unmark_without_pinned_lines_leaves_no_local_row() {
+    let pool = pool().await;
+    meeting(&pool, "m1").await;
+    speaker(&pool, "m1", "local", "You", true, Some(EMB_A)).await;
+    line(&pool, "m1", "t0", "local").await;
+    let out = SpeakersRepository::rekey_from_local(&pool, "m1", OWNER)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!((out.moved_lines, out.kept_lines), (1, 0));
+    assert!(row(&pool, "m1", "local").await.is_none());
     assert_eq!(
         SpeakersRepository::rekey_from_local(&pool, "m1", OWNER)
             .await

@@ -705,9 +705,6 @@ async fn the_refetch_turns_a_room_owner_match_into_you() {
 
     for setup in [AudioSetup::Call, AudioSetup::Room] {
         let meeting = seed_room_meeting(pool).await;
-        MeetingAudioSetupRepository::set_resolved(pool, &meeting, setup)
-            .await
-            .unwrap();
         attribute_and_persist(
             pool,
             &meeting,
@@ -717,6 +714,10 @@ async fn the_refetch_turns_a_room_owner_match_into_you() {
         )
         .await
         .unwrap();
+        // The persist recorded `room`; pretend the last pass was `setup`.
+        MeetingAudioSetupRepository::set_resolved(pool, &meeting, setup)
+            .await
+            .unwrap();
         let suggestions = compute_suggestions(pool, &meeting).await.unwrap();
         let owner = suggestions
             .iter()
@@ -739,4 +740,254 @@ async fn the_refetch_turns_a_room_owner_match_into_you() {
             .iter()
             .all(|s| s.suggested_person_id.as_deref() != Some(OWNER_PERSON_ID)));
     }
+}
+
+/// A room meeting persisted by a room pass, with the owner's voiceprint trained on spk_0.
+async fn room_meeting_with_trained_owner(pool: &sqlx::SqlitePool) -> String {
+    enroll_owner(pool, &[0.95f32, 0.31, 0.0, 0.0], 3).await;
+    let meeting = seed_room_meeting(pool).await;
+    attribute_and_persist(
+        pool,
+        &meeting,
+        &room_turns(),
+        &room_embeddings(),
+        AudioSetup::Room,
+    )
+    .await
+    .unwrap();
+    meeting
+}
+
+async fn has_local(pool: &sqlx::SqlitePool, meeting: &str) -> bool {
+    SpeakersRepository::get_by_meeting(pool, meeting)
+        .await
+        .unwrap()
+        .iter()
+        .any(|s| s.speaker_key == "local")
+}
+
+/// specs/0078 review: "This isn't me" used to undo itself. The refetch after it
+/// (`api_get_speaker_suggestions` → `auto_label::apply`) saw a room meeting with no "You"
+/// and re-keyed the same cluster straight back. The rejection is now sticky, and "This is
+/// me" lifts it.
+#[tokio::test]
+async fn this_isnt_me_survives_the_suggestion_refetch() {
+    use app_lib::diarization::auto_label;
+    use app_lib::diarization::pipeline::compute_suggestions;
+
+    let (_dir, db) = fresh_db().await;
+    let pool = db.pool();
+    let meeting = room_meeting_with_trained_owner(pool).await;
+    let suggestions = compute_suggestions(pool, &meeting).await.unwrap();
+    assert_eq!(auto_label::apply(pool, &meeting, &suggestions).await, 1);
+    assert!(
+        has_local(pool, &meeting).await,
+        "the owner auto-labeled spk_0"
+    );
+
+    let out = SpeakersRepository::rekey_from_local(pool, &meeting, OWNER_PERSON_ID)
+        .await
+        .unwrap()
+        .expect("a You to unmark");
+    assert!(!has_local(pool, &meeting).await);
+
+    let suggestions = compute_suggestions(pool, &meeting).await.unwrap();
+    assert!(
+        suggestions
+            .iter()
+            .all(|s| s.suggested_person_id.as_deref() != Some(OWNER_PERSON_ID)),
+        "the owner no longer competes here: {suggestions:?}"
+    );
+    auto_label::apply(pool, &meeting, &suggestions).await;
+    assert!(
+        !has_local(pool, &meeting).await,
+        "the refetch must not re-key it back"
+    );
+    let rows = stored_rows(pool, &meeting).await;
+    assert!(rows.iter().all(|(k, _)| k != "local"), "{rows:?}");
+
+    // "This is me" on the same voice lifts the rejection.
+    SpeakersRepository::rekey_to_local(pool, &meeting, &out.new_key, OWNER_PERSON_ID, true)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(
+        !MeetingAudioSetupRepository::owner_label_rejected(pool, &meeting)
+            .await
+            .unwrap()
+    );
+}
+
+/// The same rejection holds in a re-run pass: neither the owner's voiceprint (rule 2) nor
+/// the previous "You" (rule 3) labels a cluster. A single voice is still "You" (rule 1).
+#[tokio::test]
+async fn this_isnt_me_turns_off_the_voiceprint_and_carry_over_rules_in_a_pass() {
+    let (_dir, db) = fresh_db().await;
+    let pool = db.pool();
+    let meeting = room_meeting_with_trained_owner(pool).await;
+    let mut turns = room_turns();
+    let mut emb = room_embeddings();
+    assert!(
+        label_owner_cluster(pool, &meeting, &mut turns, &mut emb, &[])
+            .await
+            .is_some(),
+        "precondition: the trained voiceprint wins spk_0"
+    );
+
+    // A "You" whose embedding matches spk_0, then "This isn't me".
+    SpeakersRepository::rekey_to_local(pool, &meeting, "spk_0", OWNER_PERSON_ID, false)
+        .await
+        .unwrap()
+        .unwrap();
+    SpeakersRepository::rekey_from_local(pool, &meeting, OWNER_PERSON_ID)
+        .await
+        .unwrap()
+        .unwrap();
+
+    let mut turns = room_turns();
+    let mut emb = room_embeddings();
+    assert_eq!(
+        label_owner_cluster(pool, &meeting, &mut turns, &mut emb, &[]).await,
+        None
+    );
+    assert!(turns.iter().all(|t| t.speaker != "local"));
+
+    let mut solo: Vec<SpeakerTurn> = vec![turn(0.0, 3.0, "spk_0")];
+    let mut solo_emb = HashMap::from([("spk_0".to_string(), vec![1.0, 0.0, 0.0, 0.0])]);
+    let label = label_owner_cluster(pool, &meeting, &mut solo, &mut solo_emb, &[])
+        .await
+        .expect("a single voice is still the owner");
+    assert_eq!(label.rule, OwnerRule::SingleCluster);
+}
+
+/// specs/0078 review: `audio_setup_resolved` is written with the pass's rows, so a pass
+/// that fails before persisting leaves the previous value, and resolving a pass's input
+/// writes nothing.
+#[tokio::test]
+async fn a_failed_pass_leaves_the_previous_resolved_setup() {
+    use app_lib::database::repositories::meeting_audio_setup::MeetingAudioSetup;
+    use app_lib::diarization::room::resolve_diarization_input;
+    use app_lib::diarization::room_types::AudioSetupOverride;
+
+    let (_dir, db) = fresh_db().await;
+    let pool = db.pool();
+    let meeting = seed_room_meeting(pool).await;
+    MeetingAudioSetupRepository::set_resolved(pool, &meeting, AudioSetup::Call)
+        .await
+        .unwrap();
+    MeetingAudioSetupRepository::set_override(pool, &meeting, AudioSetupOverride::Room)
+        .await
+        .unwrap();
+    let folder = tempfile::tempdir().unwrap();
+    // A decodable mic track, so detection would produce an activity if it ran.
+    common::write_wav_16k(
+        &folder.path().join("mic.wav"),
+        &common::silence(2.0, 16_000),
+    );
+    MeetingsRepository::update_folder_path(pool, &meeting, folder.path().to_str().unwrap())
+        .await
+        .unwrap();
+    let resolved = |m: Option<MeetingAudioSetup>| m.unwrap().resolved;
+
+    let input = resolve_diarization_input(pool, &meeting).await.unwrap();
+    assert_eq!(input.setup, AudioSetup::Room);
+    assert_eq!(
+        input.activity, None,
+        "an override skips detection (it would decode both tracks for nothing)"
+    );
+    assert_eq!(
+        resolved(
+            MeetingAudioSetupRepository::get(pool, &meeting)
+                .await
+                .unwrap()
+        ),
+        Some(AudioSetup::Call),
+        "resolving the input records nothing"
+    );
+
+    // The pass fails before it persists: the meeting lost its timed rows.
+    sqlx::query("UPDATE transcripts SET audio_start_time = NULL WHERE meeting_id = ?")
+        .bind(&meeting)
+        .execute(pool)
+        .await
+        .unwrap();
+    assert!(attribute_and_persist(
+        pool,
+        &meeting,
+        &room_turns(),
+        &room_embeddings(),
+        AudioSetup::Room
+    )
+    .await
+    .is_err());
+    assert_eq!(
+        resolved(
+            MeetingAudioSetupRepository::get(pool, &meeting)
+                .await
+                .unwrap()
+        ),
+        Some(AudioSetup::Call)
+    );
+
+    // A pass that persists records its setup.
+    let ok = seed_room_meeting(pool).await;
+    attribute_and_persist(
+        pool,
+        &ok,
+        &room_turns(),
+        &room_embeddings(),
+        AudioSetup::Room,
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        resolved(MeetingAudioSetupRepository::get(pool, &ok).await.unwrap()),
+        Some(AudioSetup::Room)
+    );
+}
+
+/// specs/0078 review: in a room pass `local` carries the owner's embedding, so a renamed
+/// speaker whose key didn't survive the re-run could have its name restored onto "You"
+/// by centroid similarity. The owner's identity is fixed: `local` is never a target.
+#[tokio::test]
+async fn a_rename_is_never_restored_onto_you() {
+    let (_dir, db) = fresh_db().await;
+    let pool = db.pool();
+    let meeting = seed_room_meeting(pool).await;
+    attribute_and_persist(
+        pool,
+        &meeting,
+        &room_turns(),
+        &room_embeddings(),
+        AudioSetup::Room,
+    )
+    .await
+    .unwrap();
+    SpeakersRepository::rename(pool, &meeting, "spk_0", "Priya")
+        .await
+        .unwrap();
+
+    // The re-run: spk_0's voice is now the owner's cluster, and no other cluster is close.
+    let turns: Vec<SpeakerTurn> = room_turns()
+        .into_iter()
+        .map(|mut t| {
+            if t.speaker == "spk_0" {
+                t.speaker = "local".to_string();
+            }
+            t
+        })
+        .collect();
+    let emb = HashMap::from([
+        ("local".to_string(), vec![1.0, 0.0, 0.0, 0.0]),
+        ("spk_1".to_string(), vec![0.0, 1.0, 0.0, 0.0]),
+    ]);
+    attribute_and_persist(pool, &meeting, &turns, &emb, AudioSetup::Room)
+        .await
+        .unwrap();
+    let speakers = SpeakersRepository::get_by_meeting(pool, &meeting)
+        .await
+        .unwrap();
+    let you = speakers.iter().find(|s| s.speaker_key == "local").unwrap();
+    assert_eq!(you.display_name, "You", "{speakers:?}");
+    assert!(speakers.iter().all(|s| s.display_name != "Priya"));
 }
