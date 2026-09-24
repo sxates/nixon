@@ -19,6 +19,10 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 ## [Unreleased]
 
+_(nothing yet)_
+
+## [0.10.0] - 2026-09-24
+
 ### Added
 
 - **Google Calendar tells you when it needs you.** If your Google sign-in expires or is
