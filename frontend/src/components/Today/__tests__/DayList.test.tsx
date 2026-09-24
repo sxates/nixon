@@ -51,6 +51,19 @@ describe('DayList (specs/0069 W4)', () => {
     expect(rows[1]).toHaveTextContent('Call with Sam');
   });
 
+  it('marks the live meeting once, with the reels badge (owner feedback 2026-09-23)', () => {
+    const item = at('11:50', 'Product sync');
+    render(
+      <DayList
+        {...base}
+        ctx={{ ...ctx, isRecording: true, recordingThisId: item.id }}
+        items={[item]}
+      />,
+    );
+    expect(screen.getAllByText(/^Recording/)).toHaveLength(1);
+    expect(screen.queryByText('Recording…')).not.toBeInTheDocument();
+  });
+
   it('offers a way out of an empty day', () => {
     const onAddMeeting = vi.fn();
     render(<DayList {...base} items={[]} onAddMeeting={onAddMeeting} />);
@@ -77,6 +90,26 @@ describe('DayList (specs/0069 W4)', () => {
     });
     render(<DayList {...base} items={[manual]} onRecord={onRecord} />);
     fireEvent.click(screen.getByRole('button', { name: 'Record' }));
+    expect(onRecord).toHaveBeenCalledWith(manual);
+  });
+
+  // Owner feedback 2026-09-24: hours out, a manual entry shows Prep like a calendar one, and
+  // recording it early is "Record now" in the row menu.
+  it('shows Prep for a later manual entry, with Record now in its menu', async () => {
+    const onRecord = vi.fn();
+    const manual = at('15:00', 'Later sync', {
+      source: 'manual',
+      meetingId: 'meeting-2',
+      calendarEventId: 'nixon-manual:meeting-2',
+      endTime: '2024-01-01T15:30:00.000Z',
+    });
+    render(<DayList {...base} items={[manual]} onRecord={onRecord} />);
+    expect(screen.queryByRole('button', { name: 'Record' })).not.toBeInTheDocument();
+    expect(screen.getByText('Prep')).toBeInTheDocument();
+    const trigger = screen.getByRole('button', { name: 'Event options' });
+    trigger.focus();
+    fireEvent.keyDown(trigger, { key: 'Enter' });
+    fireEvent.click(await screen.findByText('Record now'));
     expect(onRecord).toHaveBeenCalledWith(manual);
   });
 

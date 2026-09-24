@@ -11,7 +11,7 @@
  * the system never showed its dialog. And delivery went through the deprecated
  * `NSUserNotificationCenter`, which macOS 26 no longer surfaces.
  *
- * Everything now goes through four Tauri commands over a native `UNUserNotificationCenter`
+ * Everything now goes through a handful of Tauri commands over a native `UNUserNotificationCenter`
  * implementation (`src-tauri/src/notifications/macos/`), and a press comes back as a
  * `notification-action` event rather than a plugin callback — which is what lets a button
  * work while Nixon is in the background, the whole point of the feature.
@@ -93,6 +93,13 @@ export interface NotifyOptions extends NotifyCallbacks {
   id?: string;
   /** Handed back verbatim on the action event; useful for logging and debugging. */
   userInfo?: Record<string, string>;
+  /**
+   * Deliver at this instant (epoch ms) rather than now (specs/0075 W2). More than a second
+   * ahead, macOS holds the request and delivers it itself — on time even while the webview's
+   * timers are throttled — so this is how a banner is scheduled. Delivering the same id again
+   * replaces the pending request; `cancelPending` withdraws it.
+   */
+  deliverAtMs?: number;
 }
 
 interface ActionEvent {
@@ -110,9 +117,37 @@ let listenerWired = false;
 let nextId = 1;
 
 const callbacks = new Map<string, NotifyCallbacks>();
+/** The expiry timer for each id's callbacks, so a re-registration can replace it. */
+const expiryTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
-/** An unpressed banner should not pin its callbacks forever. */
-const CALLBACK_TTL_MS = 60 * 60 * 1000;
+/**
+ * An unpressed banner should not pin its callbacks forever. Counted from when the banner is
+ * *delivered*: a start banner scheduled five minutes ahead must still route its buttons an
+ * hour after it appears, not an hour after it was scheduled.
+ */
+export const CALLBACK_TTL_MS = 60 * 60 * 1000;
+
+function forgetCallbacks(id: string): void {
+  callbacks.delete(id);
+  const timer = expiryTimers.get(id);
+  if (timer !== undefined) clearTimeout(timer);
+  expiryTimers.delete(id);
+}
+
+function registerCallbacks(id: string, registered: NotifyCallbacks, deliverAtMs?: number): void {
+  // Forget the previous registration's timer first: re-delivering an id (a reschedule, or the
+  // in-app start replacing a scheduled one) must not let the OLD timer expire the NEW callbacks.
+  forgetCallbacks(id);
+  callbacks.set(id, registered);
+  const untilDelivery = deliverAtMs === undefined ? 0 : Math.max(0, deliverAtMs - Date.now());
+  expiryTimers.set(
+    id,
+    setTimeout(() => {
+      callbacks.delete(id);
+      expiryTimers.delete(id);
+    }, untilDelivery + CALLBACK_TTL_MS),
+  );
+}
 
 /**
  * Can this build deliver an OS notification? Cached: it cannot change within a session,
@@ -188,7 +223,7 @@ async function ensureListener(): Promise<void> {
       const registered = callbacks.get(payload.notificationId);
       if (!registered) return;
       // Buttons are one-shot: the banner is gone once pressed.
-      callbacks.delete(payload.notificationId);
+      forgetCallbacks(payload.notificationId);
 
       switch (payload.actionId) {
         case ACTION_JOIN_AND_RECORD:
@@ -227,6 +262,7 @@ export async function notify(options: NotifyOptions): Promise<boolean> {
     onRecord,
     onPrep,
     onOpen,
+    deliverAtMs,
   } = options;
 
   const granted = await ensureNotificationPermission();
@@ -239,17 +275,35 @@ export async function notify(options: NotifyOptions): Promise<boolean> {
 
   const id = options.id ?? `nixon-${nextId++}`;
   if (onJoinAndRecord || onRecord || onPrep || onOpen) {
-    callbacks.set(id, { onJoinAndRecord, onRecord, onPrep, onOpen });
-    setTimeout(() => callbacks.delete(id), CALLBACK_TTL_MS);
+    registerCallbacks(id, { onJoinAndRecord, onRecord, onPrep, onOpen }, deliverAtMs);
   }
 
+  const request: Record<string, unknown> = { id, title, body, category, userInfo };
+  // Rust reads an i64: a fractional value fails to deserialize and the whole call rejects.
+  if (deliverAtMs !== undefined) request.deliverAtMs = Math.round(deliverAtMs);
+
   try {
-    await invoke('notif_deliver', { request: { id, title, body, category, userInfo } });
+    await invoke('notif_deliver', { request });
     return true;
   } catch (error) {
     console.warn('[osNotification] delivery failed:', error);
-    callbacks.delete(id);
+    forgetCallbacks(id);
     return false;
+  }
+}
+
+/**
+ * Withdraw a scheduled notification that has not been delivered yet (specs/0075 W2) and
+ * forget its callbacks. A delivered banner is left alone — `removeNotification` takes those
+ * down. Best-effort: never throws, an unknown id is a no-op, and a build that cannot notify
+ * (unbundled dev) has nothing pending to cancel.
+ */
+export async function cancelPending(id: string): Promise<void> {
+  forgetCallbacks(id);
+  try {
+    await invoke('notif_cancel_pending', { id });
+  } catch (error) {
+    console.warn('[osNotification] could not cancel pending notification:', error);
   }
 }
 
@@ -259,7 +313,7 @@ export async function notify(options: NotifyOptions): Promise<boolean> {
  * twice. Best-effort: never throws, and an id macOS no longer knows is a no-op.
  */
 export async function removeNotification(id: string): Promise<void> {
-  callbacks.delete(id);
+  forgetCallbacks(id);
   try {
     await invoke('notif_remove', { id });
   } catch (error) {
@@ -287,6 +341,8 @@ export async function focusMainWindow(): Promise<void> {
 export function __resetNotificationStateForTests(): void {
   capabilityPromise = null;
   listenerWired = false;
+  for (const timer of expiryTimers.values()) clearTimeout(timer);
+  expiryTimers.clear();
   callbacks.clear();
   nextId = 1;
 }

@@ -322,7 +322,7 @@ export default function PageContent({
         {/* specs/0064 W4 — the identity header spans the content area, like the header on
             every other screen (Today, Meetings, People all put their header outside the
             constrained body). Only the document below it is capped to a reading column. */}
-        <div className="w-full px-6 pt-6 sm:px-7">
+        <div className="w-full px-4 pt-6 min-[900px]:px-7">
           {/* Compressed identity: inline back button + editable serif title + meta row.
               An unobtrusive overflow menu (delete) aligns to the right of the row. */}
           <div className="flex items-start gap-2">
@@ -385,7 +385,7 @@ export default function PageContent({
 
         {/* Fluid reading column: full width of the content area up to a max cap (the
             content area already excludes the sidebar, so this never overflows). */}
-        <div className="mx-auto w-full max-w-[840px] px-6 pb-24 sm:px-7">
+        <div className="mx-auto w-full max-w-[840px] px-4 pb-24 min-[900px]:px-7">
           <DeleteMeetingDialog
             open={isDeleteDialogOpen}
             onOpenChange={setIsDeleteDialogOpen}

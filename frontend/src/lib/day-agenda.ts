@@ -9,8 +9,9 @@
  * dashboard never breaks.
  *
  * Backend contract (already built, camelCase):
- *   - `api_get_day_agenda` -> DayAgendaItem[]  (today, time-ordered; calendar
- *      events + ad-hoc recordings; best-effort, recordings even if calendar denied)
+ *   - `api_get_day_agenda` -> { items: DayAgendaItem[], calendarSource }  (today,
+ *      time-ordered; calendar events + ad-hoc recordings; best-effort, recordings even
+ *      if calendar denied). `calendarSource` since specs/0075 W3.
  */
 
 import { invoke } from '@tauri-apps/api/core';
@@ -85,24 +86,46 @@ export interface DayAgendaItem {
 }
 
 /**
- * Fetch a whole-day agenda. `date` is a local `YYYY-MM-DD` (specs/0038 WS4); omit
- * it (or pass `undefined`) for today — the backend treats `None` as today, so the
- * existing call sites keep working unchanged. Returns `[]` on any failure (e.g. bare
- * dev binary, command unavailable, or a malformed date the backend rejects). Never
- * throws — the dashboard degrades to an empty day rather than breaking.
+ * Which calendar a day agenda's calendar rows came from (specs/0075 W3). `'unknown'` is
+ * the frontend's own value for a read that failed outright (no answer from the backend),
+ * which is treated like EventKit: an unreliable empty.
  */
-export async function getDayAgenda(date?: string): Promise<DayAgendaItem[]> {
+export type AgendaCalendarSource = 'eventkit' | 'google' | 'unknown';
+
+export interface DayAgendaRead {
+  items: DayAgendaItem[];
+  calendarSource: AgendaCalendarSource;
+}
+
+/**
+ * Fetch a whole-day agenda with the calendar source it was read from. `date` is a local
+ * `YYYY-MM-DD` (specs/0038 WS4); omit it for today — the backend treats `None` as today.
+ * Never throws: any failure (bare dev binary, command unavailable, a malformed date)
+ * returns `{ items: [], calendarSource: 'unknown' }` so the dashboard degrades to an
+ * empty day rather than breaking.
+ */
+export async function readDayAgenda(date?: string): Promise<DayAgendaRead> {
   try {
     // Only thread `date` when provided so the today call is byte-for-byte the old one.
-    const result = await invoke<DayAgendaItem[]>(
-      'api_get_day_agenda',
-      date ? { date } : undefined,
-    );
-    return Array.isArray(result) ? result : [];
+    const result = await invoke<unknown>('api_get_day_agenda', date ? { date } : undefined);
+    // A pre-0075 backend returned the bare array (and read EventKit or Google without
+    // saying which) — treat it as EventKit so the old anti-flicker behaviour holds.
+    if (Array.isArray(result)) return { items: result as DayAgendaItem[], calendarSource: 'eventkit' };
+    const r = result as Partial<{ items: unknown; calendarSource: unknown }> | null;
+    const items = Array.isArray(r?.items) ? (r!.items as DayAgendaItem[]) : [];
+    const src = r?.calendarSource;
+    const calendarSource: AgendaCalendarSource =
+      src === 'google' || src === 'eventkit' ? src : 'unknown';
+    return { items, calendarSource };
   } catch (err) {
     console.warn('[day-agenda] getDayAgenda failed:', err);
-    return [];
+    return { items: [], calendarSource: 'unknown' };
   }
+}
+
+/** `readDayAgenda` without the source — the item list only. Never throws. */
+export async function getDayAgenda(date?: string): Promise<DayAgendaItem[]> {
+  return (await readDayAgenda(date)).items;
 }
 
 /**
@@ -158,14 +181,21 @@ export function setItemDismissed(
 // include calendar items — recordings always come back reliably, so a recordings-only
 // read must never overwrite a good calendar cache. sessionStorage (not localStorage)
 // so it's scoped to the app session and can't outlive a genuine same-day change.
+//
+// Keyed by local date (specs/0075 W3): `nixon.dayAgenda.<YYYY-MM-DD>`. The old single
+// key could hand a fresh mount the rows of whatever day was cached last.
 // ---------------------------------------------------------------------------
 
-const AGENDA_CACHE_KEY = 'nixon-day-agenda-cache';
+const AGENDA_CACHE_PREFIX = 'nixon.dayAgenda.';
 
-/** Read the last-good cached agenda for this session. Empty array if none/unavailable. */
-export function readCachedAgenda(): DayAgendaItem[] {
+function agendaCacheKey(dateKey: string): string {
+  return `${AGENDA_CACHE_PREFIX}${dateKey}`;
+}
+
+/** Read the last-good cached agenda for `dateKey` (local `YYYY-MM-DD`). Empty if none. */
+export function readCachedAgenda(dateKey: string): DayAgendaItem[] {
   try {
-    const raw = sessionStorage.getItem(AGENDA_CACHE_KEY);
+    const raw = sessionStorage.getItem(agendaCacheKey(dateKey));
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     return Array.isArray(parsed) ? (parsed as DayAgendaItem[]) : [];
@@ -175,16 +205,28 @@ export function readCachedAgenda(): DayAgendaItem[] {
 }
 
 /**
- * Cache the agenda as last-good. No-op unless the read includes calendar items, so a
- * transient calendar-less read never clobbers a good cache. Best-effort (swallows
- * storage errors).
+ * Cache the agenda as `dateKey`'s last-good. No-op unless the read includes calendar
+ * items, so a transient calendar-less read never clobbers a good cache. Best-effort
+ * (swallows storage errors).
  */
-export function cacheAgenda(items: DayAgendaItem[]): void {
+export function cacheAgenda(dateKey: string, items: DayAgendaItem[]): void {
   try {
     if (!items.some((it) => it.source === 'calendar')) return;
-    sessionStorage.setItem(AGENDA_CACHE_KEY, JSON.stringify(items));
+    sessionStorage.setItem(agendaCacheKey(dateKey), JSON.stringify(items));
   } catch {
     /* best-effort cache; ignore quota/serialization errors */
+  }
+}
+
+/**
+ * Forget `dateKey`'s cached agenda — for an authoritative empty read (Google), after
+ * which the cached calendar rows are known to be gone. Best-effort.
+ */
+export function clearCachedAgenda(dateKey: string): void {
+  try {
+    sessionStorage.removeItem(agendaCacheKey(dateKey));
+  } catch {
+    /* best-effort */
   }
 }
 

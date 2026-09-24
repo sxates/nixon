@@ -16,7 +16,7 @@ export function useStartupRecovery() {
   const [showRecoveryDialog, setShowRecoveryDialog] = useState(false);
 
   const recordingState = useRecordingState();
-  const { status } = recordingState;
+  const { status, synced } = recordingState;
   const { refetchMeetings } = useSidebar();
   const router = useRouter();
 
@@ -32,6 +32,14 @@ export function useStartupRecovery() {
   useEffect(() => {
     const performStartupChecks = async () => {
       try {
+        // specs/0075 W4: until the first get_recording_state reply lands, `isRecording`
+        // is the provider's initial `false` — after a reload mid-recording that would
+        // offer the live meeting for Delete/Recover. Wait for the real state.
+        if (!synced) {
+          console.log('Deferring recovery check - recording state not yet synced with backend');
+          return;
+        }
+
         // Skip recovery check if currently recording or processing stop
         // This prevents the recovery dialog from showing when:
         if (recordingState.isRecording ||
@@ -76,7 +84,7 @@ export function useStartupRecovery() {
     };
 
     performStartupChecks();
-  }, [checkForRecoverableTranscripts, recordingState.isRecording, status]);
+  }, [checkForRecoverableTranscripts, recordingState.isRecording, status, synced]);
 
   // Watch for recoverable meetings changes and show dialog once per session
   useEffect(() => {

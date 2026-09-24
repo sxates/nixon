@@ -51,6 +51,7 @@ import { DayTimeline } from '@/components/Today/DayTimeline';
 import { DayList } from '@/components/Today/DayList';
 import { WeekView } from '@/components/Today/WeekView';
 import { ConnectCalendarNudge } from '@/components/Today/ConnectCalendarNudge';
+import { GoogleReconnectRow } from '@/components/Today/GoogleReconnectRow';
 import { AddMeetingDialog } from '@/components/Today/AddMeetingDialog';
 import { DeleteManualMeetingDialog } from '@/components/Today/DeleteManualMeetingDialog';
 
@@ -334,7 +335,7 @@ function HomeView() {
       />
 
       {/* Body — the day timeline / week list; scrolls beneath the fixed toolbar. */}
-      <div className="flex-1 overflow-y-auto px-7 pb-12">
+      <div className="flex-1 overflow-y-auto px-4 min-[900px]:px-7 pb-12">
         <div className="mx-auto max-w-[840px]">
           {/* specs/0069 W4 — gated on `calendarConnected` (EventKit OR Google), not the
               EventKit-only `calendarStatus`: a Google-connected user must never be told
@@ -346,6 +347,9 @@ function HomeView() {
               <ConnectCalendarNudge />
             </div>
           )}
+          {/* specs/0074 W2 — Google connected but its grant lapsed: nothing syncs until
+              reconnect. Renders nothing otherwise, so its bottom margin lives on the row itself. */}
+          <GoogleReconnectRow />
 
           {viewMode === 'week' ? (
             !weekLoaded ? (
@@ -365,6 +369,7 @@ function HomeView() {
                   onHide: (it) => void handleHide(it),
                   onEdit: handleEditManual,
                   onDelete: handleDeleteManual,
+                  onRecord: handleRecordManual,
                 }}
               />
             )

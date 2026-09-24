@@ -590,7 +590,8 @@ async fn source_fingerprint(pool: &SqlitePool, prior_ids: &[String]) -> String {
 /// Hiding "Lunch" was buying a summarization of lunch.
 async fn upcoming_for_horizon<R: Runtime>(app: &AppHandle<R>, hours: u32) -> Vec<UpcomingMeeting> {
     let events = if crate::calendar::google_is_active_source(app).await {
-        crate::calendar::google::sync::sync_if_stale(app).await;
+        use crate::calendar::google::sync::{sync_if_stale, SyncTrigger};
+        sync_if_stale(app, SyncTrigger::Prep).await;
         let now = Utc::now();
         let end = now + chrono::Duration::hours(i64::from(hours));
         match crate::calendar::google::sync::db_pool(app) {

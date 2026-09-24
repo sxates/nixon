@@ -234,6 +234,7 @@ pub fn invoke_handler() -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Sen
         notifications::os_commands::notif_request_authorization,
         notifications::os_commands::notif_deliver,
         notifications::os_commands::notif_remove,
+        notifications::os_commands::notif_cancel_pending,
         notifications::os_commands::notif_open_system_settings,
         // System audio capture commands
         audio::system_audio_commands::start_system_audio_capture_command,

@@ -22,6 +22,7 @@ import {
 import { clearStopRecordingResult } from '@/lib/recording-stop';
 import { canDiscardMeeting } from '@/lib/discard-meeting';
 import { surfaceRecordingStartFailure } from '@/lib/recording-start-errors';
+import { AUTO_START_ABANDONED_EVENT } from '@/hooks/useRecordEmptyPhase';
 import { toast } from 'sonner';
 
 interface UseRecordingStartReturn {
@@ -624,6 +625,9 @@ export function useRecordingStart(
             }
             setStatus(RecordingStatus.IDLE);
             setIsAutoStarting(false);
+            // The start never reached STARTING: tell the record page to stop showing
+            // "Listening…" for it (useRecordEmptyPhase).
+            window.dispatchEvent(new Event(AUTO_START_ABANDONED_EVENT));
             return;
           }
 

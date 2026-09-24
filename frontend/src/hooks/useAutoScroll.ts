@@ -2,6 +2,7 @@ import { useRef, useState, useEffect, useCallback, RefObject } from "react";
 import { Virtualizer } from "@tanstack/react-virtual";
 import {
     FollowState,
+    LOCKED_FOLLOW,
     nextFollowState,
     shouldStickToBottomOnAppend,
 } from "@/lib/auto-scroll";
@@ -72,7 +73,9 @@ export function useAutoScroll({
     // Single source of truth for follow decisions; the `autoScroll` state mirrors
     // `.following` for consumers. A ref so effects/listeners always read the latest
     // value synchronously (no debounce race).
-    const followStateRef = useRef<FollowState>({ following: true, followLocked: false });
+    // Starts LOCKED (see LOCKED_FOLLOW): a fresh live transcript follows until the user
+    // scrolls up, not until the first row re-measure.
+    const followStateRef = useRef<FollowState>(LOCKED_FOLLOW);
 
     const applyFollowState = useCallback((next: FollowState) => {
         followStateRef.current = next;
@@ -112,17 +115,21 @@ export function useAutoScroll({
     }, [scrollRef, applyFollowState]);
 
     /** External override (kept for API compatibility): forcing follow off also drops
-     *  the lock; forcing it on re-attaches without locking (that's jump-only). */
+     *  the lock; forcing it on locks, like every other way back to following. */
     const setAutoScroll = useCallback(
         (value: boolean) => {
-            applyFollowState(
-                value
-                    ? { ...followStateRef.current, following: true }
-                    : { following: false, followLocked: false },
-            );
+            applyFollowState(value ? LOCKED_FOLLOW : { following: false, followLocked: false });
         },
         [applyFollowState],
     );
+
+    // A new recording always starts following, whatever the last one was left at — this
+    // view can outlive a recording (owner feedback 2026-09-23).
+    const wasRecordingRef = useRef(isRecording);
+    useEffect(() => {
+        if (isRecording && !wasRecordingRef.current) applyFollowState(LOCKED_FOLLOW);
+        wasRecordingRef.current = isRecording;
+    }, [isRecording, applyFollowState]);
 
     // Handle scroll events to detect manual scrolling (hysteresis; can never clear the
     // follow lock — scroll events also fire for programmatic and content-growth scrolls).

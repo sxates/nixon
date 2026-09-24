@@ -14,6 +14,9 @@ interface TranscriptEmptyStateProps {
   unprocessed: boolean;
   /** specs/0045 WS4 — "Process now" action, forwarded to the unprocessed variant. */
   onProcessNow?: () => void;
+  /** The record page's start/stop transition (useRecordEmptyPhase). `'starting'` looks
+   *  exactly like recording; `'saving'` says the meeting is being saved. */
+  phase?: 'starting' | 'saving';
 }
 
 /**
@@ -23,16 +26,19 @@ interface TranscriptEmptyStateProps {
  * unchanged in behavior from their prior inline form:
  *  - recording (Listening… / paused)
  *  - unprocessed deferred recording (specs/0045 WS4)
- *  - fresh meeting ("Welcome to Nixon!")
+ *  - no transcript yet
+ * The idle copy was a "Welcome to Nixon!" heading until 2026-09-23: the record page showed
+ * it for a moment after REC and again while a stopped meeting saved (owner feedback), so
+ * the record page now passes its transition `phase` and the idle copy is plain.
  */
-export function TranscriptEmptyState({ isRecording, isPaused, unprocessed, onProcessNow }: TranscriptEmptyStateProps) {
+export function TranscriptEmptyState({ isRecording, isPaused, unprocessed, onProcessNow, phase }: TranscriptEmptyStateProps) {
   return (
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       className="text-center text-muted-foreground mt-8"
     >
-      {isRecording ? (
+      {isRecording || phase === 'starting' ? (
         <>
           <div className="flex items-center justify-center mb-3">
             <div className={`w-3 h-3 rounded-full ${isPaused ? 'bg-muted-foreground' : 'bg-record animate-pulse'}`}></div>
@@ -44,13 +50,19 @@ export function TranscriptEmptyState({ isRecording, isPaused, unprocessed, onPro
             {isPaused ? 'Click resume to continue recording' : 'Speak to see live transcription'}
           </p>
         </>
+      ) : phase === 'saving' ? (
+        <>
+          <div className="flex items-center justify-center mb-3">
+            <div className="w-3 h-3 rounded-full bg-muted-foreground"></div>
+          </div>
+          <p className="text-sm text-muted-foreground">Saving the recording…</p>
+        </>
       ) : unprocessed ? (
         <UnprocessedTranscriptEmptyState onProcessNow={onProcessNow} />
       ) : (
-        <>
-          <p className="font-display text-lg font-semibold">Welcome to Nixon!</p>
-          <p className="text-xs mt-1">Start recording to see live transcription</p>
-        </>
+        // Plain, because meeting details shares this state: "press REC" would be wrong
+        // on a past meeting's transcript tab.
+        <p className="text-sm text-muted-foreground">No transcript yet</p>
       )}
     </motion.div>
   );

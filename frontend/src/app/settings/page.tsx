@@ -125,7 +125,7 @@ function SettingsPageContent() {
           the title so it stays visible while the tab content scrolls. */}
       <PageHeader title="Settings" className="pb-0" />
 
-      <div className="flex-shrink-0 px-7">
+      <div className="flex-shrink-0 px-4 min-[900px]:px-7">
         {/* Pure-CSS underline (specs/0057 Task 2): the active tab owns a 2px brand
             border-bottom, the same formula as the meeting-details tab bar. The old
             measured framer-motion bar could land in the wrong place on first paint. */}
@@ -146,7 +146,7 @@ function SettingsPageContent() {
       </div>
 
       {/* Scrollable content — only this area scrolls. */}
-      <div className="flex-1 overflow-y-auto px-7 pb-12">
+      <div className="flex-1 overflow-y-auto px-4 min-[900px]:px-7 pb-12">
         <div className="mx-auto max-w-[1080px] pt-6">
           <TabsContent value="general" className="space-y-8">
             {/* General order: Appearance → Notifications → Recording permissions →

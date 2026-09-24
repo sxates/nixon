@@ -60,8 +60,12 @@ describe('useAutoScroll — sticky follow lock (WS7.1)', () => {
     it('locks on Jump-to-latest and survives content growth + scroll events', () => {
         const { el, geometry, hook } = setup();
 
-        // User scrolls up to review → natural hysteresis detaches.
+        // User wheels up to review → detaches (follow starts locked, so only real upward
+        // input can do this — a bare scroll event can't).
         geometry.scrollTop = 200; // distance from bottom: 1000 - 200 - 300 = 500
+        act(() => {
+            el.dispatchEvent(new WheelEvent('wheel', { deltaY: -100 }));
+        });
         settleScrollEvent(el);
         expect(hook.result.current.autoScroll).toBe(false);
 
@@ -193,6 +197,22 @@ describe('useAutoScroll — sticky follow lock (WS7.1)', () => {
             vi.advanceTimersByTime(200);
         });
         expect(hook.result.current.autoScroll).toBe(true);
+    });
+
+    it('a fresh recording follows through a row re-measure (owner feedback 2026-09-23)', () => {
+        const { el, geometry, hook } = setup();
+        // At the bottom; then the virtualizer re-measures rows: scrollHeight grows under
+        // the viewport and a non-programmatic scroll event lands far from the new bottom.
+        // This used to detach follow before the user had touched anything.
+        geometry.scrollTop = 700; // distance 0
+        geometry.scrollHeight = 1600; // distance: 1600 - 700 - 300 = 600
+        settleScrollEvent(el);
+        expect(hook.result.current.autoScroll).toBe(true);
+        act(() => {
+            hook.rerender({ segments: seg(4) });
+            vi.advanceTimersByTime(200);
+        });
+        expect(geometry.scrollTop).toBe(1600);
     });
 
     it('natural follow (no jump) keeps the hysteresis detach behavior', () => {

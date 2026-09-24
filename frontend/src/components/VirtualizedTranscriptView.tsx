@@ -82,6 +82,8 @@ export interface VirtualizedTranscriptViewProps {
     /** specs/0045 WS4 — "Process now" action for the unprocessed empty state. When
      *  absent, the button is omitted (e.g. no meetingId to enqueue). */
     onProcessNow?: () => void;
+    /** The record page's start/stop transition, for the empty state (useRecordEmptyPhase). */
+    emptyPhase?: 'starting' | 'saving';
 
     /** specs/0061 W5 (task 5) — save a line's manually corrected RAW text. Resolves
      *  `true` on success (the row's edit sticks) or `false` on failure — the row
@@ -125,6 +127,7 @@ export const VirtualizedTranscriptView: React.FC<VirtualizedTranscriptViewProps>
     onScrollToSegmentDone,
     unprocessed = false,
     onProcessNow,
+    emptyPhase,
     onEditText,
     liveTranscription = true,
 }) => {
@@ -589,6 +592,7 @@ export const VirtualizedTranscriptView: React.FC<VirtualizedTranscriptViewProps>
                     isPaused={isPaused}
                     unprocessed={unprocessed}
                     onProcessNow={onProcessNow}
+                    phase={emptyPhase}
                 />
             ) : useVirtualization ? (
                 // Virtualized rendering for large lists

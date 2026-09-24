@@ -18,18 +18,30 @@ vi.mock('next/navigation', () => ({
   useSearchParams: () => ({ get: searchParamsGetMock }),
 }));
 
-const { getDayAgendaMock } = vi.hoisted(() => ({
-  getDayAgendaMock: vi.fn().mockResolvedValue([]),
-}));
-vi.mock('@/lib/day-agenda', () => ({
-  getDayAgenda: getDayAgendaMock,
-  readCachedAgenda: vi.fn().mockReturnValue([]),
-  cacheAgenda: vi.fn(),
-  dismissCalendarEvent: vi.fn(),
-  undismissCalendarEvent: vi.fn(),
-  dismissKeysFor: vi.fn(() => ['k']),
-  setItemDismissed: vi.fn((items: unknown[]) => items),
-}));
+// `getDayAgendaMock` supplies the items; `sourceRef.current` the calendar source the
+// backend reports with them (specs/0075 W3). The date-keyed cache helpers are the real
+// ones, over jsdom's sessionStorage (cleared in beforeEach).
+const { getDayAgendaMock, readDayAgendaMock, sourceRef } = vi.hoisted(() => {
+  const sourceRef = { current: 'eventkit' as 'eventkit' | 'google' | 'unknown' };
+  const getDayAgendaMock = vi.fn().mockResolvedValue([]);
+  const readDayAgendaMock = vi.fn(async (date?: string) => ({
+    items: await getDayAgendaMock(date),
+    calendarSource: sourceRef.current,
+  }));
+  return { getDayAgendaMock, readDayAgendaMock, sourceRef };
+});
+vi.mock('@/lib/day-agenda', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/day-agenda')>('@/lib/day-agenda');
+  return {
+    ...actual,
+    getDayAgenda: getDayAgendaMock,
+    readDayAgenda: readDayAgendaMock,
+    dismissCalendarEvent: vi.fn(),
+    undismissCalendarEvent: vi.fn(),
+    dismissKeysFor: vi.fn(() => ['k']),
+    setItemDismissed: vi.fn((items: unknown[]) => items),
+  };
+});
 
 const { isAnyCalendarConnectedMock } = vi.hoisted(() => ({
   isAnyCalendarConnectedMock: vi.fn(),
@@ -39,14 +51,27 @@ vi.mock('@/lib/calendar', () => ({
   isAnyCalendarConnected: isAnyCalendarConnectedMock,
 }));
 
-vi.mock('@/lib/safe-listen', () => ({ safeListen: vi.fn(() => () => {}) }));
+// Records each subscribed handler by event name so a test can fire the event.
+const { listeners } = vi.hoisted(() => ({ listeners: new Map<string, () => void>() }));
+vi.mock('@/lib/safe-listen', () => ({
+  safeListen: vi.fn((event: string, handler: () => void) => {
+    listeners.set(event, handler);
+    return () => {};
+  }),
+}));
 
 import { useDayAgenda } from '@/hooks/useDayAgenda';
+import { cacheAgenda, type DayAgendaItem } from '@/lib/day-agenda';
+import { localDateKey, shiftDateKey } from '@/lib/today-timeline';
 
 beforeEach(() => {
   searchParamsGetMock.mockReset().mockReturnValue(null);
   isAnyCalendarConnectedMock.mockReset();
   getDayAgendaMock.mockReset().mockResolvedValue([]);
+  readDayAgendaMock.mockClear();
+  sourceRef.current = 'eventkit';
+  listeners.clear();
+  sessionStorage.clear();
   try {
     window.localStorage.clear();
   } catch {
@@ -154,5 +179,71 @@ describe('useDayAgenda anti-flicker merge (specs/0069b review fix)', () => {
     });
     // The calendar row is still kept too (the anti-flicker protection it already had).
     expect(result.current.items.some((it) => it.id === 'cal-1')).toBe(true);
+  });
+});
+
+describe('useDayAgenda calendar source + date-keyed cache (specs/0075 W3)', () => {
+  const cal = () => agendaItem({ id: 'cal-1', source: 'calendar', title: 'Moved meeting' });
+
+  it('drops calendar rows when a Google read comes back with none (a reschedule off today)', async () => {
+    isAnyCalendarConnectedMock.mockResolvedValue(true);
+    sourceRef.current = 'google';
+    getDayAgendaMock.mockResolvedValueOnce([cal()]);
+    const { result } = renderHook(() => useDayAgenda());
+    await waitFor(() => expect(result.current.items).toEqual([cal()]));
+
+    getDayAgendaMock.mockResolvedValueOnce([]);
+    await act(async () => {
+      await result.current.refresh();
+    });
+    expect(result.current.items).toEqual([]);
+    // …and the cache is forgotten too, so the next mount doesn't bring the row back.
+    const { result: remount } = renderHook(() => useDayAgenda());
+    expect(remount.current.items).toEqual([]);
+    await waitFor(() => expect(remount.current.calendarConnected).toBe(true));
+  });
+
+  it('keeps the previous calendar rows when an EventKit read comes back with none', async () => {
+    isAnyCalendarConnectedMock.mockResolvedValue(true);
+    sourceRef.current = 'eventkit';
+    getDayAgendaMock.mockResolvedValueOnce([cal()]);
+    const { result } = renderHook(() => useDayAgenda());
+    await waitFor(() => expect(result.current.items).toEqual([cal()]));
+
+    getDayAgendaMock.mockResolvedValueOnce([]);
+    await act(async () => {
+      await result.current.refresh();
+    });
+    expect(result.current.items).toEqual([cal()]);
+  });
+
+  it("never seeds today from another day's cached rows", async () => {
+    isAnyCalendarConnectedMock.mockResolvedValue(true);
+    const yesterday = shiftDateKey(localDateKey(), -1);
+    cacheAgenda(yesterday, [cal() as DayAgendaItem]);
+    // Hold the first read so we see the cache-seeded initial state, then an empty
+    // EventKit read (the anti-flicker path that falls back to the cache).
+    let resolve: (v: DayAgendaItemLike[]) => void = () => {};
+    getDayAgendaMock.mockReturnValueOnce(new Promise((r) => (resolve = r)));
+    const { result } = renderHook(() => useDayAgenda());
+    expect(result.current.items).toEqual([]);
+    await act(async () => {
+      resolve([]);
+    });
+    await waitFor(() => expect(readDayAgendaMock).toHaveBeenCalled());
+    expect(result.current.items).toEqual([]);
+  });
+
+  it('re-reads the agenda when a Google sync finishes', async () => {
+    isAnyCalendarConnectedMock.mockResolvedValue(true);
+    renderHook(() => useDayAgenda());
+    await waitFor(() => expect(readDayAgendaMock).toHaveBeenCalled());
+    const before = readDayAgendaMock.mock.calls.length;
+    const handler = listeners.get('google-calendar-synced');
+    expect(handler).toBeDefined();
+    await act(async () => {
+      handler!();
+    });
+    expect(readDayAgendaMock.mock.calls.length).toBeGreaterThan(before);
   });
 });

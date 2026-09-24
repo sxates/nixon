@@ -18,6 +18,7 @@ const { level, mode, micMuted } = vi.hoisted(() => ({
 
 vi.mock('@/hooks/useRecordingLevel', () => ({ useRecordingLevel: () => level }));
 vi.mock('@/hooks/useProcessingMode', () => ({ useProcessingMode: () => mode }));
+vi.mock('@/hooks/useRecordEmptyPhase', () => ({ useRecordEmptyPhase: () => undefined }));
 vi.mock('@/hooks/useMicGate', () => ({ useMicGate: () => micMuted.value }));
 vi.mock('@/hooks/useAutoScroll', () => ({
   useAutoScroll: () => ({ autoScroll: true, scrollToBottom: vi.fn() }),

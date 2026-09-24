@@ -17,7 +17,8 @@ use objc2_foundation::{NSArray, NSSet, NSString};
 use objc2_user_notifications::{
     UNMutableNotificationContent, UNNotificationAction, UNNotificationActionOptions,
     UNNotificationCategory, UNNotificationCategoryOptions, UNNotificationRequest,
-    UNNotificationSound, UNUserNotificationCenter,
+    UNNotificationSound, UNNotificationTrigger, UNTimeIntervalNotificationTrigger,
+    UNUserNotificationCenter,
 };
 
 use super::{
@@ -120,30 +121,41 @@ pub fn deliver(request: DeliverRequest) -> Result<()> {
         content.setCategoryIdentifier(&NSString::from_str(category));
     }
 
-    // A nil trigger means "deliver now" — Nixon decides when to alert (it already polls on
-    // a 60s tick), so nothing here is scheduled. See the spec's non-goals.
+    // A nil trigger means "deliver now" — the normal case: Nixon decides when to alert on
+    // its own 60s tick. The exception is `deliver_at_ms` (specs/0075 W2): the T-0 "starting
+    // now" banner is handed to macOS at T-5, because a backgrounded webview's timers are
+    // throttled and macOS keeps time regardless.
+    let now_ms = chrono::Utc::now().timestamp_millis();
+    let delay_secs = super::schedule_delay_secs(request.deliver_at_ms, now_ms);
+    let trigger = delay_secs.map(|secs| {
+        UNTimeIntervalNotificationTrigger::triggerWithTimeInterval_repeats(secs, false)
+    });
+    let trigger: Option<&UNNotificationTrigger> = trigger.as_deref().map(|t| &**t);
     let un_request = UNNotificationRequest::requestWithIdentifier_content_trigger(
         &NSString::from_str(&request.id),
         &content,
-        None,
+        trigger,
     );
 
     let center = UNUserNotificationCenter::currentNotificationCenter();
     center.addNotificationRequest_withCompletionHandler(&un_request, None);
-    log::info!(
-        "notifications: delivered {} (category={:?}, auto_dismiss={:?}ms)",
-        request.id,
-        request.category,
-        request
-            .auto_dismiss_ms
-            .or_else(|| super::default_auto_dismiss_ms(request.category.as_deref()))
-    );
 
-    // The caller's explicit value wins; otherwise the category decides.
-    if let Some(ms) = request
-        .auto_dismiss_ms
-        .or_else(|| super::default_auto_dismiss_ms(request.category.as_deref()))
-    {
+    // The caller's explicit value wins; otherwise the category decides — and a scheduled
+    // request gets none, since this timer would count from now rather than from delivery.
+    let auto_dismiss = super::effective_auto_dismiss_ms(&request, delay_secs.is_some());
+    match delay_secs {
+        Some(secs) => log::info!(
+            "notifications: scheduled {} in {secs:.0}s (category={:?})",
+            request.id,
+            request.category
+        ),
+        None => log::info!(
+            "notifications: delivered {} (category={:?}, auto_dismiss={auto_dismiss:?}ms)",
+            request.id,
+            request.category
+        ),
+    }
+    if let Some(ms) = auto_dismiss {
         schedule_dismiss(request.id.clone(), ms);
     }
     Ok(())
@@ -167,19 +179,37 @@ fn schedule_dismiss(id: String, ms: u64) {
         if !super::capability().supported {
             return;
         }
-        remove(&id);
+        // Delivered only: a request re-sent under this id as a *scheduled* one in the
+        // meantime must survive the old banner's timer (specs/0075 W2).
+        remove_delivered(&id);
         log::info!("notifications: auto-dismissed {id} after {ms}ms");
     });
 }
 
-/// Take a notification down now — off the screen and out of Notification Center. A no-op
-/// for an id macOS no longer knows. Callers must have checked `super::capability()` first
-/// (the public entry point is `super::remove`, which does).
+/// Take a notification down now — off the screen and out of Notification Center, and out of
+/// the pending queue if it was scheduled and has not fired yet. A no-op for an id macOS no
+/// longer knows. Callers must have checked `super::capability()` first (the public entry
+/// point is `super::remove`, which does).
 pub fn remove(id: &str) {
+    remove_delivered(id);
+    cancel_pending(id);
+}
+
+fn remove_delivered(id: &str) {
     let center = UNUserNotificationCenter::currentNotificationCenter();
     let ns_id = NSString::from_str(id);
     let ids = NSArray::from_slice(&[&*ns_id]);
     center.removeDeliveredNotificationsWithIdentifiers(&ids);
+}
+
+/// Withdraw a scheduled notification that has not been delivered yet, leaving a delivered
+/// one with the same id alone. Callers must have checked `super::capability()` first (the
+/// public entry point is `super::cancel_pending`, which does).
+pub fn cancel_pending(id: &str) {
+    let center = UNUserNotificationCenter::currentNotificationCenter();
+    let ns_id = NSString::from_str(id);
+    let ids = NSArray::from_slice(&[&*ns_id]);
+    center.removePendingNotificationRequestsWithIdentifiers(&ids);
 }
 
 fn remember(id: &str, user_info: HashMap<String, String>) {

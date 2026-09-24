@@ -9,7 +9,6 @@ import {
   type TimelineContext,
   type TimelineVisualState,
 } from '@/lib/today-timeline';
-import { RecordingBadge } from '@/components/RecordingBadge';
 import { StateChip } from './TimelineBlock';
 import { AgendaAttendees } from './AgendaAttendees';
 import { AgendaRowMenu, type AgendaRowActions } from './AgendaRowMenu';
@@ -19,14 +18,12 @@ function WeekRow({
   item,
   state,
   ctx,
-  isRecordingThis,
   onSelect,
   actions,
 }: {
   item: DayAgendaItem;
   state: TimelineVisualState;
   ctx: TimelineContext;
-  isRecordingThis: boolean;
   onSelect: (item: DayAgendaItem) => void;
   actions: AgendaRowActions;
 }) {
@@ -61,11 +58,10 @@ function WeekRow({
       >
         {title}
       </span>
-      {/* Faces instead of nothing, and the live meeting reads as live — the two things
-          All Meetings had and Today didn't (owner feedback 2026-09-21). Week rows are the
-          narrowest of the three views, so the cluster is capped tighter. */}
+      {/* Faces instead of nothing, as All Meetings has (owner feedback 2026-09-21). Week
+          rows are the narrowest of the three views, so the cluster is capped tighter. The
+          live meeting's reels badge is its StateChip. */}
       <AgendaAttendees item={item} max={2} className="hidden sm:flex" />
-      {isRecordingThis && <RecordingBadge />}
       <StateChip state={state} />
       <AgendaRowMenu item={item} ctx={ctx} actions={actions} />
     </div>
@@ -142,7 +138,6 @@ export function WeekView({
                     item={it}
                     state={itemVisualState(it, ctx)}
                     ctx={ctx}
-                    isRecordingThis={ctx.recordingThisId === it.id}
                     onSelect={onSelectItem}
                     actions={actions}
                   />

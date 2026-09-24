@@ -312,7 +312,7 @@ export default function TasksPage() {
       />
 
       {/* Filter bar: status · view (Mine/Everyone/By person) · sort · bulk. */}
-      <div className="flex-shrink-0 px-7 pb-3">
+      <div className="flex-shrink-0 px-4 min-[900px]:px-7 pb-3">
         <div className="mx-auto flex max-w-[840px] flex-wrap items-center gap-2">
           <SegmentedControl
             aria-label="Filter by status"
@@ -460,7 +460,7 @@ export default function TasksPage() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-7 pb-12">
+      <div className="flex-1 overflow-y-auto px-4 min-[900px]:px-7 pb-12">
         <div className="mx-auto max-w-[840px]">
           {/* Standalone to-do entry — creates an "Unattached" manual item. */}
           <AddActionItemRow placeholder="New item — add a to-do…" onAdd={add} />

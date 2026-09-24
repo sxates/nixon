@@ -80,9 +80,8 @@ vi.mock('@/hooks/useDayAgenda', () => ({
     visibleItems: [manualItem],
     calendarStatus: 'granted',
     loaded: true,
-    // canRecordManualItem no longer phase-gates Record (fix round 2), so this only
-    // matters for the startsAt tests below — it can sit anywhere relative to the
-    // manual item's window and Record still renders.
+    // Decides whether the row shows the Record button (inside the start window) or Prep
+    // with "Record now" in its menu (earlier) — and the startsAt the tests below expect.
     now: mockNow,
     viewDate: '2026-09-20',
     viewMode: 'day',
@@ -197,17 +196,27 @@ describe('edit → close → add (specs/0069 W3, fix round 1 Finding 2)', () => 
 describe('handleRecordManual startsAt (fix round 2, specs/0069 followup a)', () => {
   // The manual item is scheduled 15:00–15:30 UTC.
 
-  it('offers Record on a manual entry scheduled well in the future (no phase gate)', async () => {
+  // Owner feedback 2026-09-24: an hour out the row shows Prep like a calendar meeting, and
+  // recording early moved into the row's `…` menu.
+  const openRecordNow = async () => {
+    const trigger = await screen.findByRole('button', { name: 'Event options' });
+    trigger.focus();
+    fireEvent.keyDown(trigger, { key: 'Enter' });
+    fireEvent.click(await screen.findByText('Record now'));
+  };
+
+  it('shows Prep, not the Record button, on a manual entry well in the future', async () => {
     mockNow = new Date('2026-09-20T14:00:00.000Z'); // an hour before the 15:00 start
     render(<Home />);
-    expect(await screen.findByRole('button', { name: 'Record' })).toBeInTheDocument();
+    expect(await screen.findByText('Prep')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Record' })).not.toBeInTheDocument();
   });
 
   it('sends roughly now — not the future scheduled start — as startedAt when recording early', async () => {
     mockNow = new Date('2026-09-20T14:00:00.000Z'); // an hour before the 15:00 start
     render(<Home />);
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Record' }));
+    await openRecordNow();
 
     await waitFor(() => {
       const call = invokeMock.mock.calls.find(([cmd]) => cmd === 'api_create_meeting');

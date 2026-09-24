@@ -5,6 +5,7 @@ import {
   initials,
   readCachedAgenda,
   cacheAgenda,
+  clearCachedAgenda,
   setItemDismissed,
   dismissKeysFor,
   type DayAgendaItem,
@@ -128,20 +129,38 @@ describe('initials', () => {
 describe('agenda last-good cache', () => {
   beforeEach(() => sessionStorage.clear());
 
+  const DAY = '2026-09-23';
+
   it('round-trips a calendar-bearing agenda', () => {
     const agenda = [item({ id: 'a', source: 'calendar' })];
-    cacheAgenda(agenda);
-    expect(readCachedAgenda()).toEqual(agenda);
+    cacheAgenda(DAY, agenda);
+    expect(readCachedAgenda(DAY)).toEqual(agenda);
   });
 
   it('does NOT cache a recordings-only read (so a cold read cannot clobber a good cache)', () => {
-    cacheAgenda([item({ id: 'good', source: 'calendar' })]);
-    cacheAgenda([item({ id: 'rec', source: 'recording' })]); // should be ignored
-    expect(readCachedAgenda()).toEqual([item({ id: 'good', source: 'calendar' })]);
+    cacheAgenda(DAY, [item({ id: 'good', source: 'calendar' })]);
+    cacheAgenda(DAY, [item({ id: 'rec', source: 'recording' })]); // should be ignored
+    expect(readCachedAgenda(DAY)).toEqual([item({ id: 'good', source: 'calendar' })]);
   });
 
   it('returns [] when nothing is cached', () => {
-    expect(readCachedAgenda()).toEqual([]);
+    expect(readCachedAgenda(DAY)).toEqual([]);
+  });
+
+  // specs/0075 W3 — the cache used to be one key, so a fresh mount could show the rows
+  // of whatever day was cached last.
+  it("never returns one date's rows for another date", () => {
+    cacheAgenda('2026-09-22', [item({ id: 'yesterday', source: 'calendar' })]);
+    expect(readCachedAgenda(DAY)).toEqual([]);
+    expect(readCachedAgenda('2026-09-22')).toHaveLength(1);
+  });
+
+  it('clearCachedAgenda forgets only that date', () => {
+    cacheAgenda(DAY, [item({ id: 'a', source: 'calendar' })]);
+    cacheAgenda('2026-09-22', [item({ id: 'b', source: 'calendar' })]);
+    clearCachedAgenda(DAY);
+    expect(readCachedAgenda(DAY)).toEqual([]);
+    expect(readCachedAgenda('2026-09-22')).toHaveLength(1);
   });
 });
 

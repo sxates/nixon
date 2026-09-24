@@ -19,7 +19,9 @@ import {
   formatLastSynced,
   getGoogleCalendarStatus,
   getGoogleCapabilities,
+  calendarSyncLine,
   setGoogleCalendarSelected,
+  syncChangeCount,
   syncGoogleCalendarNow,
 } from '@/lib/googleCalendar';
 
@@ -33,8 +35,24 @@ describe('getGoogleCalendarStatus', () => {
       configured: true,
       connected: true,
       email: 'ada@example.com',
+      authRequired: true,
       lastSyncedAt: '2026-07-02T10:00:00Z',
-      calendars: [{ id: 'cal-1', summary: 'Work', selected: true }],
+      calendars: [
+        {
+          id: 'cal-1',
+          summary: 'Work',
+          selected: true,
+          lastSyncedAt: '2026-07-02T10:00:00Z',
+          lastError: null,
+        },
+        {
+          id: 'cal-2',
+          summary: 'Team',
+          selected: true,
+          lastSyncedAt: null,
+          lastError: 'HTTP 403: forbidden',
+        },
+      ],
     };
     invoke.mockResolvedValue(status);
 
@@ -49,6 +67,7 @@ describe('getGoogleCalendarStatus', () => {
       configured: false,
       connected: false,
       email: null,
+      authRequired: false,
       lastSyncedAt: null,
       calendars: [],
     });
@@ -61,6 +80,7 @@ describe('getGoogleCalendarStatus', () => {
       configured: true,
       connected: false,
       email: null,
+      authRequired: false,
       lastSyncedAt: null,
       calendars: [],
     });
@@ -92,7 +112,11 @@ describe('setGoogleCalendarSelected', () => {
   it('sends EXACT camelCase invoke arg keys { calendarId, selected }', async () => {
     invoke.mockResolvedValue(undefined);
 
-    await expect(setGoogleCalendarSelected('cal-42', false)).resolves.toBe(true);
+    invoke.mockResolvedValue(null);
+    await expect(setGoogleCalendarSelected('cal-42', false)).resolves.toEqual({
+      ok: true,
+      outcome: null,
+    });
     expect(invoke).toHaveBeenCalledTimes(1);
     expect(invoke).toHaveBeenCalledWith('api_google_calendar_set_calendar_selected', {
       calendarId: 'cal-42',
@@ -104,9 +128,22 @@ describe('setGoogleCalendarSelected', () => {
     expect(Object.keys(args)).toEqual(['calendarId', 'selected']);
   });
 
-  it('never throws: returns false when the command rejects', async () => {
+  it('never throws: returns ok:false when the command rejects', async () => {
     invoke.mockRejectedValue(new Error('boom'));
-    await expect(setGoogleCalendarSelected('cal-42', true)).resolves.toBe(false);
+    await expect(setGoogleCalendarSelected('cal-42', true)).resolves.toEqual({ ok: false });
+  });
+
+  it('passes an enabling sync outcome through, per-calendar error included', async () => {
+    invoke.mockResolvedValue({
+      kind: 'synced',
+      durationMs: 40,
+      calendars: [{ calendarId: 'cal-42', summary: 'Work', error: 'HTTP 500' }],
+    });
+    const result = await setGoogleCalendarSelected('cal-42', true);
+    expect(result.ok).toBe(true);
+    const outcome = result.ok ? result.outcome : null;
+    expect(outcome?.kind).toBe('synced');
+    expect(outcome?.kind === 'synced' && outcome.calendars[0].error).toBe('HTTP 500');
   });
 });
 
@@ -120,13 +157,77 @@ describe('disconnect / sync now', () => {
     await expect(disconnectGoogleCalendar()).resolves.toBe(false);
   });
 
-  it('syncGoogleCalendarNow returns true on success, false on failure', async () => {
-    invoke.mockResolvedValue(undefined);
-    await expect(syncGoogleCalendarNow()).resolves.toBe(true);
+  it('syncGoogleCalendarNow returns the parsed outcome, not a boolean', async () => {
+    invoke.mockResolvedValue({ kind: 'alreadyRunning' });
+    await expect(syncGoogleCalendarNow()).resolves.toEqual({ kind: 'alreadyRunning' });
     expect(invoke).toHaveBeenCalledWith('api_google_calendar_sync_now');
 
-    invoke.mockRejectedValue(new Error('boom'));
-    await expect(syncGoogleCalendarNow()).resolves.toBe(false);
+    invoke.mockResolvedValue({
+      kind: 'synced',
+      durationMs: 812,
+      calendars: [
+        {
+          calendarId: 'primary',
+          summary: 'Work',
+          isPrimary: true,
+          mode: 'incremental',
+          fetched: 3,
+          upserted: 2,
+          deleted: 1,
+          durationMs: 800,
+          error: null,
+        },
+      ],
+    });
+    const outcome = await syncGoogleCalendarNow();
+    expect(outcome.kind).toBe('synced');
+    expect(syncChangeCount(outcome)).toBe(3);
+  });
+
+  it('syncGoogleCalendarNow throws the backend message when the pass fails', async () => {
+    invoke.mockRejectedValue('Google Calendar sync failed: timed out after 120s');
+    await expect(syncGoogleCalendarNow()).rejects.toThrow(
+      'Google Calendar sync failed: timed out after 120s',
+    );
+  });
+
+  it('syncGoogleCalendarNow refuses an unrecognized payload instead of calling it a sync', async () => {
+    invoke.mockResolvedValue(undefined);
+    await expect(syncGoogleCalendarNow()).rejects.toThrow(/unexpected result/);
+    invoke.mockResolvedValue({ kind: 'mystery' });
+    await expect(syncGoogleCalendarNow()).rejects.toThrow(/unexpected result/);
+  });
+});
+
+describe('calendarSyncLine', () => {
+  const now = new Date('2026-07-02T12:00:00Z');
+  const base = { id: 'c', summary: 'Work', selected: true };
+
+  it('says when a selected calendar last synced', () => {
+    expect(calendarSyncLine({ ...base, lastSyncedAt: '2026-07-02T11:57:00Z' }, now)).toEqual({
+      text: 'synced 3 min ago',
+      failed: false,
+    });
+    expect(calendarSyncLine({ ...base, lastSyncedAt: '2026-07-02T11:59:40Z' }, now)?.text).toBe(
+      'synced just now',
+    );
+    expect(calendarSyncLine({ ...base, lastSyncedAt: '2026-07-02T09:00:00Z' }, now)?.text).toBe(
+      'synced 3 h ago',
+    );
+    expect(calendarSyncLine({ ...base, lastSyncedAt: null }, now)?.text).toBe('not synced yet');
+  });
+
+  it('a failure wins over the last good sync time', () => {
+    expect(
+      calendarSyncLine(
+        { ...base, lastSyncedAt: '2026-07-02T11:57:00Z', lastError: 'HTTP 403' },
+        now,
+      ),
+    ).toEqual({ text: 'failed: HTTP 403', failed: true });
+  });
+
+  it('says nothing for a deselected calendar', () => {
+    expect(calendarSyncLine({ ...base, selected: false, lastError: 'x' }, now)).toBeNull();
   });
 });
 

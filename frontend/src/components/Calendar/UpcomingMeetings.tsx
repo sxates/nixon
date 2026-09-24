@@ -11,7 +11,8 @@
  * there's nothing to show, so the dashboard layout is unaffected on a dev binary
  * with no calendar access and no upcoming meetings.
  *
- * Refresh: on mount, on window focus, and on a light 5-minute interval. All
+ * Refresh: on mount, on window focus, on a light 5-minute interval, and when a
+ * Google sync pass changed the cache (`google-calendar-synced`). All
  * backend calls degrade gracefully (see lib/calendar.ts) — failures never throw
  * and never block the dashboard.
  */
@@ -32,6 +33,8 @@ import {
   formatClockTime,
   formatRelativeStart,
 } from '@/lib/calendar';
+import { GOOGLE_CALENDAR_SYNCED_EVENT } from '@/lib/googleCalendar';
+import { safeListen } from '@/lib/safe-listen';
 
 const DISMISS_KEY = 'nixon-calendar-connect-dismissed';
 const REFRESH_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
@@ -130,6 +133,9 @@ export default function UpcomingMeetings() {
     };
   }, [refresh]);
 
+  // specs/0074 W2: a Google pass that changed the cache refreshes the list now,
+  // instead of waiting out the 5-minute interval.
+  useEffect(() => safeListen(GOOGLE_CALENDAR_SYNCED_EVENT, () => void refresh()), [refresh]);
 
   const handleDismiss = useCallback(() => {
     setDismissed(true);

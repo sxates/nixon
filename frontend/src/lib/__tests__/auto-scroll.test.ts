@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  LOCKED_FOLLOW,
   nextAutoFollow,
   nextFollowState,
   shouldStickToBottomOnAppend,
@@ -95,23 +96,27 @@ describe('nextFollowState (follow lock)', () => {
     expect(nextFollowState(locked, { type: 'user-scroll-up' })).toEqual(detached);
   });
 
-  it('after the lock clears, plain hysteresis governs again', () => {
+  it('after the lock clears, returning to the bottom re-locks (owner feedback 2026-09-23)', () => {
     let state = nextFollowState(locked, { type: 'user-scroll-up' });
     // Reading far up: stays detached.
     state = nextFollowState(state, { type: 'scroll', distanceFromBottomPx: 500 });
     expect(state).toEqual(detached);
-    // Returning to the bottom re-attaches naturally — WITHOUT re-locking.
+    // Returning to the bottom resumes following for good — LOCKED, like Jump to latest.
     state = nextFollowState(state, {
       type: 'scroll',
       distanceFromBottomPx: AT_BOTTOM_THRESHOLD_PX,
     });
-    expect(state).toEqual(following);
-    // ...so a later scroll-up detaches it via hysteresis, no wheel event needed.
+    expect(state).toEqual(locked);
+    // ...so content growth under the viewport can no longer detach it.
     state = nextFollowState(state, {
       type: 'scroll',
       distanceFromBottomPx: SCROLLED_UP_THRESHOLD_PX + 1,
     });
-    expect(state).toEqual(detached);
+    expect(state).toEqual(locked);
+  });
+
+  it('a live transcript starts locked', () => {
+    expect(LOCKED_FOLLOW).toEqual(locked);
   });
 
   it('a user upward scroll also detaches natural (unlocked) follow', () => {

@@ -374,7 +374,7 @@ function PersonDetailsContent() {
       transition={{ duration: 0.25, ease: 'easeOut' }}
       className="flex h-page flex-col bg-background"
     >
-      <div className="flex-shrink-0 px-7 pt-7">
+      <div className="flex-shrink-0 px-4 min-[900px]:px-7 pt-7">
         <button
           type="button"
           onClick={onBack}
@@ -462,7 +462,7 @@ function PersonDetailsContent() {
         }
       />
 
-      <div className="flex-1 overflow-y-auto px-7 pb-12">
+      <div className="flex-1 overflow-y-auto px-4 min-[900px]:px-7 pb-12">
         <div className="mx-auto max-w-[840px]">
           {/* Notes — the free-text description of this person (role, how you know
               them). Restored on the detail page (specs/0038 feedback): the field

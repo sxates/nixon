@@ -35,6 +35,7 @@
 
 use std::future::Future;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::Instant;
 
 use anyhow::{anyhow, bail, Context, Result};
 use chrono::{DateTime, Duration, Utc};
@@ -44,9 +45,11 @@ use sqlx::SqlitePool;
 use tauri::{AppHandle, Emitter, Manager, Runtime};
 use url::Url;
 
+use super::enrichment::spawn_enrichment;
 use super::events_map::{gcal_row_id, map_event, EventsPage};
-use super::photos::fetch_attendee_photos;
-use super::{cloud_identity, oauth};
+use super::oauth;
+use super::sync_outcome::{gated_pass, remember, CalendarSyncReport, SyncMode};
+pub use super::sync_outcome::{SyncOutcome, SyncTrigger};
 use crate::calendar::eventkit::{Attendee, UpcomingMeeting};
 use crate::database::repositories::attendee_photos::AttendeePhotosRepository;
 use crate::database::repositories::google_calendar::{
@@ -63,6 +66,9 @@ use crate::state::AppState;
 /// Rust→frontend event emitted (no payload) when the stored grant was revoked
 /// or expired (`invalid_grant` on refresh) — the UI shows the reconnect prompt.
 pub const AUTH_REQUIRED_EVENT: &str = "google-calendar-auth-required";
+/// Rust→frontend event `{ changed }`, emitted only when a pass wrote or removed
+/// rows — so an agenda refresh that syncs can never loop (specs/0074 W1).
+pub const SYNCED_EVENT: &str = "google-calendar-synced";
 
 const CALENDAR_LIST_URL: &str = "https://www.googleapis.com/calendar/v3/users/me/calendarList";
 const EVENTS_BASE_URL: &str = "https://www.googleapis.com/calendar/v3/calendars";
@@ -84,6 +90,8 @@ const MAX_RESULTS: &str = "250";
 /// Per-request HTTP bound so a dead network can't stall an agenda build that
 /// awaited [`sync_if_stale`] (reqwest's default is *no* timeout).
 const HTTP_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15);
+/// Bound on the startup capability probe (specs/0075).
+const PROBE_TIMEOUT: std::time::Duration = HTTP_TIMEOUT;
 
 /// ± window for the title+time attendee fallback — mirrors the EventKit
 /// fallback's 4-hour search window (`eventkit::read_event_attendees`).
@@ -93,8 +101,8 @@ const TITLE_MATCH_WINDOW_SECS: i64 = 4 * 3600;
 // Single-flight + auth-required latch
 // ---------------------------------------------------------------------------
 
-/// Single-flight guard: concurrent triggers (focus + timer + agenda build)
-/// coalesce — whoever holds the lock syncs, everyone else no-ops.
+/// Single-flight guard: background triggers coalesce (`AlreadyRunning`),
+/// manual ones wait a bounded time — see [`gated_pass`].
 static SYNC_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
 /// Latched when a refresh came back `invalid_grant`, so sync passes stop
@@ -105,6 +113,11 @@ static AUTH_REQUIRED: AtomicBool = AtomicBool::new(false);
 /// Clear the `invalid_grant` latch (connect/disconnect paths).
 pub fn clear_auth_required() {
     AUTH_REQUIRED.store(false, Ordering::SeqCst);
+}
+
+/// Whether the grant lapsed and the user must reconnect (status DTO).
+pub fn auth_required() -> bool {
+    AUTH_REQUIRED.load(Ordering::SeqCst)
 }
 
 // ---------------------------------------------------------------------------
@@ -118,136 +131,174 @@ pub(crate) fn db_pool<R: Runtime>(app: &AppHandle<R>) -> Option<SqlitePool> {
         .map(|s| s.db_manager.pool().clone())
 }
 
-/// Sync every selected calendar of the connected account. No-ops (Ok) when the
-/// feature isn't configured, no account is connected, a sync is already in
-/// flight (single-flight coalescing), or the auth-required latch is set.
-///
-/// Errors are transient (offline/quota/API) unless they came from the token
-/// refresh; `invalid_grant` emits [`AUTH_REQUIRED_EVENT`] once, latches
-/// further passes off, and returns the user-actionable auth error.
-pub async fn sync_all<R: Runtime>(app: &AppHandle<R>) -> Result<()> {
-    if !super::is_configured() || super::demo_guard::sync_suppressed() {
-        return Ok(());
-    }
-    let Ok(_guard) = SYNC_LOCK.try_lock() else {
-        log::debug!("google calendar: sync already in flight; coalescing trigger");
-        return Ok(());
+/// Sync every selected calendar of the connected account (specs/0074 W1). The
+/// outcome says what happened — a pass that didn't run is never `Synced`.
+/// `Err` means the pass couldn't start or didn't finish (Keychain, token
+/// refresh, calendar list, the [`PASS_CAP`](super::sync_outcome::PASS_CAP));
+/// per-calendar failures are reported inside `Synced`. A refresh rejected with
+/// `invalid_grant` emits [`AUTH_REQUIRED_EVENT`] once and latches later passes
+/// to `AuthRequired` until the user reconnects.
+pub async fn sync_all<R: Runtime>(app: &AppHandle<R>, trigger: SyncTrigger) -> Result<SyncOutcome> {
+    let mut enrich_token: Option<String> = None;
+    let result = if !super::is_configured() {
+        Ok(SyncOutcome::NotConfigured)
+    } else if super::demo_guard::sync_suppressed() {
+        Ok(SyncOutcome::Suppressed)
+    } else {
+        match connected_pool(app).await {
+            Ok(Some(pool)) => {
+                let slot = &mut enrich_token;
+                gated_pass(&SYNC_LOCK, &AUTH_REQUIRED, trigger, move || {
+                    run_pass(app, pool, slot)
+                })
+                .await
+            }
+            Ok(None) => Ok(SyncOutcome::NotConnected),
+            Err(e) => Err(e),
+        }
     };
-    let Some(pool) = db_pool(app) else {
-        return Ok(());
-    };
-    if GoogleCalendarRepository::get_account(&pool)
-        .await
-        .context("could not read the Google Calendar account state")?
-        .is_none()
-    {
-        return Ok(()); // not connected — nothing to sync
+    // SYNC_LOCK is released by now: report, then enrich off the lock.
+    let t = trigger.label();
+    match &result {
+        Ok(o @ SyncOutcome::Synced { calendars, duration_ms }) => log::info!(
+            "google calendar: sync pass trigger={t} outcome=synced calendars={} fetched={} changed={} duration_ms={duration_ms}",
+            calendars.len(),
+            calendars.iter().map(|c| c.fetched).sum::<usize>(),
+            o.changed()
+        ),
+        Ok(o) => log::info!("google calendar: sync pass trigger={t} outcome={}", o.label()),
+        Err(e) => log::warn!("google calendar: sync pass trigger={t} outcome=error: {e:#}"),
     }
-    if AUTH_REQUIRED.load(Ordering::SeqCst) {
-        return Ok(()); // revoked grant already surfaced; wait for reconnect
+    if let Ok(outcome) = &result {
+        remember(outcome);
+        let changed = outcome.changed();
+        if changed > 0 {
+            if let Err(e) = app.emit(SYNCED_EVENT, json!({ "changed": changed })) {
+                log::error!("google calendar: could not emit {SYNCED_EVENT}: {e}");
+            }
+        }
     }
+    if let Some(token) = enrich_token {
+        spawn_enrichment(app, token);
+    }
+    result
+}
 
+/// The DB pool when an account is connected; `None` before DB init or when
+/// not connected.
+async fn connected_pool<R: Runtime>(app: &AppHandle<R>) -> Result<Option<SqlitePool>> {
+    let Some(pool) = db_pool(app) else {
+        return Ok(None);
+    };
+    let account = GoogleCalendarRepository::get_account(&pool)
+        .await
+        .context("could not read the Google Calendar account state")?;
+    Ok(account.map(|_| pool))
+}
+
+/// The event phase, run under `SYNC_LOCK` and the pass cap. Leaves the access
+/// token in `enrich_token` for the enrichment pass that follows.
+async fn run_pass<R: Runtime>(
+    app: &AppHandle<R>,
+    pool: SqlitePool,
+    enrich_token: &mut Option<String>,
+) -> Result<SyncOutcome> {
     let Some(store) = secrets::store() else {
         bail!("the macOS Keychain is unavailable, so the Google Calendar connection can't be used");
     };
     let token = match oauth::get_access_token(store).await {
         Ok(token) => token,
         Err(e) if oauth::is_invalid_grant(&e) => {
-            // Emit once, then latch off — no error loop (spec 0032 failure modes).
+            // Emit once, then latch — no error loop (spec 0032 failure modes).
             if !AUTH_REQUIRED.swap(true, Ordering::SeqCst) {
-                log::warn!(
-                    "google calendar: access was revoked or expired; emitting {AUTH_REQUIRED_EVENT}"
-                );
+                log::warn!("google calendar: access was revoked or expired; emitting {AUTH_REQUIRED_EVENT}");
                 if let Err(emit_err) = app.emit(AUTH_REQUIRED_EVENT, ()) {
                     log::error!(
                         "google calendar: could not emit {AUTH_REQUIRED_EVENT}: {emit_err}"
                     );
                 }
             }
-            return Err(e);
+            return Ok(SyncOutcome::AuthRequired);
         }
         Err(e) => return Err(e),
     };
 
+    let started = Instant::now();
     let client = http_client()?;
     // Refresh the calendar list (discovers new calendars, refreshes names —
     // selection and sync tokens are preserved by the upsert).
-    sync_calendar_list(&client, &token, &pool).await?;
-
+    let primary = sync_calendar_list(&client, &token, &pool).await?;
     let states = GoogleCalendarRepository::list_sync_states(&pool)
         .await
         .context("could not read the calendar sync state")?;
+    if !states.iter().any(|s| s.selected) {
+        return Ok(SyncOutcome::NoCalendarsSelected);
+    }
     let now = Utc::now();
     let fetch = |req: EventsRequest| http_fetch_events(&client, &token, req);
 
-    // Probed enrichment capabilities (a granted scope is NOT access) — read BEFORE
-    // the sync loop so DL detection can widen (RC-1) at map time. `widen` is on
-    // ONLY when Cloud Identity can authoritatively confirm/correct a guess, so the
-    // broadened, speculative classification never runs on the non-expandable path.
-    let capabilities = GoogleCalendarRepository::get_capabilities(&pool)
+    // Read BEFORE the loop so DL detection can widen (RC-1) at map time — only
+    // when Cloud Identity can authoritatively confirm/correct a guess.
+    let widen = GoogleCalendarRepository::get_capabilities(&pool)
         .await
         .ok()
-        .flatten();
-    let widen = matches!(
-        capabilities.as_ref().and_then(|c| c.can_expand_groups),
-        Some(true)
-    );
+        .flatten()
+        .and_then(|c| c.can_expand_groups)
+        == Some(true);
 
-    let mut first_err: Option<anyhow::Error> = None;
-    for cal in states.iter().filter(|s| s.selected) {
-        if let Err(e) = sync_calendar(&pool, cal, now, widen, &fetch).await {
-            log::warn!(
-                "google calendar: sync of calendar '{}' failed (serving cache): {e:#}",
-                cal.calendar_id
-            );
-            first_err.get_or_insert(e);
-        }
+    let mut calendars = Vec::new();
+    for (i, cal) in states.iter().enumerate().filter(|(_, s)| s.selected) {
+        let is_primary = primary.as_deref() == Some(cal.calendar_id.as_str());
+        // Logs name calendars by index: the primary calendar id is an email.
+        let label = if is_primary {
+            "primary".to_string()
+        } else {
+            i.to_string()
+        };
+        let cal_started = Instant::now();
+        let (mode, counts, error) = match sync_calendar(&pool, cal, now, widen, &fetch).await {
+            Ok((mode, counts)) => (mode, counts, None),
+            Err(e) => {
+                log::warn!("google calendar:   cal[{label}] failed (serving cache): {e:#}");
+                let mode = match usable_sync_token(cal, now) {
+                    Some(_) => SyncMode::Incremental,
+                    None => SyncMode::Full,
+                };
+                (mode, Counts::default(), Some(format!("{e:#}")))
+            }
+        };
+        let ms = cal_started.elapsed().as_millis() as u64;
+        log::info!(
+            "google calendar:   cal[{label}] mode={} fetched={} upserted={} deleted={} ms={ms}",
+            mode.label(),
+            counts.fetched,
+            counts.upserted,
+            counts.deleted
+        );
+        calendars.push(CalendarSyncReport {
+            calendar_id: cal.calendar_id.clone(),
+            summary: cal.summary.clone(),
+            is_primary,
+            mode,
+            fetched: counts.fetched,
+            upserted: counts.upserted,
+            deleted: counts.deleted,
+            duration_ms: ms,
+            error,
+        });
     }
-
-    // Best-effort enrichment passes (specs/0038 WS3), each gated on its own
-    // probed capability. Both run after the cache is refreshed so they see every
-    // attendee, and both are wholly non-fatal — a failure never touches the sync
-    // result.
-
-    // DL flattening: only when the org granted Cloud Identity access. One
-    // group's failure never aborts the pass; the labeled-DL floor stands.
-    if matches!(
-        capabilities.as_ref().and_then(|c| c.can_expand_groups),
-        Some(true)
-    ) {
-        let owner_emails: std::collections::HashSet<String> = OwnerEmailsRepository::list(&pool)
-            .await
-            .unwrap_or_default()
-            .into_iter()
-            .collect();
-        if let Err(e) = expand_distribution_lists(&pool, &client, &token, &owner_emails).await {
-            log::warn!("google calendar: DL expansion pass failed (floor stands): {e:#}");
-        }
-    }
-
-    // Attendee photos: only when the org granted the People directory read.
-    // Downloads same-org photos into the local cache as base64 data: URIs; any
-    // failure degrades to initials and never touches the sync result.
-    if matches!(
-        capabilities.as_ref().and_then(|c| c.can_fetch_photos),
-        Some(true)
-    ) {
-        if let Err(e) = fetch_attendee_photos(&pool, &client, &token).await {
-            log::warn!("google calendar: attendee photo pass failed (initials stand): {e:#}");
-        }
-    }
-
-    match first_err {
-        Some(e) => Err(e),
-        None => Ok(()),
-    }
+    *enrich_token = Some(token);
+    Ok(SyncOutcome::Synced {
+        calendars,
+        duration_ms: started.elapsed().as_millis() as u64,
+    })
 }
 
 /// Best-effort staleness-gated sync: runs [`sync_all`] only when the newest
 /// `last_synced_at` over the selected calendars is older than 5 minutes (or
 /// absent). Never returns an error — agenda/upcoming builds and the background
 /// timer call this and must keep serving the cache on any failure.
-pub async fn sync_if_stale<R: Runtime>(app: &AppHandle<R>) {
+pub async fn sync_if_stale<R: Runtime>(app: &AppHandle<R>, trigger: SyncTrigger) {
     if !super::is_configured() {
         return;
     }
@@ -274,9 +325,8 @@ pub async fn sync_if_stale<R: Runtime>(app: &AppHandle<R>) {
     if !stale {
         return;
     }
-    if let Err(e) = sync_all(app).await {
-        log::warn!("google calendar: staleness-triggered sync failed (serving cache): {e:#}");
-    }
+    // `sync_all` logs its own outcome line, including any error.
+    let _ = sync_all(app, trigger).await;
 }
 
 /// Spawn the fixed 10-minute background sync timer (spec 0032, owner decision
@@ -295,8 +345,12 @@ pub fn spawn_background_sync<R: Runtime>(app: AppHandle<R>) {
         // Capability probe for already-connected accounts (specs/0038 WS3):
         // accounts connected before the probe existed have no capability flags,
         // so probe once here. Stale-gated (>7 days) so it's a no-op on already
-        // fresh accounts, and fully best-effort (never blocks the sync timer).
-        super::capabilities::probe_if_stale(&app).await;
+        // fresh accounts, and fully best-effort: bounded so a hung request can
+        // never keep the timer loop below from starting (specs/0075).
+        let probe = super::capabilities::probe_if_stale(&app);
+        if tokio::time::timeout(PROBE_TIMEOUT, probe).await.is_err() {
+            log::warn!("google calendar: startup capability probe timed out; retrying when stale");
+        }
 
         let mut interval = tokio::time::interval(BACKGROUND_SYNC_INTERVAL);
         interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
@@ -304,7 +358,7 @@ pub fn spawn_background_sync<R: Runtime>(app: AppHandle<R>) {
                                // agenda build handles startup freshness
         loop {
             interval.tick().await;
-            sync_if_stale(&app).await;
+            sync_if_stale(&app, SyncTrigger::Timer).await;
         }
     });
 }
@@ -738,7 +792,7 @@ enum EventsRequest {
         time_max: String,
         page_token: Option<String>,
     },
-    /// Incremental sync (`syncToken` only, paged).
+    /// Incremental sync (`syncToken` + `singleEvents=true`, paged).
     Incremental {
         calendar_id: String,
         sync_token: String,
@@ -791,7 +845,12 @@ fn events_url(req: &EventsRequest) -> Result<Url> {
             page_token,
             ..
         } => {
-            url.query_pairs_mut().append_pair("syncToken", sync_token);
+            // specs/0074 W1: singleEvents on incremental too, so a recurring
+            // edit arrives as instances rather than a series master.
+            url.query_pairs_mut()
+                .append_pair("syncToken", sync_token)
+                .append_pair("singleEvents", "true")
+                .append_pair("maxResults", MAX_RESULTS);
             if let Some(t) = page_token {
                 url.query_pairs_mut().append_pair("pageToken", t);
             }
@@ -814,6 +873,8 @@ async fn http_fetch_events(
         .bearer_auth(token)
         .send()
         .await
+        // The URL carries the calendar id, which is an email for the primary.
+        .map_err(reqwest::Error::without_url)
         .context("could not reach Google Calendar (events)")?;
     match resp.status().as_u16() {
         410 => Ok(FetchBody::Gone),
@@ -828,267 +889,6 @@ async fn http_fetch_events(
         _ => Ok(FetchBody::Json(resp.text().await.context(
             "could not read the Google Calendar events response",
         )?)),
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Distribution-list expansion (optimistic; specs/0038 WS3)
-// ---------------------------------------------------------------------------
-
-/// What Cloud Identity said about one DL-flagged address (specs/0038 WS3,
-/// findings #1/#8).
-#[derive(Debug, Clone)]
-enum DlResolution {
-    /// The address IS a group and its members were listed (possibly empty) —
-    /// fold the members in and mark the DL attendee `expanded` so a steady-state
-    /// incremental sync doesn't re-list it every pass (finding #8).
-    Expanded(Vec<cloud_identity::GroupMember>),
-    /// A definitive `404`: the address is NOT a group, so the heuristic
-    /// false-positived — clear the DL flag so it seeds as a person (finding #1).
-    NotAGroup,
-    /// Denied (`403`) or a transient error — inconclusive. Keep the labeled-DL
-    /// floor untouched and retry on a later pass.
-    Retry,
-}
-
-/// How to annotate a DL attendee in place after resolution.
-enum DlMark {
-    /// Set `expanded: true` (a real group whose members were folded in).
-    Expanded,
-    /// Set `isDistributionList: false` (a false positive — it's a person).
-    ClearFlag,
-}
-
-/// Fold Cloud Identity group members into cached events that carry a DL
-/// attendee, when the org grants access (`can_expand_groups`). Best-effort and
-/// idempotent: each address is resolved once per pass (cached in `resolved`),
-/// members are deduped against the event's existing attendees and the owner
-/// emails, and a `Denied`/error leaves the labeled-DL floor untouched. One
-/// address's failure never aborts the pass or the sync.
-///
-/// The heuristic is a label-only floor that this pass CONFIRMS or CORRECTS:
-///   - a confirmed group is expanded and its DL attendee marked `expanded`, so
-///     an unchanged event makes ZERO Cloud Identity calls on later syncs (#8);
-///   - a confirmed non-group has its `isDistributionList` flag CLEARED, so a
-///     real person the heuristic misflagged seeds normally and stops being
-///     re-queried (finding #1).
-async fn expand_distribution_lists(
-    pool: &SqlitePool,
-    client: &reqwest::Client,
-    token: &str,
-    owner_emails: &std::collections::HashSet<String>,
-) -> Result<()> {
-    use crate::database::repositories::owner_emails::normalize_email;
-
-    let rows = GoogleCalendarRepository::events_with_distribution_lists(pool)
-        .await
-        .context("could not list events with distribution lists")?;
-
-    // Normalized address -> its resolution, resolved once per pass (coalesces the
-    // same DL invited to many meetings into one Cloud Identity round-trip).
-    let mut resolved: std::collections::HashMap<String, DlResolution> =
-        std::collections::HashMap::new();
-
-    for row in rows {
-        let mut attendees: Vec<serde_json::Value> = match serde_json::from_str(&row.attendees_json)
-        {
-            Ok(v) => v,
-            Err(e) => {
-                log::warn!(
-                    "google calendar: DL expansion skipped malformed attendees for '{}': {e}",
-                    row.id
-                );
-                continue;
-            }
-        };
-
-        // Existing (normalized) emails so folded members don't duplicate a
-        // person Calendar already materialized, the owner, or each other.
-        let mut present: std::collections::HashSet<String> = attendees
-            .iter()
-            .filter_map(|a| a.get("email").and_then(|v| v.as_str()))
-            .map(normalize_email)
-            .filter(|e| !e.is_empty())
-            .collect();
-        present.extend(owner_emails.iter().cloned());
-
-        // UNEXPANDED DL addresses on this event: a DL already marked `expanded`
-        // was folded on a previous pass, so skip it — an unchanged event makes
-        // no Cloud Identity calls (finding #8). An incremental sync that rewrote
-        // this event's attendees drops the marker, so real changes re-expand.
-        let dl_emails: Vec<String> = attendees
-            .iter()
-            .filter(|a| a.get("isDistributionList").and_then(|v| v.as_bool()) == Some(true))
-            .filter(|a| a.get("expanded").and_then(|v| v.as_bool()) != Some(true))
-            .filter_map(|a| a.get("email").and_then(|v| v.as_str()))
-            .map(str::trim)
-            .filter(|e| !e.is_empty())
-            .map(|e| e.to_string())
-            .collect();
-        if dl_emails.is_empty() {
-            continue;
-        }
-
-        let mut changed = false;
-        for dl_email in dl_emails {
-            let key = normalize_email(&dl_email);
-            if key.is_empty() {
-                continue;
-            }
-            if !resolved.contains_key(&key) {
-                let outcome = resolve_distribution_list(client, token, &dl_email).await;
-                resolved.insert(key.clone(), outcome);
-            }
-            match resolved.get(&key).cloned().unwrap_or(DlResolution::Retry) {
-                DlResolution::Expanded(members) => {
-                    let mut added = 0usize;
-                    for member in members {
-                        let Some(member_email) = member.email.as_deref() else {
-                            continue;
-                        };
-                        let norm = normalize_email(member_email);
-                        if norm.is_empty() || present.contains(&norm) {
-                            continue;
-                        }
-                        present.insert(norm);
-                        let name = member
-                            .display_name
-                            .as_deref()
-                            .map(str::trim)
-                            .filter(|n| !n.is_empty())
-                            .map(str::to_string)
-                            .unwrap_or_else(|| member_email.to_string());
-                        attendees.push(json!({
-                            "name": name,
-                            "email": member_email,
-                            "isCurrentUser": false,
-                            "responseStatus": serde_json::Value::Null,
-                            "isOrganizer": false,
-                            "isDistributionList": false,
-                        }));
-                        added += 1;
-                    }
-                    // Mark the DL attendee expanded so it isn't re-listed next
-                    // pass (even a zero-member group is "done" — don't retry it).
-                    changed |= mark_distribution_list(&mut attendees, &key, DlMark::Expanded);
-                    if added > 0 {
-                        log::info!(
-                            "google calendar: folded {added} DL member(s) into '{}'",
-                            row.id
-                        );
-                        changed = true;
-                    }
-                }
-                DlResolution::NotAGroup => {
-                    if mark_distribution_list(&mut attendees, &key, DlMark::ClearFlag) {
-                        log::info!(
-                            "google calendar: '{}' is not a group; clearing the DL flag so it seeds as a person",
-                            redact_email(&key)
-                        );
-                        changed = true;
-                    }
-                }
-                DlResolution::Retry => {} // inconclusive — keep the floor, retry later
-            }
-        }
-
-        if changed {
-            let json = serde_json::to_string(&attendees).unwrap_or(row.attendees_json);
-            if let Err(e) =
-                GoogleCalendarRepository::set_event_attendees_json(pool, &row.id, &json).await
-            {
-                log::warn!(
-                    "google calendar: could not save expanded attendees for '{}': {e}",
-                    row.id
-                );
-            }
-        }
-    }
-    Ok(())
-}
-
-/// Resolve one DL-flagged address against Cloud Identity, collapsing every
-/// best-effort non-outcome into a [`DlResolution`] (never returns an error).
-async fn resolve_distribution_list(
-    client: &reqwest::Client,
-    token: &str,
-    email: &str,
-) -> DlResolution {
-    match cloud_identity::lookup_group(client, token, email).await {
-        Ok(cloud_identity::LookupOutcome::Group(group_name)) => {
-            match cloud_identity::list_members(client, token, &group_name).await {
-                Ok(cloud_identity::MembersOutcome::Members(members)) => {
-                    DlResolution::Expanded(members)
-                }
-                Ok(cloud_identity::MembersOutcome::Denied) => {
-                    log::info!("google calendar: a DL's member listing was denied; keeping floor");
-                    DlResolution::Retry
-                }
-                Err(e) => {
-                    log::warn!("google calendar: a DL's member listing failed: {e:#}");
-                    DlResolution::Retry
-                }
-            }
-        }
-        // 404: definitively not a group → the heuristic false-positived.
-        Ok(cloud_identity::LookupOutcome::NotAGroup) => DlResolution::NotAGroup,
-        // 403: not allowed to look it up → inconclusive, never demote a group
-        // we simply can't see.
-        Ok(cloud_identity::LookupOutcome::Denied) => DlResolution::Retry,
-        Err(e) => {
-            log::warn!("google calendar: a DL lookup failed: {e:#}");
-            DlResolution::Retry
-        }
-    }
-}
-
-/// Annotate the DL-flagged attendee whose (normalized) email is `key` in place.
-/// Returns whether the attendee list actually changed (idempotent — re-marking
-/// an already-marked attendee is a no-op that returns `false`).
-fn mark_distribution_list(attendees: &mut [serde_json::Value], key: &str, mark: DlMark) -> bool {
-    use crate::database::repositories::owner_emails::normalize_email;
-    for a in attendees.iter_mut() {
-        if a.get("isDistributionList").and_then(|v| v.as_bool()) != Some(true) {
-            continue;
-        }
-        let matches = a
-            .get("email")
-            .and_then(|v| v.as_str())
-            .map(normalize_email)
-            .as_deref()
-            == Some(key);
-        if !matches {
-            continue;
-        }
-        let Some(obj) = a.as_object_mut() else {
-            continue;
-        };
-        match mark {
-            DlMark::Expanded => {
-                if obj.get("expanded").and_then(|v| v.as_bool()) == Some(true) {
-                    return false;
-                }
-                obj.insert("expanded".to_string(), json!(true));
-            }
-            DlMark::ClearFlag => {
-                obj.insert("isDistributionList".to_string(), json!(false));
-            }
-        }
-        return true;
-    }
-    false
-}
-
-/// Redact an email for logs (privacy, finding #10): keep the first local-part
-/// character and the domain, mask the rest — enough to correlate entries
-/// without writing the raw address to disk.
-pub(super) fn redact_email(email: &str) -> String {
-    match email.split_once('@') {
-        Some((local, domain)) => {
-            let first = local.chars().next().unwrap_or('*');
-            format!("{first}***@{domain}")
-        }
-        None => "***".to_string(),
     }
 }
 
@@ -1138,32 +938,56 @@ fn incremental_is_safe(
             .is_some_and(|t| now - t < Duration::days(MAX_INCREMENTAL_DAYS))
 }
 
+/// What one calendar's sync did (feeds [`CalendarSyncReport`]).
+#[derive(Debug, Default, Clone, Copy)]
+struct Counts {
+    fetched: usize,
+    upserted: usize,
+    deleted: usize,
+}
+
+/// How an incremental pass ended.
+enum IncrementalEnd {
+    /// Done — store this syncToken.
+    Done(String),
+    /// 410 GONE: the token expired server-side.
+    Gone,
+    /// A recurring series master turned up (specs/0054 W5).
+    SeriesChanged,
+}
+
+/// The stored syncToken when an incremental pass is still trustworthy.
+fn usable_sync_token(cal: &GoogleCalendarSyncRow, now: DateTime<Utc>) -> Option<&str> {
+    cal.sync_token.as_deref().filter(|_| {
+        incremental_is_safe(
+            cal.window_ends_at.as_deref(),
+            cal.last_synced_at.as_deref(),
+            now,
+        )
+    })
+}
+
 /// Sync one calendar: incremental when a syncToken exists and the window
-/// horizon is healthy; otherwise (no token / 410 / horizon near expiry) a full
-/// windowed resync that replaces the calendar's cached rows (which is also the
-/// out-of-window prune).
+/// horizon is healthy; otherwise (no token / 410 / series change / horizon near
+/// expiry) a full windowed resync that replaces the calendar's cached rows
+/// (which is also the out-of-window prune).
 async fn sync_calendar<F, Fut>(
     pool: &SqlitePool,
     cal: &GoogleCalendarSyncRow,
     now: DateTime<Utc>,
     widen: bool,
     fetch: &F,
-) -> Result<()>
+) -> Result<(SyncMode, Counts)>
 where
     F: Fn(EventsRequest) -> Fut,
     Fut: Future<Output = Result<FetchBody>>,
 {
-    let incremental_token = cal.sync_token.as_deref().filter(|_| {
-        incremental_is_safe(
-            cal.window_ends_at.as_deref(),
-            cal.last_synced_at.as_deref(),
-            now,
-        )
-    });
-
-    if let Some(token) = incremental_token {
-        match incremental_sync(pool, &cal.calendar_id, token, widen, fetch).await? {
-            Some(next_token) => {
+    let mut counts = Counts::default();
+    let mut mode = SyncMode::Full;
+    if let Some(token) = usable_sync_token(cal, now) {
+        let end = incremental_sync(pool, &cal.calendar_id, token, widen, fetch, &mut counts);
+        mode = match end.await? {
+            IncrementalEnd::Done(next_token) => {
                 GoogleCalendarRepository::set_sync_progress(
                     pool,
                     &cal.calendar_id,
@@ -1171,34 +995,30 @@ where
                 )
                 .await
                 .context("could not record the sync token")?;
-                return Ok(());
+                return Ok((SyncMode::Incremental, counts));
             }
-            None => {
-                // 410 GONE: the token expired server-side — clear it and fall
-                // through to a transparent full resync (spec failure modes).
-                log::info!(
-                    "google calendar: syncToken for '{}' expired (410); full resync",
-                    cal.calendar_id
-                );
-                GoogleCalendarRepository::set_sync_progress(pool, &cal.calendar_id, None)
-                    .await
-                    .context("could not clear the expired sync token")?;
-            }
-        }
+            IncrementalEnd::Gone => SyncMode::FullAfterGone,
+            IncrementalEnd::SeriesChanged => SyncMode::FullAfterSeriesChange,
+        };
+        // Clear the token and fall through to a transparent full resync.
+        GoogleCalendarRepository::set_sync_progress(pool, &cal.calendar_id, None)
+            .await
+            .context("could not clear the expired sync token")?;
     }
 
-    full_sync(pool, &cal.calendar_id, now, widen, fetch).await
+    full_sync(pool, &cal.calendar_id, now, widen, fetch, &mut counts).await?;
+    Ok((mode, counts))
 }
 
-/// One incremental pass. `Ok(Some(token))` = done, store the new syncToken;
-/// `Ok(None)` = the server said 410 GONE (caller full-resyncs).
+/// One incremental pass, adding what it did to `counts`.
 async fn incremental_sync<F, Fut>(
     pool: &SqlitePool,
     calendar_id: &str,
     sync_token: &str,
     widen: bool,
     fetch: &F,
-) -> Result<Option<String>>
+    counts: &mut Counts,
+) -> Result<IncrementalEnd>
 where
     F: Fn(EventsRequest) -> Fut,
     Fut: Future<Output = Result<FetchBody>>,
@@ -1215,11 +1035,12 @@ where
         })
         .await?
         {
-            FetchBody::Gone => return Ok(None),
+            FetchBody::Gone => return Ok(IncrementalEnd::Gone),
             FetchBody::Json(body) => body,
         };
         let page: EventsPage =
             serde_json::from_str(&body).context("unexpected events.list response from Google")?;
+        counts.fetched += page.items.len();
         for item in &page.items {
             // specs/0054 W5: the series-master check comes FIRST, including for
             // cancellations. A cancelled master still carries `recurrence`, and
@@ -1232,12 +1053,7 @@ where
                     GoogleCalendarRepository::delete_events_for_series(pool, calendar_id, series)
                         .await
                         .context("could not clear a recurring series from the cache")?;
-                log::info!(
-                    "google calendar: recurring series changed on '{}' ({} cached row(s) dropped, cancelled={}); scheduling a full resync",
-                    calendar_id,
-                    removed,
-                    item.is_cancelled()
-                );
+                counts.deleted += removed as usize;
                 // `singleEvents=true` only expands on the FULL path, so the series
                 // cannot be re-expanded from this page. Force a full resync.
                 needs_full_resync = true;
@@ -1246,10 +1062,12 @@ where
                 GoogleCalendarRepository::delete_event(pool, &gcal_row_id(calendar_id, &item.id))
                     .await
                     .context("could not remove a cancelled event")?;
+                counts.deleted += 1;
             } else if let Some(row) = map_event(calendar_id, item, widen) {
                 GoogleCalendarRepository::upsert_event(pool, &row)
                     .await
                     .context("could not save a changed event")?;
+                counts.upserted += 1;
             } else {
                 log::warn!(
                     "google calendar: skipping unmappable event '{}' (no usable start/end)",
@@ -1258,17 +1076,17 @@ where
             }
         }
         if needs_full_resync {
-            // Same contract as a 410 GONE: the caller full-resyncs, which replaces
-            // the calendar's rows and re-expands every series properly.
-            return Ok(None);
+            // The caller full-resyncs, which replaces the calendar's rows and
+            // re-expands every series properly.
+            return Ok(IncrementalEnd::SeriesChanged);
         }
         if let Some(next) = page.next_page_token {
             page_token = Some(next);
             continue;
         }
-        return Ok(Some(page.next_sync_token.ok_or_else(|| {
-            anyhow!("Google did not return a syncToken at the end of an incremental sync")
-        })?));
+        return Ok(IncrementalEnd::Done(page.next_sync_token.ok_or_else(
+            || anyhow!("Google did not return a syncToken at the end of an incremental sync"),
+        )?));
     }
 }
 
@@ -1282,6 +1100,7 @@ async fn full_sync<F, Fut>(
     now: DateTime<Utc>,
     widen: bool,
     fetch: &F,
+    counts: &mut Counts,
 ) -> Result<()>
 where
     F: Fn(EventsRequest) -> Fut,
@@ -1306,6 +1125,7 @@ where
         };
         let page: EventsPage =
             serde_json::from_str(&body).context("unexpected events.list response from Google")?;
+        counts.fetched += page.items.len();
         for item in &page.items {
             if item.is_cancelled() {
                 continue; // defensive: showDeleted defaults to false
@@ -1337,7 +1157,7 @@ where
     }
     if sync_token.is_none() {
         // Extremely unusual; store None so the next pass full-syncs again.
-        log::warn!("google calendar: full sync of '{calendar_id}' returned no nextSyncToken");
+        log::warn!("google calendar: a full sync returned no nextSyncToken");
     }
     GoogleCalendarRepository::set_sync_progress(pool, calendar_id, sync_token.as_deref())
         .await
@@ -1345,10 +1165,7 @@ where
     GoogleCalendarRepository::set_window_horizon(pool, calendar_id, &time_max)
         .await
         .context("could not record the sync window")?;
-    log::info!(
-        "google calendar: full sync of '{calendar_id}' cached {} event(s)",
-        rows.len()
-    );
+    counts.upserted += rows.len();
     Ok(())
 }
 
@@ -1550,49 +1367,17 @@ mod tests {
     }"#;
 
     #[test]
-    fn redact_email_masks_the_local_part() {
-        assert_eq!(redact_email("priya@example.com"), "p***@example.com");
-        assert_eq!(redact_email("eng-team@corp.io"), "e***@corp.io");
-        // No `@` (defensive) → fully redacted.
-        assert_eq!(redact_email("garbage"), "***");
-    }
-
-    #[test]
-    fn mark_distribution_list_expands_and_clears_by_email() {
-        // A DL attendee plus a real person; marking is keyed by normalized email.
-        let mut attendees: Vec<serde_json::Value> = vec![
-            json!({ "name": "eng-team@x.com", "email": "Eng-Team@X.com", "isDistributionList": true }),
-            json!({ "name": "Priya", "email": "priya@x.com", "isDistributionList": false }),
-        ];
-
-        // Expanding sets `expanded: true` on the DL (and only the DL); a person
-        // is never touched, and re-marking is an idempotent no-op.
-        assert!(mark_distribution_list(
-            &mut attendees,
-            "eng-team@x.com",
-            DlMark::Expanded
-        ));
-        assert_eq!(attendees[0]["expanded"], json!(true));
-        assert!(attendees[1].get("expanded").is_none());
-        assert!(
-            !mark_distribution_list(&mut attendees, "eng-team@x.com", DlMark::Expanded),
-            "re-marking an already-expanded DL changes nothing"
-        );
-
-        // Clearing the flag demotes the false-positive DL to a person.
-        assert!(mark_distribution_list(
-            &mut attendees,
-            "eng-team@x.com",
-            DlMark::ClearFlag
-        ));
-        assert_eq!(attendees[0]["isDistributionList"], json!(false));
-
-        // A key that matches no DL-flagged attendee is a no-op.
-        assert!(!mark_distribution_list(
-            &mut attendees,
-            "nobody@x.com",
-            DlMark::ClearFlag
-        ));
+    fn incremental_requests_carry_single_events_like_full_ones() {
+        let url = events_url(&EventsRequest::Incremental {
+            calendar_id: "me@x.com".into(),
+            sync_token: "tok".into(),
+            page_token: None,
+        })
+        .unwrap();
+        let q: std::collections::HashMap<_, _> = url.query_pairs().into_owned().collect();
+        assert_eq!(q.get("singleEvents").map(String::as_str), Some("true"));
+        assert_eq!(q.get("maxResults").map(String::as_str), Some(MAX_RESULTS));
+        assert_eq!(q.get("syncToken").map(String::as_str), Some("tok"));
     }
 
     // --- Full sync: pagination + token + horizon ---------------------------

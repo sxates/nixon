@@ -51,6 +51,16 @@ export interface FollowState {
   followLocked: boolean;
 }
 
+/**
+ * Where a live transcript starts, and what "Jump to latest" or reaching the bottom returns
+ * to: following, and locked. It used to start following but UNLOCKED, and the first time
+ * the virtualizer re-measured a row it grew scrollHeight under the viewport, the debounced
+ * hysteresis read that as "scrolled up" and detached — so a new recording sat still until
+ * the owner clicked "Jump to latest" (owner feedback 2026-09-23). Only explicit upward
+ * input (wheel / touch / keys / a scrollbar drag) leaves this state.
+ */
+export const LOCKED_FOLLOW: FollowState = { following: true, followLocked: true };
+
 export type FollowEvent =
   /** The user pressed "Jump to latest": follow, and LOCK the intent. */
   | { type: 'jump-to-latest' }
@@ -70,12 +80,16 @@ export type FollowEvent =
 export function nextFollowState(state: FollowState, event: FollowEvent): FollowState {
   switch (event.type) {
     case 'jump-to-latest':
-      return { following: true, followLocked: true };
+      return LOCKED_FOLLOW;
     case 'user-scroll-up':
       // Explicit intent to review: unlock and detach. If the user was merely nudging
       // at the bottom, the very next scroll event (≤ AT_BOTTOM_THRESHOLD_PX) re-attaches.
       return { following: false, followLocked: false };
     case 'scroll':
+      // Landing at the bottom is the same intent as "Jump to latest", so it LOCKS too
+      // (owner feedback 2026-09-23: scrolling back down should resume following for good,
+      // not only until the next row re-measure).
+      if (event.distanceFromBottomPx <= AT_BOTTOM_THRESHOLD_PX) return LOCKED_FOLLOW;
       // Locked: scroll events (programmatic scrolls, content growth) can NOT detach.
       if (state.followLocked) return state;
       return {

@@ -26,7 +26,7 @@ export function PageHeader({ title, subtitle, actions, className }: PageHeaderPr
   return (
     <header
       className={cn(
-        'flex flex-shrink-0 items-start justify-between gap-4 px-7 pb-4 pt-7',
+        'flex flex-shrink-0 items-start justify-between gap-4 px-4 min-[900px]:px-7 pb-4 pt-7',
         className
       )}
     >

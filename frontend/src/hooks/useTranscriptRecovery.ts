@@ -11,6 +11,7 @@ import { indexedDBService, MeetingMetadata, StoredTranscript } from '@/services/
 import { storageService } from '@/services/storageService';
 import { applyPinnedSummaryLanguageToMeeting } from '@/lib/summary-language-preferences';
 import { toast } from 'sonner';
+import { fetchLiveRecording, isLiveMeeting } from '@/lib/live-recording-exclusion';
 
 interface AudioRecoveryStatus {
   status: string; // "success" | "partial" | "failed" | "none"
@@ -42,6 +43,9 @@ export function useTranscriptRecovery(): UseTranscriptRecoveryReturn {
     setIsLoading(true);
     try {
       const meetings = await indexedDBService.getAllMeetings();
+      // specs/0075 W4: never offer (and so never let anyone Delete/Recover) the meeting
+      // that is being recorded right now, however this check came to run.
+      const live = await fetchLiveRecording();
 
       // Filter out meetings older than 7 days and newer than 15 seconds
       // The 15 seconds threshold prevents showing meetings from the current session(jus in case)
@@ -52,7 +56,7 @@ export function useTranscriptRecovery(): UseTranscriptRecoveryReturn {
       const recentMeetings = meetings.filter(m => {
         const isWithinRetention = m.lastUpdated > cutoffTime; // Not older than 7 days
         const isOldEnough = m.lastUpdated < secondsAgo; // Older than 15 seconds
-        return isWithinRetention && isOldEnough;
+        return isWithinRetention && isOldEnough && !isLiveMeeting(m, live);
       });
 
       // Verify audio checkpoint availability for each meeting

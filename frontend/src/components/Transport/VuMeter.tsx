@@ -8,6 +8,10 @@ const ANGLE_MIN = -50;
 const ANGLE_MAX = 50;
 /** Sub-pixel needle moves aren't worth a React render (~0.2° at this size). */
 const RENDER_EPSILON_DB = 0.05;
+/** The well's default (and minimum useful) height: the 180×78 drawing at 0.733. */
+export const VU_DEFAULT_HEIGHT = 57;
+/** The bezel frame's width on each side (`.vu-bezel` padding in globals.css). */
+const VU_BEZEL_PX = 1.5;
 
 /**
  * specs/0057 §3.2 — needle VU. `db` is the raw target (from rmsToVu); the needle follows it
@@ -18,11 +22,14 @@ export function VuMeter({
   db,
   active,
   label,
+  height = VU_DEFAULT_HEIGHT,
   className,
 }: {
   db: number;
   active: boolean;
   label: string;
+  /** Well height in px; width follows the dial's 180:78 aspect. */
+  height?: number;
   className?: string;
 }) {
   const integ = useRef(createVuIntegrator());
@@ -95,72 +102,82 @@ export function VuMeter({
       role="img"
       aria-label={`${label} level ${Math.round(needleDb)} VU`}
     >
-      {/* 132×57 keeps the original 180×78 drawing exactly — same viewBox, same arc, same
-          pivot — scaled to 0.733. Owner feedback 2026-09-21: the meter bridge was making the
-          record header tall enough to push the transcript down the page, and two meters is
-          the one thing on that header that can give back height without losing information.
-          The in-SVG font sizes below are pre-divided by that scale so the engraving still
-          renders at its intended pixel size. */}
-      <div className="relative h-[57px] w-[132px] overflow-hidden rounded-[2px] bg-well shadow-[inset_0_1px_2px_rgba(0,0,0,0.6),inset_0_-1px_0_hsl(var(--bevel-hi))]">
-        <svg viewBox="0 0 180 78" className="block h-full w-full">
-          <path d="M30.3 44.9 A78 78 0 0 1 119.2 22.7" className="stroke-engrave" strokeWidth="1" fill="none" />
-          <path d="M119.2 22.7 A78 78 0 0 1 149.7 44.9" className="stroke-meter-over" strokeWidth="2.5" fill="none" />
-          <g className="stroke-engrave" strokeWidth="1">
-            <path d="M30.3 44.9 L34.8 48.7" />
-            <path d="M51 27.5 L54 32.7" />
-            <path d="M69.8 19.7 L71.4 25.5" />
-            <path d="M83.2 17.3 L83.7 23.3" />
-            <path d="M100.9 17.8 L100 23.7" />
-            <path d="M119.2 22.7 L117 28.3" />
-            <path d="M145.1 39.9 L140.9 44.1" />
-          </g>
-          <g className="fill-engrave font-narrow" fontSize="10.9" textAnchor="middle">
-            <text x="22.6" y="40">-20</text>
-            <text x="46" y="20">-10</text>
-            <text x="67.2" y="12">-7</text>
-            <text x="82.3" y="9">-5</text>
-            <text x="102.2" y="10">-3</text>
-            <text x="123" y="15">0</text>
-            <text x="152.2" y="35">+3</text>
-          </g>
-          <line
-            x1="90"
-            y1="95"
-            x2="90"
-            y2="17"
-            className="stroke-foreground"
-            strokeWidth="1.5"
-            transform={`rotate(${angle} 90 95)`}
-          />
-          <text
-            x="90"
-            y="72"
-            className="fill-engrave font-sans"
-            fontSize="12.3"
-            fontWeight="600"
-            letterSpacing="2"
-            textAnchor="middle"
-          >
-            VU
-          </text>
-          {/* The channel label lives INSIDE the well, bottom-right, sharing the VU
-              engraving's baseline (owner feedback 2026-09-21) — it used to be a separate
-              `u-section-label` span below the meter, which cost the header a whole text row
-              per channel for something that belongs on the faceplate anyway. `role="img"` +
-              `aria-label` on the wrapper still carries it for assistive tech, so this text
-              is decorative. */}
-          <text
-            x="175"
-            y="72"
-            className="fill-engrave font-sans"
-            fontSize="11"
-            fontWeight="600"
-            letterSpacing="1.4"
-            textAnchor="end"
-          >
-            {label.toUpperCase()}
-          </text>
-        </svg>
+      {/* The well keeps the original 180×78 drawing's aspect at the height it is given —
+          57px (0.733 scale) by default. Owner feedback 2026-09-21 shrank it to 57px so the
+          meter bridge stopped making the record header taller; 2026-09-23 asked for the
+          meters to fill the height the header already has, so the record header passes
+          its title column's measured height. The in-SVG font sizes below are pre-divided by
+          the 0.733 scale, so a taller dial grows its engraving with it. */}
+      {/* Bezel + recessed, backlit face (globals.css `.vu-bezel` / `.vu-face`). The bezel's
+          1.5px sits INSIDE `height`, so a framed meter is no taller than the flat one was. */}
+      <div
+        style={{ height, width: Math.round(((height - 2 * VU_BEZEL_PX) * 180) / 78) + 2 * VU_BEZEL_PX }}
+        className="vu-bezel"
+      >
+        <div className="vu-face h-full w-full">
+          {/* The drawing is 180×78; the viewBox pads it (10 each side, 7 on top, 2 below) so
+              the scale and labels sit inside the bezel rather than against it (owner
+              feedback 2026-09-23). 200×87 keeps the drawing's aspect to within 0.4%. */}
+          <svg viewBox="-10 -7 200 87" className="relative z-[1] block h-full w-full">
+            <path d="M30.3 44.9 A78 78 0 0 1 119.2 22.7" className="stroke-engrave" strokeWidth="1" fill="none" />
+            <path d="M119.2 22.7 A78 78 0 0 1 149.7 44.9" className="stroke-meter-over" strokeWidth="2.5" fill="none" />
+            <g className="stroke-engrave" strokeWidth="1">
+              <path d="M30.3 44.9 L34.8 48.7" />
+              <path d="M51 27.5 L54 32.7" />
+              <path d="M69.8 19.7 L71.4 25.5" />
+              <path d="M83.2 17.3 L83.7 23.3" />
+              <path d="M100.9 17.8 L100 23.7" />
+              <path d="M119.2 22.7 L117 28.3" />
+              <path d="M145.1 39.9 L140.9 44.1" />
+            </g>
+            <g className="fill-engrave font-narrow" fontSize="10.9" textAnchor="middle">
+              <text x="22.6" y="40">-20</text>
+              <text x="46" y="20">-10</text>
+              <text x="67.2" y="12">-7</text>
+              <text x="82.3" y="9">-5</text>
+              <text x="102.2" y="10">-3</text>
+              <text x="123" y="15">0</text>
+              <text x="152.2" y="35">+3</text>
+            </g>
+            <line
+              x1="90"
+              y1="95"
+              x2="90"
+              y2="17"
+              className="stroke-foreground"
+              strokeWidth="1.5"
+              transform={`rotate(${angle} 90 95)`}
+            />
+            <text
+              x="90"
+              y="72"
+              className="fill-engrave font-sans"
+              fontSize="12.3"
+              fontWeight="600"
+              letterSpacing="2"
+              textAnchor="middle"
+            >
+              VU
+            </text>
+            {/* The channel label lives INSIDE the well, bottom-right, sharing the VU
+                engraving's baseline (owner feedback 2026-09-21) — it used to be a separate
+                `u-section-label` span below the meter, which cost the header a whole text row
+                per channel for something that belongs on the faceplate anyway. `role="img"` +
+                `aria-label` on the wrapper still carries it for assistive tech, so this text
+                is decorative. */}
+            <text
+              x="175"
+              y="72"
+              className="fill-engrave font-sans"
+              fontSize="11"
+              fontWeight="600"
+              letterSpacing="1.4"
+              textAnchor="end"
+            >
+              {label.toUpperCase()}
+            </text>
+          </svg>
+        </div>
       </div>
     </div>
   );

@@ -1,8 +1,8 @@
 'use client';
 
 /**
- * The `…` menu on a Today row — Edit / Delete for a manually added meeting, Hide for an
- * unrecorded calendar event.
+ * The `…` menu on a Today row — Record now / Edit / Delete for a manually added meeting,
+ * Hide for an unrecorded calendar event.
  *
  * Owner feedback 2026-09-21: "On Today, the 'week' view is missing the … actions menu that
  * lets me remove items." It was missing because `WeekView` was written (specs/0038 WS4) as
@@ -14,7 +14,7 @@
  * dead control.
  */
 
-import { EyeOff, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
+import { Circle, EyeOff, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -25,6 +25,8 @@ import type { DayAgendaItem } from '@/lib/day-agenda';
 import {
   canDeleteRecordedItem,
   canEditManualItem,
+  canRecordManualItem,
+  showsManualRecordButton,
   type TimelineContext,
 } from '@/lib/today-timeline';
 
@@ -32,6 +34,7 @@ export interface AgendaRowActions {
   onHide: (item: DayAgendaItem) => void;
   onEdit: (item: DayAgendaItem) => void;
   onDelete: (item: DayAgendaItem) => void;
+  onRecord: (item: DayAgendaItem) => void;
 }
 
 /**
@@ -60,9 +63,12 @@ export function AgendaRowMenu({
   const canEdit = canEditManualItem(item);
   const canHide = canHideItem(item, ctx);
   const canDelete = canDeleteRecordedItem(item, ctx);
+  // Early recording of a manual meeting: before its start window the row shows Prep, not
+  // the Record button, so this is where recording it ahead of time lives (2026-09-24).
+  const canRecordEarly = canRecordManualItem(item, ctx) && !showsManualRecordButton(item, ctx);
   // Nothing to offer — but keep the slot, so the chips of rows with and without a menu line
   // up (owner report 2026-09-23: the Week view's RECORDED chips stepped in and out).
-  if (!canEdit && !canHide && !canDelete) return <span aria-hidden="true" className="h-5 w-5 flex-shrink-0" />;
+  if (!canEdit && !canHide && !canDelete && !canRecordEarly) return <span aria-hidden="true" className="h-5 w-5 flex-shrink-0" />;
 
   return (
     // The row itself is clickable (it opens the meeting), so the menu swallows its own
@@ -84,6 +90,12 @@ export function AgendaRowMenu({
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
+          {canRecordEarly && (
+            <DropdownMenuItem onSelect={() => actions.onRecord(item)}>
+              <Circle className="mr-2 h-4 w-4" />
+              Record now
+            </DropdownMenuItem>
+          )}
           {canEdit && (
             <>
               <DropdownMenuItem onSelect={() => actions.onEdit(item)}>

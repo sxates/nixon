@@ -11,7 +11,7 @@ import {
   layoutTimeline,
   itemVisualState,
   canJoinItem,
-  canRecordManualItem,
+  showsManualRecordButton,
   dayLabel,
   type TimelineBounds,
   type TimelineContext,
@@ -125,7 +125,7 @@ export function DayTimeline({
             lane={lane}
             laneCount={laneCount}
             canJoin={canJoinItem(item, ctx)}
-            canRecord={canRecordManualItem(item, ctx)}
+            canRecord={showsManualRecordButton(item, ctx)}
             // The Hide/Edit/Delete gate moved into AgendaRowMenu (2026-09-21), which
             // derives it from the item + ctx — the week view was missing the menu
             // entirely because each view carried its own copy of these rules.

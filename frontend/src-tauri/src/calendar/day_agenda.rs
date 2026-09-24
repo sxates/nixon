@@ -46,6 +46,25 @@ pub enum AgendaSource {
     Manual,
 }
 
+/// Which calendar the agenda's calendar rows came from (specs/0075 W3). The frontend's
+/// anti-flicker fallback (keep the previous calendar rows when a read has none) only
+/// makes sense for EventKit, whose cold reads can come back empty; Google reads a local
+/// cache and an empty read there is the truth.
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum CalendarSource {
+    EventKit,
+    Google,
+}
+
+/// `api_get_day_agenda`'s result: the items plus the calendar source they were read from.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DayAgenda {
+    pub items: Vec<DayAgendaItem>,
+    pub calendar_source: CalendarSource,
+}
+
 /// Per-meeting processing status flags (specs/0012). All four are best-effort
 /// derived from the DB in one query (see `MeetingsRepository::get_between_with_status`).
 #[derive(Debug, Clone, Copy, Serialize)]
@@ -349,7 +368,7 @@ fn build_agenda(
 pub async fn api_get_day_agenda<R: Runtime>(
     app: AppHandle<R>,
     date: Option<String>,
-) -> Result<Vec<DayAgendaItem>, String> {
+) -> Result<DayAgenda, String> {
     // `None`/empty means today, so existing call sites that pass no date behave unchanged.
     let date = date.filter(|s| !s.trim().is_empty());
     log::info!("api_get_day_agenda called (date={date:?})");
@@ -380,8 +399,10 @@ pub async fn api_get_day_agenda<R: Runtime>(
     // When not connected, EventKit only (best-effort; empty when access
     // denied). EventKit reads touch the Objective-C runtime, so they run off
     // the async executor.
-    let events = if crate::calendar::google_is_active_source(&app).await {
-        crate::calendar::google::sync::sync_if_stale(&app).await;
+    let google_active = crate::calendar::google_is_active_source(&app).await;
+    let events = if google_active {
+        use crate::calendar::google::sync::{sync_if_stale, SyncTrigger};
+        sync_if_stale(&app, SyncTrigger::Agenda).await;
         crate::calendar::google::sync::cached_upcoming_between(pool, start_utc, end_utc).await
     } else {
         tokio::task::spawn_blocking(move || eventkit::meetings_between(start_utc, end_utc))
@@ -454,7 +475,14 @@ pub async fn api_get_day_agenda<R: Runtime>(
     }
 
     log::info!("api_get_day_agenda -> {} item(s)", items.len());
-    Ok(items)
+    Ok(DayAgenda {
+        items,
+        calendar_source: if google_active {
+            CalendarSource::Google
+        } else {
+            CalendarSource::EventKit
+        },
+    })
 }
 
 /// Give every agenda item that belongs to a meeting but carries no calendar attendees its

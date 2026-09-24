@@ -327,8 +327,9 @@ export function canDeleteRecordedItem(item: DayAgendaItem, ctx: TimelineContext)
 }
 
 /**
- * Whether a timeline item should show an explicit "Record" button (specs/0069 W3): a
- * manual entry, not yet recorded, with no recording already in progress anywhere.
+ * Whether a manual entry can be recorded against its own row (specs/0069 W3): a manual
+ * entry, not yet recorded, with no recording already in progress anywhere. Where that is
+ * offered depends on the time — see {@link showsManualRecordButton}.
  *
  * No phase gate (fix round 2, specs/0069 followup a): this used to require the "now"
  * phase, which left an entry scheduled more than `PRE_START_GRACE_MS` out with NO way to
@@ -341,7 +342,7 @@ export function canDeleteRecordedItem(item: DayAgendaItem, ctx: TimelineContext)
  * hasn't happened yet. `handleRecordManual` (in `page.tsx`) now sends the actual `now`
  * as the start when recording early, and only the scheduled start once it has passed
  * (matching Join & Record's calendar behavior, specs/0015) — so recording early can no
- * longer misdate the row, and a manual entry can offer Record from the moment it exists —
+ * longer misdate the row, and a manual entry can be recorded from the moment it exists —
  * until it ends.
  */
 export function canRecordManualItem(item: DayAgendaItem, ctx: TimelineContext): boolean {
@@ -353,6 +354,17 @@ export function canRecordManualItem(item: DayAgendaItem, ctx: TimelineContext): 
     // followup-a change dropped this half of the gate by accident (owner feedback 2026-09-23).
     itemPhase(item, ctx.now, ctx.recordingThisId) !== 'past'
   );
+}
+
+/**
+ * Whether the row shows the Record BUTTON: a recordable manual entry inside its start
+ * window — the same "now" phase (from `PRE_START_GRACE_MS` before the start) that gives a
+ * calendar meeting Join & Record. Before that the row shows Prep like any other upcoming
+ * meeting, and recording early is "Record now" in the row's `…` menu (owner feedback
+ * 2026-09-24: a manual meeting hours away showed Record, where a calendar one showed Prep).
+ */
+export function showsManualRecordButton(item: DayAgendaItem, ctx: TimelineContext): boolean {
+  return canRecordManualItem(item, ctx) && itemPhase(item, ctx.now, ctx.recordingThisId) === 'now';
 }
 
 // ---------------------------------------------------------------------------

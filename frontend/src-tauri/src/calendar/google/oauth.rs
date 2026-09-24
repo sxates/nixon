@@ -39,7 +39,7 @@ use std::time::Duration;
 use anyhow::{anyhow, Context, Result};
 use chrono::{DateTime, Utc};
 use oauth2::basic::{BasicClient, BasicErrorResponseType};
-use oauth2::reqwest::async_http_client;
+use oauth2::reqwest::{async_http_client, AsyncHttpClientError};
 use oauth2::{
     AuthUrl, AuthorizationCode, ClientId, ClientSecret, CsrfToken, PkceCodeChallenge,
     PkceCodeVerifier, RedirectUrl, RefreshToken, RequestTokenError, Scope, TokenResponse, TokenUrl,
@@ -89,6 +89,26 @@ const EXPIRY_SLACK_SECS: i64 = 60;
 /// Fallback lifetime when Google omits `expires_in` (it never does in
 /// practice; Google access tokens live ~3600s).
 const DEFAULT_EXPIRY_SECS: u64 = 3600;
+
+/// Bound on one token-endpoint round trip (specs/0075). oauth2's
+/// `async_http_client` builds a reqwest client with no timeout, so a half-open
+/// socket after sleep hung the hourly refresh — and the sync lock — forever.
+const TOKEN_HTTP_TIMEOUT: Duration = Duration::from_secs(15);
+
+/// `async_http_client` with [`TOKEN_HTTP_TIMEOUT`]. A timeout is a plain
+/// request error, never `invalid_grant`, so it can't set the reconnect latch.
+async fn bounded_http_client(
+    request: oauth2::HttpRequest,
+) -> Result<oauth2::HttpResponse, AsyncHttpClientError> {
+    tokio::time::timeout(TOKEN_HTTP_TIMEOUT, async_http_client(request))
+        .await
+        .unwrap_or_else(|_| {
+            Err(AsyncHttpClientError::Other(format!(
+                "Google did not answer within {}s",
+                TOKEN_HTTP_TIMEOUT.as_secs()
+            )))
+        })
+}
 
 // ---------------------------------------------------------------------------
 // Error markers (so the command layer can route without string-matching)
@@ -227,7 +247,7 @@ impl PendingConnect {
             .client
             .exchange_code(AuthorizationCode::new(code))
             .set_pkce_verifier(self.pkce_verifier)
-            .request_async(async_http_client)
+            .request_async(bounded_http_client)
             .await
             .map_err(|e| {
                 anyhow!(
@@ -395,13 +415,16 @@ async fn request_refresh(
 ) -> Result<oauth2::basic::BasicTokenResponse> {
     client
         .exchange_refresh_token(&RefreshToken::new(refresh_token.to_string()))
-        .request_async(async_http_client)
+        .request_async(bounded_http_client)
         .await
         .map_err(|e| match &e {
             RequestTokenError::ServerResponse(resp)
                 if *resp.error() == BasicErrorResponseType::InvalidGrant =>
             {
                 anyhow::Error::new(AuthError::InvalidGrant)
+            }
+            RequestTokenError::Request(AsyncHttpClientError::Other(msg)) => {
+                anyhow!("Google token refresh failed: {msg}")
             }
             // Display of the other variants carries endpoint/JSON error info,
             // never token material.
@@ -793,6 +816,24 @@ mod tests {
             .unwrap_err();
         assert!(is_invalid_grant(&err));
         assert!(!is_cancelled(&err));
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_refresh_that_never_answers_times_out_without_latching() {
+        // Accepts, then never responds: the half-open socket after a sleep.
+        let listener = TcpListener::bind(("127.0.0.1", 0)).await.unwrap();
+        let url = format!("http://{}/token", listener.local_addr().unwrap());
+        tokio::spawn(async move {
+            let _held = listener.accept().await;
+            std::future::pending::<()>().await;
+        });
+        let client = test_client(&url);
+        let err = tokio::time::timeout(TOKEN_HTTP_TIMEOUT * 4, request_refresh(&client, "rt"))
+            .await
+            .expect("the refresh must be bounded")
+            .unwrap_err();
+        assert!(err.to_string().contains("did not answer"), "{err}");
+        assert!(!is_invalid_grant(&err));
     }
 
     #[tokio::test]

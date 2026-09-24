@@ -24,7 +24,7 @@ import { SearchMeetingsButton } from '@/components/CommandPalette/SearchMeetings
 import { avatarColorClass } from '@/lib/avatar-colors';
 import { PageHeader } from '@/components/ui/page-header';
 import { SegmentedControl } from '@/components/ui/segmented-control';
-import { Reels } from '@/components/Transport/Reels';
+import { RecordingBadge } from '@/components/RecordingBadge';
 import { formatReelTag } from '@/lib/reel-number';
 
 /** Month grid vs. list of rows (specs/0054 W3), as an underlined segmented control. */
@@ -113,20 +113,6 @@ function formatDuration(seconds?: number | null): string | null {
   const hours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;
   return `${hours}h ${String(minutes).padStart(2, '0')}m`;
-}
-
-/**
- * "Recording" marker for a meeting-list row (specs/0029 WS4.4), keyed off the sidebar's
- * authoritative `activeRecordingMeetingId`. specs/0057 Task 6: an engraved caps label
- * beside the turning reels — the reels carry the liveness, so nothing blinks.
- */
-function RecordingBadge() {
-  return (
-    <span className="inline-flex flex-shrink-0 items-center gap-1.5">
-      <Reels state="recording" size={14} />
-      <span className="u-section-label text-record-ink">Recording</span>
-    </span>
-  );
 }
 
 /**
@@ -385,8 +371,8 @@ export default function AllMeetingsPage() {
       <div
         className={
           viewMode === 'month'
-            ? 'flex min-h-0 flex-1 flex-col overflow-hidden px-7 pb-6'
-            : 'flex-1 overflow-y-auto px-7 pb-12'
+            ? 'flex min-h-0 flex-1 flex-col overflow-hidden px-4 min-[900px]:px-7 pb-6'
+            : 'flex-1 overflow-y-auto px-4 min-[900px]:px-7 pb-12'
         }
       >
         {isLoading ? (

@@ -14,7 +14,8 @@ use anyhow::{anyhow, bail, Result};
 use serde::Serialize;
 use tauri::{AppHandle, Runtime};
 
-use super::{capabilities, oauth, sync};
+use super::sync::{SyncOutcome, SyncTrigger};
+use super::{capabilities, oauth, sync, sync_outcome};
 use crate::database::repositories::attendee_photos::AttendeePhotosRepository;
 use crate::database::repositories::google_calendar::GoogleCalendarRepository;
 use crate::database::repositories::owner_emails::OwnerEmailsRepository;
@@ -25,7 +26,8 @@ use crate::secrets;
 // ---------------------------------------------------------------------------
 
 /// `api_google_calendar_status` result: `{ configured, connected, email,
-/// lastSyncedAt, calendars: [{id, summary, selected}] }`.
+/// authRequired, lastSyncedAt, calendars: [{id, summary, selected,
+/// lastSyncedAt, lastError}] }`.
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GoogleCalendarStatusDto {
@@ -34,7 +36,11 @@ pub struct GoogleCalendarStatusDto {
     /// An account row exists (connect completed and wasn't disconnected).
     pub connected: bool,
     pub email: Option<String>,
-    /// Newest `last_synced_at` across the account's calendars (RFC3339 UTC).
+    /// The grant lapsed (`invalid_grant`): nothing syncs until the user
+    /// reconnects, so `last_synced_at` is not fresh (specs/0074 W1).
+    pub auth_required: bool,
+    /// Newest `last_synced_at` across the SELECTED calendars (RFC3339 UTC) — a
+    /// deselected calendar's old stamp can't make a stalled sync look fresh.
     pub last_synced_at: Option<String>,
     pub calendars: Vec<GoogleCalendarEntryDto>,
 }
@@ -45,6 +51,9 @@ pub struct GoogleCalendarEntryDto {
     pub id: String,
     pub summary: String,
     pub selected: bool,
+    pub last_synced_at: Option<String>,
+    /// This calendar's error from the last pass this session, if it failed.
+    pub last_error: Option<String>,
 }
 
 /// `api_google_calendar_connect` result: `{ email }`.
@@ -77,19 +86,26 @@ pub async fn api_google_calendar_status<R: Runtime>(
         .map_err(|e| format!("Could not read the Google Calendar list: {e}"))?;
 
     // RFC3339 UTC strings compare chronologically, so lexicographic max works.
-    let last_synced_at = states.iter().filter_map(|s| s.last_synced_at.clone()).max();
+    let last_synced_at = states
+        .iter()
+        .filter(|s| s.selected)
+        .filter_map(|s| s.last_synced_at.clone())
+        .max();
 
     Ok(GoogleCalendarStatusDto {
         configured: super::is_configured(),
         connected: account.is_some(),
         email: account.map(|a| a.email),
+        auth_required: sync::auth_required(),
         last_synced_at,
         calendars: states
             .into_iter()
             .map(|s| GoogleCalendarEntryDto {
+                last_error: sync_outcome::last_error_for(&s.calendar_id),
                 id: s.calendar_id,
                 summary: s.summary,
                 selected: s.selected,
+                last_synced_at: s.last_synced_at,
             })
             .collect(),
     })
@@ -194,9 +210,8 @@ async fn finish_connect<R: Runtime>(
     // Initial sync (spec 0032): populate the cache right away. Best-effort —
     // a transient failure must not undo a successful connect; the staleness
     // triggers and the 10-minute timer will fill the cache shortly.
-    if let Err(e) = sync::sync_all(app).await {
-        log::warn!("google calendar: initial sync after connect failed (will retry): {e:#}");
-    }
+    // `sync_all` logs its own outcome line, including any error.
+    let _ = sync::sync_all(app, SyncTrigger::Connect).await;
 
     // Best-effort capability probe (specs/0038 WS3): a granted scope is NOT
     // access, so probe once what the org actually allows (DL expansion / photos)
@@ -265,23 +280,25 @@ async fn apply_calendar_selection(
 }
 
 /// Toggle one calendar's sync selection (see [`apply_calendar_selection`] for the
-/// token-invalidation semantics).
+/// token-invalidation semantics). Returns the enable's sync outcome (`null` on
+/// deselect, which doesn't sync).
 #[tauri::command]
 pub async fn api_google_calendar_set_calendar_selected<R: Runtime>(
     app: AppHandle<R>,
     calendar_id: String,
     selected: bool,
-) -> Result<(), String> {
+) -> Result<Option<SyncOutcome>, String> {
     let Some(pool) = sync::db_pool(&app) else {
         return Err(DB_NOT_READY.to_string());
     };
     apply_calendar_selection(&pool, &calendar_id, selected).await?;
-    if selected {
-        sync::sync_all(&app)
-            .await
-            .map_err(|e| format!("The calendar was enabled, but its first sync failed: {e}"))?;
+    if !selected {
+        return Ok(None);
     }
-    Ok(())
+    sync::sync_all(&app, SyncTrigger::Selection)
+        .await
+        .map(Some)
+        .map_err(|e| format!("The calendar was enabled, but its first sync failed: {e}"))
 }
 
 /// Bulk form of [`api_google_calendar_set_calendar_selected`] for the Settings
@@ -297,26 +314,30 @@ pub async fn api_google_calendar_set_calendars_selected<R: Runtime>(
     app: AppHandle<R>,
     calendar_ids: Vec<String>,
     selected: bool,
-) -> Result<(), String> {
+) -> Result<Option<SyncOutcome>, String> {
     let Some(pool) = sync::db_pool(&app) else {
         return Err(DB_NOT_READY.to_string());
     };
     for calendar_id in &calendar_ids {
         apply_calendar_selection(&pool, calendar_id, selected).await?;
     }
-    if selected && !calendar_ids.is_empty() {
-        sync::sync_all(&app)
-            .await
-            .map_err(|e| format!("The calendars were enabled, but their first sync failed: {e}"))?;
+    if !selected || calendar_ids.is_empty() {
+        return Ok(None);
     }
-    Ok(())
+    sync::sync_all(&app, SyncTrigger::Selection)
+        .await
+        .map(Some)
+        .map_err(|e| format!("The calendars were enabled, but their first sync failed: {e}"))
 }
 
-/// Manual "Sync now" — forces a pass regardless of staleness (still coalesced
-/// by the single-flight guard if one is already running).
+/// Manual "Sync now" — forces a pass regardless of staleness, waiting (bounded)
+/// for an in-flight one. The outcome says what actually happened (specs/0074
+/// W1): `alreadyRunning`, `authRequired` etc. are never reported as synced.
 #[tauri::command]
-pub async fn api_google_calendar_sync_now<R: Runtime>(app: AppHandle<R>) -> Result<(), String> {
-    sync::sync_all(&app)
+pub async fn api_google_calendar_sync_now<R: Runtime>(
+    app: AppHandle<R>,
+) -> Result<SyncOutcome, String> {
+    sync::sync_all(&app, SyncTrigger::Manual)
         .await
         .map_err(|e| format!("Google Calendar sync failed: {e}"))
 }

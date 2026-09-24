@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // specs/0068 — the routing this file is responsible for. The old implementation could not
 // be tested at all, because the plugin calls it depended on do not exist on desktop; these
@@ -17,8 +17,10 @@ import {
   ACTION_OPEN,
   ACTION_PREP,
   ACTION_RECORD,
+  CALLBACK_TTL_MS,
   CATEGORY_MEETING,
   __resetNotificationStateForTests,
+  cancelPending,
   ensureNotificationPermission,
   notify,
   removeNotification,
@@ -104,6 +106,31 @@ describe('notify', () => {
   it('reports failure when delivery throws, so the caller can fall back', async () => {
     backend({ deliverFails: true });
     expect(await notify({ title: 'T', body: 'B' })).toBe(false);
+  });
+
+  // Exact args: a request that is not scheduled carries no `deliverAtMs` key at all.
+  it('sends exactly the request Rust expects', async () => {
+    backend();
+    await notify({ title: 'T', body: 'B', category: CATEGORY_MEETING, id: 'meeting-42' });
+    expect(invokeMock).toHaveBeenCalledWith('notif_deliver', {
+      request: { id: 'meeting-42', title: 'T', body: 'B', category: CATEGORY_MEETING, userInfo: {} },
+    });
+  });
+
+  // specs/0075 W2. Rust reads an i64, so a fractional value would reject the whole call.
+  it('schedules with an integer deliverAtMs', async () => {
+    backend();
+    await notify({ title: 'T', body: 'B', id: 'meeting-start-1', deliverAtMs: 1_790_000_000_000.6 });
+    expect(invokeMock).toHaveBeenCalledWith('notif_deliver', {
+      request: {
+        id: 'meeting-start-1',
+        title: 'T',
+        body: 'B',
+        category: 'nixon.plain',
+        userInfo: {},
+        deliverAtMs: 1_790_000_000_001,
+      },
+    });
   });
 
   it('sends the category and the id the caller chose', async () => {
@@ -192,5 +219,94 @@ describe('removeNotification', () => {
   it('never throws when the build cannot remove anything', async () => {
     invokeMock.mockRejectedValue(new Error('unbundled'));
     await expect(removeNotification('gone')).resolves.toBeUndefined();
+  });
+});
+
+// specs/0075 W2 — a start banner scheduled at T-5 is pressed at T-0 or later.
+describe('scheduled notifications', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const press = (notificationId: string) =>
+    handler?.({ payload: { actionId: ACTION_JOIN_AND_RECORD, notificationId, userInfo: {} } });
+
+  it('keeps its callbacks for the TTL counted from delivery, not from scheduling', async () => {
+    vi.useFakeTimers();
+    backend();
+    const pressed: string[] = [];
+    const deliverAtMs = Date.now() + 5 * 60 * 1000;
+    await notify({
+      title: 'T',
+      body: 'B',
+      id: 'meeting-start-1',
+      category: CATEGORY_MEETING,
+      deliverAtMs,
+      onJoinAndRecord: () => pressed.push('joinAndRecord'),
+    });
+    // Past the TTL as counted from scheduling; still inside it as counted from delivery.
+    vi.advanceTimersByTime(CALLBACK_TTL_MS + 60 * 1000);
+    press('meeting-start-1');
+    expect(pressed).toEqual(['joinAndRecord']);
+  });
+
+  it('still forgets them once the TTL after delivery has passed', async () => {
+    vi.useFakeTimers();
+    backend();
+    const pressed: string[] = [];
+    await notify({
+      title: 'T',
+      body: 'B',
+      id: 'meeting-start-1',
+      deliverAtMs: Date.now() + 5 * 60 * 1000,
+      onJoinAndRecord: () => pressed.push('joinAndRecord'),
+    });
+    vi.advanceTimersByTime(5 * 60 * 1000 + CALLBACK_TTL_MS + 1);
+    press('meeting-start-1');
+    expect(pressed).toEqual([]);
+  });
+
+  // Re-delivering an id (a reschedule, the in-app start replacing a scheduled one) must not
+  // let the first registration's expiry timer drop the second registration's callbacks.
+  it('does not let an earlier registration expire a later one', async () => {
+    vi.useFakeTimers();
+    backend();
+    const pressed: string[] = [];
+    await notify({ title: 'T', body: 'B', id: 'n', onOpen: () => pressed.push('first') });
+    vi.advanceTimersByTime(CALLBACK_TTL_MS - 1000);
+    await notify({
+      title: 'T',
+      body: 'B',
+      id: 'n',
+      deliverAtMs: Date.now() + 10 * 60 * 1000,
+      onOpen: () => pressed.push('second'),
+    });
+    vi.advanceTimersByTime(5000); // the first registration's timer would have fired here
+    handler?.({ payload: { actionId: ACTION_OPEN, notificationId: 'n', userInfo: {} } });
+    expect(pressed).toEqual(['second']);
+  });
+});
+
+describe('cancelPending', () => {
+  it('asks Rust to withdraw the request and forgets its callbacks', async () => {
+    backend();
+    const pressed: string[] = [];
+    await notify({
+      title: 'T',
+      body: 'B',
+      id: 'meeting-start-1',
+      deliverAtMs: Date.now() + 60_000,
+      onRecord: () => pressed.push('record'),
+    });
+    await cancelPending('meeting-start-1');
+    expect(invokeMock).toHaveBeenCalledWith('notif_cancel_pending', { id: 'meeting-start-1' });
+    handler?.({ payload: { actionId: ACTION_RECORD, notificationId: 'meeting-start-1', userInfo: {} } });
+    expect(pressed).toEqual([]);
+  });
+
+  // An unbundled build rejects with the capability reason; callers never see it.
+  it('never throws when the build cannot cancel anything', async () => {
+    invokeMock.mockRejectedValue(new Error('unbundled'));
+    await expect(cancelPending('gone')).resolves.toBeUndefined();
   });
 });
