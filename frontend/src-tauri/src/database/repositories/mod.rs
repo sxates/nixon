@@ -18,6 +18,7 @@ pub mod search;
 pub mod search_rank;
 pub mod setting;
 pub mod speaker;
+pub mod speaker_rekey; // specs/0078: "This is me" / "This isn't me" re-keys
 pub mod summary;
 pub mod summary_outline;
 pub mod transcript;
