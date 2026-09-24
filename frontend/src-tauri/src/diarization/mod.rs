@@ -48,8 +48,8 @@ pub mod split;
 mod real_eval;
 
 pub use align::{
-    align_system_turns_to_segments, align_turns_to_segments, AlignableSegment, Channel,
-    LOCAL_SPEAKER_KEY,
+    align_system_turns_to_segments, align_turns_to_segments, AlignMode, AlignableSegment,
+    Channel, LOCAL_SPEAKER_KEY,
 };
 pub use sherpa::{SherpaDiarizer, SpeakerCount, UNKNOWN_SPEAKER_KEY};
 

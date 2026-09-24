@@ -20,7 +20,7 @@ use crate::audio::decoder::decode_audio_file;
 use crate::audio::retranscription::VAD_REDEMPTION_TIME_MS;
 use crate::audio::vad::get_speech_chunks;
 use crate::diarization::align::{
-    align_turns_to_segments, pad_trimmed, AlignableSegment, Channel, LOCAL_SPEAKER_KEY,
+    align_turns_to_segments, pad_trimmed, AlignMode, AlignableSegment, Channel, LOCAL_SPEAKER_KEY,
 };
 use crate::diarization::owner_turns::{
     filter_bleed_owner_segments, speech_segments_to_owner_turns,
@@ -211,7 +211,7 @@ fn eval_you_attribution_old_vs_new() {
     // NEW attribution (0047: owner turns filtered from System/Mixed by the real code).
     let mut new_turns = remote_turns.clone();
     new_turns.extend(guarded_owner.iter().cloned());
-    let new_keys = align_turns_to_segments(&new_turns, &alignable);
+    let new_keys = align_turns_to_segments(&new_turns, &alignable, AlignMode::Call);
 
     let old_you = old_keys.iter().filter(|k| *k == LOCAL_SPEAKER_KEY).count();
     let new_you = new_keys.iter().filter(|k| *k == LOCAL_SPEAKER_KEY).count();

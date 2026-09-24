@@ -37,10 +37,11 @@ use crate::audio::channel_writer::{system_channel_path, system_channel_wav};
 use crate::database::repositories::speaker::{SpeakerIdentitySnapshot, SpeakersRepository};
 use crate::database::repositories::transcript_speaker_overrides::TranscriptSpeakerOverridesRepository;
 use crate::diarization::align::{
-    align_turns_to_segments, AlignableSegment, Channel, LOCAL_SPEAKER_KEY,
+    align_turns_to_segments, AlignMode, AlignableSegment, Channel, LOCAL_SPEAKER_KEY,
 };
 use crate::diarization::models;
 use crate::diarization::segments::load_segments;
+use crate::diarization::split::{split_straddling_rows, SplitMode};
 use crate::diarization::{Diarizer, SherpaDiarizer};
 use crate::state::AppState;
 
@@ -714,9 +715,7 @@ pub(super) async fn run<R: Runtime>(app: AppHandle<R>, meeting_id: String) -> Re
     // wrong speaker" bug. Split such rows at the turn boundaries BEFORE loading
     // segments for alignment. Best-effort: the split runs in its own
     // transaction, so a failure leaves rows whole and alignment still works.
-    if let Err(e) =
-        crate::diarization::split::split_straddling_rows(pool, &meeting_id, &turns).await
-    {
+    if let Err(e) = split_straddling_rows(pool, &meeting_id, &turns, SplitMode::Call).await {
         log::warn!("diarization split failed for {meeting_id} (continuing unsplit): {e:#}");
     }
 
@@ -741,7 +740,7 @@ pub(super) async fn run<R: Runtime>(app: AppHandle<R>, meeting_id: String) -> Re
             AlignableSegment::new(ts, te, s.channel)
         })
         .collect();
-    let keys = align_turns_to_segments(&turns, &alignable);
+    let keys = align_turns_to_segments(&turns, &alignable, AlignMode::Call);
     let mic_tagged = alignable
         .iter()
         .filter(|s| s.channel == Channel::Microphone)
@@ -1268,10 +1267,7 @@ mod tests {
             registry_update(id, stage, None);
             let s = run_status(id).unwrap();
             assert_eq!(s.stage, stage, "stage is reported");
-            assert_eq!(
-                s.progress_pct, 0,
-                "{stage} must not inherit sherpa's 100%"
-            );
+            assert_eq!(s.progress_pct, 0, "{stage} must not inherit sherpa's 100%");
             assert!(s.running, "the run is still going");
         }
 
