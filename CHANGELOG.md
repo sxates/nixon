@@ -19,7 +19,50 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 ## [Unreleased]
 
-_(nothing yet)_
+### Added
+
+- **Google Calendar tells you when it needs you.** If your Google sign-in expires or is
+  revoked, Today and Settings → Calendar show a **Reconnect** prompt, and **Sync now** says
+  what actually happened — how many changes it picked up, that a sync is still running, or
+  that nothing synced and why. Each calendar also shows when it last synced.
+- **VU meters with depth.** The recording meters sit in a thin bezel with a backlit face,
+  and fill the header instead of floating in it.
+
+### Changed
+
+- **A narrow window gives the page more room.** Below about 900 pixels wide the sidebar
+  folds to its icons (open it and it floats over the page) and the margins tighten. The VU
+  meters step aside when the recording header runs out of room.
+- **Recording opens on the recording screen.** Pressing REC goes straight to "Listening for
+  speech…", and stopping shows "Saving the recording…" until your meeting opens.
+- **The live transcript follows along from the first line**, and picks up following again
+  whenever you scroll back to the bottom.
+- **The meeting being recorded is marked once on Today**, with the turning reels, in
+  Agenda, List and Week alike.
+
+### Fixed
+
+- The "starting now" notification arrives at the start of a calendar meeting even when
+  Nixon is in the background.
+- Google Calendar picks up meetings added or moved since the last sync, and keeps syncing
+  after the Mac sleeps.
+- A meeting moved to another day leaves Today.
+- Nixon no longer offers the recording in progress as an interrupted meeting to recover or
+  delete.
+- A long status in the sidebar queue no longer runs into its count.
+
+### Internal
+
+- specs/0075: `SyncOutcome` from `sync_all`; oauth2 token refresh and code exchange bounded
+  at 15s (its reqwest client had no timeout, so a half-open socket could hold `SYNC_LOCK`
+  until restart); 120s pass cap; bounded startup probe; enrichment on its own lock;
+  `singleEvents` on incremental requests; `google-calendar-synced` event;
+  `notif_deliver.deliverAtMs` (UNTimeIntervalNotificationTrigger) + `notif_cancel_pending`;
+  `api_get_upcoming_meetings.includeStartedWithinMs`; `api_get_day_agenda` returns
+  `{ items, calendarSource }`; recovery waits for the first recording-state reply.
+- Screenshots: the Today shot is the Agenda view, `next dev`'s error overlay is hidden in
+  shots, and narrow-window and lapsed-Google shots were added.
+- README: macOS 14 is the supported floor; Google Calendar's test-mode 7-day sign-in noted.
 
 ## [0.9.0] - 2026-09-23
 
