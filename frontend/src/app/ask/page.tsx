@@ -424,7 +424,7 @@ function AskPageContent() {
         subtitle="Ask a question across your meetings — answers cite their sources"
       />
 
-      <div className="flex-1 overflow-y-auto px-7 pb-12">
+      <div className="flex-1 overflow-y-auto px-4 min-[900px]:px-7 pb-12">
         <div className="mx-auto max-w-[840px]">
           {/* Question + scope */}
           <div className="rounded-[3px] border border-border bg-card p-4 shadow-sm">

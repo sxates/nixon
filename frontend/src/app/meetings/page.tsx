@@ -371,8 +371,8 @@ export default function AllMeetingsPage() {
       <div
         className={
           viewMode === 'month'
-            ? 'flex min-h-0 flex-1 flex-col overflow-hidden px-7 pb-6'
-            : 'flex-1 overflow-y-auto px-7 pb-12'
+            ? 'flex min-h-0 flex-1 flex-col overflow-hidden px-4 min-[900px]:px-7 pb-6'
+            : 'flex-1 overflow-y-auto px-4 min-[900px]:px-7 pb-12'
         }
       >
         {isLoading ? (

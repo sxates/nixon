@@ -83,7 +83,9 @@ const PANEL_SURFACE =
 const Sidebar: React.FC = () => {
   const router = useRouter();
   const pathname = usePathname();
-  const { isCollapsed, toggleCollapse } = useSidebar();
+  const { isCollapsed, isContentInsetCollapsed, toggleCollapse } = useSidebar();
+  // A narrow window's expanded sidebar floats over the page; a click outside it closes it.
+  const isOverlay = !isCollapsed && isContentInsetCollapsed;
 
   // Expose openSettings to window for the Rust tray to call (preserved from the
   // previous sidebar — the tray invokes this to surface settings).
@@ -102,6 +104,14 @@ const Sidebar: React.FC = () => {
   // and whether labels render — nothing moves or shrinks.
   return (
     <div className="fixed top-0 left-0 z-40 h-screen">
+      {isOverlay && (
+        <div
+          aria-hidden="true"
+          data-sidebar-scrim
+          className="fixed inset-0 -z-10 bg-background/40"
+          onClick={toggleCollapse}
+        />
+      )}
       <div
         className={cn(
           'relative flex h-screen flex-col border-r border-border transition-all duration-300',

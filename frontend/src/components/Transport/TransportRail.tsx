@@ -23,7 +23,7 @@ import { TransportStatus, type TransportPhase } from './TransportStatus';
  */
 export function TransportRail() {
   const rs = useRecordingState();
-  const { isCollapsed, handleRecordingToggle } = useSidebar();
+  const { isContentInsetCollapsed, handleRecordingToggle } = useSidebar();
   const router = useRouter();
 
   const finalizing = rs.isStopping || rs.isProcessing || rs.isSaving;
@@ -101,7 +101,7 @@ export function TransportRail() {
         'fixed bottom-0 right-0 z-40 flex h-[var(--rail-h)] items-stretch border-t border-border',
         'bg-panel shadow-[inset_0_1px_0_hsl(var(--bevel-hi)),0_-8px_16px_-12px_rgba(0,0,0,0.35)]',
         'transition-[left] duration-300',
-        isCollapsed ? 'left-16' : 'left-64',
+        isContentInsetCollapsed ? 'left-16' : 'left-64',
       )}
     >
       {/* Instruments first, keys last (specs/0064 W6) — the status zone takes the slack, so

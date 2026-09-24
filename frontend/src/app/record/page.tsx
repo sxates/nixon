@@ -34,7 +34,7 @@ export default function Home() {
   const { status, isStopping, isProcessing } = recordingState;
 
   // Hooks
-  const { setIsMeetingActive, isCollapsed: sidebarCollapsed, activeRecordingMeetingId } = useSidebar();
+  const { setIsMeetingActive, isContentInsetCollapsed: sidebarCollapsed, activeRecordingMeetingId } = useSidebar();
   const { modals, messages, showModal, hideModal } = useModalState(transcriptModelConfig);
   const { setIsRecordingDisabled } = useRecordingStateSync(isRecording, setIsRecordingState, setIsMeetingActive);
   useRecordingStart(isRecording, setIsRecordingState, showModal);

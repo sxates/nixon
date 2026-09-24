@@ -6,6 +6,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { toast } from 'sonner';
 import { useRecordingState } from '@/contexts/RecordingStateContext';
 import { createSummaryPoller, type SummaryPoller } from '@/lib/summary-polling';
+import { useNarrowWindow } from './useNarrowWindow';
 
 /** localStorage key for the persisted sidebar collapse preference ('1' | '0'). */
 const SIDEBAR_COLLAPSED_KEY = 'nixon.sidebar.collapsed';
@@ -34,7 +35,11 @@ interface SidebarContextType {
   activeRecordingMeetingId: string | null;
   setActiveRecordingMeetingId: (id: string | null) => void;
   sidebarItems: SidebarItem[];
+  /** Whether the sidebar PANEL is drawn collapsed (the 64px rail). */
   isCollapsed: boolean;
+  /** Whether the PAGE should be inset by the rail only. Differs from `isCollapsed` in a
+   *  narrow window, where an expanded sidebar overlays the page instead of pushing it. */
+  isContentInsetCollapsed: boolean;
   toggleCollapse: () => void;
   meetings: CurrentMeeting[];
   setMeetings: (meetings: CurrentMeeting[]) => void;
@@ -132,7 +137,22 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  // Narrow window (owner feedback 2026-09-23): the sidebar collapses to its rail whatever
+  // the saved preference, and the toggle opens it as a temporary overlay — not saved, and
+  // closed again on navigation or when the window widens.
+  const isNarrow = useNarrowWindow();
+  const [narrowExpanded, setNarrowExpanded] = useState(false);
+  useEffect(() => {
+    setNarrowExpanded(false);
+  }, [pathname, isNarrow]);
+  const effectiveCollapsed = isNarrow ? !narrowExpanded : isCollapsed;
+  const isContentInsetCollapsed = isNarrow || isCollapsed;
+
   const toggleCollapse = () => {
+    if (isNarrow) {
+      setNarrowExpanded((prev) => !prev);
+      return;
+    }
     setIsCollapsed((prev) => {
       const next = !prev;
       try {
@@ -243,7 +263,8 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
     activeRecordingMeetingId,
     setActiveRecordingMeetingId,
     sidebarItems,
-    isCollapsed,
+    isCollapsed: effectiveCollapsed,
+    isContentInsetCollapsed,
     toggleCollapse,
     meetings,
     setMeetings,
@@ -258,7 +279,9 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
     currentMeeting,
     activeRecordingMeetingId,
     sidebarItems,
-    isCollapsed,
+    effectiveCollapsed,
+    isContentInsetCollapsed,
+    isNarrow,
     meetings,
     isMeetingActive,
     handleNewNote,

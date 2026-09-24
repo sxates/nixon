@@ -8,12 +8,14 @@ interface MainContentProps {
 }
 
 const MainContent: React.FC<MainContentProps> = ({ children }) => {
-  const { isCollapsed } = useSidebar();
+  // The page is inset by the rail whenever the sidebar isn't taking a column — including
+  // a narrow window's expanded overlay.
+  const { isContentInsetCollapsed } = useSidebar();
 
   return (
     <main
       className={`min-w-0 flex-1 pb-[var(--rail-h)] transition-all duration-300 ${
-        isCollapsed ? 'ml-16' : 'ml-64'
+        isContentInsetCollapsed ? 'ml-16' : 'ml-64'
       }`}
     >
       {children}

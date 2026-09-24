@@ -67,6 +67,34 @@
     ]
   },
   {
+    "name": "today-narrow",
+    "route": "/?view=day",
+    "ignore": [
+      {
+        "x": 300,
+        "y": 734,
+        "w": 420,
+        "h": 20,
+        "why": "live now-line + wall-clock time label on the day view (specs/0060 Task 3 determinism check)"
+      },
+      {
+        "x": 338,
+        "y": 816,
+        "w": 106,
+        "h": 22,
+        "why": "footer TapeCounter roller digits (specs/0060 Task 3). Moved here in specs/0066: specs/0064 W6 reordered the rail (reel, then counter-over-meter, then title, keys right), so the old box at x=470 sat over \"Deck ready\" while the digits flaked unignored at x=343..434 — measured, not guessed."
+      },
+      {
+        "x": 88,
+        "y": 26,
+        "w": 250,
+        "h": 30,
+        "why": "Today greeting (\"Good morning/afternoon/evening\") is derived from the wall clock, so two runs at different hours differ by real glyphs, not sub-pixels (specs/0066)."
+      }
+    ],
+    "viewport": [760, 860]
+  },
+  {
     "name": "today-no-calendar",
     "route": "/",
     "calendar": "none",
@@ -157,6 +185,21 @@
       }
     ],
     "wait": 4500
+  },
+  {
+    "name": "meeting-transcript-narrow",
+    "route": "/meeting-details?id=demo-01&tab=transcript",
+    "ignore": [
+      {
+        "x": 338,
+        "y": 816,
+        "w": 106,
+        "h": 22,
+        "why": "footer TapeCounter roller digits (specs/0060 Task 3). Moved here in specs/0066: specs/0064 W6 reordered the rail (reel, then counter-over-meter, then title, keys right), so the old box at x=470 sat over \"Deck ready\" while the digits flaked unignored at x=343..434 — measured, not guessed."
+      }
+    ],
+    "wait": 4500,
+    "viewport": [760, 860]
   },
   {
     "name": "meeting-notes",

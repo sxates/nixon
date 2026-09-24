@@ -151,7 +151,7 @@ export function RecordingHeader({
   }, []);
 
   return (
-    <header className="flex flex-wrap items-start gap-x-2 gap-y-3 border-b border-border bg-panel py-4 pl-6 pr-4 shadow-[inset_0_1px_0_hsl(var(--bevel-hi)),inset_0_-1px_0_hsl(var(--bevel-lo))]">
+    <header className="flex flex-wrap items-start gap-x-2 gap-y-3 border-b border-border bg-panel py-4 pl-4 pr-4 min-[900px]:pl-6 shadow-[inset_0_1px_0_hsl(var(--bevel-hi)),inset_0_-1px_0_hsl(var(--bevel-lo))]">
       {/* 0.1.0 canvas feedback: the back control is the same unboxed chevron as on meeting
           details, sitting on the title line (the header top-aligns for that; the meter
           bridge re-centres itself on the right). */}

@@ -334,7 +334,7 @@ function HomeView() {
       />
 
       {/* Body — the day timeline / week list; scrolls beneath the fixed toolbar. */}
-      <div className="flex-1 overflow-y-auto px-7 pb-12">
+      <div className="flex-1 overflow-y-auto px-4 min-[900px]:px-7 pb-12">
         <div className="mx-auto max-w-[840px]">
           {/* specs/0069 W4 — gated on `calendarConnected` (EventKit OR Google), not the
               EventKit-only `calendarStatus`: a Google-connected user must never be told
