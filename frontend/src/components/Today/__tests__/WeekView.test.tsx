@@ -149,6 +149,9 @@ describe('WeekView row parity with All Meetings', () => {
       ctx: { ...ctx, isRecording: true, recordingThisId: 'live-1' },
     });
     expect(screen.getByText('Recording')).toBeInTheDocument();
+    // Once, not twice: the reels badge IS the state label (owner feedback 2026-09-23 —
+    // the row carried the badge and the older "Recording…" lamp label side by side).
+    expect(screen.getAllByText(/^Recording/)).toHaveLength(1);
   });
 
   it('leaves other rows unmarked while one is recording', () => {

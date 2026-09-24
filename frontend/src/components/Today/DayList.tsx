@@ -10,7 +10,6 @@ import {
   canRecordManualItem,
   type TimelineContext,
 } from '@/lib/today-timeline';
-import { RecordingBadge } from '@/components/RecordingBadge';
 import { StateChip, barClass, blockClasses } from './TimelineBlock';
 import { AgendaAttendees } from './AgendaAttendees';
 import { AgendaRowMenu } from './AgendaRowMenu';
@@ -121,10 +120,9 @@ export function DayList({
               >
                 {title}
               </span>
-              {/* Faces instead of "· 3 attendees", and the live meeting reads as live —
-                  parity with All Meetings (owner feedback 2026-09-21). */}
+              {/* Faces instead of "· 3 attendees" — parity with All Meetings (owner
+                  feedback 2026-09-21). The live marker is the StateChip below. */}
               <AgendaAttendees item={item} className="hidden sm:flex" />
-              {ctx.recordingThisId === item.id && <RecordingBadge />}
               {canJoin ? (
                 <Button
                   variant="brand"

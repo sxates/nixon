@@ -68,8 +68,9 @@ export function barClass(state: TimelineVisualState): string | null {
 
 /**
  * Short right-aligned status label per state (none for a missed/unrecorded event).
- * Engraved caps rather than a pill: the rail's turning reels carry liveness now, so the
- * recording label needs no blink — just a steady square record lamp.
+ * Engraved caps rather than a pill. The live meeting's label IS the reels badge — the one
+ * All Meetings shows — so every view marks it once, the same way (owner feedback
+ * 2026-09-23: List and Week showed both the reels and an older lamp label).
  */
 export function StateChip({ state }: { state: TimelineVisualState }): JSX.Element | null {
   const chip = (cls: string, label: string) => (
@@ -77,12 +78,7 @@ export function StateChip({ state }: { state: TimelineVisualState }): JSX.Elemen
   );
   switch (state) {
     case 'recording':
-      return (
-        <span className="u-section-label inline-flex flex-shrink-0 items-center gap-1.5 text-record-ink">
-          <span className="h-1.5 w-1.5 flex-shrink-0 bg-record" aria-hidden="true" />
-          Recording…
-        </span>
-      );
+      return <RecordingBadge />;
     case 'now-joinable':
       return chip('text-brand', 'Join & record');
     case 'now':
@@ -211,11 +207,9 @@ export function TimelineBlock({
           <span className="u-meta flex-shrink-0">
             {validStart ? formatClockTime(start) : '--:--'}
           </span>
-          {/* Faces instead of "· 3 attendees", and the live meeting reads as live —
-              parity with All Meetings (owner feedback 2026-09-21). A compact block has no
-              meta line at all, so it keeps carrying neither. */}
+          {/* Faces instead of "· 3 attendees" — parity with All Meetings (owner feedback
+              2026-09-21). A compact block has no meta line at all. */}
           <AgendaAttendees item={item} max={2} />
-          {ctx.recordingThisId === item.id && <RecordingBadge />}
         </div>
       )}
     </div>

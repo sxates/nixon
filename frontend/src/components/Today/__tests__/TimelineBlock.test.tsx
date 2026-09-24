@@ -93,7 +93,7 @@ describe('TimelineBlock state bar (specs/0057 Task 6)', () => {
 
 describe('TimelineBlock chip text (specs/0057 Task 6)', () => {
   it.each([
-    ['recording', 'Recording…'],
+    ['recording', 'Recording'],
     ['now-joinable', 'Join & record'],
     ['now', 'Now'],
     ['upcoming', 'Prep'],
@@ -105,7 +105,7 @@ describe('TimelineBlock chip text (specs/0057 Task 6)', () => {
 
   it('a past unrecorded event carries no chip', () => {
     renderBlock('past-unrecorded');
-    for (const label of ['Recording…', 'Join & record', 'Now', 'Prep', 'Recorded']) {
+    for (const label of ['Recording', 'Join & record', 'Now', 'Prep', 'Recorded']) {
       expect(screen.queryByText(label)).not.toBeInTheDocument();
     }
   });

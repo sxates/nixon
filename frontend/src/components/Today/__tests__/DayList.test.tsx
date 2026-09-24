@@ -51,6 +51,19 @@ describe('DayList (specs/0069 W4)', () => {
     expect(rows[1]).toHaveTextContent('Call with Sam');
   });
 
+  it('marks the live meeting once, with the reels badge (owner feedback 2026-09-23)', () => {
+    const item = at('11:50', 'Product sync');
+    render(
+      <DayList
+        {...base}
+        ctx={{ ...ctx, isRecording: true, recordingThisId: item.id }}
+        items={[item]}
+      />,
+    );
+    expect(screen.getAllByText(/^Recording/)).toHaveLength(1);
+    expect(screen.queryByText('Recording…')).not.toBeInTheDocument();
+  });
+
   it('offers a way out of an empty day', () => {
     const onAddMeeting = vi.fn();
     render(<DayList {...base} items={[]} onAddMeeting={onAddMeeting} />);
