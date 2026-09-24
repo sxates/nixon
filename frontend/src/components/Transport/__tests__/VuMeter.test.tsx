@@ -23,6 +23,10 @@ vi.mock('@/lib/transport/vu-ballistics', async (importOriginal) => {
   };
 });
 
+// specs/0077 — Low Power Mode on battery ("calm motion") takes the Reduce Motion path.
+const calm = vi.hoisted(() => ({ on: false }));
+vi.mock('@/contexts/CalmMotionContext', () => ({ useCalmMotion: () => calm.on }));
+
 import { VuMeter } from '@/components/Transport/VuMeter';
 
 let now = 0;
@@ -46,6 +50,7 @@ const advance = (ms: number) => {
 };
 
 beforeEach(() => {
+  calm.on = false;
   steps.length = 0;
   now = 0;
   nextId = 1;
@@ -88,5 +93,15 @@ describe('VuMeter', () => {
     render(<VuMeter db={-20} active label="MIX" />);
     frame(5000);
     expect(steps).toEqual([100]);
+  });
+
+  it('runs no animation loop in calm motion, and snaps the needle to each level', () => {
+    calm.on = true;
+    const { rerender, getByRole } = render(<VuMeter db={-10} active label="MIX" />);
+    expect(pending.size).toBe(0);
+    expect(getByRole('img').getAttribute('aria-label')).toBe('MIX level -10 VU');
+    rerender(<VuMeter db={-3} active label="MIX" />);
+    expect(pending.size).toBe(0);
+    expect(getByRole('img').getAttribute('aria-label')).toBe('MIX level -3 VU');
   });
 });

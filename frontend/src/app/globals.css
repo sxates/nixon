@@ -441,3 +441,12 @@
     height: calc(100vh - var(--rail-h));
   }
 }
+
+/* specs/0077 — Low Power Mode on battery stills the continuous animations (CalmMotionProvider
+   sets the attribute). Each kept WindowServer recompositing the window every frame while
+   recording. The state they show stays: reels at rest, lamps lit, dot lit. */
+html[data-calm-motion="1"] [data-hub],
+html[data-calm-motion="1"] .animate-hold-blink,
+html[data-calm-motion="1"] .animate-pulse {
+  animation: none !important;
+}

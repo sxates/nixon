@@ -28,6 +28,13 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 - **Nixon remembers where you left its window.** Its size and position carry over when you
   quit and reopen it, and across updates.
 
+### Changed
+
+- **Low Power Mode also keeps the animations still.** On battery with Low Power Mode on,
+  the tape reels, the VU needles and the blinking lights stop moving while you record. The
+  lights stay lit and every reading still updates, and Nixon uses noticeably less CPU during
+  a meeting.
+
 ### Fixed
 
 - Turning off **Label speakers live while recording** now stops it in the meeting you're
@@ -35,6 +42,10 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 ### Internal
 
+- specs/0077 calm motion: `CalmMotionProvider` sets `html[data-calm-motion]` (globals.css stops
+  `[data-hub]`, `.animate-hold-blink`, `.animate-pulse`); VuMeter takes its reduced-motion path;
+  `power::calm_motion()` holds the tray reel. Measured: the reels and VU each cost ~12% of a core in
+  WindowServer while visible.
 - Tray icon: `src/tray_reel.rs` + `scripts/tray-icons/render.mjs`. All reel frames are template
   images set with `set_icon_with_as_template` — plain `set_icon` cleared the template flag, so the
   old icon rendered black on a menu bar tinted white. The REC light is a `CALayer` on the status

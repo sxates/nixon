@@ -12,6 +12,7 @@ import {
   noticeForSetting,
   type StartTimeOnlySetting,
 } from '@/lib/recording-settings-notices';
+import { LOW_POWER_PREF_EVENT } from '@/lib/calm-motion';
 import {
   SettingsGroup,
   SettingsNote,
@@ -187,6 +188,8 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
     try {
       await patchRecordingPreferences<RecordingPreferences>(newPreferences);
       onSave?.(newPreferences);
+      // specs/0077: the calm-motion provider follows this setting live.
+      window.dispatchEvent(new CustomEvent(LOW_POWER_PREF_EVENT, { detail: enabled }));
       toastSaved(
         'low-power-on-battery',
         enabled
@@ -258,7 +261,8 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
             description={
               <>
                 When on battery, record audio but defer transcription and summaries until
-                you&apos;re back on power. You can override per meeting while recording.
+                you&apos;re back on power, and keep the animations still. You can override
+                per meeting while recording.
               </>
             }
             control={

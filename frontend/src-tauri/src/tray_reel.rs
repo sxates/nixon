@@ -11,7 +11,8 @@
 //!
 //! Recording steps through [`REC_FRAMES`] frames 7.5° apart every [`FRAME_MS`], so the reel
 //! turns at the in-app take-up hub's ~0.38 rev/s (`components/Transport/Reels.tsx`). Under
-//! Reduce Motion it holds the first frame and the HOLD light stays lit, as in the app.
+//! Reduce Motion, or Low Power Mode on battery (specs/0077), it holds its frame and the HOLD
+//! light stays lit, as in the app.
 //! Paused stops the reel.
 
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -28,6 +29,8 @@ use crate::tray::RecordingState;
 /// (15° at ~9 fps read as choppy; 5° at ~27 fps cost WindowServer about 18% of a core
 /// while recording — owner chose 18 fps, 2026-09-24.)
 const FRAME_MS: u64 = 55;
+/// Frames between checks of whether the reel should hold still (~1 s).
+const CALM_CHECK_EVERY: u64 = 18;
 
 const REC_FRAMES: [&[u8]; 16] = [
     include_bytes!("../icons/tray/rec-00.png"),
@@ -126,12 +129,20 @@ pub fn show<R: Runtime>(app: &AppHandle<R>, look: Look) {
             set_light(&tray, Light::Rec);
             tauri::async_runtime::spawn(async move {
                 let mut frame = 0usize;
+                let mut tick = 0u64;
+                let mut still = false;
                 loop {
                     tokio::time::sleep(Duration::from_millis(FRAME_MS)).await;
                     if GENERATION.load(Ordering::SeqCst) != generation {
                         break;
                     }
-                    if reduce_motion() {
+                    // Re-check about once a second, not every frame: Reduce Motion, and
+                    // Low Power Mode on battery (specs/0077).
+                    if tick.is_multiple_of(CALM_CHECK_EVERY) {
+                        still = reduce_motion() || crate::power::calm_motion();
+                    }
+                    tick += 1;
+                    if still {
                         continue; // hold the frame on screen
                     }
                     frame = (frame + 1) % REC_FRAMES.len();
@@ -186,6 +197,18 @@ fn show_rec_frame<R: Runtime>(tray: &TrayIcon<R>, index: usize, generation: u64)
 
 #[cfg(not(target_os = "macos"))]
 fn show_rec_frame<R: Runtime>(_tray: &TrayIcon<R>, _index: usize, _generation: u64) {}
+
+/// Re-draw the HOLD light after the power source changes, so its blink starts or stops with
+/// Low Power Mode (specs/0077). The turning reel re-checks by itself about once a second.
+pub fn refresh_for_power<R: Runtime>(app: &AppHandle<R>) {
+    let paused = CURRENT
+        .lock()
+        .map(|c| *c == Some(Look::Paused))
+        .unwrap_or(false);
+    if let (true, Some(tray)) = (paused, app.tray_by_id("main-tray")) {
+        set_light(&tray, Light::Hold);
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Light {
@@ -277,7 +300,7 @@ fn set_light<R: Runtime>(tray: &TrayIcon<R>, light: Light) {
         layer.setFrame(CGRect::new(CGPoint::new(x, y), CGSize::new(d, d)));
         layer.setCornerRadius(d / 2.0);
         layer.setBackgroundColor(Some(&colour));
-        if light == Light::Hold && !reduce_motion() {
+        if light == Light::Hold && !reduce_motion() && !crate::power::calm_motion() {
             let blink =
                 CABasicAnimation::animationWithKeyPath(Some(&NSString::from_str("opacity")));
             // SAFETY: `opacity` is a float property, and these are NSNumbers.
