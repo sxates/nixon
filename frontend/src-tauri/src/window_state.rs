@@ -24,9 +24,13 @@ static REGISTERED: AtomicBool = AtomicBool::new(false);
 /// The plugin, or `None` under the dev control channel: screenshot runs resize the window
 /// to fixed capture sizes, which must not become the developer's saved size.
 pub fn plugin<R: Runtime>() -> Option<TauriPlugin<R>> {
-    use crate::dev_fixtures::guard;
-    if guard::is_debug_identifier() && guard::env_flag(guard::ENV_DEV_CONTROL) {
-        return None;
+    // `dev_fixtures` only exists in debug builds; a release build never has the channel.
+    #[cfg(debug_assertions)]
+    {
+        use crate::dev_fixtures::guard;
+        if guard::is_debug_identifier() && guard::env_flag(guard::ENV_DEV_CONTROL) {
+            return None;
+        }
     }
     REGISTERED.store(true, Ordering::SeqCst);
     Some(
