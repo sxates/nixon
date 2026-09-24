@@ -22,8 +22,7 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 ### Fixed
 
 - Turning off **Label speakers live while recording** now stops it in the meeting you're
-  recording, not just from the next one. The setting also says that it uses a lot of CPU
-  while recording.
+  recording, not just from the next one. The setting now notes that it uses significant CPU.
 
 ### Internal
 

@@ -218,7 +218,7 @@ export function SpeakerSettings() {
           {diarizationEnabled && (
             <SettingsRow
               label="Label speakers live while recording"
-              description="Shows provisional numbered labels while you record. Names are matched when the recording ends. Uses a lot of CPU while recording, which can make your fans run."
+              description="Shows provisional numbered labels while you record. Names are matched when the recording ends. Uses significant CPU."
               control={
                 <Switch
                   checked={liveDiarizationEnabled}

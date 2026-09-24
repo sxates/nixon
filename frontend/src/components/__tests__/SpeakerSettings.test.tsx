@@ -139,7 +139,7 @@ describe('SpeakerSettings — copy (specs/0061 W6, moved by 0067)', () => {
     await renderSettings();
     expect(
       screen.getByText(
-        'Shows provisional numbered labels while you record. Names are matched when the recording ends. Uses a lot of CPU while recording, which can make your fans run.',
+        'Shows provisional numbered labels while you record. Names are matched when the recording ends. Uses significant CPU.',
       ),
     ).toBeInTheDocument();
   });
