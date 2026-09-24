@@ -35,6 +35,7 @@ function renderWeek(items: DayAgendaItem[], over: Partial<Parameters<typeof Week
     onHide: vi.fn(),
     onEdit: vi.fn(),
     onDelete: vi.fn(),
+    onRecord: vi.fn(),
   };
   render(
     <WeekView

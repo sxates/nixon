@@ -93,6 +93,26 @@ describe('DayList (specs/0069 W4)', () => {
     expect(onRecord).toHaveBeenCalledWith(manual);
   });
 
+  // Owner feedback 2026-09-24: hours out, a manual entry shows Prep like a calendar one, and
+  // recording it early is "Record now" in the row menu.
+  it('shows Prep for a later manual entry, with Record now in its menu', async () => {
+    const onRecord = vi.fn();
+    const manual = at('15:00', 'Later sync', {
+      source: 'manual',
+      meetingId: 'meeting-2',
+      calendarEventId: 'nixon-manual:meeting-2',
+      endTime: '2024-01-01T15:30:00.000Z',
+    });
+    render(<DayList {...base} items={[manual]} onRecord={onRecord} />);
+    expect(screen.queryByRole('button', { name: 'Record' })).not.toBeInTheDocument();
+    expect(screen.getByText('Prep')).toBeInTheDocument();
+    const trigger = screen.getByRole('button', { name: 'Event options' });
+    trigger.focus();
+    fireEvent.keyDown(trigger, { key: 'Enter' });
+    fireEvent.click(await screen.findByText('Record now'));
+    expect(onRecord).toHaveBeenCalledWith(manual);
+  });
+
   // fix round 1 Finding 1 — List is the DEFAULT view for no-calendar users, exactly the
   // people most likely to want an unwanted calendar row off their day, so this menu item
   // (and the ⋯ trigger itself) can't be missing here the way it briefly was.

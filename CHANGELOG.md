@@ -39,6 +39,9 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
   whenever you scroll back to the bottom.
 - **The meeting being recorded is marked once on Today**, with the turning reels, in
   Agenda, List and Week alike.
+- **Meetings you add yourself show Prep until they're about to start**, like calendar
+  meetings. The Record button appears five minutes before; to record earlier, choose
+  **Record now** from the meeting's menu.
 
 ### Fixed
 

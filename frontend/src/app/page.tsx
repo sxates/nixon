@@ -369,6 +369,7 @@ function HomeView() {
                   onHide: (it) => void handleHide(it),
                   onEdit: handleEditManual,
                   onDelete: handleDeleteManual,
+                  onRecord: handleRecordManual,
                 }}
               />
             )

@@ -200,7 +200,7 @@ export function TimelineBlock({
         ) : (
           <StateChip state={state} />
         )}
-        <AgendaRowMenu item={item} ctx={ctx} actions={{ onHide, onEdit, onDelete }} />
+        <AgendaRowMenu item={item} ctx={ctx} actions={{ onHide, onEdit, onDelete, onRecord }} />
       </div>
       {!compact && (
         <div className="mt-0.5 flex min-w-0 items-center gap-2">

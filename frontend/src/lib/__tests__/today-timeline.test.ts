@@ -13,6 +13,7 @@ import {
   canEditManualItem,
   canDeleteRecordedItem,
   canRecordManualItem,
+  showsManualRecordButton,
   findRecordingRowId,
   assignLanes,
   layoutTimeline,
@@ -403,6 +404,32 @@ describe('canRecordManualItem (specs/0069 W3, fix round 1 Finding 1; gate droppe
 
   it('is false for a calendar event even if unrecorded and in its "now" window', () => {
     expect(canRecordManualItem(item({ source: 'calendar' }), ctx({ now: nowDuring }))).toBe(false);
+  });
+});
+
+// Owner feedback 2026-09-24: a manual meeting hours away showed Record where a calendar one
+// showed Prep. The button now waits for the same start window Join & Record uses; recording
+// earlier is the row menu's "Record now" (still allowed by canRecordManualItem, above).
+describe('showsManualRecordButton', () => {
+  // The default manualItem() runs 10:00–11:00.
+  it('is false an hour before the start, though the entry can still be recorded', () => {
+    const now = new Date(2026, 6, 4, 9, 0);
+    expect(showsManualRecordButton(manualItem(), ctx({ now }))).toBe(false);
+    expect(canRecordManualItem(manualItem(), ctx({ now }))).toBe(true);
+  });
+
+  it('is true from the pre-start grace window (4 minutes before the start)', () => {
+    expect(showsManualRecordButton(manualItem(), ctx({ now: new Date(2026, 6, 4, 9, 56) }))).toBe(true);
+  });
+
+  it('is true during the meeting and false once it has ended', () => {
+    expect(showsManualRecordButton(manualItem(), ctx({ now: new Date(2026, 6, 4, 10, 30) }))).toBe(true);
+    expect(showsManualRecordButton(manualItem(), ctx({ now: new Date(2026, 6, 4, 12, 0) }))).toBe(false);
+  });
+
+  it('is false while another recording is in progress', () => {
+    const now = new Date(2026, 6, 4, 10, 30);
+    expect(showsManualRecordButton(manualItem(), ctx({ now, isRecording: true }))).toBe(false);
   });
 });
 

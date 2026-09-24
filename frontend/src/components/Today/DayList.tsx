@@ -7,7 +7,7 @@ import { formatClockTime } from '@/lib/calendar';
 import {
   itemVisualState,
   canJoinItem,
-  canRecordManualItem,
+  showsManualRecordButton,
   type TimelineContext,
 } from '@/lib/today-timeline';
 import { StateChip, barClass, blockClasses } from './TimelineBlock';
@@ -84,7 +84,7 @@ export function DayList({
       {sorted.map((item) => {
         const state = itemVisualState(item, ctx);
         const canJoin = canJoinItem(item, ctx);
-        const canRecord = canRecordManualItem(item, ctx);
+        const canRecord = showsManualRecordButton(item, ctx);
         const start = new Date(item.startTime);
         const validStart = !Number.isNaN(start.getTime());
         const title = item.title?.trim() || 'Untitled meeting';
@@ -153,7 +153,7 @@ export function DayList({
               <AgendaRowMenu
                 item={item}
                 ctx={ctx}
-                actions={{ onHide, onEdit, onDelete }}
+                actions={{ onHide, onEdit, onDelete, onRecord }}
               />
             </div>
           </li>
