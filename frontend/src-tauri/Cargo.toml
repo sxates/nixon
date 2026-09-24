@@ -262,6 +262,32 @@ objc2-user-notifications = { version = "0.3", default-features = false, features
     "UNNotificationTrigger",
     "UNUserNotificationCenter",
 ] }
+# The menu bar reel (src/tray_reel.rs): the red REC light is a Core Animation layer on the
+# status item's button (a template image can't hold colour), plus Reduce Motion. Same 0.3
+# line tray-icon already links.
+objc2-app-kit = { version = "0.3", default-features = false, features = [
+    "std",
+    "objc2-quartz-core",
+    "NSAccessibility",
+    "NSButton",
+    "NSControl",
+    "NSResponder",
+    "NSStatusBarButton",
+    "NSStatusItem",
+    "NSView",
+    "NSWorkspace",
+] }
+objc2-quartz-core = { version = "0.3", default-features = false, features = [
+    "std",
+    "objc2-core-foundation",
+    "objc2-core-graphics",
+    "CAAnimation",
+    "CALayer",
+    "CAMediaTiming",
+    "CAMediaTimingFunction",
+] }
+objc2-core-graphics = { version = "0.3", default-features = false, features = ["std", "CGColor"] }
+objc2-core-foundation = { version = "0.3", default-features = false, features = ["std", "CFCGTypes"] }
 block2 = "0.6"
 dasp = "0.11.0"
 futures-channel = "0.3.31"

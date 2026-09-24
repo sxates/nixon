@@ -61,6 +61,7 @@ pub mod state;
 pub mod summary;
 pub mod transcripts;
 pub mod tray;
+pub mod tray_reel;
 pub mod updater;
 pub mod utils;
 pub mod whisper_engine;

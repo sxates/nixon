@@ -15,24 +15,6 @@ pub enum RecordingState {
     Stopping,
 }
 
-/// Loads the monochrome template icon (44px, macOS scales template images) for a given
-/// recording state. Panics only if the bundled PNG bytes fail to decode, which would
-/// indicate a corrupted asset shipped with the binary.
-fn tray_icon_for(state: &RecordingState) -> tauri::image::Image<'static> {
-    let bytes: &[u8] = match state {
-        RecordingState::Stopped | RecordingState::Stopping => {
-            include_bytes!("../icons/tray/idle@2x.png")
-        }
-        RecordingState::Starting | RecordingState::Recording | RecordingState::Resuming => {
-            include_bytes!("../icons/tray/recording@2x.png")
-        }
-        RecordingState::Pausing | RecordingState::Paused => {
-            include_bytes!("../icons/tray/paused@2x.png")
-        }
-    };
-    tauri::image::Image::from_bytes(bytes).expect("bundled tray icon decodes")
-}
-
 pub fn create_tray<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     // Start with default menu, will update with actual state after initialization
     // Pass can_record=true initially, will be updated by update_tray_menu immediately
@@ -41,7 +23,7 @@ pub fn create_tray<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     TrayIconBuilder::with_id("main-tray")
         .menu(&menu)
         .tooltip("Nixon")
-        .icon(tray_icon_for(&RecordingState::Stopped))
+        .icon(crate::tray_reel::idle_icon())
         .icon_as_template(true)
         .on_menu_event(|app, event| handle_menu_event(app, event.id.as_ref()))
         .build(app)?;
@@ -249,9 +231,7 @@ pub fn set_tray_state<R: Runtime>(app: &AppHandle<R>, state: RecordingState) {
         if let Some(tray) = app.tray_by_id("main-tray") {
             let result = tray.set_menu(Some(menu));
             log::info!("Tray: Intermediate state menu update result: {:?}", result);
-            if let Err(e) = tray.set_icon(Some(tray_icon_for(&state))) {
-                log::warn!("Tray: Failed to set icon for intermediate state: {:?}", e);
-            }
+            crate::tray_reel::show(app, crate::tray_reel::Look::for_state(&state));
         } else {
             log::warn!("Tray: Could not find tray with id 'main-tray'");
         }
@@ -337,9 +317,7 @@ pub async fn update_tray_menu_async<R: Runtime>(app: &AppHandle<R>) {
         if let Some(tray) = app.tray_by_id("main-tray") {
             let result = tray.set_menu(Some(menu));
             log::info!("Tray: Menu update result: {:?}", result);
-            if let Err(e) = tray.set_icon(Some(tray_icon_for(&recording_state))) {
-                log::warn!("Tray: Failed to set icon: {:?}", e);
-            }
+            crate::tray_reel::show(app, crate::tray_reel::Look::for_state(&recording_state));
         } else {
             log::warn!("Tray: Could not find tray with id 'main-tray'");
         }
@@ -482,25 +460,6 @@ pub(crate) fn focus_main_window<R: Runtime>(app: &AppHandle<R>) {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn tray_icon_for_returns_44x44_for_every_state() {
-        let states = [
-            RecordingState::Stopped,
-            RecordingState::Starting,
-            RecordingState::Recording,
-            RecordingState::Pausing,
-            RecordingState::Paused,
-            RecordingState::Resuming,
-            RecordingState::Stopping,
-        ];
-
-        for state in states {
-            let image = tray_icon_for(&state);
-            assert_eq!(image.width(), 44, "unexpected width for {:?}", state);
-            assert_eq!(image.height(), 44, "unexpected height for {:?}", state);
-        }
-    }
 
     #[test]
     fn install_item_only_when_ready_and_stopped() {

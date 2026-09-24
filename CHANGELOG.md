@@ -21,6 +21,10 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 ### Added
 
+- **A new menu bar icon.** Nixon's menu bar icon is now a single tape reel, the one from the
+  app icon. While a meeting records, it turns and shows a red light in its corner; on
+  hold it stops and the light blinks amber, as the HOLD key does in the app. It now matches
+  the other menu bar icons' colour instead of staying black.
 - **Nixon remembers where you left its window.** Its size and position carry over when you
   quit and reopen it, and across updates.
 
@@ -31,6 +35,10 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 ### Internal
 
+- Tray icon: `src/tray_reel.rs` + `scripts/tray-icons/render.mjs`. All reel frames are template
+  images set with `set_icon_with_as_template` — plain `set_icon` cleared the template flag, so the
+  old icon rendered black on a menu bar tinted white. The REC light is a `CALayer` on the status
+  button, since a template can't hold colour (HOLD blinks it with a `CABasicAnimation`).
 - Window state: `tauri-plugin-window-state` (size, position, maximized), skipped under the dev
   control channel so screenshot runs don't overwrite the saved size; saved explicitly before the
   updater's `app.restart()`, which bypasses `RunEvent::Exit` on the main thread.
