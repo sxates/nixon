@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { BatteryLow, Check, ChevronDown, ChevronLeft, Pencil } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
@@ -19,7 +19,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { ParticipantsPopover } from '@/components/Participants/ParticipantsPopover';
-import { VuMeter } from '@/components/Transport/VuMeter';
+import { VU_DEFAULT_HEIGHT, VuMeter } from '@/components/Transport/VuMeter';
 import { useProcessingMode } from '@/hooks/useProcessingMode';
 import { useRecordingLevel } from '@/hooks/useRecordingLevel';
 import { modeChipDisplay } from '@/lib/processing-mode';
@@ -134,8 +134,24 @@ export function RecordingHeader({
     availableTemplates.find((t) => t.id === selectedTemplate)?.name ?? 'Template';
   const level = useRecordingLevel(isRecordingActive);
 
+  // The meters take the title column's height (never under their 57px default), so they
+  // fill the header instead of floating in it without making it any taller (owner
+  // feedback 2026-09-23). Measured, because a CSS stretch lets the meters' own
+  // aspect-derived height feed back into the row they are sizing themselves from.
+  const titleColumnRef = useRef<HTMLDivElement>(null);
+  const [meterHeight, setMeterHeight] = useState(VU_DEFAULT_HEIGHT);
+  useEffect(() => {
+    const el = titleColumnRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(([entry]) => {
+      setMeterHeight(Math.max(VU_DEFAULT_HEIGHT, Math.round(entry.contentRect.height)));
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
   return (
-    <header className="flex flex-wrap items-start gap-x-2 gap-y-3 border-b border-border bg-panel px-6 py-4 shadow-[inset_0_1px_0_hsl(var(--bevel-hi)),inset_0_-1px_0_hsl(var(--bevel-lo))]">
+    <header className="flex flex-wrap items-start gap-x-2 gap-y-3 border-b border-border bg-panel py-4 pl-6 pr-4 shadow-[inset_0_1px_0_hsl(var(--bevel-hi)),inset_0_-1px_0_hsl(var(--bevel-lo))]">
       {/* 0.1.0 canvas feedback: the back control is the same unboxed chevron as on meeting
           details, sitting on the title line (the header top-aligns for that; the meter
           bridge re-centres itself on the right). */}
@@ -148,7 +164,7 @@ export function RecordingHeader({
         <ChevronLeft size={18} />
       </button>
 
-      <div className="min-w-0 flex-1 basis-60">
+      <div ref={titleColumnRef} className="min-w-0 flex-1 basis-60">
         {/* Editable during a recording (specs/0029 WS4.3); static until the recording's
             SQLite row id exists — there is nothing to rename before that. */}
         {!isRecordingActive || !activeRecordingMeetingId ? (
@@ -259,11 +275,23 @@ export function RecordingHeader({
           is the owner's mic, CH2 is system audio (the other side of the call) — read from
           the clean pre-mix windows. The PEAK / MIC GATE lamps were dropped on 0.1.0 canvas
           feedback: the rail's ladder and the transport status line carry both states. The
-          meters are 132×57 and carry their own channel label inside the well since
-          2026-09-21 — see VuMeter. */}
-      <div className="flex flex-shrink-0 items-center gap-2.5 self-center">
-        <VuMeter db={rmsToVu(level.mic.rms)} active={isRecordingActive} label="CH1 Mic" />
-        <VuMeter db={rmsToVu(level.sys.rms)} active={isRecordingActive} label="CH2 Sys" />
+          meters carry their own channel label inside the well since 2026-09-21 — see
+          VuMeter. Since 2026-09-23 they are as tall as the title column (57px minimum)
+          rather than floating centred beside it, and the header's right padding is 16px to
+          match the 16px above and below them (owner feedback). */}
+      <div className="flex flex-shrink-0 items-start gap-2.5">
+        <VuMeter
+          db={rmsToVu(level.mic.rms)}
+          active={isRecordingActive}
+          label="CH1 Mic"
+          height={meterHeight}
+        />
+        <VuMeter
+          db={rmsToVu(level.sys.rms)}
+          active={isRecordingActive}
+          label="CH2 Sys"
+          height={meterHeight}
+        />
       </div>
     </header>
   );

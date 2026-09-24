@@ -8,6 +8,8 @@ const ANGLE_MIN = -50;
 const ANGLE_MAX = 50;
 /** Sub-pixel needle moves aren't worth a React render (~0.2° at this size). */
 const RENDER_EPSILON_DB = 0.05;
+/** The well's default (and minimum useful) height: the 180×78 drawing at 0.733. */
+export const VU_DEFAULT_HEIGHT = 57;
 
 /**
  * specs/0057 §3.2 — needle VU. `db` is the raw target (from rmsToVu); the needle follows it
@@ -18,11 +20,14 @@ export function VuMeter({
   db,
   active,
   label,
+  height = VU_DEFAULT_HEIGHT,
   className,
 }: {
   db: number;
   active: boolean;
   label: string;
+  /** Well height in px; width follows the dial's 180:78 aspect. */
+  height?: number;
   className?: string;
 }) {
   const integ = useRef(createVuIntegrator());
@@ -95,13 +100,16 @@ export function VuMeter({
       role="img"
       aria-label={`${label} level ${Math.round(needleDb)} VU`}
     >
-      {/* 132×57 keeps the original 180×78 drawing exactly — same viewBox, same arc, same
-          pivot — scaled to 0.733. Owner feedback 2026-09-21: the meter bridge was making the
-          record header tall enough to push the transcript down the page, and two meters is
-          the one thing on that header that can give back height without losing information.
-          The in-SVG font sizes below are pre-divided by that scale so the engraving still
-          renders at its intended pixel size. */}
-      <div className="relative h-[57px] w-[132px] overflow-hidden rounded-[2px] bg-well shadow-[inset_0_1px_2px_rgba(0,0,0,0.6),inset_0_-1px_0_hsl(var(--bevel-hi))]">
+      {/* The well keeps the original 180×78 drawing's aspect at the height it is given —
+          57px (0.733 scale) by default. Owner feedback 2026-09-21 shrank it to 57px so the
+          meter bridge stopped making the record header taller; 2026-09-23 asked for the
+          meters to fill the height the header already has, so the record header passes
+          its title column's measured height. The in-SVG font sizes below are pre-divided by
+          the 0.733 scale, so a taller dial grows its engraving with it. */}
+      <div
+        style={{ height, width: Math.round((height * 180) / 78) }}
+        className="relative overflow-hidden rounded-[2px] bg-well shadow-[inset_0_1px_2px_rgba(0,0,0,0.6),inset_0_-1px_0_hsl(var(--bevel-hi))]"
+      >
         <svg viewBox="0 0 180 78" className="block h-full w-full">
           <path d="M30.3 44.9 A78 78 0 0 1 119.2 22.7" className="stroke-engrave" strokeWidth="1" fill="none" />
           <path d="M119.2 22.7 A78 78 0 0 1 149.7 44.9" className="stroke-meter-over" strokeWidth="2.5" fill="none" />
