@@ -60,7 +60,8 @@ pub async fn api_get_upcoming_meetings<R: tauri::Runtime>(
     log::info!("api_get_upcoming_meetings called (within_hours={hours})");
 
     let meetings = if crate::calendar::google_is_active_source(&app).await {
-        crate::calendar::google::sync::sync_if_stale(&app).await;
+        use crate::calendar::google::sync::{sync_if_stale, SyncTrigger};
+        sync_if_stale(&app, SyncTrigger::Upcoming).await;
         let now = chrono::Utc::now();
         let end = now + chrono::Duration::hours(i64::from(hours));
         match crate::calendar::google::sync::db_pool(&app) {

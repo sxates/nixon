@@ -14,9 +14,11 @@
  *   - `api_google_calendar_disconnect`            → void
  *   - `api_google_calendar_set_calendar_selected` → void, args `{ calendarId, selected }`
  *     (Tauri matches invoke arg keys in camelCase — `calendarId`, never `calendar_id`)
- *   - `api_google_calendar_sync_now`              → void
+ *   - `api_google_calendar_sync_now`              → GoogleCalendarSyncOutcome (specs/0074 W1)
  *   - Rust→frontend event `google-calendar-auth-required` when the stored token is
  *     revoked/expired and the user must reconnect.
+ *   - Rust→frontend event `google-calendar-synced` `{ changed }` after a pass that
+ *     wrote or removed rows.
  */
 
 import { invoke } from '@tauri-apps/api/core';
@@ -24,11 +26,52 @@ import { invoke } from '@tauri-apps/api/core';
 /** Rust→frontend event: the stored Google token was revoked/expired — reconnect. */
 export const GOOGLE_CALENDAR_AUTH_REQUIRED_EVENT = 'google-calendar-auth-required';
 
+/** Rust→frontend event: a sync pass changed the cache. Payload `{ changed: number }`. */
+export const GOOGLE_CALENDAR_SYNCED_EVENT = 'google-calendar-synced';
+
+/** How one calendar was synced (Rust `SyncMode`). */
+export type GoogleCalendarSyncMode =
+  | 'incremental'
+  | 'full'
+  | 'fullAfterGone'
+  | 'fullAfterSeriesChange';
+
+/** One calendar's result within a `synced` outcome (Rust `CalendarSyncReport`). */
+export interface GoogleCalendarSyncReport {
+  calendarId: string;
+  summary: string;
+  isPrimary: boolean;
+  mode: GoogleCalendarSyncMode;
+  fetched: number;
+  upserted: number;
+  deleted: number;
+  durationMs: number;
+  /** This calendar failed (the cache keeps serving); the pass still ran. */
+  error: string | null;
+}
+
+/**
+ * What `api_google_calendar_sync_now` (and an enabling selection change) reports
+ * (Rust `SyncOutcome`, specs/0074 W1). Only `synced` means a pass ran; an `Err`
+ * (pass couldn't start / timed out) still rejects the invoke with a message.
+ */
+export type GoogleCalendarSyncOutcome =
+  | { kind: 'synced'; calendars: GoogleCalendarSyncReport[]; durationMs: number }
+  | { kind: 'alreadyRunning' }
+  | { kind: 'authRequired' }
+  | { kind: 'notConnected' }
+  | { kind: 'notConfigured' }
+  | { kind: 'suppressed' }
+  | { kind: 'noCalendarsSelected' };
+
 /** One calendar on the connected Google account, with its per-calendar sync toggle. */
 export interface GoogleCalendarListEntry {
   id: string;
   summary: string;
   selected: boolean;
+  /** Backend sends these (specs/0074 W1); not yet normalized — see W1b. */
+  lastSyncedAt?: string | null;
+  lastError?: string | null;
 }
 
 /** Connection status for the Google Calendar provider (Settings card state). */
@@ -37,7 +80,9 @@ export interface GoogleCalendarStatus {
   configured: boolean;
   connected: boolean;
   email: string | null;
-  lastSyncedAt: string | null; // ISO-8601, or null when never synced
+  /** The grant lapsed; nothing syncs until reconnect (backend sends it; not yet normalized). */
+  authRequired?: boolean;
+  lastSyncedAt: string | null; // ISO-8601, or null when never synced (newest SELECTED calendar)
   calendars: GoogleCalendarListEntry[];
 }
 
@@ -211,10 +256,14 @@ export async function getGoogleCapabilities(): Promise<GoogleCapabilities> {
   }
 }
 
-/** Trigger a manual sync. Never throws; returns whether the sync succeeded. */
+/**
+ * Trigger a manual sync. Never throws; returns whether the invoke resolved.
+ * Boolean shim kept for the current UI — the backend now returns a
+ * GoogleCalendarSyncOutcome, and resolving does NOT mean a pass ran (W1b).
+ */
 export async function syncGoogleCalendarNow(): Promise<boolean> {
   try {
-    await invoke('api_google_calendar_sync_now');
+    await invoke<GoogleCalendarSyncOutcome>('api_google_calendar_sync_now');
     return true;
   } catch (err) {
     console.warn('[googleCalendar] syncGoogleCalendarNow failed:', err);

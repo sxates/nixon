@@ -3,7 +3,7 @@
 //! reads the Google People directory once per sync and caches same-org profile
 //! photos into `attendee_photos` as base64 `data:` URIs.
 //!
-//! Called from [`super::sync`] at the end of a sync pass, only when the org
+//! Called from [`super::enrichment`] after a sync pass, only when the org
 //! grants the directory read (`can_fetch_photos`). Every failure degrades to
 //! initials for that attendee and never touches the sync result.
 
@@ -11,8 +11,8 @@ use anyhow::{Context, Result};
 use chrono::{DateTime, Duration, Utc};
 use sqlx::SqlitePool;
 
+use super::enrichment::redact_email;
 use super::people_api;
-use super::sync::redact_email;
 use crate::database::repositories::attendee_photos::AttendeePhotosRepository;
 use crate::database::repositories::google_calendar::GoogleCalendarRepository;
 use crate::database::repositories::owner_emails::normalize_email;
@@ -30,7 +30,7 @@ const MAX_PHOTOS_PER_PASS: usize = 40;
 
 /// Fetch same-org profile photos into the local cache, when the org grants the
 /// People directory read (`can_fetch_photos`). Best-effort and the sibling of
-/// `sync::expand_distribution_lists`: it reads the domain directory once per
+/// `enrichment::expand_distribution_lists`: it reads the domain directory once per
 /// pass (`email → url`), then downloads bytes as base64 `data:` URIs for every
 /// wanted email that isn't already freshly cached (<30 days).
 ///

@@ -299,6 +299,8 @@ strsim = "0.10.0"
 futures = "0.3.31"
 tracing-subscriber = "0.3.16"
 tauri = { version = "2.6.2", features = ["test"] }
+# Paused-clock tests for the calendar sync timeouts (specs/0075).
+tokio = { version = "1.32.0", features = ["test-util"] }
 
 [patch.crates-io]
 cpal = { git = "https://github.com/RustAudio/cpal", rev = "51c3b43" }

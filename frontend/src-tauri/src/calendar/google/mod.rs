@@ -11,8 +11,10 @@
 //!     THE calendar feed while connected (single-active-source model — see
 //!     [`crate::calendar::google_is_active_source`]) and the attendee-routing
 //!     lookups.
-//!   - `photos.rs` — the best-effort attendee photo / directory-name pass that
-//!     runs at the end of a sync.
+//!   - `sync_outcome.rs` — what a pass reports ([`sync_outcome::SyncOutcome`])
+//!     and the lock/latch/timeout gate every pass goes through (specs/0075).
+//!   - `enrichment.rs` + `photos.rs` — the best-effort DL expansion and
+//!     attendee photo passes, spawned after a sync releases its lock.
 //!   - `commands.rs` — the `api_google_calendar_*` Tauri IPC layer and the
 //!     `google-calendar-auth-required` event contract.
 //!
@@ -27,6 +29,8 @@ pub mod capabilities;
 pub mod cloud_identity;
 pub mod commands;
 mod demo_guard;
+/// DL expansion + photo pass, run off the sync lock (specs/0074 W1).
+mod enrichment;
 /// `events.list` wire types + event→row mapping, split out of `sync.rs` (specs/0054 W5).
 pub(crate) mod events_map;
 pub mod oauth;
@@ -34,6 +38,7 @@ pub mod people_api;
 /// Attendee photo enrichment pass, split out of `sync.rs` (specs/0056 W6).
 pub(crate) mod photos;
 pub mod sync;
+pub mod sync_outcome;
 
 /// Compile-time OAuth client id (Google Cloud "Desktop app" client).
 const CLIENT_ID: Option<&str> = option_env!("NIXON_GOOGLE_CLIENT_ID");

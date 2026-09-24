@@ -396,7 +396,8 @@ pub fn run() {
                 tauri::WindowEvent::Focused(true) if window.label() == "main" => {
                     let app = window.app_handle().clone();
                     tauri::async_runtime::spawn(async move {
-                        calendar::google::sync::sync_if_stale(&app).await;
+                        use calendar::google::sync::{sync_if_stale, SyncTrigger};
+                        sync_if_stale(&app, SyncTrigger::Focus).await;
                     });
                 }
                 _ => {}
