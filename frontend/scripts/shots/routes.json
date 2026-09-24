@@ -1,7 +1,7 @@
 [
   {
     "name": "today",
-    "route": "/",
+    "route": "/?view=day",
     "ignore": [
       {
         "x": 300,
