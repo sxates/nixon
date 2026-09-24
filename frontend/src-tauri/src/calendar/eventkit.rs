@@ -207,9 +207,16 @@ pub async fn request_access() -> Result<bool> {
 /// yields no events (it never crashes and never prompts), so this stays correct
 /// when denied while removing the post-grant race.
 pub fn upcoming_meetings(within_hours: u32) -> Vec<UpcomingMeeting> {
+    upcoming_meetings_since(within_hours, 0)
+}
+
+/// [`upcoming_meetings`], but the window opens `started_within_ms` before now, so a meeting
+/// that started that recently is still returned (specs/0075 W2 — the in-app "starting now"
+/// alert's grace). `0` is exactly `upcoming_meetings`.
+pub fn upcoming_meetings_since(within_hours: u32, started_within_ms: i64) -> Vec<UpcomingMeeting> {
     #[cfg(target_os = "macos")]
     {
-        match read_events(within_hours) {
+        match read_events(within_hours, started_within_ms) {
             Ok(mut events) => {
                 events.sort_by(|a, b| a.starts_at.cmp(&b.starts_at));
                 events
@@ -223,13 +230,13 @@ pub fn upcoming_meetings(within_hours: u32) -> Vec<UpcomingMeeting> {
 
     #[cfg(not(target_os = "macos"))]
     {
-        let _ = within_hours;
+        let _ = (within_hours, started_within_ms);
         Vec::new()
     }
 }
 
 #[cfg(target_os = "macos")]
-fn read_events(within_hours: u32) -> Result<Vec<UpcomingMeeting>> {
+fn read_events(within_hours: u32, started_within_ms: i64) -> Result<Vec<UpcomingMeeting>> {
     use objc2::rc::Retained;
     use objc2_event_kit::EKEventStore;
     use objc2_foundation::NSDate;
@@ -241,15 +248,17 @@ fn read_events(within_hours: u32) -> Result<Vec<UpcomingMeeting>> {
     let store: Retained<EKEventStore> = unsafe { EKEventStore::new() };
 
     let window_secs = (within_hours as f64) * 3600.0;
-    // `NSDate::now()` is the reference instant; build [now, now + window].
-    let start: Retained<NSDate> = NSDate::now();
+    // Build [now - grace, now + window]; grace is 0 unless the caller asked for
+    // recently-started meetings too (specs/0075 W2).
+    let grace_secs = (started_within_ms.max(0) as f64) / 1000.0;
+    let start: Retained<NSDate> = NSDate::dateWithTimeIntervalSinceNow(-grace_secs);
     let end: Retained<NSDate> = NSDate::dateWithTimeIntervalSinceNow(window_secs);
 
-    let now_interval = start.timeIntervalSince1970();
+    let min_start_interval = start.timeIntervalSince1970();
 
-    // Only events from now forward (the predicate is inclusive of in-progress
-    // events that started slightly before `now`; upcoming wants future starts only).
-    map_events_in_window(&store, &start, &end, Some(now_interval))
+    // Only events starting from the window's start forward (the predicate is inclusive of
+    // in-progress events that started earlier; upcoming wants those excluded).
+    map_events_in_window(&store, &start, &end, Some(min_start_interval))
 }
 
 /// Read ALL non-all-day events whose start falls within today's LOCAL calendar

@@ -140,6 +140,41 @@ pub struct DeliverRequest {
     /// normal case, so no caller has to remember.
     #[serde(default)]
     pub auto_dismiss_ms: Option<u64>,
+    /// Have macOS deliver this at an instant (epoch ms) instead of now (specs/0075 W2).
+    ///
+    /// The T-0 "starting now" banner is scheduled this way at T-5: the webview's 60s poll is
+    /// throttled when Nixon is in the background, and macOS keeps its own clock. An instant
+    /// less than [`SCHEDULE_MIN_LEAD_MS`] away (or already past) delivers now. Re-sending the
+    /// same `id` replaces the pending request, and [`cancel_pending`] withdraws it.
+    #[serde(default)]
+    pub deliver_at_ms: Option<i64>,
+}
+
+/// How far in the future `deliver_at_ms` must be before it is worth a trigger. Anything
+/// closer is delivered now — a one-second trigger buys nothing and a zero or negative
+/// interval makes `UNTimeIntervalNotificationTrigger` raise.
+pub const SCHEDULE_MIN_LEAD_MS: i64 = 1_000;
+
+/// Seconds until a scheduled delivery, or `None` for "deliver now". Pure, so the
+/// schedule-vs-now decision is testable without a notification centre.
+pub fn schedule_delay_secs(deliver_at_ms: Option<i64>, now_ms: i64) -> Option<f64> {
+    let lead_ms = deliver_at_ms?.checked_sub(now_ms)?;
+    (lead_ms > SCHEDULE_MIN_LEAD_MS).then(|| lead_ms as f64 / 1000.0)
+}
+
+/// The auto-dismiss delay this delivery should get: the caller's explicit value, else the
+/// category's default — but never for a scheduled request. That timer runs in Nixon from the
+/// moment of the call, so on a banner macOS will show minutes later it would fire first and
+/// remove the still-pending request (`remove` clears pending ones too), dropping the banner.
+/// Only the start categories are scheduled today and they persist anyway; this keeps it so if
+/// a transient category is ever scheduled.
+pub fn effective_auto_dismiss_ms(request: &DeliverRequest, scheduled: bool) -> Option<u64> {
+    if scheduled {
+        return None;
+    }
+    request
+        .auto_dismiss_ms
+        .or_else(|| default_auto_dismiss_ms(request.category.as_deref()))
 }
 
 /// How long a banner of this category should last before Nixon takes it back down.
@@ -253,7 +288,7 @@ pub async fn request_authorization() -> Result<bool> {
     }
 }
 
-/// Deliver a notification now.
+/// Deliver a notification — now, or at `deliver_at_ms` when that is in the future.
 pub fn deliver(request: DeliverRequest) -> Result<()> {
     let capability = capability();
     if !capability.supported {
@@ -277,7 +312,35 @@ pub fn deliver(request: DeliverRequest) -> Result<()> {
     }
 }
 
-/// Take a delivered notification down now (specs/0074 W5): acting on the in-app twin of a
+/// Withdraw a scheduled notification that macOS has not delivered yet (specs/0075 W2): a
+/// recording started, or the in-app start alert fired first. A no-op for an unknown id or one
+/// already delivered. Gated like every other entry point.
+pub fn cancel_pending(id: &str) -> Result<()> {
+    let capability = capability();
+    if !capability.supported {
+        return Err(anyhow::anyhow!(
+            "{}",
+            capability
+                .reason
+                .unwrap_or_else(|| "Notifications are unavailable.".to_string())
+        ));
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        deliver::cancel_pending(id);
+        log::info!("notifications: cancelled pending {id}");
+        Ok(())
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = id;
+        Ok(())
+    }
+}
+
+/// Take a delivered (or still pending) notification down now (specs/0074 W5): acting on the in-app twin of a
 /// banner removes the banner, so the same question is not left asked twice. Gated like
 /// every other entry point — outside an `.app` the framework aborts the process.
 pub fn remove(id: &str) -> Result<()> {
@@ -356,6 +419,7 @@ mod tests {
             category: Some(CATEGORY_PLAIN.into()),
             user_info: HashMap::new(),
             auto_dismiss_ms: None,
+            deliver_at_ms: None,
         })
         .is_err());
         // The auto-dismiss path (2026-09-21) reaches the framework too, on a delay. Its
@@ -369,8 +433,21 @@ mod tests {
             category: Some(CATEGORY_PREP.into()),
             user_info: HashMap::new(),
             auto_dismiss_ms: Some(1),
+            deliver_at_ms: None,
         })
         .is_err());
+        // specs/0075 W2: a scheduled request is refused before the trigger is built.
+        assert!(deliver(DeliverRequest {
+            id: "t-scheduled".into(),
+            title: "t".into(),
+            body: "b".into(),
+            category: Some(CATEGORY_MEETING.into()),
+            user_info: HashMap::new(),
+            auto_dismiss_ms: None,
+            deliver_at_ms: Some(i64::MAX),
+        })
+        .is_err());
+        assert!(cancel_pending("t-scheduled").is_err());
         // specs/0074 W5: the cross-dismiss removal is an entry point too.
         assert!(remove("t").is_err());
     }
@@ -437,5 +514,71 @@ mod tests {
         .unwrap();
         assert_eq!(parsed.category.as_deref(), Some(CATEGORY_MEETING));
         assert_eq!(parsed.user_info.get("meetingId").unwrap(), "m1");
+    }
+
+    // specs/0075 W2 — the T-0 banner is scheduled with macOS at T-5.
+    #[test]
+    fn a_future_instant_is_scheduled_for_the_remaining_seconds() {
+        let now = 1_800_000_000_000;
+        assert_eq!(schedule_delay_secs(Some(now + 300_000), now), Some(300.0));
+        assert_eq!(schedule_delay_secs(Some(now + 1_500), now), Some(1.5));
+    }
+
+    #[test]
+    fn absent_past_or_imminent_instants_deliver_now() {
+        let now = 1_800_000_000_000;
+        assert_eq!(schedule_delay_secs(None, now), None);
+        assert_eq!(schedule_delay_secs(Some(now - 60_000), now), None, "already past");
+        assert_eq!(schedule_delay_secs(Some(now), now), None);
+        assert_eq!(
+            schedule_delay_secs(Some(now + SCHEDULE_MIN_LEAD_MS), now),
+            None,
+            "one second or less is not worth a trigger"
+        );
+        assert_eq!(schedule_delay_secs(Some(i64::MIN), now), None, "overflow is not a panic");
+    }
+
+    fn request(category: &str, auto_dismiss_ms: Option<u64>) -> DeliverRequest {
+        DeliverRequest {
+            id: "r".into(),
+            title: "t".into(),
+            body: "b".into(),
+            category: Some(category.into()),
+            user_info: HashMap::new(),
+            auto_dismiss_ms,
+            deliver_at_ms: None,
+        }
+    }
+
+    #[test]
+    fn a_scheduled_request_never_starts_the_auto_dismiss_timer() {
+        // The timer would count from scheduling, not delivery, and remove the pending banner.
+        assert_eq!(effective_auto_dismiss_ms(&request(CATEGORY_PREP, None), true), None);
+        assert_eq!(effective_auto_dismiss_ms(&request(CATEGORY_PLAIN, Some(2_500)), true), None);
+        assert_eq!(effective_auto_dismiss_ms(&request(CATEGORY_MEETING, None), true), None);
+    }
+
+    #[test]
+    fn an_immediate_request_keeps_the_auto_dismiss_policy() {
+        let prep = request(CATEGORY_PREP, None);
+        assert_eq!(effective_auto_dismiss_ms(&prep, false), Some(TRANSIENT_MS));
+        let explicit = request(CATEGORY_PLAIN, Some(2_500));
+        assert_eq!(effective_auto_dismiss_ms(&explicit, false), Some(2_500));
+        // The start categories persist whether delivered now or scheduled.
+        assert_eq!(effective_auto_dismiss_ms(&request(CATEGORY_MEETING, None), false), None);
+        assert_eq!(effective_auto_dismiss_ms(&request(CATEGORY_RECORD, None), false), None);
+    }
+
+    #[test]
+    fn deliver_at_ms_is_optional_camel_case_on_the_wire() {
+        let now: DeliverRequest =
+            serde_json::from_str(r#"{"id":"a1","title":"T","body":"B"}"#).unwrap();
+        assert_eq!(now.deliver_at_ms, None, "absent => deliver now, as before");
+
+        let scheduled: DeliverRequest = serde_json::from_str(
+            r#"{"id":"meeting-start-e1","title":"T","body":"B","deliverAtMs":1800000300000}"#,
+        )
+        .unwrap();
+        assert_eq!(scheduled.deliver_at_ms, Some(1_800_000_300_000));
     }
 }

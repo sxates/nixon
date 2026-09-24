@@ -28,7 +28,8 @@ pub async fn notif_request_authorization() -> Result<bool, String> {
     macos::request_authorization().await.map_err(|e| e.to_string())
 }
 
-/// Post a notification now.
+/// Post a notification — now, or at `request.deliverAtMs` (epoch ms) when that is in the
+/// future (specs/0075 W2).
 #[tauri::command]
 pub fn notif_deliver(request: DeliverRequest) -> Result<(), String> {
     macos::deliver(request).map_err(|e| e.to_string())
@@ -40,6 +41,14 @@ pub fn notif_deliver(request: DeliverRequest) -> Result<(), String> {
 #[tauri::command]
 pub fn notif_remove(id: String) -> Result<(), String> {
     macos::remove(&id).map_err(|e| e.to_string())
+}
+
+/// Withdraw a scheduled notification macOS has not delivered yet (specs/0075 W2) — the
+/// pending T-0 "starting now" banner, once a recording has started or the in-app start alert
+/// fired. An unknown or already-delivered id is a no-op.
+#[tauri::command]
+pub fn notif_cancel_pending(id: String) -> Result<(), String> {
+    macos::cancel_pending(&id).map_err(|e| e.to_string())
 }
 
 /// Open System Settings → Notifications.
@@ -96,6 +105,7 @@ pub async fn recording_banner<R: tauri::Runtime>(
         // None => the category's default (transient). A recording-started banner is news,
         // not a decision, so it has no business sitting on screen until dismissed.
         auto_dismiss_ms: None,
+        deliver_at_ms: None,
     }) {
         log::debug!("notifications: recording banner not delivered: {error}");
     }
