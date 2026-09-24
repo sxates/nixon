@@ -19,6 +19,10 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 ## [Unreleased]
 
+_(nothing yet)_
+
+## [0.11.0] - 2026-09-24
+
 ### Added
 
 - **A new menu bar icon.** Nixon's menu bar icon is now a single tape reel, the one from the
