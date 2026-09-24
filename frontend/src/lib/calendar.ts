@@ -86,18 +86,47 @@ export async function requestCalendarAccess(): Promise<boolean> {
   }
 }
 
+export interface UpcomingMeetingsOptions {
+  /**
+   * Also return meetings that started at most this long ago (specs/0075 W2). Omitted, a
+   * meeting drops out of the list the moment it starts. The calendar alerts pass 2 minutes
+   * so their in-app "starting now" alert has a grace after the start.
+   */
+  includeStartedWithinMs?: number;
+}
+
+/**
+ * Fetch upcoming meetings within `withinHours` (default 12), or `null` when the fetch
+ * failed — for a caller that must not mistake a failed read for an empty calendar (the
+ * calendar alerts cancel a scheduled start banner when its meeting leaves the list).
+ * Never throws.
+ */
+export async function tryGetUpcomingMeetings(
+  withinHours = 12,
+  options: UpcomingMeetingsOptions = {},
+): Promise<UpcomingMeeting[] | null> {
+  const args: Record<string, number> = { withinHours };
+  if (options.includeStartedWithinMs !== undefined) {
+    args.includeStartedWithinMs = options.includeStartedWithinMs;
+  }
+  try {
+    const result = await invoke<UpcomingMeeting[]>('api_get_upcoming_meetings', args);
+    return Array.isArray(result) ? result : [];
+  } catch (err) {
+    console.warn('[calendar] getUpcomingMeetings failed:', err);
+    return null;
+  }
+}
+
 /**
  * Fetch upcoming meetings within `withinHours` (default 12). Returns `[]` if not
  * authorized or on any failure. Never throws.
  */
-export async function getUpcomingMeetings(withinHours = 12): Promise<UpcomingMeeting[]> {
-  try {
-    const result = await invoke<UpcomingMeeting[]>('api_get_upcoming_meetings', { withinHours });
-    return Array.isArray(result) ? result : [];
-  } catch (err) {
-    console.warn('[calendar] getUpcomingMeetings failed:', err);
-    return [];
-  }
+export async function getUpcomingMeetings(
+  withinHours = 12,
+  options: UpcomingMeetingsOptions = {},
+): Promise<UpcomingMeeting[]> {
+  return (await tryGetUpcomingMeetings(withinHours, options)) ?? [];
 }
 
 /**
