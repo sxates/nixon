@@ -54,6 +54,7 @@ import {
 import { useMeetingTalkTime } from '@/hooks/meeting-details/useMeetingTalkTime';
 import { ChannelStrip, type ChannelRow } from '@/components/MeetingDetails/ChannelStrip';
 import { speakerChipProps, type SpeakerChipProps } from '@/components/MeetingDetails/speaker-chip-props';
+import { ownerActionContext, RoomOwnerHint, SpeakerOwnerAction } from '@/components/MeetingDetails/SpeakerOwnerAction';
 import { filterPeople } from '@/lib/people-filter';
 import { consolidateSpeakers } from '@/lib/speaker-consolidation';
 import { cn } from '@/lib/utils';
@@ -239,6 +240,7 @@ export function SpeakerLegend({
           />
         </div>
       )}
+      <RoomOwnerHint owner={ownerActionContext(controller)} />
     </div>
   );
 }
@@ -257,6 +259,7 @@ function SpeakerChip({
   onAssignPerson,
   onMerge,
   onPersonSaved,
+  owner,
 }: SpeakerChipProps) {
   // specs/0019 WS2.4 — when this chip stands for several consolidated speakers, apply
   // every correction to all of them so the group doesn't split back apart. Sequential
@@ -443,6 +446,8 @@ function SpeakerChip({
                 </span>
               </button>
             )}
+
+            <SpeakerOwnerAction speakerKey={speaker.speakerKey} isLocal={speaker.isLocal} memberKeys={memberKeys} owner={owner} onBeforeAction={() => setRenameOpen(false)} />
 
             {/* Free-text rename. */}
             <form

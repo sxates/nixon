@@ -7,6 +7,7 @@ import {
 } from '@/components/VirtualizedTranscriptView';
 import { TranscriptButtonGroup } from './TranscriptButtonGroup';
 import { SpeakerFilterChip } from './SpeakerFilterChip';
+import { ownerActionContext } from './SpeakerOwnerAction';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { toast } from 'sonner';
@@ -261,6 +262,13 @@ export function TranscriptPanel({
     [meetingId, reconcileInBackground],
   );
 
+  // specs/0078 — "This is me" / "This isn't me" in the transcript name's popover.
+  const { speakers: ownerSpeakers, audioSetup, markAsMe, unmarkMe } = speakersController;
+  const ownerCtx = useMemo(
+    () => ownerActionContext({ speakers: ownerSpeakers, audioSetup, markAsMe, unmarkMe }),
+    [ownerSpeakers, audioSetup, markAsMe, unmarkMe],
+  );
+
   // Inline assignment wiring for the transcript — only when viewing (not recording)
   // and the meeting has a speaker directory to pick from. Absent => names are static.
   const inlineAssignment: InlineSpeakerAssignment | undefined = useMemo(() => {
@@ -286,6 +294,7 @@ export function TranscriptPanel({
       onReassignSegment: reassignSegment,
       onReassignSegments: reassignSegments,
       onCreateSpeaker: createSpeaker,
+      owner: ownerCtx,
     };
   }, [
     isRecording,
@@ -295,6 +304,7 @@ export function TranscriptPanel({
     speakersController.assignAttendee,
     speakersController.assignPerson,
     speakersController.speakers,
+    ownerCtx,
     reassignSegment,
     reassignSegments,
     createSpeaker,

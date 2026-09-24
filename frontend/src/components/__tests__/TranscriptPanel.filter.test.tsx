@@ -50,6 +50,9 @@ function makeSpeakersController(speakers: MeetingSpeaker[]): UseSpeakersReturn {
     assignAttendee: vi.fn().mockResolvedValue(undefined),
     assignPerson: vi.fn().mockResolvedValue(undefined),
     mergeSpeakers: vi.fn().mockResolvedValue(undefined),
+    audioSetup: null,
+    markAsMe: vi.fn().mockResolvedValue(undefined),
+    unmarkMe: vi.fn().mockResolvedValue(undefined),
   };
 }
 

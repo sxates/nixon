@@ -23,6 +23,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { toast } from 'sonner';
 import { safeListen } from '@/lib/safe-listen';
 import { notifyMeetingParticipantsChanged } from '@/lib/participants-events';
+import { useAudioSetup, type MeetingAudioSetup } from '@/hooks/useAudioSetup';
 import type {
   MeetingSpeaker,
   MeetingAttendee,
@@ -77,6 +78,14 @@ export interface UseSpeakersReturn {
    *  of the person's voiceprint opt-out. */
   assignPerson: (speakerKey: string, person: Person) => Promise<void>;
   mergeSpeakers: (fromKey: string, intoKey: string) => Promise<void>;
+  /** specs/0078 — the meeting's "Who was on the mic?" setup; `resolved` decides
+   *  whether "This is me" / "This isn't me" are offered. null until fetched. */
+  audioSetup: MeetingAudioSetup | null;
+  /** specs/0078 "This is me": re-key these speakers to "You". Several keys = one
+   *  consolidated group; the backend folds each into the same "You". */
+  markAsMe: (speakerKeys: string | string[]) => Promise<void>;
+  /** specs/0078 "This isn't me": this meeting's "You" becomes the next "Speaker N". */
+  unmarkMe: () => Promise<void>;
 }
 
 export function useSpeakers({
@@ -384,6 +393,47 @@ export function useSpeakers({
     [meetingId, afterMutation],
   );
 
+  // specs/0078 — the owner is no longer structural in a room recording. Refreshed on
+  // `diarization-complete` by the hook itself.
+  const { setup: audioSetup } = useAudioSetup(meetingId);
+
+  const markAsMe = useCallback(
+    async (speakerKeys: string | string[]) => {
+      if (!meetingId) return;
+      const keys = Array.isArray(speakerKeys) ? speakerKeys : [speakerKeys];
+      try {
+        // Sequential: the first creates "You", the rest merge into it.
+        for (const speakerKey of keys) {
+          await invoke('api_mark_speaker_as_me', { meetingId, speakerKey });
+        }
+        await afterMutation();
+        toast.success('Marked as you');
+      } catch (error) {
+        console.error('Failed to mark speaker as you:', error);
+        // A partial run (several keys) may still have changed rows; show them.
+        await afterMutation().catch(() => {});
+        toast.error('Could not mark this speaker as you', {
+          description: error instanceof Error ? error.message : String(error),
+        });
+      }
+    },
+    [meetingId, afterMutation],
+  );
+
+  const unmarkMe = useCallback(async () => {
+    if (!meetingId) return;
+    try {
+      await invoke('api_unmark_speaker_as_me', { meetingId });
+      await afterMutation();
+      toast.success('No longer marked as you');
+    } catch (error) {
+      console.error('Failed to unmark you:', error);
+      toast.error('Could not change this speaker', {
+        description: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }, [meetingId, afterMutation]);
+
   // Exposed suggestions = raw suggestions minus dismissed keys.
   const crossMeetingSuggestions = useMemo(() => {
     if (dismissedKeys.size === 0) return rawSuggestions;
@@ -407,5 +457,8 @@ export function useSpeakers({
     assignAttendee,
     assignPerson,
     mergeSpeakers,
+    audioSetup,
+    markAsMe,
+    unmarkMe,
   };
 }
