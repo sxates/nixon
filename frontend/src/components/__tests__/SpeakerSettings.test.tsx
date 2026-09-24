@@ -74,6 +74,34 @@ describe('SpeakerSettings — start-time-only notice (spec 0051 WS3, moved by 00
     expect(toastSuccess).not.toHaveBeenCalled();
   });
 
+  // specs/0076: switching them OFF mid-meeting stops them in that meeting too.
+  it('says switching live labels off stops them for this meeting too', async () => {
+    useSidebarMock.mockReturnValue({ activeRecordingMeetingId: 'meeting-123' });
+    invokeMock.mockImplementation((cmd: string) => {
+      switch (cmd) {
+        case 'api_get_diarization_enabled':
+        case 'api_get_live_diarization_enabled':
+          return Promise.resolve(true);
+        case 'api_get_voiceprint_settings':
+          return Promise.resolve({ storeOthersVoiceprints: false, selfEnrollVoiceprint: true });
+        default:
+          return Promise.resolve(undefined);
+      }
+    });
+    await renderSettings();
+    await waitFor(() =>
+      expect(switchForLabel('Label speakers live while recording')).toHaveAttribute('aria-checked', 'true'),
+    );
+
+    fireEvent.click(switchForLabel('Label speakers live while recording'));
+
+    await waitFor(() => expect(toastSuccess).toHaveBeenCalledTimes(1));
+    expect(toastSuccess.mock.calls[0][0]).toBe('Live speaker labels are off');
+    expect(toastSuccess.mock.calls[0][1].description).toMatch(/this meeting too/);
+    expect(toastInfo).not.toHaveBeenCalled();
+    expect(invokeMock).toHaveBeenCalledWith('api_set_live_diarization_enabled', { enabled: false });
+  });
+
   it('falls back to the plain toast when nothing is recording', async () => {
     await renderSettings();
 
@@ -111,7 +139,7 @@ describe('SpeakerSettings — copy (specs/0061 W6, moved by 0067)', () => {
     await renderSettings();
     expect(
       screen.getByText(
-        'Shows provisional numbered labels while you record. Names are matched when the recording ends.',
+        'Shows provisional numbered labels while you record. Names are matched when the recording ends. Uses a lot of CPU while recording, which can make your fans run.',
       ),
     ).toBeInTheDocument();
   });

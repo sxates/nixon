@@ -19,7 +19,16 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 ## [Unreleased]
 
-_(nothing yet)_
+### Fixed
+
+- Turning off **Label speakers live while recording** now stops it in the meeting you're
+  recording, not just from the next one. The setting also says that it uses a lot of CPU
+  while recording.
+
+### Internal
+
+- specs/0076: a process-wide `LIVE_PASSES_ENABLED` flag, checked by the live diarization pass
+  loop each tick and set by `api_set_live_diarization_enabled`.
 
 ## [0.10.0] - 2026-09-24
 
