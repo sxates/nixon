@@ -175,6 +175,7 @@ tauri = { version = "2.6.2", features = [ "macos-private-api", "protocol-asset",
 tauri-plugin-fs = "2.4.0"
 tauri-plugin-dialog = "2.3.0"
 tauri-plugin-store = "2.4.0"
+tauri-plugin-window-state = "2"
 
 # Desktop-only single instance guard
 [target.'cfg(any(target_os = "macos", windows, target_os = "linux"))'.dependencies]

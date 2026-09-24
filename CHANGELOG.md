@@ -19,6 +19,11 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 ## [Unreleased]
 
+### Added
+
+- **Nixon remembers where you left its window.** Its size and position carry over when you
+  quit and reopen it, and across updates.
+
 ### Fixed
 
 - Turning off **Label speakers live while recording** now stops it in the meeting you're
@@ -26,6 +31,9 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 ### Internal
 
+- Window state: `tauri-plugin-window-state` (size, position, maximized), skipped under the dev
+  control channel so screenshot runs don't overwrite the saved size; saved explicitly before the
+  updater's `app.restart()`, which bypasses `RunEvent::Exit` on the main thread.
 - specs/0076: a process-wide `LIVE_PASSES_ENABLED` flag, checked by the live diarization pass
   loop each tick and set by `api_set_live_diarization_enabled`.
 

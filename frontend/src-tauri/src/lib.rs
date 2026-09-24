@@ -64,6 +64,7 @@ pub mod tray;
 pub mod updater;
 pub mod utils;
 pub mod whisper_engine;
+pub mod window_state;
 pub mod zoom;
 
 use log::info as log_info;
@@ -126,6 +127,10 @@ pub fn run() {
         // specs/0058 — in-app updates. Desktop-only like the plugins above; the
         // driver's `updater_builder()` needs this plugin's state to be registered.
         builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
+
+        if let Some(plugin) = window_state::plugin() {
+            builder = builder.plugin(plugin);
+        }
     }
 
     builder
