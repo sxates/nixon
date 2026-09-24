@@ -52,7 +52,15 @@ export function SpeakerSettings() {
   const { activeRecordingMeetingId } = useSidebar();
   const isRecordingActive =
     !!activeRecordingMeetingId && activeRecordingMeetingId !== 'intro-call';
-  const toastSaved = () => {
+  const toastSaved = (enabled: boolean) => {
+    // specs/0076: switching live labels OFF also stops them in the meeting under way, so
+    // the "applies to your next recording" notice is only true when switching them on.
+    if (!enabled && isRecordingActive) {
+      toast.success('Live speaker labels are off', {
+        description: 'Stopped for this meeting too. Speakers are still labelled after it ends.',
+      });
+      return;
+    }
     const notice = noticeForSetting('live-diarization', isRecordingActive);
     if (notice) {
       toast.info(notice.title, { description: notice.description, duration: 8000 });
@@ -136,7 +144,7 @@ export function SpeakerSettings() {
     setLiveDiarizationEnabled(enabled);
     try {
       await invoke('api_set_live_diarization_enabled', { enabled });
-      toastSaved();
+      toastSaved(enabled);
     } catch (error) {
       console.error('Failed to save live diarization preference:', error);
       setLiveDiarizationEnabled(previous); // revert on failure
@@ -210,7 +218,7 @@ export function SpeakerSettings() {
           {diarizationEnabled && (
             <SettingsRow
               label="Label speakers live while recording"
-              description="Shows provisional numbered labels while you record. Names are matched when the recording ends."
+              description="Shows provisional numbered labels while you record. Names are matched when the recording ends. Uses significant CPU."
               control={
                 <Switch
                   checked={liveDiarizationEnabled}

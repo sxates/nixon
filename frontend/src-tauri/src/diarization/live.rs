@@ -69,6 +69,24 @@ pub const PASS_INTERVAL: std::time::Duration = std::time::Duration::from_secs(8)
 /// buffer wastes CPU and can't reveal new speakers. (Debounce, ADR-0006.)
 const MIN_NEW_AUDIO_SECONDS: f32 = 3.0;
 
+/// specs/0076: whether the running recording's pass loop may start passes. The setting is
+/// read once when a recording starts (`build_live_diarizer`), so without this, switching
+/// it off in Settings left a meeting already recording at ~700% CPU in bursts until it
+/// stopped (owner report, v0.10.0). One recording runs at a time, so one flag is enough.
+static LIVE_PASSES_ENABLED: AtomicBool = AtomicBool::new(true);
+
+/// Called by the live-labels setting: off stops passes in the recording under way; on
+/// resumes them if that recording started with live labels (otherwise it has no diarizer).
+pub fn set_live_passes_enabled(enabled: bool) {
+    LIVE_PASSES_ENABLED.store(enabled, Ordering::SeqCst);
+}
+
+/// A tick's gate, apart from the single-flight check: the setting is on and enough new
+/// audio has come in since the last pass.
+fn should_run_pass(passes_enabled: bool, new_audio_seconds: f32) -> bool {
+    passes_enabled && new_audio_seconds >= MIN_NEW_AUDIO_SECONDS
+}
+
 /// specs/0028: cap the live diarization buffer to a sliding window of the most recent audio,
 /// instead of re-clustering the *whole growing buffer* every pass. The old approach was
 /// O(n²) in CPU over a meeting (each pass re-clusters everything) and grew RAM without bound
@@ -327,6 +345,9 @@ impl LiveDiarizer {
             feed_disabled: false,
         }));
         let running = Arc::new(AtomicBool::new(true));
+        // Starting means the setting is on (the caller checked), whatever a previous
+        // recording's mid-meeting switch left behind.
+        set_live_passes_enabled(true);
         // Single-in-flight debounce flag — owned solely by the background loop.
         let pass_in_flight = Arc::new(AtomicBool::new(false));
 
@@ -409,8 +430,11 @@ async fn run_pass_loop(
         // Snapshot under lock: buffer + segments, and gate on enough new audio.
         let (samples, window_start_seconds, segments) = {
             let Ok(mut s) = shared.lock() else { continue };
-            if s.buffer.new_seconds() < MIN_NEW_AUDIO_SECONDS {
-                continue; // not enough new audio — skip this tick (don't queue).
+            if !should_run_pass(
+                LIVE_PASSES_ENABLED.load(Ordering::SeqCst),
+                s.buffer.new_seconds(),
+            ) {
+                continue; // switched off, or not enough new audio — skip this tick (don't queue).
             }
             let (samples, window_start_seconds) = s.buffer.snapshot_for_pass();
             let segments = s.segments.clone();
@@ -619,6 +643,14 @@ mod tests {
         ]));
         // One reuses A's key, the other is new — they don't both become A.
         assert_ne!(m["spk_0"], m["spk_1"]);
+    }
+
+    // specs/0076: switching the setting off mid-recording must stop passes at once.
+    #[test]
+    fn no_pass_runs_while_switched_off_even_with_plenty_of_new_audio() {
+        assert!(!should_run_pass(false, 60.0));
+        assert!(should_run_pass(true, 60.0));
+        assert!(!should_run_pass(true, MIN_NEW_AUDIO_SECONDS - 0.1));
     }
 
     // --- run_single_pass via a stub Diarizer: end-to-end stable-once-shown ---

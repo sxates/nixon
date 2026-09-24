@@ -143,14 +143,18 @@ pub async fn api_get_live_diarization_enabled() -> Result<bool, String> {
 }
 
 /// Enable or disable live diarization (specs/0011 P3-B). Persisted to disk; preserves
-/// the offline `diarization_enabled` toggle. Takes effect on the next recording start.
+/// the offline `diarization_enabled` toggle. Switching it off also stops the passes of a
+/// recording already under way (specs/0076); switching it on resumes them only if that
+/// recording started with live labels.
 #[tauri::command]
 pub async fn api_set_live_diarization_enabled(enabled: bool) -> Result<(), String> {
     let mut current = settings::load_settings().await;
     current.live_diarization_enabled = enabled;
     settings::save_settings(&current)
         .await
-        .map_err(|e| format!("Failed to save live diarization setting: {e}"))
+        .map_err(|e| format!("Failed to save live diarization setting: {e}"))?;
+    crate::diarization::live::set_live_passes_enabled(enabled);
+    Ok(())
 }
 
 /// The two voiceprint-consent toggles surfaced to the frontend (specs/0016 1c,
