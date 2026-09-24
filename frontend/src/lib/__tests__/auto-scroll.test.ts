@@ -118,14 +118,6 @@ describe('nextFollowState (follow lock)', () => {
   it('a live transcript starts locked', () => {
     expect(LOCKED_FOLLOW).toEqual(locked);
   });
-    expect(state).toEqual(following);
-    // ...so a later scroll-up detaches it via hysteresis, no wheel event needed.
-    state = nextFollowState(state, {
-      type: 'scroll',
-      distanceFromBottomPx: SCROLLED_UP_THRESHOLD_PX + 1,
-    });
-    expect(state).toEqual(detached);
-  });
 
   it('a user upward scroll also detaches natural (unlocked) follow', () => {
     expect(nextFollowState(following, { type: 'user-scroll-up' })).toEqual(detached);
