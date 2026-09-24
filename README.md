@@ -10,6 +10,9 @@ your meeting. No recording is uploaded. Nothing leaves your machine.
 
 Apple Silicon, macOS 14 Sonoma or later. Open the `.dmg` and drag Nixon to Applications.
 
+> **Nixon is pre-release software.** Expect bugs, and expect features to change,
+> sometimes substantially, between versions.
+
 ---
 
 ## What it looks like
