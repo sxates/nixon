@@ -19,7 +19,12 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 ## [Unreleased]
 
-_(nothing yet)_
+### Changed
+
+- **One switch for voiceprints.** Speaker settings now have a single "Store voiceprints"
+  switch that covers your own voice as well as other people's. Nixon learns your voice, like
+  anyone else's, only while it is on. If you had turned on storing other people's
+  voiceprints, that choice carries over.
 
 ## [0.11.0] - 2026-09-24
 

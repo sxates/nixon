@@ -63,7 +63,7 @@ pub async fn merge_person_into_owner(pool: &SqlitePool, person_id: &str) -> Resu
         .context("re-point speakers to owner")?;
 
     // 3. Voiceprints (decision V — re-point, NOT delete): it is the owner's voice. No new
-    //    enrollment; future enrollment stays gated by self_enroll_voiceprint.
+    //    enrollment; future enrollment stays gated by store_voiceprints (specs/0078).
     sqlx::query("UPDATE voiceprints SET person_id = ? WHERE person_id = ?")
         .bind(OWNER_PERSON_ID)
         .bind(person_id)

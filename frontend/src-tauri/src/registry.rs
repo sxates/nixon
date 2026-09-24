@@ -354,8 +354,7 @@ pub fn invoke_handler() -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Sen
         diarization::commands::api_remove_meeting_participant,
         // Voiceprint gallery + consent controls (specs/0016 1c, ADR-0007)
         diarization::commands::api_get_voiceprint_settings,
-        diarization::commands::api_set_store_others_voiceprints,
-        diarization::commands::api_set_self_enroll_voiceprint,
+        diarization::commands::api_set_store_voiceprints,
         diarization::commands::api_clear_all_voiceprints,
         diarization::commands::api_get_person_voiceprint_count,
         // Per-sample voiceprint controls + retraction undo (specs/0039 WS3)

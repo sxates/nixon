@@ -4,7 +4,7 @@ import { render, screen, fireEvent, waitFor, within } from '@testing-library/rea
 // specs/0067 — these settings moved out of Recordings to the Transcription tab, where the
 // engine they describe lives. The guarantees came with them: a change made mid-meeting has
 // to say it applies to the NEXT recording (spec 0051 WS3), and the voiceprint copy has to
-// state that storing other people's is opt-in biometric data (ADR-0007, specs/0061 W6).
+// state that storing voiceprints is opt-in biometric data (ADR-0007, specs/0061 W6, specs/0078).
 
 const { useSidebarMock, toastInfo, toastSuccess } = vi.hoisted(() => ({
   useSidebarMock: vi.fn(),
@@ -55,7 +55,7 @@ beforeEach(() => {
       case 'api_get_live_diarization_enabled':
         return Promise.resolve(false);
       case 'api_get_voiceprint_settings':
-        return Promise.resolve({ storeOthersVoiceprints: false, selfEnrollVoiceprint: true });
+        return Promise.resolve({ storeVoiceprints: false });
       default:
         return Promise.resolve(undefined);
     }
@@ -83,7 +83,7 @@ describe('SpeakerSettings — start-time-only notice (spec 0051 WS3, moved by 00
         case 'api_get_live_diarization_enabled':
           return Promise.resolve(true);
         case 'api_get_voiceprint_settings':
-          return Promise.resolve({ storeOthersVoiceprints: false, selfEnrollVoiceprint: true });
+          return Promise.resolve({ storeVoiceprints: false });
         default:
           return Promise.resolve(undefined);
       }
@@ -144,9 +144,25 @@ describe('SpeakerSettings — copy (specs/0061 W6, moved by 0067)', () => {
     ).toBeInTheDocument();
   });
 
-  it('explains that storing other voiceprints is opt-in biometric data', async () => {
+  it('explains that storing voiceprints is opt-in biometric data', async () => {
     await renderSettings();
     expect(screen.getByText(/biometric data/i)).toBeInTheDocument();
+  });
+
+  // specs/0078 owner decision 1: one consent for every voiceprint, your own included.
+  it('offers one "Store voiceprints" toggle that covers your own voice too', async () => {
+    await renderSettings();
+    expect(screen.getByText(/covers your own voice and other people/i)).toBeInTheDocument();
+    expect(screen.queryByText('Recognize my own voice across meetings')).toBeNull();
+    expect(screen.queryByText('Store voiceprints for other people')).toBeNull();
+
+    const toggle = switchForLabel('Store voiceprints');
+    expect(toggle).toHaveAttribute('aria-checked', 'false');
+    fireEvent.click(toggle);
+
+    await waitFor(() =>
+      expect(invokeMock).toHaveBeenCalledWith('api_set_store_voiceprints', { enabled: true }),
+    );
   });
 });
 

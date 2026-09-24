@@ -69,17 +69,15 @@ export function SpeakerSettings() {
     }
   };
 
-  // Voiceprint consent controls (specs/0016 1c, ADR-0007). `storeOthers` is the
-  // off-by-default global opt-in to persist *other people's* voiceprints; `selfEnroll`
-  // is the device-owner ("You") self-enroll, on by default. Both live in
-  // DiarizationSettings and are only meaningful when diarization is enabled.
+  // Voiceprint consent (specs/0016 1c, ADR-0007 as amended by specs/0078). One
+  // off-by-default opt-in covers every voiceprint, your own included. It lives in
+  // DiarizationSettings and is only meaningful when diarization is enabled.
   // Live (during-recording) diarization sub-toggle (specs/0011, P3-B). Default off;
   // visually subordinate to / gated by the main diarization-enabled setting above.
   // Speaker diarization (specs/0010). Opt-in / default OFF.
   const [diarizationEnabled, setDiarizationEnabled] = useState(false);
   const [liveDiarizationEnabled, setLiveDiarizationEnabled] = useState(false);
-  const [storeOthersVoiceprints, setStoreOthersVoiceprints] = useState(false);
-  const [selfEnrollVoiceprint, setSelfEnrollVoiceprint] = useState(true);
+  const [storeVoiceprints, setStoreVoiceprints] = useState(false);
   const [clearVoiceprintsOpen, setClearVoiceprintsOpen] = useState(false);
 
   // Load speaker diarization preference (default off; specs/0010).
@@ -108,17 +106,12 @@ export function SpeakerSettings() {
     loadLiveDiarizationEnabled();
   }, []);
 
-  // Load the two voiceprint-consent toggles (specs/0016 1c). Both come back in a
-  // single DTO: storeOthers (default false) + selfEnroll (default true).
+  // Load the voiceprint consent (specs/0016 1c; default false).
   useEffect(() => {
     const loadVoiceprintSettings = async () => {
       try {
-        const dto = await invoke<{
-          storeOthersVoiceprints: boolean;
-          selfEnrollVoiceprint: boolean;
-        }>('api_get_voiceprint_settings');
-        setStoreOthersVoiceprints(!!dto.storeOthersVoiceprints);
-        setSelfEnrollVoiceprint(!!dto.selfEnrollVoiceprint);
+        const dto = await invoke<{ storeVoiceprints: boolean }>('api_get_voiceprint_settings');
+        setStoreVoiceprints(!!dto.storeVoiceprints);
       } catch (error) {
         console.error('Failed to load voiceprint settings:', error);
       }
@@ -152,32 +145,18 @@ export function SpeakerSettings() {
     }
   };
 
-  // Global opt-in to store *other people's* voiceprints (ADR-0007 §2). Off by default;
-  // turning it off doesn't delete already-stored samples (that's "clear all" / per-person
-  // opt-out) — it only blocks future enrollment of non-owner people.
-  const handleStoreOthersToggle = async (enabled: boolean) => {
-    const previous = storeOthersVoiceprints;
-    setStoreOthersVoiceprints(enabled);
+  // The one voiceprint consent (ADR-0007 §2, amended by specs/0078): your own voice and
+  // other people's. Off by default; turning it off doesn't delete already-stored samples
+  // (that's "clear all" / per-person opt-out) — it only blocks future enrollment.
+  const handleStoreVoiceprintsToggle = async (enabled: boolean) => {
+    const previous = storeVoiceprints;
+    setStoreVoiceprints(enabled);
     try {
-      await invoke('api_set_store_others_voiceprints', { enabled });
+      await invoke('api_set_store_voiceprints', { enabled });
       toast.success('Preference saved');
     } catch (error) {
       console.error('Failed to save voiceprint setting:', error);
-      setStoreOthersVoiceprints(previous); // revert on failure
-      toast.error('Failed to save preference');
-    }
-  };
-
-  // Device-owner ("You") self-enroll (ADR-0007 §3). On by default.
-  const handleSelfEnrollToggle = async (enabled: boolean) => {
-    const previous = selfEnrollVoiceprint;
-    setSelfEnrollVoiceprint(enabled);
-    try {
-      await invoke('api_set_self_enroll_voiceprint', { enabled });
-      toast.success('Preference saved');
-    } catch (error) {
-      console.error('Failed to save self-enroll setting:', error);
-      setSelfEnrollVoiceprint(previous); // revert on failure
+      setStoreVoiceprints(previous); // revert on failure
       toast.error('Failed to save preference');
     }
   };
@@ -229,45 +208,26 @@ export function SpeakerSettings() {
             />
           )}
 
-          {/* Voice identification / voiceprints (specs/0016 1c, ADR-0007). Only meaningful
-              when diarization is on, since cross-meeting voice memory is built from
-              diarized speakers. The global "store others" gate is OFF by default. */}
+          {/* Voice identification / voiceprints (specs/0016 1c, ADR-0007, specs/0078).
+              Only meaningful when diarization is on, since cross-meeting voice memory is
+              built from diarized speakers. One consent, OFF by default. */}
           {diarizationEnabled && (
             <SettingsRow
-              label="Store voiceprints for other people"
+              label="Store voiceprints"
               description={
                 <>
-                  Off by default. Storing other people&apos;s voiceprints is opt-in because it
-                  is biometric data. When on, Nixon remembers other people&apos;s voices to
-                  suggest names automatically in future meetings. When off, names still suggest
-                  within a single meeting, but no cross-meeting voice memory is kept for others.
-                  Voiceprints stay on this Mac either way.
+                  Off by default. Covers your own voice and other people&apos;s. Voiceprints
+                  are biometric data, so storing them is opt-in. When on, Nixon remembers
+                  voices to label &quot;You&quot; and suggest names automatically in future
+                  meetings. When off, names still suggest within a single meeting, but no
+                  cross-meeting voice memory is kept. Voiceprints stay on this Mac either way.
                 </>
               }
               control={
                 <Switch
-                  checked={storeOthersVoiceprints}
-                  onCheckedChange={handleStoreOthersToggle}
-                  aria-label="Store voiceprints for other people"
-                />
-              }
-            />
-          )}
-
-          {diarizationEnabled && (
-            <SettingsRow
-              label="Recognize my own voice across meetings"
-              description={
-                <>
-                  Learns your voice (the microphone channel) so &quot;You&quot; is labeled
-                  reliably in every meeting. Stored only on this Mac.
-                </>
-              }
-              control={
-                <Switch
-                  checked={selfEnrollVoiceprint}
-                  onCheckedChange={handleSelfEnrollToggle}
-                  aria-label="Recognize my own voice across meetings"
+                  checked={storeVoiceprints}
+                  onCheckedChange={handleStoreVoiceprintsToggle}
+                  aria-label="Store voiceprints"
                 />
               }
             />

@@ -232,7 +232,8 @@ pub async fn api_assign_speaker_to_person<R: Runtime>(
     // Enroll-on-confirm (specs/0016 1c, ADR-0007 §2/§3): opportunistically add this
     // cluster's voiceprint to the person's gallery, behind the consent gate. Best-effort
     // — the identity is already linked; a gating no-op or an enroll error must not fail
-    // the command. (Owner/local rows enroll under the singleton "You" person.)
+    // the command. The owner path covers the local/mic row AND a cluster assigned to the
+    // owner person (specs/0078 open question 6), under the one `store_voiceprints` consent.
     match crate::people::enroll::enroll_voiceprint_for_speaker(
         pool,
         &meeting_id,

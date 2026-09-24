@@ -157,50 +157,35 @@ pub async fn api_set_live_diarization_enabled(enabled: bool) -> Result<(), Strin
     Ok(())
 }
 
-/// The two voiceprint-consent toggles surfaced to the frontend (specs/0016 1c,
-/// ADR-0007 §2/§3). `storeOthersVoiceprints` is the global opt-in to persist *other
-/// people's* voiceprints (default false); `selfEnrollVoiceprint` is the owner ("You")
-/// self-enroll toggle (default true).
+/// The voiceprint consent surfaced to the frontend (specs/0016 1c, ADR-0007 §2/§3).
+/// `storeVoiceprints` is the one opt-in (default false) that covers everyone's
+/// voiceprint, the owner's included (specs/0078 owner decision 1).
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct VoiceprintSettingsDto {
-    pub store_others_voiceprints: bool,
-    pub self_enroll_voiceprint: bool,
+    pub store_voiceprints: bool,
 }
 
-/// Read both voiceprint-consent toggles (specs/0016 1c).
+/// Read the voiceprint consent (specs/0016 1c).
 #[tauri::command]
 pub async fn api_get_voiceprint_settings() -> Result<VoiceprintSettingsDto, String> {
     let s = settings::load_settings().await;
     Ok(VoiceprintSettingsDto {
-        store_others_voiceprints: s.store_others_voiceprints,
-        self_enroll_voiceprint: s.self_enroll_voiceprint,
+        store_voiceprints: s.store_voiceprints,
     })
 }
 
-/// Set the **global** opt-in to store other people's voiceprints (ADR-0007 §2). Persisted;
-/// preserves the other diarization toggles. Turning it OFF does not delete already-stored
+/// Set the voiceprint consent (ADR-0007 §2, amended by specs/0078). Persisted; preserves
+/// the other diarization toggles. Turning it OFF does not delete already-stored
 /// voiceprints (use "clear all" or per-person opt-out for that) — it only blocks future
-/// enrollment of non-owner people.
+/// enrollment, the owner's included.
 #[tauri::command]
-pub async fn api_set_store_others_voiceprints(enabled: bool) -> Result<(), String> {
+pub async fn api_set_store_voiceprints(enabled: bool) -> Result<(), String> {
     let mut current = settings::load_settings().await;
-    current.store_others_voiceprints = enabled;
+    current.store_voiceprints = enabled;
     settings::save_settings(&current)
         .await
         .map_err(|e| format!("Failed to save voiceprint setting: {e}"))
-}
-
-/// Set the owner ("You") self-enroll toggle (ADR-0007 §3). Persisted; preserves the other
-/// diarization toggles. On by default; turning it off stops self-enrollment from then on
-/// (existing owner samples are untouched — use "clear all" to remove them).
-#[tauri::command]
-pub async fn api_set_self_enroll_voiceprint(enabled: bool) -> Result<(), String> {
-    let mut current = settings::load_settings().await;
-    current.self_enroll_voiceprint = enabled;
-    settings::save_settings(&current)
-        .await
-        .map_err(|e| format!("Failed to save self-enroll setting: {e}"))
 }
 
 /// Wipe the entire voiceprint gallery (ADR-0007 §6 "clear all voiceprints"): every stored
@@ -452,7 +437,7 @@ pub async fn api_assign_speaker_to_attendee<R: Runtime>(
 
     // specs/0018: if the assigned address is one of the owner's emails, this attendee IS
     // the owner — link the speaker to the singleton "You" person rather than minting a
-    // separate person, and route enrollment through the owner self-enroll gate. When the
+    // separate person, and route enrollment through the owner path. When the
     // address is NOT an owner email, behavior is byte-identical to before.
     use crate::database::repositories::owner_emails::OwnerEmailsRepository;
     let is_owner_email = OwnerEmailsRepository::contains(pool, email)
@@ -509,7 +494,7 @@ pub async fn api_assign_speaker_to_attendee<R: Runtime>(
                         person.id
                     );
                 }
-                // Owner-email attendee → force the OWNER self-enroll gate (the speaker is a
+                // Owner-email attendee → force the OWNER enroll path (the speaker is a
                 // remote cluster the user declared as their own voice). Otherwise the usual
                 // structural is_local routing.
                 let enroll = if is_owner_email {

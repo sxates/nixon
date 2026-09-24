@@ -3,16 +3,20 @@
 //!
 //! There is no explicit "record 10s" enrollment product (spec non-goal). Instead, every
 //! time the user confirms an identity — assigning a detected speaker to a Person
-//! (`api_assign_speaker_to_person`) or to a calendar attendee
-//! (`api_assign_speaker_to_attendee`) — we insert ONE voiceprint sample from that
-//! speaker row's already-stored embedding, **behind a two-layer consent gate**:
+//! (`api_assign_speaker_to_person`), to a calendar attendee
+//! (`api_assign_speaker_to_attendee`), or marking a cluster "This is me"
+//! (`api_mark_speaker_as_me`) — we insert ONE voiceprint sample from that speaker row's
+//! already-stored embedding, **behind one consent gate** (specs/0078 owner decision 1):
 //!
-//! - **Owner ("You") / local channel:** gated on `self_enroll_voiceprint` (ADR-0007 §3,
-//!   on by default). The owner is represented by a singleton reserved `people` row
-//!   ([`OWNER_PERSON_ID`]), created lazily on first self-enroll.
-//! - **Everyone else:** gated on `store_others_voiceprints && !person.voiceprint_opt_out`
-//!   (ADR-0007 §2). With the global toggle off, or that person opted out, identity is
-//!   still associated but NO voiceprint is stored.
+//! - **Everyone, the owner included:** gated on `store_voiceprints` (off by default).
+//!   The owner ("You") is enrolled under a singleton reserved `people` row
+//!   ([`OWNER_PERSON_ID`]), created lazily on first enroll. The owner path is taken for
+//!   the local/mic row, for any speaker assigned to [`OWNER_PERSON_ID`], and for an
+//!   attendee whose address is one of the owner's.
+//! - **Everyone else** additionally honours the person's `voiceprint_opt_out`.
+//!
+//! Before specs/0078 the owner had a separate, on-by-default `self_enroll_voiceprint`
+//! toggle; it is retired, and the owner's voice is treated like anyone else's.
 //!
 //! Gating off is a silent, expected no-op — identity association always succeeds; only the
 //! biometric storage is suppressed. Every function here is best-effort from the caller's
@@ -36,17 +40,15 @@ pub const OWNER_PERSON_ID: &str = "person-owner-self";
 /// Display name for the owner person row.
 const OWNER_DISPLAY_NAME: &str = "You";
 
-/// The outcome of the pure two-layer consent gate (ADR-0007 §2/§3), separated from I/O so
-/// it is unit-testable without disk settings or a DB.
+/// The outcome of the pure consent gate (ADR-0007 §2/§3 as amended by specs/0078),
+/// separated from I/O so it is unit-testable without disk settings or a DB.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum EnrollDecision {
-    /// Enroll under the singleton owner ("You") person — the local/mic channel, gated on
-    /// `self_enroll_voiceprint`.
+    /// Enroll under the singleton owner ("You") person.
     EnrollOwner,
-    /// Enroll under the given non-owner person — gated on
-    /// `store_others_voiceprints && !voiceprint_opt_out`.
+    /// Enroll under the given non-owner person.
     EnrollPerson,
-    /// Consent gate says no — associate identity but store NO voiceprint.
+    /// The gate says no — associate identity but store NO voiceprint.
     Skip,
 }
 
@@ -58,50 +60,60 @@ pub enum EnrollDecision {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EnrollConfidence {
     /// An explicit human confirmation — `api_assign_speaker_to_person` /
-    /// `api_assign_speaker_to_attendee`. Highest trust; enrolls subject to consent.
+    /// `api_assign_speaker_to_attendee` / `api_mark_speaker_as_me`. Highest trust; enrolls
+    /// subject to consent.
     UserConfirmed,
-    /// An automatic gallery auto-label (the offline pass, `pipeline.rs:~823`). It must
-    /// **NEVER** enroll — that's the flywheel-in-reverse WS3 exists to prevent. The offline
-    /// pass avoids enrollment today only by calling `assign_speaker_to_person` directly
-    /// (never this enroll path); routing it here with this variant keeps that a hard,
-    /// tested invariant even if a future refactor changes the call site.
+    /// Structural owner evidence, not an inference from the gallery (specs/0078 owner
+    /// decision 2): the bleed-guarded mic turns of a call, or the single cluster of a room
+    /// recording. Enrolls the OWNER only, subject to consent, at most once per meeting
+    /// (see [`enroll_owner_sample_from_embedding`]). For anyone other than the owner it
+    /// always skips.
+    OwnerBootstrap,
+    /// An automatic gallery auto-label (the offline pass, `pipeline.rs:~823`), including
+    /// an automatic room-mode "You" found by owner voiceprint. It must **NEVER** enroll —
+    /// that's the flywheel-in-reverse WS3 exists to prevent. The offline pass avoids
+    /// enrollment today only by calling `assign_speaker_to_person` directly (never this
+    /// enroll path); routing it here with this variant keeps that a hard, tested invariant
+    /// even if a future refactor changes the call site.
     AutoLabel,
 }
 
-/// Pure consent + confidence gate (ADR-0007 §2/§3, specs/0039 WS3). `confidence` is the
-/// attribution-trust layer: an [`EnrollConfidence::AutoLabel`] attribution always [`Skip`]s
-/// regardless of consent (a low-confidence auto-label must never grow the gallery). `is_local`
-/// marks the device-owner/mic channel; `store_others`/`self_enroll` are the two global toggles;
-/// `person_opt_out` is the matched non-owner person's per-person flag (ignored for the owner
-/// path).
+/// Pure consent + confidence gate (ADR-0007 §2/§3 as amended by specs/0078, specs/0039 WS3).
+/// `is_owner` marks the device owner (the local/mic row, a speaker assigned to
+/// [`OWNER_PERSON_ID`], or an owner-email attendee); `store_voiceprints` is the one global
+/// consent; `person_opt_out` is the matched non-owner person's per-person flag (ignored for
+/// the owner).
 ///
 /// - Auto-label: always skip.
-/// - Owner (local): enroll iff `self_enroll`.
-/// - Others: enroll iff `store_others && !person_opt_out`.
-///
-/// [`Skip`]: EnrollDecision::Skip
+/// - Consent off: always skip, owner included.
+/// - Owner: enroll.
+/// - Others: enroll iff user-confirmed and not opted out.
 pub fn decide_enrollment(
     confidence: EnrollConfidence,
-    is_local: bool,
-    store_others: bool,
-    self_enroll: bool,
+    is_owner: bool,
+    store_voiceprints: bool,
     person_opt_out: bool,
 ) -> EnrollDecision {
-    // WS3 invariant: an automatic auto-label never enrolls, whatever the consent toggles say.
-    if confidence == EnrollConfidence::AutoLabel {
+    // WS3 invariant: an automatic auto-label never enrolls, whatever the consent says.
+    if confidence == EnrollConfidence::AutoLabel || !store_voiceprints {
         return EnrollDecision::Skip;
     }
-    if is_local {
-        if self_enroll {
-            EnrollDecision::EnrollOwner
-        } else {
-            EnrollDecision::Skip
-        }
-    } else if store_others && !person_opt_out {
-        EnrollDecision::EnrollPerson
-    } else {
+    if is_owner {
+        EnrollDecision::EnrollOwner
+    } else if confidence == EnrollConfidence::OwnerBootstrap || person_opt_out {
         EnrollDecision::Skip
+    } else {
+        EnrollDecision::EnrollPerson
     }
+}
+
+/// The one voiceprint consent, read from the persisted diarization settings
+/// (`store_voiceprints`, specs/0078 owner decision 1). Every enroll entry point resolves
+/// the gate through this.
+pub async fn voiceprint_consent() -> bool {
+    crate::diarization::settings::load_settings()
+        .await
+        .store_voiceprints
 }
 
 /// Ensure the singleton owner ("You") `people` row exists, returning its id
@@ -132,22 +144,74 @@ pub async fn ensure_owner_person(pool: &SqlitePool) -> Result<String, sqlx::Erro
     Ok(OWNER_PERSON_ID.to_string())
 }
 
-/// Enroll a confirmed speaker's voiceprint into a Person's gallery, behind the two-layer
-/// consent gate (ADR-0007 §2/§3).
+/// Enroll a confirmed speaker's voiceprint into a Person's gallery, behind the consent
+/// gate (ADR-0007 §2/§3 as amended by specs/0078).
 ///
-/// Reads the speaker row's stored embedding; if it's the local/owner channel, gates on
-/// `self_enroll_voiceprint` and enrolls under the singleton owner person (creating it
-/// lazily, ignoring the passed `person_id`); otherwise gates on
-/// `store_others_voiceprints && !person.voiceprint_opt_out` and enrolls under
-/// `person_id`. Returns `Ok(true)` iff a voiceprint row was actually written, `Ok(false)`
-/// when correctly gated off or there was nothing to enroll (no embedding). Never panics;
-/// callers treat a returned `Err` as best-effort and log-and-continue.
+/// Reads the speaker row's stored embedding. The owner path (the local/mic row, or
+/// `person_id == OWNER_PERSON_ID`) enrolls under the singleton owner person, creating it
+/// lazily; any other person enrolls under `person_id` unless they opted out. Both need
+/// `store_voiceprints`. Returns `Ok(true)` iff a voiceprint row was actually written,
+/// `Ok(false)` when correctly gated off or there was nothing to enroll (no embedding).
+/// Never panics; callers treat a returned `Err` as best-effort and log-and-continue.
 pub async fn enroll_voiceprint_for_speaker(
     pool: &SqlitePool,
     meeting_id: &str,
     speaker_key: &str,
     person_id: &str,
     confidence: EnrollConfidence,
+) -> Result<bool> {
+    let consent = voiceprint_consent().await;
+    enroll_speaker_gated(
+        pool,
+        meeting_id,
+        speaker_key,
+        person_id,
+        confidence,
+        false,
+        consent,
+    )
+    .await
+}
+
+/// Enroll a confirmed speaker's voiceprint under the singleton OWNER ("You") regardless of
+/// the row's channel (specs/0018). Unlike [`enroll_voiceprint_for_speaker`] — which
+/// routes by the speaker row's `is_local` flag and the target person — this always takes
+/// the owner path. It exists for the "this attendee is me" case
+/// (`api_assign_speaker_to_attendee` owner branch): the speaker is a *remote* cluster
+/// (`is_local = 0`) that the user has declared to be their own voice.
+///
+/// Gated on `store_voiceprints` like every other enrollment (specs/0078), and subject to
+/// the same WS3 cluster-quality guards. Returns `Ok(true)` iff a voiceprint row was
+/// written. Best-effort — callers log-and-continue.
+pub async fn enroll_owner_voiceprint_for_speaker(
+    pool: &SqlitePool,
+    meeting_id: &str,
+    speaker_key: &str,
+) -> Result<bool> {
+    let consent = voiceprint_consent().await;
+    enroll_speaker_gated(
+        pool,
+        meeting_id,
+        speaker_key,
+        OWNER_PERSON_ID,
+        EnrollConfidence::UserConfirmed,
+        true,
+        consent,
+    )
+    .await
+}
+
+/// The enroll-from-a-speaker-row core with the consent passed in, so DB tests can pin it
+/// without touching the settings file on disk. `force_owner` takes the owner path whatever
+/// the row and `person_id` say.
+pub(crate) async fn enroll_speaker_gated(
+    pool: &SqlitePool,
+    meeting_id: &str,
+    speaker_key: &str,
+    person_id: &str,
+    confidence: EnrollConfidence,
+    force_owner: bool,
+    store_voiceprints: bool,
 ) -> Result<bool> {
     // WS3 cluster-quality guards (specs/0039), before any embedding read:
     // - The `unknown` overflow bucket is a MIX of voices and carries no centroid
@@ -186,8 +250,6 @@ pub async fn enroll_voiceprint_for_speaker(
             // No row or no embedding (offline owner row, too-short cluster) → nothing to do.
             None => return Ok(false),
         };
-
-    let settings = crate::diarization::settings::load_settings().await;
     let model = model.unwrap_or_else(|| EMBEDDING_MODEL_ID.to_string());
 
     // Decode + sanity-check the embedding before any gate work (a corrupt blob enrolls
@@ -197,9 +259,13 @@ pub async fn enroll_voiceprint_for_speaker(
         _ => return Ok(false),
     };
 
-    // Resolve the target person + consent gate. For the non-owner path we must know the
-    // person's opt-out flag first (a missing person → no enrollment).
-    let person_opt_out = if is_local {
+    // specs/0078 open question 6: a cluster assigned to the owner person is the owner's
+    // voice, whatever its channel, so it takes the owner path.
+    let is_owner = force_owner || is_local || person_id == OWNER_PERSON_ID;
+
+    // For the non-owner path we must know the person's opt-out flag first (a missing
+    // person → no enrollment).
+    let person_opt_out = if is_owner {
         false // owner path ignores this
     } else {
         match PeopleRepository::get(pool, person_id)
@@ -211,19 +277,14 @@ pub async fn enroll_voiceprint_for_speaker(
         }
     };
 
-    let target_person_id = match decide_enrollment(
-        confidence,
-        is_local,
-        settings.store_others_voiceprints,
-        settings.self_enroll_voiceprint,
-        person_opt_out,
-    ) {
-        EnrollDecision::Skip => return Ok(false), // gated off — identity already associated.
-        EnrollDecision::EnrollOwner => ensure_owner_person(pool)
-            .await
-            .context("ensure owner person")?,
-        EnrollDecision::EnrollPerson => person_id.to_string(),
-    };
+    let target_person_id =
+        match decide_enrollment(confidence, is_owner, store_voiceprints, person_opt_out) {
+            EnrollDecision::Skip => return Ok(false), // gated off — identity already associated.
+            EnrollDecision::EnrollOwner => ensure_owner_person(pool)
+                .await
+                .context("ensure owner person")?,
+            EnrollDecision::EnrollPerson => person_id.to_string(),
+        };
 
     VoiceprintsRepository::add_sample(
         pool,
@@ -244,52 +305,81 @@ pub async fn enroll_voiceprint_for_speaker(
     Ok(true)
 }
 
-/// Enroll a confirmed speaker's voiceprint under the singleton OWNER ("You"), gated on
-/// `self_enroll_voiceprint` (specs/0018). Unlike [`enroll_voiceprint_for_speaker`] — which
-/// routes by the speaker row's structural `is_local` flag — this forces the OWNER
-/// self-enroll path regardless of the channel. It exists for the "this attendee is me"
-/// case (`api_assign_speaker_to_attendee` owner branch): the speaker is a *remote* cluster
-/// (`is_local = 0`) that the user has declared to be their own voice (e.g. joined under an
-/// alias on another device), so it must be gated like the owner, not like "others".
+/// Add one owner ("You") voiceprint sample from an embedding computed by the diarization
+/// pass (specs/0078 owner decision 2: the owner bootstrap). For the call-mode mic turns
+/// and the room-mode single cluster, both of which are structural owner evidence.
 ///
-/// Returns `Ok(true)` iff a voiceprint row was written; `Ok(false)` when gated off
-/// (`self_enroll` disabled) or there is nothing to enroll. Best-effort — callers
-/// log-and-continue.
-pub async fn enroll_owner_voiceprint_for_speaker(
+/// - Gated on `store_voiceprints`, like every enrollment.
+/// - `confidence` should be [`EnrollConfidence::OwnerBootstrap`] (or `UserConfirmed`);
+///   `AutoLabel` never enrolls.
+/// - **At most one sample per meeting:** it is back-linked to the meeting's `local`
+///   speaker key, and nothing is written when any owner sample back-linked to
+///   `(meeting_id, "local")` already exists, live or quarantined. A re-run of the pass
+///   therefore never piles up samples, and a sample the user retracted with "This isn't
+///   me" (quarantined) is not silently re-added.
+/// - The back-link is what lets "This isn't me" (`api_unmark_speaker_as_me`) and "Clear
+///   all voiceprints" find the sample again.
+///
+/// Returns `Ok(true)` iff a sample was written. Best-effort for the caller.
+pub async fn enroll_owner_sample_from_embedding(
     pool: &SqlitePool,
     meeting_id: &str,
-    speaker_key: &str,
+    embedding: &[f32],
+    embedding_model: &str,
+    confidence: EnrollConfidence,
 ) -> Result<bool> {
-    let settings = crate::diarization::settings::load_settings().await;
-    if !settings.self_enroll_voiceprint {
-        return Ok(false); // owner self-enroll gated off — identity already linked.
+    let consent = voiceprint_consent().await;
+    enroll_owner_sample_gated(
+        pool,
+        meeting_id,
+        embedding,
+        embedding_model,
+        confidence,
+        consent,
+    )
+    .await
+}
+
+/// [`enroll_owner_sample_from_embedding`] with the consent passed in (for DB tests).
+pub(crate) async fn enroll_owner_sample_gated(
+    pool: &SqlitePool,
+    meeting_id: &str,
+    embedding: &[f32],
+    embedding_model: &str,
+    confidence: EnrollConfidence,
+    store_voiceprints: bool,
+) -> Result<bool> {
+    if decide_enrollment(confidence, true, store_voiceprints, false) != EnrollDecision::EnrollOwner
+    {
+        return Ok(false);
     }
-
-    let (_, bytes, model) =
-        match SpeakersRepository::get_speaker_embedding(pool, meeting_id, speaker_key)
-            .await
-            .context("load speaker embedding for owner enrollment")?
-        {
-            Some(t) => t,
-            None => return Ok(false), // no embedding → nothing to enroll.
-        };
-    let model = model.unwrap_or_else(|| EMBEDDING_MODEL_ID.to_string());
-
-    let embedding = match embedding_from_bytes(&bytes) {
-        Ok(v) if !v.is_empty() => v,
-        _ => return Ok(false),
-    };
-
+    if embedding.is_empty() || embedding.iter().any(|x| !x.is_finite()) {
+        return Ok(false);
+    }
+    let local = crate::diarization::LOCAL_SPEAKER_KEY;
+    let already: bool = sqlx::query_scalar(
+        "SELECT EXISTS(SELECT 1 FROM voiceprints
+                        WHERE person_id = ? AND source_meeting_id = ? AND source_speaker_key = ?)",
+    )
+    .bind(OWNER_PERSON_ID)
+    .bind(meeting_id)
+    .bind(local)
+    .fetch_one(pool)
+    .await
+    .context("check for an existing owner sample from this meeting")?;
+    if already {
+        return Ok(false);
+    }
     let owner_id = ensure_owner_person(pool)
         .await
         .context("ensure owner person")?;
     VoiceprintsRepository::add_sample(
         pool,
         &owner_id,
-        &embedding,
-        &model,
+        embedding,
+        embedding_model,
         Some(meeting_id),
-        Some(speaker_key),
+        Some(local),
         None,
     )
     .await
@@ -298,314 +388,4 @@ pub async fn enroll_owner_voiceprint_for_speaker(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::database::repositories::people::PeopleRepository;
-    use sqlx::SqlitePool;
-
-    // ----- pure consent-gate matrix (ADR-0007 §2/§3) -----
-
-    #[test]
-    fn owner_enrolls_only_when_self_enroll_on() {
-        use EnrollConfidence::UserConfirmed;
-        // self_enroll on → owner enrolls regardless of the others-toggle / opt-out.
-        assert_eq!(
-            decide_enrollment(UserConfirmed, true, false, true, true),
-            EnrollDecision::EnrollOwner
-        );
-        // self_enroll off → owner is skipped.
-        assert_eq!(
-            decide_enrollment(UserConfirmed, true, true, false, false),
-            EnrollDecision::Skip
-        );
-    }
-
-    #[test]
-    fn others_enroll_only_when_global_on_and_not_opted_out() {
-        use EnrollConfidence::UserConfirmed;
-        // Global on + not opted out → enroll.
-        assert_eq!(
-            decide_enrollment(UserConfirmed, false, true, true, false),
-            EnrollDecision::EnrollPerson
-        );
-        // Global OFF → skip (the off-by-default consent posture).
-        assert_eq!(
-            decide_enrollment(UserConfirmed, false, false, true, false),
-            EnrollDecision::Skip
-        );
-        // Global on but this person OPTED OUT → skip (per-person override wins).
-        assert_eq!(
-            decide_enrollment(UserConfirmed, false, true, true, true),
-            EnrollDecision::Skip
-        );
-    }
-
-    /// specs/0039 WS3: an auto-label attribution NEVER enrolls, no matter how permissive the
-    /// consent toggles are — the guard against the pollution flywheel. Mirror of the two
-    /// consent-matrix rows above but with `AutoLabel`, all of which must collapse to `Skip`.
-    #[test]
-    fn auto_label_never_enrolls_regardless_of_consent() {
-        use EnrollConfidence::AutoLabel;
-        // Owner path, self_enroll on — would enroll if user-confirmed; auto-label → skip.
-        assert_eq!(
-            decide_enrollment(AutoLabel, true, false, true, true),
-            EnrollDecision::Skip
-        );
-        // Others path, global on + not opted out — would enroll if user-confirmed; skip.
-        assert_eq!(
-            decide_enrollment(AutoLabel, false, true, true, false),
-            EnrollDecision::Skip
-        );
-    }
-
-    // ----- integration: opt-out deletes existing samples (ADR-0007 §6) -----
-
-    /// In-memory pool through the app's REAL migration set (the previous hand-rolled DDL
-    /// had to be kept in sync with four migrations by hand and silently drifted). One
-    /// connection max — each in-memory connection is a separate database. `foreign_keys`
-    /// is ON by sqlx default, matching the app pool (manager.rs); the explicit cascades
-    /// exist because most cross-table links are documentation-only, not declared FKs.
-    async fn pool_with_schema() -> SqlitePool {
-        let pool = sqlx::sqlite::SqlitePoolOptions::new()
-            .max_connections(1)
-            .connect("sqlite::memory:")
-            .await
-            .unwrap();
-        sqlx::migrate!("./migrations").run(&pool).await.unwrap();
-        pool
-    }
-
-    #[tokio::test]
-    async fn opt_out_deletes_existing_voiceprints_but_keeps_person() {
-        let pool = pool_with_schema().await;
-        let person =
-            PeopleRepository::create(&pool, "Priya", Some("priya@example.com"), None, None)
-                .await
-                .unwrap();
-        VoiceprintsRepository::add_sample(
-            &pool,
-            &person.id,
-            &[1.0, 0.0],
-            "3dspeaker_campplus_sv_en_voxceleb_16k",
-            None,
-            None,
-            Some(1.0),
-        )
-        .await
-        .unwrap();
-        assert_eq!(
-            VoiceprintsRepository::count_for_person(&pool, &person.id)
-                .await
-                .unwrap(),
-            1
-        );
-
-        // Turn on per-person opt-out → samples deleted, person survives.
-        PeopleRepository::set_voiceprint_opt_out(&pool, &person.id, true)
-            .await
-            .unwrap();
-        assert_eq!(
-            VoiceprintsRepository::count_for_person(&pool, &person.id)
-                .await
-                .unwrap(),
-            0,
-            "opt-out must delete existing voiceprints"
-        );
-        assert!(
-            PeopleRepository::get(&pool, &person.id)
-                .await
-                .unwrap()
-                .is_some(),
-            "the person row must survive opt-out"
-        );
-
-        // Flipping opt-out back OFF does NOT recreate samples.
-        PeopleRepository::set_voiceprint_opt_out(&pool, &person.id, false)
-            .await
-            .unwrap();
-        assert_eq!(
-            VoiceprintsRepository::count_for_person(&pool, &person.id)
-                .await
-                .unwrap(),
-            0
-        );
-    }
-
-    #[tokio::test]
-    async fn forget_person_cascades_voiceprints() {
-        let pool = pool_with_schema().await;
-        let person = PeopleRepository::create(&pool, "Sam", None, None, None)
-            .await
-            .unwrap();
-        VoiceprintsRepository::add_sample(
-            &pool,
-            &person.id,
-            &[0.0, 1.0],
-            "3dspeaker_campplus_sv_en_voxceleb_16k",
-            None,
-            None,
-            None,
-        )
-        .await
-        .unwrap();
-        assert!(PeopleRepository::delete(&pool, &person.id).await.unwrap());
-        assert_eq!(
-            VoiceprintsRepository::count_for_person(&pool, &person.id)
-                .await
-                .unwrap(),
-            0,
-            "forget-person must cascade-delete voiceprints"
-        );
-        assert!(PeopleRepository::get(&pool, &person.id)
-            .await
-            .unwrap()
-            .is_none());
-    }
-
-    // ----- specs/0039 WS3: enroll cluster-quality guards -----
-
-    /// The `unknown` overflow bucket is a MIX of voices and carries no centroid; the enroll
-    /// gate must refuse it outright (returns before any embedding/settings work), writing NO
-    /// voiceprint row. Guards the mixed bucket from ever polluting a gallery.
-    #[tokio::test]
-    async fn unknown_bucket_never_enrolls() {
-        let pool = pool_with_schema().await;
-        let enrolled = enroll_voiceprint_for_speaker(
-            &pool,
-            "m1",
-            crate::diarization::UNKNOWN_SPEAKER_KEY,
-            "p-anything",
-            EnrollConfidence::UserConfirmed,
-        )
-        .await
-        .unwrap();
-        assert!(!enrolled, "the unknown bucket must never enroll");
-    }
-
-    // --- shared setup for the "materially contested" enroll-gate tests (specs/0039 WS3) ---
-
-    async fn insert_meeting(pool: &SqlitePool, id: &str) {
-        let now = chrono::Utc::now().to_rfc3339();
-        sqlx::query("INSERT INTO meetings (id, title, created_at, updated_at) VALUES (?, ?, ?, ?)")
-            .bind(id)
-            .bind("t")
-            .bind(&now)
-            .bind(&now)
-            .execute(pool)
-            .await
-            .unwrap();
-    }
-
-    /// `n` transcript lines `t0..tn` for a meeting under `speaker`.
-    async fn insert_lines(pool: &SqlitePool, meeting: &str, n: usize, speaker: &str) {
-        let now = chrono::Utc::now().to_rfc3339();
-        for i in 0..n {
-            sqlx::query(
-                "INSERT INTO transcripts (id, meeting_id, transcript, timestamp, speaker)
-                 VALUES (?, ?, ?, ?, ?)",
-            )
-            .bind(format!("t{i}"))
-            .bind(meeting)
-            .bind("hello")
-            .bind(&now)
-            .bind(speaker)
-            .execute(pool)
-            .await
-            .unwrap();
-        }
-    }
-
-    /// A local/mic speaker row carrying a real embedding — the owner-path enroll source.
-    async fn insert_local_speaker_with_embedding(pool: &SqlitePool, meeting: &str, key: &str) {
-        use crate::database::repositories::speaker::SpeakersRepository;
-        use crate::diarization::embedding::{embedding_to_bytes, l2_normalize};
-        let emb = embedding_to_bytes(&l2_normalize(&[1.0, 0.0, 0.0]));
-        SpeakersRepository::upsert(
-            pool,
-            meeting,
-            key,
-            "You",
-            true, // is_local → owner self-enroll path
-            Some(&emb),
-            Some(3),
-            Some(EMBEDDING_MODEL_ID),
-        )
-        .await
-        .unwrap();
-    }
-
-    /// A single stray override on an otherwise-clean cluster (1/4 = 0.25 < MATERIAL) must NOT
-    /// block enrollment — the regression the ANY-override gate broke. Routed through the
-    /// owner/local path (self-enroll on by default) so the enroll actually fires.
-    #[tokio::test]
-    async fn single_stray_override_still_enrolls() {
-        let pool = pool_with_schema().await;
-        insert_meeting(&pool, "m1").await;
-        insert_local_speaker_with_embedding(&pool, "m1", crate::diarization::LOCAL_SPEAKER_KEY)
-            .await;
-        insert_lines(&pool, "m1", 4, crate::diarization::LOCAL_SPEAKER_KEY).await;
-        // One stray correction on a single line of the 4-line cluster → 0.25 contested.
-        crate::database::repositories::transcript_speaker_overrides::TranscriptSpeakerOverridesRepository
-            ::set(&pool, "m1", "t0", crate::diarization::LOCAL_SPEAKER_KEY)
-            .await
-            .unwrap();
-
-        let enrolled = enroll_voiceprint_for_speaker(
-            &pool,
-            "m1",
-            crate::diarization::LOCAL_SPEAKER_KEY,
-            "ignored-for-owner-path",
-            EnrollConfidence::UserConfirmed,
-        )
-        .await
-        .unwrap();
-        assert!(
-            enrolled,
-            "a single stray override must not block a clean cluster's enrollment"
-        );
-        assert_eq!(
-            VoiceprintsRepository::count_for_person(&pool, OWNER_PERSON_ID)
-                .await
-                .unwrap(),
-            1,
-            "the owner gained exactly one sample"
-        );
-    }
-
-    /// A MATERIALLY contested cluster (half its lines overridden, 2/4 = 0.5 >= MATERIAL) is
-    /// refused — its membership was substantially hand-edited, so it is not a clean source.
-    /// This gate returns before any settings/embedding work, so it is deterministic.
-    #[tokio::test]
-    async fn materially_contested_cluster_refuses_enrollment() {
-        let pool = pool_with_schema().await;
-        insert_meeting(&pool, "m1").await;
-        insert_local_speaker_with_embedding(&pool, "m1", crate::diarization::LOCAL_SPEAKER_KEY)
-            .await;
-        insert_lines(&pool, "m1", 4, crate::diarization::LOCAL_SPEAKER_KEY).await;
-        // Override HALF the cluster's lines → materially contested.
-        for id in ["t0", "t1"] {
-            crate::database::repositories::transcript_speaker_overrides::TranscriptSpeakerOverridesRepository
-                ::set(&pool, "m1", id, crate::diarization::LOCAL_SPEAKER_KEY)
-                .await
-                .unwrap();
-        }
-
-        let enrolled = enroll_voiceprint_for_speaker(
-            &pool,
-            "m1",
-            crate::diarization::LOCAL_SPEAKER_KEY,
-            "ignored",
-            EnrollConfidence::UserConfirmed,
-        )
-        .await
-        .unwrap();
-        assert!(!enrolled, "a materially-contested cluster must not enroll");
-        assert_eq!(
-            VoiceprintsRepository::count_for_person(&pool, OWNER_PERSON_ID)
-                .await
-                .unwrap(),
-            0,
-            "no sample written when refused"
-        );
-    }
-}
+mod tests;
