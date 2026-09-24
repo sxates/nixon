@@ -100,6 +100,10 @@ processed.
 **Memory:** 8 GB is enough. With 16 GB or more Nixon automatically uses a larger, better
 summary model — it checks on first run and chooses for you.
 
+**Google Calendar:** Nixon's Google connection is currently in Google's test mode, which
+means Google signs it out after 7 days. If your meetings stop updating, reconnect it in
+Settings → Calendar. Your Mac's own Calendar app is not affected.
+
 ---
 
 ## License
