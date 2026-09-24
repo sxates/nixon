@@ -28,6 +28,7 @@
   },
   {
     "name": "today-google-lapsed",
+    "headless_only": true,
     "route": "/?view=day&google=lapsed",
     "ignore": [
       {
