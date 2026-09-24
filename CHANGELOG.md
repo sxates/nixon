@@ -19,6 +19,16 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 ## [Unreleased]
 
+### Added
+
+- **In-person meetings get their speakers.** When a meeting is recorded in a room, with
+  everyone on the same microphone, Nixon notices and tells the voices apart instead of
+  labeling everything "You". Click a speaker's name and choose "This is me" to mark yourself.
+  With "Store voiceprints" on, Nixon learns your voice and labels you on its own in later
+  meetings.
+- **"Who was on the mic?"** The transcript's "…" menu lets you tell Nixon how a meeting was
+  recorded (in a room, or on a call) and re-identify speakers when it guessed wrong.
+
 ### Changed
 
 - **One switch for voiceprints.** Speaker settings now have a single "Store voiceprints"
