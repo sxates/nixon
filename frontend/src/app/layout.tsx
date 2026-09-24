@@ -24,6 +24,7 @@ import { DeferredBacklogProvider } from '@/contexts/DeferredBacklogProvider'
 import { QueueOpenProvider } from '@/contexts/QueueOpenContext'
 import { ImportDialogProvider } from '@/contexts/ImportDialogContext'
 import { PermissionsModalProvider } from '@/contexts/PermissionsModalContext'
+import { CalmMotionProvider } from '@/contexts/CalmMotionContext'
 import { isAudioExtension, getAudioFormatsDisplayList } from '@/constants/audioFormats'
 import { AppShell } from './_components/AppShell'
 
@@ -276,6 +277,7 @@ export default function RootLayout({
           <RecordingStateProvider>
             <UpdateStatusProvider>
             <RestartConfirmProvider>
+            <CalmMotionProvider>
               <TranscriptProvider>
                 <ConfigProvider>
                   <OllamaDownloadProvider>
@@ -330,6 +332,7 @@ export default function RootLayout({
                   </OllamaDownloadProvider>
                 </ConfigProvider>
               </TranscriptProvider>
+            </CalmMotionProvider>
             </RestartConfirmProvider>
             </UpdateStatusProvider>
           </RecordingStateProvider>

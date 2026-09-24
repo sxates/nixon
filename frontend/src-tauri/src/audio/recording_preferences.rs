@@ -432,6 +432,7 @@ pub async fn load_recording_preferences<R: Runtime>(
     };
     let mut prefs = prefs;
     prefs.audio_retention = Some(prefs.effective_audio_retention());
+    crate::power::set_low_power_preference(prefs.low_power_on_battery);
 
     info!(
         "Loaded recording preferences: save_folder={:?}, auto_save={}, mic={:?}, system={:?}",
@@ -474,6 +475,7 @@ pub async fn save_recording_preferences<R: Runtime>(
         .map_err(|e| anyhow::anyhow!("Failed to save store to disk: {}", e))?;
 
     info!("Successfully persisted recording preferences to disk");
+    crate::power::set_low_power_preference(preferences.low_power_on_battery);
 
     // specs/0057 Plan 2 — keep the active write root in lockstep with the persisted
     // preference, so writers land where `fs_guard` and the meetings commands look.

@@ -2,6 +2,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
+import { useCalmMotion } from '@/contexts/CalmMotionContext';
 import { createVuIntegrator, vuToArcFraction, VU_MIN_DB } from '@/lib/transport/vu-ballistics';
 
 const ANGLE_MIN = -50;
@@ -36,7 +37,11 @@ export function VuMeter({
   const target = useRef(db);
   const [needleDb, setNeedleDb] = useState(VU_MIN_DB);
   const rendered = useRef(VU_MIN_DB);
-  const [reduced, setReduced] = useState(false);
+  const [prefersReduced, setReduced] = useState(false);
+  // specs/0077: Low Power Mode on battery takes the same path as Reduce Motion — the needle
+  // snaps to each 12.5 Hz level instead of animating on every frame.
+  const calm = useCalmMotion();
+  const reduced = prefersReduced || calm;
   // The rAF clock lives OUTSIDE the loop effect. The effect re-arms on every `db` change
   // (12.5 Hz), and a `last` local would be re-seeded at re-arm time — mid-frame — so each
   // tick measured only the sliver since the re-arm instead of since the previous step,
