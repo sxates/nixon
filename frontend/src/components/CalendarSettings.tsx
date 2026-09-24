@@ -21,7 +21,9 @@ import {
 import {
   GOOGLE_CALENDAR_AUTH_REQUIRED_EVENT,
   type GoogleCalendarStatus,
+  type GoogleCalendarSyncOutcome,
   type GoogleCapabilities,
+  calendarSyncLine,
   capabilitiesPending,
   capabilityState,
   disconnectGoogleCalendar,
@@ -31,6 +33,7 @@ import {
   setGoogleCalendarsSelected,
   syncGoogleCalendarNow,
 } from '@/lib/googleCalendar';
+import { describeSyncOutcome } from '@/lib/googleCalendarSyncMessage';
 import { useGoogleCalendarConnect } from '@/hooks/useGoogleCalendarConnect';
 import { SettingsNote, SettingsSection } from '@/components/ui/settings';
 
@@ -151,11 +154,16 @@ export function CalendarSettings() {
    * owns connect/refresh, not arbitrary local mutations.
    */
   const [googleStatus, setGoogleStatus] = useState<GoogleCalendarStatus | null>(null);
-  useEffect(() => {
-    setGoogleStatus(hookGoogleStatus);
-  }, [hookGoogleStatus]);
   const [googleSyncing, setGoogleSyncing] = useState(false);
   const [authRequired, setAuthRequired] = useState(false);
+  useEffect(() => {
+    setGoogleStatus(hookGoogleStatus);
+    // specs/0074 W2: the lapsed-grant latch is in the status now, so the reconnect
+    // banner shows on every visit — not only when the one-shot event happened to
+    // fire while this card was mounted. Only ever SETS it: reconnect, disconnect and
+    // a sync that actually ran are what clear it.
+    if (hookGoogleStatus?.authRequired) setAuthRequired(true);
+  }, [hookGoogleStatus]);
   const [disconnectOpen, setDisconnectOpen] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
   // Probed best-effort enrichment capabilities (specs/0038 WS3); null until fetched.
@@ -174,9 +182,9 @@ export function CalendarSettings() {
     let unlisten: (() => void) | undefined;
     listen(GOOGLE_CALENDAR_AUTH_REQUIRED_EVENT, () => {
       setAuthRequired(true);
-      toast.error('Google Calendar disconnected', {
+      toast.error('Google needs you to reconnect', {
         description:
-          'Your Google session expired or was revoked. Reconnect in Settings → Calendar.',
+          'Your Google session expired or was revoked. Nothing syncs until you reconnect.',
       });
       void refreshGoogleStatus();
     })
@@ -260,6 +268,42 @@ export function CalendarSettings() {
     cancelGoogleConnect();
   }, [cancelGoogleConnect]);
 
+  /**
+   * Toast what a sync actually did (specs/0074 W2). Only `synced` is ever green;
+   * `quietWhenClean` skips the success toast for syncs the user didn't ask for by
+   * name (ticking a calendar) while still surfacing failures and the auth latch.
+   */
+  const reportSyncOutcome = useCallback(
+    (outcome: GoogleCalendarSyncOutcome, quietWhenClean = false) => {
+      if (outcome.kind === 'authRequired') setAuthRequired(true);
+      if (outcome.kind === 'synced') setAuthRequired(false);
+      const message = describeSyncOutcome(outcome);
+      if (quietWhenClean && (message.tone === 'success' || message.tone === 'info')) return;
+      const options = {
+        description: message.description,
+        ...(message.reconnect
+          ? { action: { label: 'Reconnect', onClick: () => void handleGoogleConnect() } }
+          : {}),
+      };
+      toast[message.tone](message.title, options);
+    },
+    [handleGoogleConnect],
+  );
+
+  /**
+   * After a selection change: when enabling ran a sync, report it and re-read the
+   * status for the per-calendar lines. A deselect (no outcome) keeps the optimistic
+   * state as-is — there is nothing new to read.
+   */
+  const afterSelectionSync = useCallback(
+    async (outcome: GoogleCalendarSyncOutcome | null) => {
+      if (!outcome) return;
+      reportSyncOutcome(outcome, true);
+      await refreshGoogleStatus();
+    },
+    [reportSyncOutcome, refreshGoogleStatus],
+  );
+
   // Per-calendar sync toggle — optimistic, revert on failure (house pattern).
   const handleCalendarToggle = useCallback(
     async (calendarId: string, selected: boolean) => {
@@ -271,13 +315,15 @@ export function CalendarSettings() {
           c.id === calendarId ? { ...c, selected } : c,
         ),
       });
-      const ok = await setGoogleCalendarSelected(calendarId, selected);
-      if (!ok) {
+      const result = await setGoogleCalendarSelected(calendarId, selected);
+      if (!result.ok) {
         setGoogleStatus(previous); // revert
         toast.error('Could not update calendar selection');
+        return;
       }
+      await afterSelectionSync(result.outcome);
     },
-    [googleStatus],
+    [googleStatus, afterSelectionSync],
   );
 
   // Bulk Select all / none (specs/0041 WS5) — optimistic like the single toggle,
@@ -297,29 +343,34 @@ export function CalendarSettings() {
         ...previous,
         calendars: previous.calendars.map((c) => ({ ...c, selected })),
       });
-      const ok = await setGoogleCalendarsSelected(changing, selected);
+      const result = await setGoogleCalendarsSelected(changing, selected);
       setBulkToggling(false);
-      if (!ok) {
+      if (!result.ok) {
         setGoogleStatus(previous); // revert
         toast.error('Could not update calendar selection');
+        return;
       }
+      await afterSelectionSync(result.outcome);
     },
-    [googleStatus, bulkToggling],
+    [googleStatus, bulkToggling, afterSelectionSync],
   );
 
   const handleSyncNow = useCallback(async () => {
     setGoogleSyncing(true);
-    const ok = await syncGoogleCalendarNow();
-    setGoogleSyncing(false);
-    if (ok) {
-      toast.success('Google Calendar synced');
-      await refreshGoogleStatus();
-    } else {
+    try {
+      reportSyncOutcome(await syncGoogleCalendarNow());
+    } catch (err) {
       toast.error('Sync failed', {
-        description: 'Nixon will retry automatically. Check your connection and try again.',
+        description:
+          err instanceof Error && err.message
+            ? err.message
+            : 'Nixon will retry automatically. Check your connection and try again.',
       });
+    } finally {
+      setGoogleSyncing(false);
     }
-  }, [refreshGoogleStatus]);
+    await refreshGoogleStatus();
+  }, [reportSyncOutcome, refreshGoogleStatus]);
 
   const handleDisconnect = useCallback(async () => {
     if (disconnecting) return;
@@ -354,10 +405,10 @@ export function CalendarSettings() {
       {authRequired && configured && (
         <SettingsNote role="status" tone="info" className="flex items-center justify-between gap-4">
           <div className="flex-1">
-            <span className="font-medium">Google Calendar disconnected — reconnect</span>
+            <span className="font-medium">Google Calendar needs reconnecting</span>
             <div className="mt-0.5">
-              Your Google session expired or was revoked. Your meetings still show from
-              macOS Calendar and the last-synced Google events.
+              Your Google session expired or was revoked, so nothing has synced since.
+              Today still shows the events from the last sync.
             </div>
           </div>
           <Button
@@ -541,21 +592,37 @@ export function CalendarSettings() {
             </div>
             {googleStatus.calendars.length > 0 ? (
               <ul className="space-y-1.5">
-                {googleStatus.calendars.map((calendar) => (
-                  <li key={calendar.id}>
-                    <label className="flex cursor-pointer items-center gap-2 text-sm text-foreground">
-                      <input
-                        type="checkbox"
-                        checked={calendar.selected}
-                        onChange={(e) =>
-                          void handleCalendarToggle(calendar.id, e.target.checked)
-                        }
-                        className="h-4 w-4 accent-brand"
-                      />
-                      <span className="truncate">{calendar.summary}</span>
-                    </label>
-                  </li>
-                ))}
+                {googleStatus.calendars.map((calendar) => {
+                  const line = calendarSyncLine(calendar);
+                  return (
+                    <li key={calendar.id} className="flex items-center gap-3">
+                      <label className="flex min-w-0 cursor-pointer items-center gap-2 text-sm text-foreground">
+                        <input
+                          type="checkbox"
+                          checked={calendar.selected}
+                          onChange={(e) =>
+                            void handleCalendarToggle(calendar.id, e.target.checked)
+                          }
+                          className="h-4 w-4 accent-brand"
+                        />
+                        <span className="truncate">{calendar.summary}</span>
+                      </label>
+                      {/* specs/0074 W2: per-calendar freshness, so one stale or failing
+                          calendar can't hide behind the account's newest sync time. */}
+                      {line && (
+                        <span
+                          data-testid={`calendar-sync-line-${calendar.id}`}
+                          title={line.text}
+                          className={`ml-auto min-w-0 max-w-[60%] flex-shrink truncate text-xs ${
+                            line.failed ? 'text-destructive' : 'text-muted-foreground'
+                          }`}
+                        >
+                          {line.text}
+                        </span>
+                      )}
+                    </li>
+                  );
+                })}
               </ul>
             ) : (
               <p className="text-sm text-muted-foreground">

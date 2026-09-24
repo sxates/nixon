@@ -29,7 +29,7 @@ const { listeners, listenMock } = vi.hoisted(() => {
 vi.mock('@tauri-apps/api/event', () => ({ listen: listenMock }));
 
 const { toastMock } = vi.hoisted(() => ({
-  toastMock: { success: vi.fn(), error: vi.fn() },
+  toastMock: { success: vi.fn(), error: vi.fn(), warning: vi.fn(), info: vi.fn() },
 }));
 vi.mock('sonner', () => ({ toast: toastMock }));
 
@@ -82,6 +82,8 @@ beforeEach(() => {
   listenMock.mockClear();
   toastMock.success.mockReset();
   toastMock.error.mockReset();
+  toastMock.warning.mockReset();
+  toastMock.info.mockReset();
   for (const key of Object.keys(listeners)) delete listeners[key];
 });
 
@@ -338,7 +340,9 @@ describe('CalendarSettings — connected-state actions', () => {
   });
 
   it('"Sync now" invokes api_google_calendar_sync_now and refreshes status', async () => {
-    mockBackend(CONNECTED_STATUS);
+    mockBackend(CONNECTED_STATUS, {
+      api_google_calendar_sync_now: () => ({ kind: 'synced', calendars: [], durationMs: 5 }),
+    });
     render(<CalendarSettings />);
 
     fireEvent.click(await screen.findByRole('button', { name: /sync now/i }));
@@ -347,8 +351,13 @@ describe('CalendarSettings — connected-state actions', () => {
       expect(invoke).toHaveBeenCalledWith('api_google_calendar_sync_now'),
     );
     await waitFor(() =>
-      expect(toastMock.success).toHaveBeenCalledWith('Google Calendar synced'),
+      expect(toastMock.success).toHaveBeenCalledWith(
+        'Google Calendar synced — no changes',
+        expect.anything(),
+      ),
     );
+    const statusReads = invoke.mock.calls.filter((c) => c[0] === 'api_google_calendar_status');
+    expect(statusReads.length).toBeGreaterThanOrEqual(2);
   });
 
   it('Disconnect opens a confirm dialog (back-to-Mac-calendar copy) and only disconnects on confirm', async () => {
@@ -480,16 +489,185 @@ describe('CalendarSettings — google-calendar-auth-required event', () => {
     });
 
     expect(toastMock.error).toHaveBeenCalledWith(
-      'Google Calendar disconnected',
+      'Google needs you to reconnect',
       expect.objectContaining({ description: expect.stringMatching(/reconnect/i) }),
     );
     expect(
-      await screen.findByText('Google Calendar disconnected — reconnect'),
+      await screen.findByText('Google Calendar needs reconnecting'),
     ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /^reconnect$/i }));
     await waitFor(() =>
       expect(invoke).toHaveBeenCalledWith('api_google_calendar_connect'),
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// specs/0074 W2 / 0075 W1b — Sync now tells the truth, per outcome.
+// ---------------------------------------------------------------------------
+
+function report(summary: string, over: Record<string, unknown> = {}) {
+  return {
+    calendarId: summary.toLowerCase(),
+    summary,
+    isPrimary: false,
+    mode: 'incremental',
+    fetched: 0,
+    upserted: 0,
+    deleted: 0,
+    durationMs: 10,
+    error: null,
+    ...over,
+  };
+}
+
+async function clickSyncNow(outcome: unknown, reject = false) {
+  mockBackend(CONNECTED_STATUS, {
+    api_google_calendar_sync_now: () => (reject ? Promise.reject(outcome) : outcome),
+    api_google_calendar_connect: () => new Promise(() => {}),
+  });
+  render(<CalendarSettings />);
+  fireEvent.click(await screen.findByRole('button', { name: /sync now/i }));
+  await waitFor(() => expect(invoke).toHaveBeenCalledWith('api_google_calendar_sync_now'));
+  // Let the handler settle (the button returns to "Sync now").
+  await screen.findByRole('button', { name: /^sync now$/i });
+}
+
+/** Every title any toast channel was called with — to prove what was NOT said. */
+function allToastTitles(): string[] {
+  return [toastMock.success, toastMock.error, toastMock.warning, toastMock.info].flatMap((m) =>
+    m.mock.calls.map((c) => String(c[0])),
+  );
+}
+
+describe('CalendarSettings — Sync now toasts by outcome', () => {
+  it('synced, clean: "Google Calendar synced — N changes"', async () => {
+    await clickSyncNow({
+      kind: 'synced',
+      durationMs: 30,
+      calendars: [report('Work', { upserted: 2 }), report('Team', { deleted: 1 })],
+    });
+    expect(toastMock.success).toHaveBeenCalledWith(
+      'Google Calendar synced — 3 changes',
+      expect.anything(),
+    );
+  });
+
+  it('synced with a calendar error: a warning naming that calendar, never green', async () => {
+    await clickSyncNow({
+      kind: 'synced',
+      durationMs: 30,
+      calendars: [report('Work', { upserted: 2 }), report('Team', { error: 'HTTP 403: forbidden' })],
+    });
+    expect(toastMock.warning).toHaveBeenCalledWith(
+      'Synced, but Team failed',
+      expect.objectContaining({ description: 'HTTP 403: forbidden' }),
+    );
+    expect(toastMock.success).not.toHaveBeenCalled();
+  });
+
+  it('authRequired: error toast with Reconnect, sets the banner, never says "synced"', async () => {
+    await clickSyncNow({ kind: 'authRequired' });
+    expect(toastMock.error).toHaveBeenCalledWith(
+      'Google needs you to reconnect',
+      expect.objectContaining({ action: expect.objectContaining({ label: 'Reconnect' }) }),
+    );
+    expect(toastMock.success).not.toHaveBeenCalled();
+    expect(allToastTitles().some((t) => /synced/i.test(t))).toBe(false);
+    expect(await screen.findByText('Google Calendar needs reconnecting')).toBeInTheDocument();
+
+    // The toast's Reconnect action runs the existing connect flow.
+    const opts = toastMock.error.mock.calls[0][1] as { action: { onClick: () => void } };
+    act(() => opts.action.onClick());
+    await waitFor(() => expect(invoke).toHaveBeenCalledWith('api_google_calendar_connect'));
+  });
+
+  it('alreadyRunning: "A sync is still running", never says "synced"', async () => {
+    await clickSyncNow({ kind: 'alreadyRunning' });
+    expect(toastMock.info).toHaveBeenCalledWith('A sync is still running', expect.anything());
+    expect(toastMock.success).not.toHaveBeenCalled();
+    expect(allToastTitles().some((t) => /\bsynced\b/i.test(t) && !/nothing/i.test(t))).toBe(false);
+  });
+
+  it.each([
+    ['notConnected', /Google Calendar isn't connected/],
+    ['noCalendarsSelected', /no calendars are selected/],
+    ['suppressed', /demo data is loaded/],
+    ['notConfigured', /isn't set up in this build/],
+  ])('%s: a neutral toast naming the reason, never green', async (kind, title) => {
+    await clickSyncNow({ kind });
+    expect(toastMock.info).toHaveBeenCalledWith(expect.stringMatching(title), expect.anything());
+    expect(toastMock.success).not.toHaveBeenCalled();
+    expect(toastMock.error).not.toHaveBeenCalled();
+  });
+
+  it('a failed pass shows the backend reason', async () => {
+    await clickSyncNow('Google Calendar sync failed: timed out after 120s', true);
+    expect(toastMock.error).toHaveBeenCalledWith(
+      'Sync failed',
+      expect.objectContaining({ description: 'Google Calendar sync failed: timed out after 120s' }),
+    );
+    expect(toastMock.success).not.toHaveBeenCalled();
+  });
+});
+
+describe('CalendarSettings — latched auth + per-calendar status', () => {
+  it('shows the reconnect banner on load when the status reports authRequired (no event needed)', async () => {
+    mockBackend({ ...CONNECTED_STATUS, authRequired: true });
+    render(<CalendarSettings />);
+    expect(await screen.findByText('Google Calendar needs reconnecting')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^reconnect$/i })).toBeInTheDocument();
+  });
+
+  it('shows no banner when the status is not latched', async () => {
+    mockBackend({ ...CONNECTED_STATUS, authRequired: false });
+    render(<CalendarSettings />);
+    await screen.findByText(/Connected as ada@example\.com/);
+    expect(screen.queryByText('Google Calendar needs reconnecting')).toBeNull();
+  });
+
+  it('each selected calendar shows when it synced, or why it failed', async () => {
+    mockBackend({
+      ...CONNECTED_STATUS,
+      calendars: [
+        {
+          id: 'cal-1',
+          summary: 'Work',
+          selected: true,
+          lastSyncedAt: new Date(Date.now() - 3 * 60_000).toISOString(),
+          lastError: null,
+        },
+        { id: 'cal-3', summary: 'Team', selected: true, lastSyncedAt: null, lastError: 'HTTP 403' },
+        { id: 'cal-2', summary: 'Family', selected: false, lastSyncedAt: null, lastError: null },
+      ],
+    });
+    render(<CalendarSettings />);
+    expect(await screen.findByTestId('calendar-sync-line-cal-1')).toHaveTextContent(
+      'synced 3 min ago',
+    );
+    const failed = screen.getByTestId('calendar-sync-line-cal-3');
+    expect(failed).toHaveTextContent('failed: HTTP 403');
+    expect(failed.className).toContain('text-destructive');
+    expect(screen.queryByTestId('calendar-sync-line-cal-2')).toBeNull();
+  });
+
+  it('ticking a calendar whose first sync fails warns, and re-reads the status', async () => {
+    mockBackend(CONNECTED_STATUS, {
+      api_google_calendar_set_calendar_selected: () => ({
+        kind: 'synced',
+        durationMs: 9,
+        calendars: [report('Family', { error: 'HTTP 404: notFound' })],
+      }),
+    });
+    render(<CalendarSettings />);
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'Family' }));
+    await waitFor(() =>
+      expect(toastMock.warning).toHaveBeenCalledWith(
+        'Synced, but Family failed',
+        expect.objectContaining({ description: 'HTTP 404: notFound' }),
+      ),
+    );
+    expect(toastMock.success).not.toHaveBeenCalled();
   });
 });

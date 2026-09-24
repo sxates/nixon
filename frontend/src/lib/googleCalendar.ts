@@ -4,7 +4,9 @@
  * Thin never-throw wrappers over the `api_google_calendar_*` Tauri commands,
  * mirroring the `lib/calendar.ts` house style: every helper swallows IPC errors
  * and returns a safe default, so the Settings card renders fine even while the
- * backend commands don't exist yet (parallel build) or fail at runtime.
+ * backend commands don't exist yet (parallel build) or fail at runtime. The one
+ * exception is `syncGoogleCalendarNow`, which throws on a failed pass: the user
+ * pressed "Sync now" and is owed the reason, not a default.
  *
  * Backend contract (pinned, specs/0032 "Tauri IPC"; backend serializes camelCase):
  *   - `api_google_calendar_status`                → GoogleCalendarStatus
@@ -12,7 +14,7 @@
  *     user completes browser consent; the command times out after 5 minutes) and
  *     rejects with a user-friendly string on failure/cancel.
  *   - `api_google_calendar_disconnect`            → void
- *   - `api_google_calendar_set_calendar_selected` → void, args `{ calendarId, selected }`
+ *   - `api_google_calendar_set_calendar_selected` → SyncOutcome | null, args `{ calendarId, selected }`
  *     (Tauri matches invoke arg keys in camelCase — `calendarId`, never `calendar_id`)
  *   - `api_google_calendar_sync_now`              → GoogleCalendarSyncOutcome (specs/0074 W1)
  *   - Rust→frontend event `google-calendar-auth-required` when the stored token is
@@ -69,8 +71,9 @@ export interface GoogleCalendarListEntry {
   id: string;
   summary: string;
   selected: boolean;
-  /** Backend sends these (specs/0074 W1); not yet normalized — see W1b. */
+  /** When this calendar last synced (ISO-8601), or null when never (specs/0074 W1). */
   lastSyncedAt?: string | null;
+  /** The last pass's error for this calendar, or null when it synced cleanly. */
   lastError?: string | null;
 }
 
@@ -80,7 +83,7 @@ export interface GoogleCalendarStatus {
   configured: boolean;
   connected: boolean;
   email: string | null;
-  /** The grant lapsed; nothing syncs until reconnect (backend sends it; not yet normalized). */
+  /** The grant lapsed (`invalid_grant`); nothing syncs until the user reconnects. */
   authRequired?: boolean;
   lastSyncedAt: string | null; // ISO-8601, or null when never synced (newest SELECTED calendar)
   calendars: GoogleCalendarListEntry[];
@@ -125,7 +128,14 @@ function normalizeCapabilities(raw: unknown): GoogleCapabilities {
 
 /** Safe status when the backend is unavailable: feature renders as not configured. */
 function fallbackStatus(): GoogleCalendarStatus {
-  return { configured: false, connected: false, email: null, lastSyncedAt: null, calendars: [] };
+  return {
+    configured: false,
+    connected: false,
+    email: null,
+    authRequired: false,
+    lastSyncedAt: null,
+    calendars: [],
+  };
 }
 
 function errorMessage(err: unknown): string {
@@ -149,12 +159,15 @@ function normalizeStatus(raw: unknown): GoogleCalendarStatus {
           summary: typeof c.summary === 'string' && c.summary ? c.summary : c.id,
           // DB default is selected=1, so treat anything but an explicit false as on.
           selected: c.selected !== false,
+          lastSyncedAt: typeof c.lastSyncedAt === 'string' ? c.lastSyncedAt : null,
+          lastError: typeof c.lastError === 'string' && c.lastError ? c.lastError : null,
         }))
     : [];
   return {
     configured: r.configured === true,
     connected: r.connected === true,
     email: typeof r.email === 'string' ? r.email : null,
+    authRequired: r.authRequired === true,
     lastSyncedAt: typeof r.lastSyncedAt === 'string' ? r.lastSyncedAt : null,
     calendars,
   };
@@ -205,40 +218,63 @@ export async function disconnectGoogleCalendar(): Promise<boolean> {
 }
 
 /**
- * Toggle whether one calendar syncs. Never throws; returns success so the UI
- * can revert an optimistic checkbox. NOTE: the invoke arg keys MUST be camelCase
+ * Result of a selection change. `outcome` is the sync the backend ran for the
+ * newly enabled calendars (specs/0074 W1), or null on a deselect. A calendar
+ * that failed to sync is reported inside `outcome.calendars[].error` — the
+ * selection itself still succeeded.
+ */
+export type GoogleCalendarSelectionResult =
+  | { ok: true; outcome: GoogleCalendarSyncOutcome | null }
+  | { ok: false };
+
+/** Coerce a nullable outcome payload; anything unrecognized reads as "no sync reported". */
+function optionalOutcome(raw: unknown): GoogleCalendarSyncOutcome | null {
+  try {
+    return raw == null ? null : normalizeSyncOutcome(raw);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Toggle whether one calendar syncs. Never throws; `ok: false` lets the UI
+ * revert an optimistic checkbox. NOTE: the invoke arg keys MUST be camelCase
  * (`calendarId`) — a snake_case key silently becomes None on the Rust side.
  */
 export async function setGoogleCalendarSelected(
   calendarId: string,
   selected: boolean,
-): Promise<boolean> {
+): Promise<GoogleCalendarSelectionResult> {
   try {
-    await invoke('api_google_calendar_set_calendar_selected', { calendarId, selected });
-    return true;
+    const raw = await invoke<unknown>('api_google_calendar_set_calendar_selected', {
+      calendarId,
+      selected,
+    });
+    return { ok: true, outcome: optionalOutcome(raw) };
   } catch (err) {
     console.warn('[googleCalendar] setGoogleCalendarSelected failed:', err);
-    return false;
+    return { ok: false };
   }
 }
 
 /**
  * Bulk form of `setGoogleCalendarSelected` for the Settings "Select all / none"
  * actions (specs/0041 WS5). One backend command instead of N client-batched
- * invokes: each per-calendar enable runs a full sync pass on the Rust side, so
- * batching there keeps Select-all to a single sync. Never throws; returns
- * success so the UI can revert an optimistic bulk toggle.
+ * invokes, so Select-all runs a single sync pass. Never throws.
  */
 export async function setGoogleCalendarsSelected(
   calendarIds: string[],
   selected: boolean,
-): Promise<boolean> {
+): Promise<GoogleCalendarSelectionResult> {
   try {
-    await invoke('api_google_calendar_set_calendars_selected', { calendarIds, selected });
-    return true;
+    const raw = await invoke<unknown>('api_google_calendar_set_calendars_selected', {
+      calendarIds,
+      selected,
+    });
+    return { ok: true, outcome: optionalOutcome(raw) };
   } catch (err) {
     console.warn('[googleCalendar] setGoogleCalendarsSelected failed:', err);
-    return false;
+    return { ok: false };
   }
 }
 
@@ -256,19 +292,93 @@ export async function getGoogleCapabilities(): Promise<GoogleCapabilities> {
   }
 }
 
+const OUTCOME_KINDS = new Set<GoogleCalendarSyncOutcome['kind']>([
+  'synced',
+  'alreadyRunning',
+  'authRequired',
+  'notConnected',
+  'notConfigured',
+  'suppressed',
+  'noCalendarsSelected',
+]);
+
+/** Normalize one per-calendar report; missing counts read as 0. */
+function normalizeReport(raw: unknown): GoogleCalendarSyncReport {
+  const r = (raw && typeof raw === 'object' ? raw : {}) as Partial<GoogleCalendarSyncReport>;
+  const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
+  const calendarId = typeof r.calendarId === 'string' ? r.calendarId : '';
+  return {
+    calendarId,
+    summary: typeof r.summary === 'string' && r.summary ? r.summary : calendarId || 'A calendar',
+    isPrimary: r.isPrimary === true,
+    mode: typeof r.mode === 'string' ? r.mode : 'incremental',
+    fetched: num(r.fetched),
+    upserted: num(r.upserted),
+    deleted: num(r.deleted),
+    durationMs: num(r.durationMs),
+    error: typeof r.error === 'string' && r.error ? r.error : null,
+  };
+}
+
 /**
- * Trigger a manual sync. Never throws; returns whether the invoke resolved.
- * Boolean shim kept for the current UI — the backend now returns a
- * GoogleCalendarSyncOutcome, and resolving does NOT mean a pass ran (W1b).
+ * Parse the backend's `SyncOutcome`. Throws on an unrecognized payload rather
+ * than guessing — a guess is how "synced" got shown for a sync that never ran.
  */
-export async function syncGoogleCalendarNow(): Promise<boolean> {
+export function normalizeSyncOutcome(raw: unknown): GoogleCalendarSyncOutcome {
+  const kind = (raw as { kind?: unknown } | null)?.kind;
+  if (typeof kind !== 'string' || !OUTCOME_KINDS.has(kind as GoogleCalendarSyncOutcome['kind'])) {
+    throw new Error('Google Calendar sync returned an unexpected result.');
+  }
+  if (kind !== 'synced') return { kind } as GoogleCalendarSyncOutcome;
+  const r = raw as { calendars?: unknown; durationMs?: unknown };
+  return {
+    kind: 'synced',
+    calendars: Array.isArray(r.calendars) ? r.calendars.map(normalizeReport) : [],
+    durationMs: typeof r.durationMs === 'number' ? r.durationMs : 0,
+  };
+}
+
+/**
+ * Trigger a manual sync and report what actually happened (specs/0074 W2). Only
+ * `kind: 'synced'` means a pass ran. THROWS (with the backend's message) when the
+ * pass failed outright — e.g. "Google Calendar sync failed: timed out after 120s".
+ */
+export async function syncGoogleCalendarNow(): Promise<GoogleCalendarSyncOutcome> {
+  let raw: unknown;
   try {
-    await invoke<GoogleCalendarSyncOutcome>('api_google_calendar_sync_now');
-    return true;
+    raw = await invoke<unknown>('api_google_calendar_sync_now');
   } catch (err) {
     console.warn('[googleCalendar] syncGoogleCalendarNow failed:', err);
-    return false;
+    throw new Error(errorMessage(err));
   }
+  return normalizeSyncOutcome(raw);
+}
+
+/** Rows written or removed across every calendar in a `synced` outcome. */
+export function syncChangeCount(outcome: GoogleCalendarSyncOutcome): number {
+  if (outcome.kind !== 'synced') return 0;
+  return outcome.calendars.reduce((n, c) => n + c.upserted + c.deleted, 0);
+}
+
+/**
+ * The muted status line under one calendar in Settings: "failed: …" when its last
+ * pass errored, else "synced 3 min ago" / "synced just now" / "not synced yet".
+ * Null for a deselected calendar — it isn't syncing, so there is nothing to say.
+ */
+export function calendarSyncLine(
+  entry: GoogleCalendarListEntry,
+  now: Date = new Date(),
+): { text: string; failed: boolean } | null {
+  if (!entry.selected) return null;
+  if (entry.lastError) return { text: `failed: ${entry.lastError}`, failed: true };
+  const at = entry.lastSyncedAt ? new Date(entry.lastSyncedAt) : null;
+  if (!at || Number.isNaN(at.getTime())) return { text: 'not synced yet', failed: false };
+  const min = Math.floor((now.getTime() - at.getTime()) / 60000);
+  if (min < 1) return { text: 'synced just now', failed: false };
+  if (min < 60) return { text: `synced ${min} min ago`, failed: false };
+  const hours = Math.floor(min / 60);
+  if (hours < 24) return { text: `synced ${hours} h ago`, failed: false };
+  return { text: `synced ${Math.floor(hours / 24)} d ago`, failed: false };
 }
 
 /**

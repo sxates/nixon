@@ -51,6 +51,7 @@ import { DayTimeline } from '@/components/Today/DayTimeline';
 import { DayList } from '@/components/Today/DayList';
 import { WeekView } from '@/components/Today/WeekView';
 import { ConnectCalendarNudge } from '@/components/Today/ConnectCalendarNudge';
+import { GoogleReconnectRow } from '@/components/Today/GoogleReconnectRow';
 import { AddMeetingDialog } from '@/components/Today/AddMeetingDialog';
 import { DeleteManualMeetingDialog } from '@/components/Today/DeleteManualMeetingDialog';
 
@@ -346,6 +347,9 @@ function HomeView() {
               <ConnectCalendarNudge />
             </div>
           )}
+          {/* specs/0074 W2 — Google connected but its grant lapsed: nothing syncs until
+              reconnect. Renders nothing otherwise, so its bottom margin lives on the row itself. */}
+          <GoogleReconnectRow />
 
           {viewMode === 'week' ? (
             !weekLoaded ? (
