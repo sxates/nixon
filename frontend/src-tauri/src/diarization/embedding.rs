@@ -144,7 +144,7 @@ pub fn embedding_from_bytes(bytes: &[u8]) -> Result<Vec<f32>> {
 /// Total seconds of pooled speech, per cluster, fed to the embedding model. CAM++
 /// produces a stable utterance-level vector from a few seconds; we cap so a very
 /// talkative cluster doesn't pay an unbounded re-embed cost (live runs repeatedly).
-const MAX_POOL_SECONDS: f32 = 8.0;
+pub(crate) const MAX_POOL_SECONDS: f32 = 8.0;
 /// Skip embedding a cluster with less than this much pooled speech — too little
 /// audio yields a noisy, untrustworthy vector (better no embedding than a bad one).
 const MIN_POOL_SECONDS: f32 = 0.5;

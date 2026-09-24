@@ -135,17 +135,30 @@ pub async fn owner_turns_for_meeting<R: Runtime>(
     _app: &AppHandle<R>,
     meeting_folder: &Path,
 ) -> Vec<SpeakerTurn> {
+    owner_turns_and_clip(meeting_folder).await.0
+}
+
+/// [`owner_turns_for_meeting`], plus the owner-voiceprint bootstrap clip cut from the
+/// same decoded mic track while it is in memory (specs/0078 W5; `None` when the owner
+/// spoke too little). The clip is at most a few seconds, so the mic buffer itself is
+/// still dropped here.
+async fn owner_turns_and_clip(
+    meeting_folder: &Path,
+) -> (
+    Vec<SpeakerTurn>,
+    Option<crate::diarization::owner_bootstrap::OwnerClip>,
+) {
     // `mic.wav`, or `mic.opus` once kept audio is compressed (specs/0072).
     let Some(mic_wav) = crate::audio::channel_writer::mic_channel_path(meeting_folder) else {
         log::info!("owner turns: no mic channel in {meeting_folder:?} — skipping owner track");
-        return Vec::new();
+        return (Vec::new(), None);
     };
     // Decode → mono 16k, then VAD with the batch redemption window.
     let decoded = match crate::audio::decoder::decode_audio_file(&mic_wav) {
         Ok(d) => d,
         Err(e) => {
             log::warn!("owner turns: mic WAV decode failed ({e:#}) — skipping owner track");
-            return Vec::new();
+            return (Vec::new(), None);
         }
     };
     let mic_samples = decoded.to_whisper_format();
@@ -179,26 +192,37 @@ pub async fn owner_turns_for_meeting<R: Runtime>(
             crate::audio::retranscription::VAD_REDEMPTION_TIME_MS,
         )
         .map(|segs| {
-            filter_bleed_owner_segments(segs, &mic_samples, &sys_samples, OWNER_VAD_SAMPLE_RATE)
+            let segs = filter_bleed_owner_segments(
+                segs,
+                &mic_samples,
+                &sys_samples,
+                OWNER_VAD_SAMPLE_RATE,
+            );
+            let turns = speech_segments_to_owner_turns(&segs);
+            let clip = crate::diarization::owner_bootstrap::owner_clip(
+                &turns,
+                &mic_samples,
+                OWNER_VAD_SAMPLE_RATE,
+            );
+            (turns, clip)
         })
     })
     .await;
     match segments {
-        Ok(Ok(segs)) => {
-            let turns = speech_segments_to_owner_turns(&segs);
+        Ok(Ok((turns, clip))) => {
             log::info!(
                 "owner turns: {} owner speech interval(s) from mic WAV",
                 turns.len()
             );
-            turns
+            (turns, clip)
         }
         Ok(Err(e)) => {
             log::warn!("owner turns: VAD failed ({e:#}) — skipping owner track");
-            Vec::new()
+            (Vec::new(), None)
         }
         Err(e) => {
             log::warn!("owner turns: VAD task panicked ({e}) — skipping owner track");
-            Vec::new()
+            (Vec::new(), None)
         }
     }
 }
@@ -206,7 +230,7 @@ pub async fn owner_turns_for_meeting<R: Runtime>(
 /// Resolve this meeting's recording folder from its persisted `folder_path`.
 ///
 /// By the time offline diarization (`pipeline::run`) reaches this call, it has
-/// already resolved + backfilled `folder_path` via `resolve_system_wav` earlier
+/// already resolved + backfilled `folder_path` via `folder_locate::resolve_meeting_folder` earlier
 /// in the same pass, so a plain lookup suffices — no need to repeat its
 /// recordings-root scan. Returns `None` on any DB miss (never fatal).
 async fn resolve_meeting_folder(pool: &sqlx::SqlitePool, meeting_id: &str) -> Option<PathBuf> {
@@ -233,20 +257,21 @@ fn merge_owner_turns(turns: &mut Vec<SpeakerTurn>, owner: Vec<SpeakerTurn>) {
 }
 
 /// Resolve and merge this meeting's owner turns into `turns` (spec 0046 W1.2).
-/// Only ever extends `turns` — never touches embeddings, so the owner stays
-/// excluded from voiceprints/gallery/cap. A no-op when the folder or mic WAV is
-/// unavailable (see [`owner_turns_for_meeting`]).
+/// Only ever extends `turns` — never touches embeddings, so the owner stays out of
+/// clustering and the cap. A no-op when the folder or mic WAV is unavailable (see
+/// [`owner_turns_for_meeting`]). Returns the owner-voiceprint bootstrap clip for the
+/// pass to embed after persist (specs/0078 W5).
 pub async fn inject_owner_turns<R: Runtime>(
-    app: &AppHandle<R>,
+    _app: &AppHandle<R>,
     pool: &sqlx::SqlitePool,
     meeting_id: &str,
     turns: &mut Vec<SpeakerTurn>,
-) {
+) -> Option<crate::diarization::owner_bootstrap::OwnerClip> {
     let Some(folder) = resolve_meeting_folder(pool, meeting_id).await else {
         log::info!("owner turns: no folder_path for meeting {meeting_id} — skipping owner track");
-        return;
+        return None;
     };
-    let owner_turns = owner_turns_for_meeting(app, &folder).await;
+    let (owner_turns, clip) = owner_turns_and_clip(&folder).await;
     let injected = owner_turns.len();
     merge_owner_turns(turns, owner_turns);
     if injected > 0 {
@@ -255,6 +280,7 @@ pub async fn inject_owner_turns<R: Runtime>(
             turns.len()
         );
     }
+    clip
 }
 
 #[cfg(test)]

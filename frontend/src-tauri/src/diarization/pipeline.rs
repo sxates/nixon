@@ -740,19 +740,25 @@ pub(super) async fn run<R: Runtime>(app: AppHandle<R>, meeting_id: String) -> Re
     // Call: the owner is the mic channel; inject its turns so split can cut owner<->remote
     // rows. Room (specs/0078): the owner is one of the clusters; find it and re-key it to
     // `local` before split/align.
-    let _owner = if setup.owner_is_clustered() {
-        crate::diarization::room::label_owner_cluster(
+    let (owner, owner_clip) = if setup.owner_is_clustered() {
+        let owner = crate::diarization::room::label_owner_cluster(
             pool,
             &meeting_id,
             &mut turns,
             &mut embeddings,
             &corroborating_emails,
         )
-        .await
+        .await;
+        (owner, None)
     } else {
-        crate::diarization::owner_turns::inject_owner_turns(&app, pool, &meeting_id, &mut turns)
-            .await;
-        None
+        let clip = crate::diarization::owner_turns::inject_owner_turns(
+            &app,
+            pool,
+            &meeting_id,
+            &mut turns,
+        )
+        .await;
+        (None, clip)
     };
     drop(folder_lease); // the last audio read is done
 
@@ -763,6 +769,14 @@ pub(super) async fn run<R: Runtime>(app: AppHandle<R>, meeting_id: String) -> Re
          {segment_count} segments ({} pass)",
         setup.as_str()
     );
+    crate::diarization::owner_bootstrap::enroll_after_pass(
+        pool,
+        &meeting_id,
+        owner.as_ref(),
+        &embeddings,
+        owner_clip,
+    )
+    .await;
 
     // The clusters are committed, so the transcript can show them NOW rather than after the
     // matcher and the auto-label pass (owner feedback 2026-09-21). Emitted after the write,
