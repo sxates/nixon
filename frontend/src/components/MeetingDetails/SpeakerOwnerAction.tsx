@@ -13,6 +13,7 @@
  *    pass was a room (or hybrid) pass, OR when the meeting has no "You" at all (so it is
  *    reachable on meetings that haven't been re-identified since room detection shipped).
  *  - "This isn't me" on "You", only for room/hybrid passes: in a call "You" is the mic.
+ *    Only when the meeting actually has a "You" speaker row.
  */
 
 import { UserCheck, UserX } from 'lucide-react';
@@ -53,7 +54,9 @@ export function ownerActionFor(
   ctx: Pick<OwnerActionContext, 'resolved' | 'hasLocalSpeaker'>,
 ): 'mark' | 'unmark' | null {
   const room = isRoomSetup(ctx.resolved);
-  if (isLocal || speakerKey === LOCAL_KEY) return room ? 'unmark' : null;
+  // A transcript line can carry the `local` key before a speakers row exists; there is
+  // nothing to unmark then (the command would refuse).
+  if (isLocal || speakerKey === LOCAL_KEY) return room && ctx.hasLocalSpeaker ? 'unmark' : null;
   if (speakerKey === UNKNOWN_KEY) return null;
   return room || !ctx.hasLocalSpeaker ? 'mark' : null;
 }

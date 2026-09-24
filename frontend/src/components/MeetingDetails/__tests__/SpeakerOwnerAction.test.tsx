@@ -86,6 +86,8 @@ describe('ownerActionFor (specs/0078)', () => {
     expect(ownerActionFor('local', true, ctx('hybrid', true))).toBe('unmark');
     expect(ownerActionFor('local', true, ctx('call', true))).toBeNull();
     expect(ownerActionFor('local', true, ctx(null, true))).toBeNull();
+    // A transcript line keyed `local` with no speakers row: nothing to unmark.
+    expect(ownerActionFor('local', false, ctx('room', false))).toBeNull();
   });
 });
 

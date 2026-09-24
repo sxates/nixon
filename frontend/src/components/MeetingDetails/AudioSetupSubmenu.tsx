@@ -49,7 +49,7 @@ export function AudioSetupSubmenu({ setup, disabled, onChoose }: AudioSetupSubme
         Who was on the mic?
       </DropdownMenuSubTrigger>
       <DropdownMenuPortal>
-        <DropdownMenuSubContent className="w-64">
+        <DropdownMenuSubContent className="w-72">
           <DropdownMenuRadioGroup
             value={value}
             onValueChange={(v) => onChoose(v as AudioSetupOverride)}
