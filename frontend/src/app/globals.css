@@ -77,6 +77,12 @@
     --well: 40 39% 95%;                /* #F8F5EF recessed counter/meter well */
     --walnut: 22 38% 25%;              /* #5A3A28 */
     --meter-over: 4 82% 50%;
+    --meter-bezel: 30 8% 16%;          /* dark frame around each VU dial */
+    --meter-glow: 45 100% 99%;         /* backlight: a bright warm-white centre... */
+    --meter-glow-strength: 0.9;
+    --meter-glow-at: 50% 58%;
+    --meter-glow-size: 70% 80%;
+    --meter-vignette: 32 50% 32% / 0.45; /* ...falling off to tan at the edges */
     --bevel-hi: 0 0% 100% / 0.85;
     --bevel-lo: 0 0% 0% / 0.14;
 
@@ -92,6 +98,46 @@
   html[data-shot="1"] [data-dev-badge],
   html[data-shot="1"] [data-dev-only],
   html[data-shot="1"] nextjs-portal { display: none !important; }
+
+  /* VU dial depth (owner feedback 2026-09-23, "very flat"): a dark bezel, a recessed face,
+     a backlight, and a faint glass sheen on top. Colours are tokens so Faceplate reads as a
+     cream dial lit from the middle and Deck as a dim amber one lit from below. */
+  .vu-bezel {
+    padding: 1.5px;
+    border-radius: 4px;
+    background: linear-gradient(180deg, hsl(var(--meter-bezel)) 0%, hsl(var(--meter-bezel) / 0.85) 100%);
+    box-shadow: 0 1px 0 hsl(var(--bevel-hi)), 0 1px 3px hsl(var(--bevel-lo)),
+      inset 0 1px 0 hsl(0 0% 100% / 0.08);
+  }
+  .vu-face {
+    position: relative;
+    overflow: hidden;
+    border-radius: 2px;
+    background: hsl(var(--well));
+    box-shadow: inset 0 2px 5px hsl(0 0% 0% / 0.55), inset 0 0 0 1px hsl(0 0% 0% / 0.45),
+      inset 0 -8px 14px -10px hsl(0 0% 0% / 0.35);
+  }
+  .vu-face::before {
+    /* the lamp: where it sits and how far it spreads is per theme — Faceplate is lit from
+       the middle, Deck from under the scale */
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: radial-gradient(ellipse var(--meter-glow-size) at var(--meter-glow-at),
+      hsl(var(--meter-glow) / var(--meter-glow-strength)) 0%, transparent 70%);
+  }
+  .vu-face::after {
+    /* the glass, in front of the needle: a soft sheen across the top edge, then the
+       corners fall off into shadow */
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    pointer-events: none;
+    background: linear-gradient(180deg, hsl(0 0% 100% / 0.10) 0%, transparent 38%),
+      radial-gradient(ellipse 120% 140% at 50% 50%, transparent 42%, hsl(var(--meter-vignette)) 100%);
+  }
 
   /* The record header's VU meters need room beside the title and its controls: shown only
      when the HEADER's content box is at least 804px (a 1100px window with the sidebar open:
@@ -155,6 +201,12 @@
     --well: 0 6% 7%;                   /* #121010 */
     --walnut: 22 38% 21%;              /* #4A3021 */
     --meter-over: 5 88% 58%;
+    --meter-bezel: 20 8% 5%;
+    --meter-glow: 36 90% 55%;          /* a dim amber lamp rising from under the scale */
+    --meter-glow-strength: 0.16;
+    --meter-glow-at: 50% 105%;
+    --meter-glow-size: 75% 95%;
+    --meter-vignette: 0 0% 0% / 0.22;
     --bevel-hi: 0 0% 100% / 0.06;
     --bevel-lo: 0 0% 0% / 0.45;
   }
