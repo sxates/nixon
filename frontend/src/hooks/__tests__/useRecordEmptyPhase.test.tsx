@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { renderHook } from '@testing-library/react';
+import { act, renderHook } from '@testing-library/react';
 import { RecordingStatus } from '@/contexts/RecordingStateContext';
 
 let status = RecordingStatus.IDLE;
@@ -9,7 +9,11 @@ vi.mock('@/contexts/RecordingStateContext', async (orig) => ({
 }));
 vi.mock('@/lib/resume-recording', () => ({ isResumeArmedOrInFlight: () => false }));
 
-import { useRecordEmptyPhase } from '../useRecordEmptyPhase';
+import {
+  AUTO_START_ABANDONED_EVENT,
+  START_PENDING_MAX_MS,
+  useRecordEmptyPhase,
+} from '../useRecordEmptyPhase';
 
 // Owner feedback 2026-09-23: "Welcome to Nixon!" flashed after REC and while saving.
 describe('useRecordEmptyPhase', () => {
@@ -37,6 +41,31 @@ describe('useRecordEmptyPhase', () => {
   ])('reads "saving" while %s', (s) => {
     status = s;
     expect(renderHook(() => useRecordEmptyPhase()).result.current).toBe('saving');
+  });
+
+  it('drops "starting" when the start is abandoned before STARTING (no model yet)', () => {
+    window.sessionStorage.setItem('autoStartRecording', 'true');
+    const { result } = renderHook(() => useRecordEmptyPhase());
+    expect(result.current).toBe('starting');
+    act(() => {
+      window.dispatchEvent(new Event(AUTO_START_ABANDONED_EVENT));
+    });
+    expect(result.current).toBeUndefined();
+  });
+
+  it('never reads "starting" for longer than the backstop when the status never moves', () => {
+    vi.useFakeTimers();
+    try {
+      window.sessionStorage.setItem('autoStartRecording', 'true');
+      const { result } = renderHook(() => useRecordEmptyPhase());
+      expect(result.current).toBe('starting');
+      act(() => {
+        vi.advanceTimersByTime(START_PENDING_MAX_MS);
+      });
+      expect(result.current).toBeUndefined();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('is idle when nothing was requested', () => {
