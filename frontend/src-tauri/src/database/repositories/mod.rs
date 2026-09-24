@@ -6,6 +6,7 @@ pub mod google_calendar;
 /// Series-scoped deletes for the event cache (specs/0054 W5).
 pub mod google_calendar_series;
 pub mod meeting;
+pub mod meeting_audio_setup; // specs/0078: who was on the mic
 pub mod meeting_brief;
 pub mod meeting_note;
 pub mod meeting_participant;

@@ -33,6 +33,7 @@ pub mod model_commands;
 pub mod models;
 pub mod owner_turns;
 pub mod pipeline;
+pub mod room_types; // specs/0078: AudioSetup / AudioSetupOverride
 pub mod seed; // specs/0050: audio-derived speaker-count estimator
 pub mod segments;
 pub mod settings;
