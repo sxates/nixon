@@ -9,6 +9,8 @@ const { level, mode } = vi.hoisted(() => ({
 }));
 vi.mock('@/hooks/useRecordingLevel', () => ({ useRecordingLevel: () => level }));
 vi.mock('@/hooks/useProcessingMode', () => ({ useProcessingMode: () => mode }));
+let transition: 'starting' | 'saving' | undefined = undefined;
+vi.mock('@/hooks/useRecordEmptyPhase', () => ({ useRecordEmptyPhase: () => transition }));
 vi.mock('@/components/Participants/ParticipantsPopover', () => ({
   ParticipantsPopover: () => <button type="button">Participants</button>,
 }));
@@ -58,6 +60,19 @@ describe('RecordingHeader', () => {
     expect(screen.getByText('Recording locally on your Mac')).toBeTruthy();
     expect(screen.queryByRole('button', { name: /pause|resume|stop/i })).toBeNull();
   });
+
+  it.each(['starting', 'saving'] as const)(
+    'no idle subtitle while %s (owner feedback 2026-09-23: it flashed on the way in and out)',
+    (phase) => {
+      transition = phase;
+      try {
+        renderHeader(false);
+        expect(screen.queryByText('Recording locally on your Mac')).toBeNull();
+      } finally {
+        transition = undefined;
+      }
+    },
+  );
 
   it('recording: drops the subheads and shows one VU per channel', () => {
     level.rms = 0.5;

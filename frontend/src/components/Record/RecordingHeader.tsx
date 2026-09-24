@@ -22,6 +22,7 @@ import { ParticipantsPopover } from '@/components/Participants/ParticipantsPopov
 import { VU_DEFAULT_HEIGHT, VuMeter } from '@/components/Transport/VuMeter';
 import { useProcessingMode } from '@/hooks/useProcessingMode';
 import { useRecordingLevel } from '@/hooks/useRecordingLevel';
+import { useRecordEmptyPhase } from '@/hooks/useRecordEmptyPhase';
 import { modeChipDisplay } from '@/lib/processing-mode';
 import { rmsToVu } from '@/lib/transport/vu-ballistics';
 import type { UseRecordingTitleEditReturn } from '@/hooks/useRecordingTitleEdit';
@@ -133,6 +134,8 @@ export function RecordingHeader({
   const selectedTemplateName =
     availableTemplates.find((t) => t.id === selectedTemplate)?.name ?? 'Template';
   const level = useRecordingLevel(isRecordingActive);
+  // Starting or saving is not idle: the idle subhead would flash on the way in and out.
+  const transition = useRecordEmptyPhase();
 
   // The meters take the title column's height (never under their 57px default), so they
   // fill the header instead of floating in it without making it any taller (owner
@@ -208,7 +211,7 @@ export function RecordingHeader({
             the only way to be looking at this header at all is with a recording in
             progress, so the line carried no information for the height it took. The idle
             line stays: an idle header DOES need to say what pressing REC will do. */}
-        {!isRecordingActive && (
+        {!isRecordingActive && !transition && (
           <p className="mt-0.5 text-xs text-muted-foreground">Recording locally on your Mac</p>
         )}
         {/* 0.1.0 canvas feedback: the per-meeting controls sit under the title, not in the

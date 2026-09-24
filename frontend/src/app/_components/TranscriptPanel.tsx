@@ -10,6 +10,7 @@ import { usePermissionCheck } from '@/hooks/usePermissionCheck';
 import { useIsLinux } from '@/hooks/usePlatform';
 import { useProcessingMode } from '@/hooks/useProcessingMode';
 import { useSidebar } from '@/components/Sidebar/SidebarProvider';
+import { useRecordEmptyPhase } from '@/hooks/useRecordEmptyPhase';
 import { effectiveLiveTranscription, transcriptEmptyStateVariant } from '@/lib/processing-mode';
 import { useEffect, useMemo, useState } from 'react';
 
@@ -36,6 +37,7 @@ export function TranscriptPanel({
   const { checkPermissions, isChecking, hasSystemAudio, hasMicrophone } = usePermissionCheck();
   const isLinux = useIsLinux();
   const { activeRecordingMeetingId } = useSidebar();
+  const emptyPhase = useRecordEmptyPhase();
 
   // Live transcription state (specs/0029 WS7.2; low-power-mode spec §§3,5). When OFF
   // (record-only mode) the backend never emits transcript updates, so instead of a
@@ -241,6 +243,7 @@ export function TranscriptPanel({
             segments={segments}
             isRecording={isRecording}
             isPaused={isPaused}
+            emptyPhase={emptyPhase}
             isProcessing={isProcessingStop}
             isStopping={isStopping}
             enableStreaming={isRecording}
