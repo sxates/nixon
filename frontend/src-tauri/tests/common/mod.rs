@@ -415,3 +415,162 @@ pub async fn drain_settled(
     }
     out
 }
+
+// ---------------------------------------------------------------------------
+// Room-recording fixtures (specs/0078 W0 task 4)
+// ---------------------------------------------------------------------------
+
+/// Which synthetic meeting [`synth_room_meeting`] builds.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RoomFixture {
+    /// Two voices taking turns on the mic; the system track is silent but for two dings.
+    Room,
+    /// One voice on the mic (dictation, solo notes); the same dinged system track.
+    Solo,
+    /// A call: voice A on the mic, voice B on the system track.
+    Call,
+}
+
+/// Lines per voice. Each renders to roughly 3–5 s, so each voice pools well over
+/// `N_AUDIO_MIN_SECS` (10 s) and 25 s across its turns.
+const ROOM_VOICE_A_LINES: &[&str] = &[
+    "Good morning, thanks for coming in today to go over the plan. I know everyone is busy this week.",
+    "The first thing I want to cover is the delivery schedule for next month. It has changed a little.",
+    "We moved the design review up by a week, so the team has more time to test. That was the right call.",
+    "I also want to talk about the budget, because a few numbers changed. Most of them went in our favor.",
+    "Overall I think we are in good shape, but there are two risks to watch. Staffing is the bigger one.",
+    "Let's plan to meet again on Thursday and check where things stand. Same room, same time works for me.",
+    "Thanks, that covers everything on my list for this morning. I appreciate you making the time.",
+];
+const ROOM_VOICE_B_LINES: &[&str] = &[
+    "Sure, happy to be here, I brought the latest numbers with me. They came in late last night.",
+    "That works for us, the vendor confirmed the shipping dates yesterday. Nothing has slipped so far.",
+    "Testing will need at least two full weeks, so the extra time really helps. We were worried about it.",
+    "The hardware costs went up a little, but the licensing came in lower. So the total is about even.",
+    "The main risk on our side is staffing during the holiday period. Two people are out for a week.",
+    "Thursday is fine, I will send an updated spreadsheet before then. It will have the new totals.",
+    "Great, thank you, I will follow up with the team this afternoon. Have a good rest of the day.",
+];
+
+/// Pause between turns (seconds).
+const ROOM_TURN_GAP_SECS: f32 = 0.5;
+/// Where the two synthetic notification dings sit on the system track (seconds). Both are
+/// multiples of the classifier's 600 ms window, so each ding fills exactly one window.
+pub const ROOM_DING_AT_SECS: [f32; 2] = [12.0, 60.0];
+/// Ding length (seconds): a 1 kHz tone at −20 dBFS.
+pub const ROOM_DING_SECS: f32 = 0.3;
+
+/// `say -v voice` → 16 kHz mono f32. `None` when `say` or the voice is unavailable.
+pub fn say_voice_16k(text: &str, voice: &str) -> Option<Vec<f32>> {
+    let dir = tempfile::tempdir().ok()?;
+    let out = dir.path().join("line.wav");
+    let ok = std::process::Command::new("say")
+        .args(["-v", voice, "-o"])
+        .arg(&out)
+        .args(["--data-format=LEI16@16000", "--channels=1", "--", text])
+        .status()
+        .map(|s| s.success() && out.exists())
+        .unwrap_or(false);
+    ok.then(|| decode_wav_16k_mono(&out).0)
+}
+
+/// Write 16 kHz mono f32 samples as a 16-bit PCM WAV (the recorder's channel format).
+pub fn write_wav_16k(path: &Path, samples: &[f32]) {
+    let data_bytes = (samples.len() * 2) as u32;
+    let mut bytes = Vec::with_capacity(44 + samples.len() * 2);
+    bytes.extend_from_slice(b"RIFF");
+    bytes.extend_from_slice(&(36 + data_bytes).to_le_bytes());
+    bytes.extend_from_slice(b"WAVEfmt ");
+    bytes.extend_from_slice(&16u32.to_le_bytes());
+    bytes.extend_from_slice(&1u16.to_le_bytes()); // PCM
+    bytes.extend_from_slice(&1u16.to_le_bytes()); // mono
+    bytes.extend_from_slice(&16_000u32.to_le_bytes());
+    bytes.extend_from_slice(&32_000u32.to_le_bytes());
+    bytes.extend_from_slice(&2u16.to_le_bytes());
+    bytes.extend_from_slice(&16u16.to_le_bytes());
+    bytes.extend_from_slice(b"data");
+    bytes.extend_from_slice(&data_bytes.to_le_bytes());
+    for s in samples {
+        let v = (s.clamp(-1.0, 1.0) * i16::MAX as f32) as i16;
+        bytes.extend_from_slice(&v.to_le_bytes());
+    }
+    std::fs::write(path, bytes).expect("write fixture wav");
+}
+
+/// One voice turn on the meeting timeline: `(voice: 0 = A, 1 = B; start sample; samples)`.
+type PlacedTurn = (usize, usize, Vec<f32>);
+
+/// Build a synthetic meeting in `dir` and return `(mic.wav, system.wav)`.
+///
+/// Voice A (*Samantha*) and voice B (*Daniel*) alternate, seven turns each with
+/// [`ROOM_TURN_GAP_SECS`] gaps (about 90 s in all). The system track is all zeros except
+/// two [`ROOM_DING_SECS`] 1 kHz dings at [`ROOM_DING_AT_SECS`], except in the call variant,
+/// where voice B's turns are on it instead of on the mic. The solo variant keeps voice B's
+/// slots silent. `None` when `say` or either voice is unavailable (callers skip).
+pub fn synth_room_meeting(dir: &Path, variant: RoomFixture) -> Option<(PathBuf, PathBuf)> {
+    const SR: usize = 16_000;
+    let gap = (ROOM_TURN_GAP_SECS * SR as f32) as usize;
+    let mut placed: Vec<PlacedTurn> = Vec::new();
+    let mut at = 0usize;
+    for (a, b) in ROOM_VOICE_A_LINES.iter().zip(ROOM_VOICE_B_LINES) {
+        for (voice, (name, line)) in [("Samantha", a), ("Daniel", b)].into_iter().enumerate() {
+            let samples = say_voice_16k(line, name)?;
+            let len = samples.len();
+            placed.push((voice, at, samples));
+            at += len + gap;
+        }
+    }
+    let total = at;
+    let mut mic = vec![0.0f32; total];
+    let mut system = vec![0.0f32; total];
+    for (voice, start, samples) in &placed {
+        let target = match (variant, voice) {
+            (RoomFixture::Room, _) | (_, 0) => Some(&mut mic),
+            (RoomFixture::Call, _) => Some(&mut system),
+            (RoomFixture::Solo, _) => None,
+        };
+        if let Some(track) = target {
+            track[*start..*start + samples.len()].copy_from_slice(samples);
+        }
+    }
+    if variant != RoomFixture::Call {
+        let amp = 10f32.powf(-20.0 / 20.0);
+        for at_secs in ROOM_DING_AT_SECS {
+            let start = (at_secs * SR as f32) as usize;
+            let len = (ROOM_DING_SECS * SR as f32) as usize;
+            for i in 0..len.min(total.saturating_sub(start)) {
+                let t = i as f32 / SR as f32;
+                system[start + i] = amp * (2.0 * std::f32::consts::PI * 1_000.0 * t).sin();
+            }
+        }
+    }
+    let mic_path = dir.join("mic.wav");
+    let system_path = dir.join("system.wav");
+    write_wav_16k(&mic_path, &mic);
+    write_wav_16k(&system_path, &system);
+    Some((mic_path, system_path))
+}
+
+/// The on-disk diarization model dir (`models/diarization/` under any of the app's data
+/// dirs, or `NIXON_TEST_DIARIZATION_DIR`), gated on the SHIPPED model file names
+/// (`models::SEGMENTATION_MODEL_FILE` / `EMBEDDING_MODEL_FILE`). `None` → skip.
+pub fn diarization_models_dir() -> Option<PathBuf> {
+    use app_lib::diarization::models::{EMBEDDING_MODEL_FILE, SEGMENTATION_MODEL_FILE};
+    let mut roots: Vec<PathBuf> = Vec::new();
+    if let Ok(dir) = std::env::var("NIXON_TEST_DIARIZATION_DIR") {
+        roots.push(PathBuf::from(dir));
+    }
+    if let Some(data) = dirs::data_dir() {
+        for id in [
+            "ai.vinyl.app.debug",
+            "ai.vinyl.app",
+            "com.meetily.ai",
+            "Nixon",
+        ] {
+            roots.push(data.join(id).join("models").join("diarization"));
+        }
+    }
+    roots.into_iter().find(|dir| {
+        dir.join(SEGMENTATION_MODEL_FILE).exists() && dir.join(EMBEDDING_MODEL_FILE).exists()
+    })
+}
