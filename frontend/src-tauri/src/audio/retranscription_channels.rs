@@ -20,6 +20,7 @@
 //! track yields `None` tags (persisted as NULL — the pre-fix behavior), never
 //! an error that could fail the retranscription itself.
 
+use crate::audio::channel_attribution::CHANNEL_ACTIVE_RMS;
 use crate::audio::common::ChannelTag;
 use crate::audio::pipeline::{classify_window_channel, dominant_channel_for_span};
 use log::{info, warn};
@@ -41,6 +42,9 @@ const MAX_DURATION_DRIFT_SECONDS: f64 = 5.0;
 pub struct ChannelRmsProfile {
     mic: Vec<f32>,
     system: Vec<f32>,
+    /// `false` when the meeting has no system channel file at all (specs/0078: a
+    /// mic-only folder reads as a room recording, not as a silent call).
+    system_present: bool,
 }
 
 impl ChannelRmsProfile {
@@ -51,6 +55,56 @@ impl ChannelRmsProfile {
         Self {
             mic: windowed_rms(mic, window),
             system: windowed_rms(system, window),
+            system_present: true,
+        }
+    }
+
+    /// A mic-only profile, for a meeting with no system channel file (specs/0078).
+    pub fn from_mic_track(mic: &[f32], sample_rate: u32) -> Self {
+        let mut profile = Self::from_tracks(mic, &[], sample_rate);
+        profile.system_present = false;
+        profile
+    }
+
+    /// Load the channel files for room detection (specs/0078). Unlike [`Self::load`]
+    /// there is no mixed-file duration to check against: the two tracks are only
+    /// compared with each other. `None` when the mic channel is missing, or when either
+    /// present track can't be decoded (detection then falls back to call mode). A
+    /// missing system channel gives a mic-only profile.
+    pub fn load_for_detection(folder: &Path) -> Option<Self> {
+        let mic_path = crate::audio::channel_writer::mic_channel_path(folder)?;
+        let mic = decode_track_rms(&mic_path, None)?;
+        let system_path = crate::audio::channel_writer::system_channel_path(folder);
+        let (system, system_present) = match system_path {
+            Some(p) => (decode_track_rms(&p, None)?, true),
+            None => (Vec::new(), false),
+        };
+        Some(Self {
+            mic,
+            system,
+            system_present,
+        })
+    }
+
+    /// How much each track is active, measured with the capture classifier's own 600 ms
+    /// windows and [`CHANNEL_ACTIVE_RMS`] bar, so "active" means what it means for
+    /// `transcripts.channel` (specs/0078 room detection).
+    pub fn activity(&self) -> crate::diarization::room::ChannelActivity {
+        let window_secs = (WINDOW_MS / 1000.0) as f32;
+        let is_active = |rms: &f32| *rms >= CHANNEL_ACTIVE_RMS;
+        let mut longest = 0usize;
+        let mut run = 0usize;
+        for rms in &self.system {
+            run = if is_active(rms) { run + 1 } else { 0 };
+            longest = longest.max(run);
+        }
+        crate::diarization::room::ChannelActivity {
+            duration_secs: self.mic.len().max(self.system.len()) as f32 * window_secs,
+            system_active_secs: self.system.iter().filter(|r| is_active(r)).count() as f32
+                * window_secs,
+            system_longest_run_secs: longest as f32 * window_secs,
+            mic_active_secs: self.mic.iter().filter(|r| is_active(r)).count() as f32 * window_secs,
+            system_present: self.system_present,
         }
     }
 
@@ -73,9 +127,13 @@ impl ChannelRmsProfile {
         };
         // Sequential decode-and-reduce keeps the peak footprint to one track's
         // samples; only the tiny per-window RMS vectors are retained.
-        let mic = decode_track_rms(&mic_path, expected_duration_seconds)?;
-        let system = decode_track_rms(&system_path, expected_duration_seconds)?;
-        Some(Self { mic, system })
+        let mic = decode_track_rms(&mic_path, Some(expected_duration_seconds))?;
+        let system = decode_track_rms(&system_path, Some(expected_duration_seconds))?;
+        Some(Self {
+            mic,
+            system,
+            system_present: true,
+        })
     }
 
     /// Tag each `(start_ms, end_ms)` span with its dominant capture channel,
@@ -112,8 +170,9 @@ fn windowed_rms(samples: &[f32], window: usize) -> Vec<f32> {
 }
 
 /// Decode one channel WAV to its per-window RMS profile, enforcing the
-/// duration guard. Best-effort: any failure logs and returns `None`.
-fn decode_track_rms(path: &Path, expected_duration_seconds: f64) -> Option<Vec<f32>> {
+/// duration guard when an expected duration is given. Best-effort: any failure
+/// logs and returns `None`.
+fn decode_track_rms(path: &Path, expected_duration_seconds: Option<f64>) -> Option<Vec<f32>> {
     let decoded = match crate::audio::decoder::decode_audio_file(path) {
         Ok(decoded) => decoded,
         Err(e) => {
@@ -125,6 +184,7 @@ fn decode_track_rms(path: &Path, expected_duration_seconds: f64) -> Option<Vec<f
             return None;
         }
     };
+    let expected_duration_seconds = expected_duration_seconds.unwrap_or(decoded.duration_seconds);
     let drift = (decoded.duration_seconds - expected_duration_seconds).abs();
     if drift > MAX_DURATION_DRIFT_SECONDS {
         warn!(
@@ -254,6 +314,45 @@ mod tests {
             profile.classify_spans(&[(500.0, 5_500.0)]),
             vec![Some(ChannelTag::Microphone)]
         );
+    }
+
+    /// specs/0078: activity counts 600 ms windows at or above the classifier's bar, and
+    /// the longest run of consecutive active system windows.
+    #[test]
+    fn activity_measures_active_time_and_the_longest_system_run() {
+        // 12 s: system active 0–1.2 s and 3.0–6.0 s; mic active 0–9 s.
+        let mic = track(12.0, &[(0.0, 9.0)]);
+        let sys = track(12.0, &[(0.0, 1.2), (3.0, 6.0)]);
+        let a = ChannelRmsProfile::from_tracks(&mic, &sys, RATE).activity();
+        assert!((a.duration_secs - 12.0).abs() < 1e-3, "{a:?}");
+        assert!((a.system_active_secs - 4.2).abs() < 1e-3, "{a:?}");
+        assert!((a.system_longest_run_secs - 3.0).abs() < 1e-3, "{a:?}");
+        assert!((a.mic_active_secs - 9.0).abs() < 1e-3, "{a:?}");
+        assert!(a.system_present);
+
+        let solo = ChannelRmsProfile::from_mic_track(&mic, RATE).activity();
+        assert!(!solo.system_present);
+        assert_eq!(solo.system_active_secs, 0.0);
+        assert!((solo.mic_active_secs - 9.0).abs() < 1e-3);
+    }
+
+    #[test]
+    fn load_for_detection_reads_a_mic_only_folder() {
+        let dir = tempfile::tempdir().unwrap();
+        assert!(
+            ChannelRmsProfile::load_for_detection(dir.path()).is_none(),
+            "no mic channel means nothing to detect from"
+        );
+        write_channel_wav(
+            crate::audio::channel_writer::mic_channel_wav(dir.path()),
+            6.0,
+            0.1,
+        );
+        let a = ChannelRmsProfile::load_for_detection(dir.path())
+            .expect("mic-only folder loads")
+            .activity();
+        assert!(!a.system_present);
+        assert!(a.mic_active_secs > 5.0, "{a:?}");
     }
 
     #[test]

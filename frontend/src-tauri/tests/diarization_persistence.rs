@@ -474,3 +474,269 @@ async fn span_reassign_to_new_speaker_survives_rerun() {
         "manual speaker drops once no override references it"
     );
 }
+
+// ---------------------------------------------------------------------------
+// specs/0078: room recordings (everyone on the mic), model-free routing
+// ---------------------------------------------------------------------------
+
+use app_lib::database::repositories::meeting_audio_setup::MeetingAudioSetupRepository;
+use app_lib::database::repositories::voiceprints::VoiceprintsRepository;
+use app_lib::diarization::embedding::EMBEDDING_MODEL_ID;
+use app_lib::diarization::pipeline::attribute_and_persist;
+use app_lib::diarization::room::{label_owner_cluster, OwnerRule};
+use app_lib::diarization::room_types::AudioSetup;
+use app_lib::people::enroll::{ensure_owner_person, OWNER_PERSON_ID};
+use std::collections::HashMap;
+
+/// A mic-tagged row, as capture writes every row of a room recording.
+fn mic_segment(text: &str, start: f64, end: f64) -> app_lib::transcripts::TranscriptSegment {
+    app_lib::transcripts::TranscriptSegment {
+        channel: Some("microphone".to_string()),
+        ..segment(text, start, end)
+    }
+}
+
+/// A room meeting: two voices taking turns on one mic, every row tagged `microphone`,
+/// one row gluing a fast handoff between them.
+async fn seed_room_meeting(pool: &sqlx::SqlitePool) -> String {
+    let meeting_id =
+        MeetingsRepository::create_meeting(pool, Some("Room".into()), None, None, None, None)
+            .await
+            .unwrap();
+    let segs = vec![
+        mic_segment("first voice opens the meeting", 0.0, 3.0),
+        mic_segment("second voice answers the question", 6.0, 9.0),
+        mic_segment(
+            "so that works for me. Great lets ship it tomorrow then",
+            12.0,
+            18.7,
+        ),
+        mic_segment("first voice wraps things up", 22.0, 24.0),
+    ];
+    TranscriptsRepository::save_transcripts_for_meeting(pool, &meeting_id, "Room", &segs, None)
+        .await
+        .unwrap();
+    meeting_id
+}
+
+fn room_turns() -> Vec<SpeakerTurn> {
+    vec![
+        turn(0.0, 3.5, "spk_0"),
+        turn(5.5, 9.5, "spk_1"),
+        turn(12.0, 15.0, "spk_0"),
+        turn(15.4, 18.3, "spk_1"),
+        turn(21.5, 24.5, "spk_0"),
+    ]
+}
+
+fn room_embeddings() -> HashMap<String, Vec<f32>> {
+    HashMap::from([
+        ("spk_0".to_string(), vec![1.0, 0.0, 0.0, 0.0]),
+        ("spk_1".to_string(), vec![0.0, 1.0, 0.0, 0.0]),
+    ])
+}
+
+async fn stored_rows(pool: &sqlx::SqlitePool, meeting_id: &str) -> Vec<(String, Option<String>)> {
+    sqlx::query_as::<_, (Option<String>, Option<String>)>(
+        "SELECT speaker, channel FROM transcripts WHERE meeting_id = ? ORDER BY audio_start_time",
+    )
+    .bind(meeting_id)
+    .fetch_all(pool)
+    .await
+    .unwrap()
+    .into_iter()
+    .map(|(s, c)| (s.unwrap_or_default(), c))
+    .collect()
+}
+
+/// specs/0078 task 11 / acceptance 4: two clusters over mic-tagged rows persist as two
+/// non-`local` speakers when nobody is identified as the owner, the straddling row is
+/// split between them, and no `transcripts.channel` changes. The same rows through the
+/// call path all come out "You".
+#[tokio::test]
+async fn room_routing_keeps_two_mic_voices_apart_and_never_rewrites_channels() {
+    let (_dir, db) = fresh_db().await;
+    let pool = db.pool();
+
+    let room = seed_room_meeting(pool).await;
+    let (persisted, segments) = attribute_and_persist(
+        pool,
+        &room,
+        &room_turns(),
+        &room_embeddings(),
+        AudioSetup::Room,
+    )
+    .await
+    .expect("room pass");
+    assert_eq!(segments, 5, "the glued handoff row was split in two");
+    assert_eq!(persisted, 2);
+
+    let rows = stored_rows(pool, &room).await;
+    let keys: Vec<&str> = rows.iter().map(|(k, _)| k.as_str()).collect();
+    assert_eq!(keys, vec!["spk_0", "spk_1", "spk_0", "spk_1", "spk_0"]);
+    assert!(
+        rows.iter().all(|(_, c)| c.as_deref() == Some("microphone")),
+        "room mode never rewrites transcripts.channel: {rows:?}"
+    );
+    let speakers = SpeakersRepository::get_by_meeting(pool, &room)
+        .await
+        .unwrap();
+    let mut speaker_keys: Vec<&str> = speakers.iter().map(|s| s.speaker_key.as_str()).collect();
+    speaker_keys.sort();
+    assert_eq!(
+        speaker_keys,
+        vec!["spk_0", "spk_1"],
+        "no local without an owner"
+    );
+
+    // Call mode over the same kind of meeting: every mic row is "You", nothing splits.
+    let call = seed_room_meeting(pool).await;
+    let (persisted, segments) = attribute_and_persist(
+        pool,
+        &call,
+        &room_turns(),
+        &room_embeddings(),
+        AudioSetup::Call,
+    )
+    .await
+    .expect("call pass");
+    assert_eq!((persisted, segments), (1, 4));
+    let rows = stored_rows(pool, &call).await;
+    assert!(rows.iter().all(|(k, _)| k == "local"), "{rows:?}");
+}
+
+/// In a room pass the owner's cluster, re-keyed to `local`, keeps its embedding (the
+/// carry-over and "This is me" read it); a call's `local` stays NULL (ADR-0007 §3).
+#[tokio::test]
+async fn only_a_room_pass_keeps_an_embedding_on_local() {
+    let (_dir, db) = fresh_db().await;
+    let pool = db.pool();
+    let mut embeddings = room_embeddings();
+    embeddings.insert("local".to_string(), vec![0.0, 0.0, 1.0, 0.0]);
+    let with_owner: Vec<SpeakerTurn> = room_turns()
+        .into_iter()
+        .map(|mut t| {
+            if t.speaker == "spk_1" {
+                t.speaker = "local".to_string();
+            }
+            t
+        })
+        .collect();
+
+    for (setup, expect_embedding) in [(AudioSetup::Room, true), (AudioSetup::Call, false)] {
+        let meeting = seed_room_meeting(pool).await;
+        attribute_and_persist(pool, &meeting, &with_owner, &embeddings, setup)
+            .await
+            .unwrap();
+        let has: bool = sqlx::query_scalar(
+            "SELECT embedding IS NOT NULL FROM speakers WHERE meeting_id = ? AND speaker_key = 'local'",
+        )
+        .bind(&meeting)
+        .fetch_one(pool)
+        .await
+        .unwrap();
+        assert_eq!(has, expect_embedding, "{setup:?}");
+    }
+}
+
+/// Give the owner `n` gallery samples near `voice`.
+async fn enroll_owner(pool: &sqlx::SqlitePool, voice: &[f32], n: usize) {
+    ensure_owner_person(pool).await.unwrap();
+    for _ in 0..n {
+        VoiceprintsRepository::add_sample(
+            pool,
+            OWNER_PERSON_ID,
+            voice,
+            EMBEDDING_MODEL_ID,
+            None,
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+    }
+}
+
+/// specs/0078 owner decision 3: in a room the owner is an ordinary gallery candidate. With
+/// a well-trained voiceprint (TRUSTED_GALLERY_MIN_SAMPLES) and a match above the voice-only
+/// bar, the owner's cluster becomes `local`; with a thin one (one sample), the bar is the
+/// same as for anyone and nothing is labeled.
+#[tokio::test]
+async fn a_room_owner_is_labeled_by_the_same_rules_as_anyone() {
+    let (_dir, db) = fresh_db().await;
+    let pool = db.pool();
+    let meeting = seed_room_meeting(pool).await;
+    let owner_voice = [0.95f32, 0.31, 0.0, 0.0]; // cosine ≈ 0.95 to spk_0
+
+    enroll_owner(pool, &owner_voice, 1).await;
+    let mut turns = room_turns();
+    let mut emb = room_embeddings();
+    let thin = label_owner_cluster(pool, &meeting, &mut turns, &mut emb, &[]).await;
+    assert_eq!(
+        thin, None,
+        "one owner sample is a thin gallery: no auto-label"
+    );
+    assert!(turns.iter().all(|t| t.speaker != "local"));
+
+    enroll_owner(pool, &owner_voice, 2).await; // now 3 samples
+    let label = label_owner_cluster(pool, &meeting, &mut turns, &mut emb, &[])
+        .await
+        .expect("a well-trained owner voiceprint wins its cluster");
+    assert_eq!(label.rule, OwnerRule::Voiceprint);
+    assert_eq!(label.cluster, "spk_0");
+    assert!(turns
+        .iter()
+        .all(|t| t.speaker == "local" || t.speaker == "spk_1"));
+    assert!(emb.contains_key("local") && !emb.contains_key("spk_0"));
+}
+
+/// The refetch path (`api_get_speaker_suggestions` → `auto_label::apply`) labels an older
+/// room meeting once the owner's voiceprint is well trained, by re-keying the cluster to
+/// `local`. A call meeting never offers the owner at all.
+#[tokio::test]
+async fn the_refetch_turns_a_room_owner_match_into_you() {
+    use app_lib::diarization::auto_label;
+    use app_lib::diarization::pipeline::compute_suggestions;
+
+    let (_dir, db) = fresh_db().await;
+    let pool = db.pool();
+    let owner_voice = [0.95f32, 0.31, 0.0, 0.0];
+    enroll_owner(pool, &owner_voice, 3).await;
+
+    for setup in [AudioSetup::Call, AudioSetup::Room] {
+        let meeting = seed_room_meeting(pool).await;
+        MeetingAudioSetupRepository::set_resolved(pool, &meeting, setup)
+            .await
+            .unwrap();
+        attribute_and_persist(
+            pool,
+            &meeting,
+            &room_turns(),
+            &room_embeddings(),
+            AudioSetup::Room,
+        )
+        .await
+        .unwrap();
+        let suggestions = compute_suggestions(pool, &meeting).await.unwrap();
+        let owner = suggestions
+            .iter()
+            .find(|s| s.suggested_person_id.as_deref() == Some(OWNER_PERSON_ID));
+        if setup == AudioSetup::Call {
+            assert!(owner.is_none(), "the owner never competes in a call");
+            continue;
+        }
+        let owner = owner.expect("the owner competes in a room with no You yet");
+        assert!(owner.auto_label);
+        assert_eq!(owner.speaker_key, "spk_0");
+
+        assert_eq!(auto_label::apply(pool, &meeting, &suggestions).await, 1);
+        let rows = stored_rows(pool, &meeting).await;
+        let keys: Vec<&str> = rows.iter().map(|(k, _)| k.as_str()).collect();
+        assert_eq!(keys, vec!["local", "spk_1", "local", "spk_1", "local"]);
+        // With a You in place, the owner stops competing.
+        let again = compute_suggestions(pool, &meeting).await.unwrap();
+        assert!(again
+            .iter()
+            .all(|s| s.suggested_person_id.as_deref() != Some(OWNER_PERSON_ID)));
+    }
+}

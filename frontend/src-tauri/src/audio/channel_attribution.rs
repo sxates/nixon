@@ -35,7 +35,7 @@ use super::common::{ChannelRun, ChannelTag};
 /// system speech is comparable, so real speech clears this comfortably while an
 /// idle track's noise floor stays under it. Windows where BOTH tracks are below
 /// this are unclassified (silence) and excluded from the segment vote.
-const CHANNEL_ACTIVE_RMS: f32 = 0.01;
+pub(crate) const CHANNEL_ACTIVE_RMS: f32 = 0.01;
 
 /// RMS ratio one track must have over the other (when both are active) to be
 /// called dominant (≈ 9.5 dB). Large enough that acoustic bleed — speaker

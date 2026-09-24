@@ -21,6 +21,7 @@
 pub mod accel;
 pub mod align;
 pub mod auto_label;
+pub mod candidates; // specs/0078: matcher inputs (moved from pipeline.rs), owner as a room candidate
 pub mod commands;
 pub mod corrections;
 pub mod embedding;
@@ -33,6 +34,7 @@ pub mod model_commands;
 pub mod models;
 pub mod owner_turns;
 pub mod pipeline;
+pub mod room; // specs/0078: room detection, input resolution, owner cluster
 pub mod room_commands; // specs/0078: audio-setup override + "This is me"
 pub mod room_types; // specs/0078: AudioSetup / AudioSetupOverride
 pub mod seed; // specs/0050: audio-derived speaker-count estimator
@@ -48,8 +50,8 @@ pub mod split;
 mod real_eval;
 
 pub use align::{
-    align_system_turns_to_segments, align_turns_to_segments, AlignMode, AlignableSegment,
-    Channel, LOCAL_SPEAKER_KEY,
+    align_system_turns_to_segments, align_turns_to_segments, AlignMode, AlignableSegment, Channel,
+    LOCAL_SPEAKER_KEY,
 };
 pub use sherpa::{SherpaDiarizer, SpeakerCount, UNKNOWN_SPEAKER_KEY};
 
