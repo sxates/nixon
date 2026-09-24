@@ -8,7 +8,7 @@ your meeting. No recording is uploaded. Nothing leaves your machine.
 
 ### [Download for macOS →](https://github.com/sxates/nixon/releases/latest)
 
-Apple Silicon, macOS 14.4 or later. Open the `.dmg` and drag Nixon to Applications.
+Apple Silicon, macOS 14 Sonoma or later. Open the `.dmg` and drag Nixon to Applications.
 
 ---
 
@@ -84,10 +84,9 @@ Full detail in [`PRIVACY_POLICY.md`](PRIVACY_POLICY.md).
 
 ## What you need
 
-**Any Apple Silicon Mac running macOS 14.4 or later** — including the original M1. Nixon
+**Any Apple Silicon Mac running macOS 14 Sonoma or later** — including the original M1. Nixon
 sizes its work to your machine rather than demanding a recent one. Intel Macs are not
-supported, and 14.4 is the floor because it is where macOS gained the ability to capture
-another app's audio without extra software.
+supported.
 
 You will be asked once for **microphone** and **audio-capture** permission.
 
