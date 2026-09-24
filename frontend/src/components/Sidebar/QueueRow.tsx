@@ -77,8 +77,9 @@ export function QueueRow({ collapsed = false }: { collapsed?: boolean }) {
             <span className="u-section-label text-engrave">Queue {view.count}</span>
             {/* One line, always — a wrapping status line would shift the settings row below
                 it every time a stage name changed. `SIDEBAR_LABEL` is for the label; this
-                trailing status line keeps its own right inset. */}
-            <span className="min-w-0 flex-1 truncate pr-3.5 text-right text-[11px] text-muted-foreground">
+                trailing status line keeps its own right inset, and a left gap so a long line
+                truncates short of the count instead of reading "Queue 1AI · …". */}
+            <span className="ml-3 min-w-0 flex-1 truncate pr-3.5 text-right text-[11px] text-muted-foreground">
               {line}
             </span>
           </button>
