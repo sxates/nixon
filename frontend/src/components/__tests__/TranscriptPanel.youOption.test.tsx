@@ -49,6 +49,11 @@ function makeSpeakersController(speakers: MeetingSpeaker[]): UseSpeakersReturn {
     assignAttendee: vi.fn().mockResolvedValue(undefined),
     assignPerson: vi.fn().mockResolvedValue(undefined),
     mergeSpeakers: vi.fn().mockResolvedValue(undefined),
+    audioSetup: null,
+    setAudioSetup: vi.fn().mockResolvedValue({ started: true, alreadyRunning: false }),
+    refetchAudioSetup: vi.fn().mockResolvedValue(undefined),
+    markAsMe: vi.fn().mockResolvedValue(undefined),
+    unmarkMe: vi.fn().mockResolvedValue(undefined),
   };
 }
 
@@ -106,5 +111,18 @@ describe('TranscriptPanel — "You" is always a reassignment target (specs/0061 
     const items = await openReassignMenu();
     const youItems = items.filter((item) => item.textContent?.includes('You'));
     expect(youItems).toHaveLength(1);
+  });
+});
+
+describe('TranscriptPanel — "This is me" from a transcript name (specs/0078)', () => {
+  it('offers "This is me" in the name popover when the meeting has no You yet', () => {
+    const controller = makeSpeakersController([
+      { speakerKey: 'spk_0', displayName: 'Speaker 1', isLocal: false },
+    ]);
+    renderPanel(controller);
+
+    fireEvent.click(screen.getByRole('button', { name: /^Speaker 1/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'This is me' }));
+    expect(controller.markAsMe).toHaveBeenCalledWith(['spk_0']);
   });
 });

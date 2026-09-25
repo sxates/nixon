@@ -22,7 +22,7 @@ use app_lib::diarization::{Diarizer, SherpaDiarizer};
 /// Filenames the diarization engine needs on disk (see
 /// `src/diarization/models.rs`).
 const SEGMENTATION_FILE: &str = "segmentation.onnx";
-const EMBEDDING_FILE: &str = "3dspeaker_campplus_sv_en_voxceleb_16k.onnx";
+const EMBEDDING_FILE: &str = app_lib::diarization::models::EMBEDDING_MODEL_FILE;
 
 /// Candidate `models/diarization/` dirs across the dev/prod/upstream identifiers
 /// (mirrors the Parakeet model-gate in `tests/common/mod.rs`).

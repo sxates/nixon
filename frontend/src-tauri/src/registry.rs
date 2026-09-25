@@ -348,14 +348,18 @@ pub fn invoke_handler() -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Sen
         diarization::commands::api_get_meeting_attendees,
         diarization::commands::api_assign_speaker_to_attendee,
         diarization::commands::api_get_speaker_suggestions,
+        // Room recordings: "Who was on the mic?" + "This is me" (specs/0078)
+        diarization::room_commands::api_get_meeting_audio_setup,
+        diarization::room_commands::api_set_meeting_audio_setup,
+        diarization::room_commands::api_mark_speaker_as_me,
+        diarization::room_commands::api_unmark_speaker_as_me,
         // Persistent meeting participant roster (specs/0017 Phase A)
         diarization::commands::api_get_meeting_participants,
         diarization::commands::api_add_meeting_participant,
         diarization::commands::api_remove_meeting_participant,
         // Voiceprint gallery + consent controls (specs/0016 1c, ADR-0007)
         diarization::commands::api_get_voiceprint_settings,
-        diarization::commands::api_set_store_others_voiceprints,
-        diarization::commands::api_set_self_enroll_voiceprint,
+        diarization::commands::api_set_store_voiceprints,
         diarization::commands::api_clear_all_voiceprints,
         diarization::commands::api_get_person_voiceprint_count,
         // Per-sample voiceprint controls + retraction undo (specs/0039 WS3)

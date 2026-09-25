@@ -92,6 +92,15 @@ pub async fn api_diarization_status(
     Ok(pipeline::run_status(&meeting_id))
 }
 
+/// specs/0078: a room cluster assigned to you before that meant "This is me" becomes "You"
+/// on the next read (`owner_assign::convert_owner_links`). Best-effort: logged, never fails
+/// the read.
+async fn convert_owner_links(pool: &sqlx::SqlitePool, meeting_id: &str) {
+    if let Err(e) = crate::diarization::owner_assign::convert_owner_links(pool, meeting_id).await {
+        log::warn!("speakers: owner-link conversion for {meeting_id} failed (continuing): {e:#}");
+    }
+}
+
 /// The diarized speakers for a meeting (empty until a pass has run).
 #[tauri::command]
 pub async fn api_get_meeting_speakers<R: Runtime>(
@@ -100,6 +109,7 @@ pub async fn api_get_meeting_speakers<R: Runtime>(
 ) -> Result<Vec<SpeakerDto>, String> {
     let state = app.state::<AppState>();
     let pool = state.db_manager.pool();
+    convert_owner_links(pool, &meeting_id).await;
 
     SpeakersRepository::get_by_meeting(pool, &meeting_id)
         .await
@@ -157,50 +167,35 @@ pub async fn api_set_live_diarization_enabled(enabled: bool) -> Result<(), Strin
     Ok(())
 }
 
-/// The two voiceprint-consent toggles surfaced to the frontend (specs/0016 1c,
-/// ADR-0007 §2/§3). `storeOthersVoiceprints` is the global opt-in to persist *other
-/// people's* voiceprints (default false); `selfEnrollVoiceprint` is the owner ("You")
-/// self-enroll toggle (default true).
+/// The voiceprint consent surfaced to the frontend (specs/0016 1c, ADR-0007 §2/§3).
+/// `storeVoiceprints` is the one opt-in (default false) that covers everyone's
+/// voiceprint, the owner's included (specs/0078 owner decision 1).
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct VoiceprintSettingsDto {
-    pub store_others_voiceprints: bool,
-    pub self_enroll_voiceprint: bool,
+    pub store_voiceprints: bool,
 }
 
-/// Read both voiceprint-consent toggles (specs/0016 1c).
+/// Read the voiceprint consent (specs/0016 1c).
 #[tauri::command]
 pub async fn api_get_voiceprint_settings() -> Result<VoiceprintSettingsDto, String> {
     let s = settings::load_settings().await;
     Ok(VoiceprintSettingsDto {
-        store_others_voiceprints: s.store_others_voiceprints,
-        self_enroll_voiceprint: s.self_enroll_voiceprint,
+        store_voiceprints: s.store_voiceprints,
     })
 }
 
-/// Set the **global** opt-in to store other people's voiceprints (ADR-0007 §2). Persisted;
-/// preserves the other diarization toggles. Turning it OFF does not delete already-stored
+/// Set the voiceprint consent (ADR-0007 §2, amended by specs/0078). Persisted; preserves
+/// the other diarization toggles. Turning it OFF does not delete already-stored
 /// voiceprints (use "clear all" or per-person opt-out for that) — it only blocks future
-/// enrollment of non-owner people.
+/// enrollment, the owner's included.
 #[tauri::command]
-pub async fn api_set_store_others_voiceprints(enabled: bool) -> Result<(), String> {
+pub async fn api_set_store_voiceprints(enabled: bool) -> Result<(), String> {
     let mut current = settings::load_settings().await;
-    current.store_others_voiceprints = enabled;
+    current.store_voiceprints = enabled;
     settings::save_settings(&current)
         .await
         .map_err(|e| format!("Failed to save voiceprint setting: {e}"))
-}
-
-/// Set the owner ("You") self-enroll toggle (ADR-0007 §3). Persisted; preserves the other
-/// diarization toggles. On by default; turning it off stops self-enrollment from then on
-/// (existing owner samples are untouched — use "clear all" to remove them).
-#[tauri::command]
-pub async fn api_set_self_enroll_voiceprint(enabled: bool) -> Result<(), String> {
-    let mut current = settings::load_settings().await;
-    current.self_enroll_voiceprint = enabled;
-    settings::save_settings(&current)
-        .await
-        .map_err(|e| format!("Failed to save self-enroll setting: {e}"))
 }
 
 /// Wipe the entire voiceprint gallery (ADR-0007 §6 "clear all voiceprints"): every stored
@@ -415,7 +410,10 @@ pub async fn api_merge_speakers<R: Runtime>(
 }
 
 /// Associate a diarized speaker with a real calendar attendee (specs/0010 P2 Task 7):
-/// set both the display name and the stable `email` identity key on the speaker row.
+/// set both the display name and the stable `email` identity key on the speaker row, link
+/// a durable person, roster it and enroll behind the voiceprint consent. An owner address
+/// resolves to the owner; in a room recording that is "This is me" (specs/0078,
+/// `diarization::owner_assign`).
 #[tauri::command]
 pub async fn api_assign_speaker_to_attendee<R: Runtime>(
     app: AppHandle<R>,
@@ -424,127 +422,19 @@ pub async fn api_assign_speaker_to_attendee<R: Runtime>(
     display_name: String,
     email: String,
 ) -> Result<(), String> {
-    let display_name = display_name.trim();
-    let email = email.trim();
-    if display_name.is_empty() {
-        return Err("display_name cannot be empty".to_string());
-    }
-    if email.is_empty() {
-        return Err("email cannot be empty".to_string());
-    }
     let state = app.state::<AppState>();
     let pool = state.db_manager.pool();
-
-    let assigned = SpeakersRepository::assign_to_attendee(
+    let consent = crate::people::enroll::voiceprint_consent().await;
+    crate::diarization::owner_assign::assign_speaker_to_attendee(
         pool,
         &meeting_id,
         &speaker_key,
-        display_name,
-        email,
+        &display_name,
+        &email,
+        consent,
     )
     .await
-    .map_err(|e| format!("Failed to assign speaker to attendee: {e}"))?;
-    if !assigned {
-        return Err(format!(
-            "No speaker '{speaker_key}' found for this meeting to assign"
-        ));
-    }
-
-    // specs/0018: if the assigned address is one of the owner's emails, this attendee IS
-    // the owner — link the speaker to the singleton "You" person rather than minting a
-    // separate person, and route enrollment through the owner self-enroll gate. When the
-    // address is NOT an owner email, behavior is byte-identical to before.
-    use crate::database::repositories::owner_emails::OwnerEmailsRepository;
-    let is_owner_email = OwnerEmailsRepository::contains(pool, email)
-        .await
-        .unwrap_or(false);
-
-    // Enroll-on-confirm (specs/0016 1c): an attendee assignment is a confirmed identity,
-    // so it should grow the gallery too — but it writes `email`, not `person_id`. Upsert
-    // a durable `people` row by email first (the cross-meeting anchor), link the speaker
-    // to it, then enroll behind the consent gate. All best-effort: a failure here must
-    // not undo the (committed) attendee assignment.
-    {
-        use crate::database::repositories::people::PeopleRepository;
-
-        // Owner branch: ensure the "You" person, link the speaker to it (no separate
-        // person), and enroll under the owner. Non-owner branch: the original upsert path.
-        let person_result = if is_owner_email {
-            match crate::people::enroll::ensure_owner_person(pool).await {
-                Ok(owner_id) => PeopleRepository::get(pool, &owner_id).await,
-                Err(e) => Err(e),
-            }
-            .and_then(|opt| {
-                opt.ok_or_else(|| sqlx::Error::Protocol("owner person missing".to_string()))
-            })
-        } else {
-            PeopleRepository::create(pool, display_name, Some(email), None, None).await
-        };
-
-        match person_result {
-            Ok(person) => {
-                // Link the speaker to the durable person (also keeps name/email consistent).
-                if let Err(e) = PeopleRepository::assign_speaker_to_person(
-                    pool,
-                    &meeting_id,
-                    &speaker_key,
-                    &person.id,
-                )
-                .await
-                {
-                    log::warn!("attendee-assign: link person failed (continuing): {e}");
-                }
-                // specs/0038 WS6.c: naming a speaker from an attendee also adds that person
-                // to the meeting roster (so an identified speaker always shows as a
-                // participant). `add_identified` skips the owner ("You" is implicit, never a
-                // roster row — specs/0018; the owner-email branch resolves to the singleton
-                // owner person) and dedupes on the `(meeting_id, person_id)` PK. Best-effort:
-                // the assignment is already committed; a roster failure must not undo it.
-                if let Err(e) =
-                    MeetingParticipantsRepository::add_identified(pool, &meeting_id, &person.id)
-                        .await
-                {
-                    log::warn!(
-                        "attendee-assign: roster add for {} in meeting {meeting_id} failed (continuing): {e}",
-                        person.id
-                    );
-                }
-                // Owner-email attendee → force the OWNER self-enroll gate (the speaker is a
-                // remote cluster the user declared as their own voice). Otherwise the usual
-                // structural is_local routing.
-                let enroll = if is_owner_email {
-                    crate::people::enroll::enroll_owner_voiceprint_for_speaker(
-                        pool,
-                        &meeting_id,
-                        &speaker_key,
-                    )
-                    .await
-                } else {
-                    crate::people::enroll::enroll_voiceprint_for_speaker(
-                        pool,
-                        &meeting_id,
-                        &speaker_key,
-                        &person.id,
-                        // Explicit attendee assignment = user-confirmed (specs/0039 WS3).
-                        crate::people::enroll::EnrollConfidence::UserConfirmed,
-                    )
-                    .await
-                };
-                match enroll {
-                    Ok(true) => log::info!(
-                        "enrolled voiceprint for {speaker_key} in meeting {meeting_id} (attendee {email})"
-                    ),
-                    Ok(false) => {}
-                    Err(e) => log::warn!(
-                        "attendee-assign voiceprint enroll failed (continuing): {e:#}"
-                    ),
-                }
-            }
-            Err(e) => {
-                log::warn!("attendee-assign: upsert person by email failed (continuing): {e}")
-            }
-        }
-    }
+    .map_err(|e| format!("{e:#}"))?;
 
     // specs/0044 WS3: the speaker now carries a real name — debounced refresh of a
     // pristine summary whose name set is stale. Fire-and-forget.
@@ -609,6 +499,8 @@ pub async fn api_get_speaker_suggestions<R: Runtime>(
         .filter(|e| !e.is_empty())
         .collect();
 
+    // Before matching: a cluster that becomes "You" here is out of the candidate set.
+    convert_owner_links(pool, &meeting_id).await;
     let suggestions =
         pipeline::compute_suggestions_with_emails(pool, &meeting_id, &corroborating_emails)
             .await

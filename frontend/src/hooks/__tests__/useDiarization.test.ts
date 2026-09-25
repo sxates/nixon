@@ -257,3 +257,33 @@ describe('useDiarization — progressive speaker reveal', () => {
     expect(result.current.progressPct).toBeNull();
   });
 });
+
+describe('useDiarization — custom start (specs/0078 "Who was on the mic?")', () => {
+  it('runs the given start instead of api_diarize_meeting, after the model check', async () => {
+    const start = vi.fn().mockResolvedValue({ started: true, alreadyRunning: false });
+    const { result } = renderHook(() => useDiarization({ meetingId: 'm1' }));
+
+    await act(async () => {
+      await result.current.identifySpeakers(start);
+    });
+
+    expect(invokeMock).toHaveBeenCalledWith('api_diarization_models_present');
+    expect(start).toHaveBeenCalledTimes(1);
+    expect(invokeMock).not.toHaveBeenCalledWith('api_diarize_meeting', expect.anything());
+    expect(result.current.isRunning).toBe(true);
+  });
+
+  it('a failing start ends the run with an error toast', async () => {
+    const start = vi.fn().mockRejectedValue('Couldn\'t save this meeting\'s audio setup');
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { result } = renderHook(() => useDiarization({ meetingId: 'm1' }));
+
+    await act(async () => {
+      await result.current.identifySpeakers(start);
+    });
+
+    expect(result.current.isRunning).toBe(false);
+    expect(toast.error).toHaveBeenCalled();
+    err.mockRestore();
+  });
+});

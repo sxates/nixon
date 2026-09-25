@@ -64,6 +64,16 @@ pub struct MeetingModel {
     #[serde(default)]
     #[sqlx(default)]
     pub speakers_identified_at: Option<String>,
+    /// Who was on the mic, as the user set it (specs/0078): NULL = detect automatically |
+    /// "room" | "call". Read and written through `MeetingAudioSetupRepository`.
+    #[serde(default)]
+    #[sqlx(default)]
+    pub audio_setup: Option<String>,
+    /// The setup the last diarization pass used (specs/0078): NULL | "call" | "room" |
+    /// "hybrid".
+    #[serde(default)]
+    #[sqlx(default)]
+    pub audio_setup_resolved: Option<String>,
 }
 
 /// Raw row for the enriched meeting-list query (`get_meetings_enriched`).

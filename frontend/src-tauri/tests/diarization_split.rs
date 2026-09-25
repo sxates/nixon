@@ -14,9 +14,9 @@ use app_lib::database::repositories::transcript::TranscriptsRepository;
 use app_lib::database::repositories::transcript_speaker_overrides::TranscriptSpeakerOverridesRepository;
 use app_lib::diarization::align::pad_trimmed;
 use app_lib::diarization::segments::load_segments;
-use app_lib::diarization::split::split_straddling_rows;
+use app_lib::diarization::split::{split_straddling_rows, SplitMode};
 use app_lib::diarization::{
-    align_turns_to_segments, AlignableSegment, SpeakerTurn, LOCAL_SPEAKER_KEY,
+    align_turns_to_segments, AlignMode, AlignableSegment, SpeakerTurn, LOCAL_SPEAKER_KEY,
 };
 use common::{fresh_db, segment};
 
@@ -62,7 +62,7 @@ async fn straddling_row_is_split_and_parts_persisted() {
     let pool = db.pool();
     let (meeting_id, original_id) = seed_meeting_with_row(pool, MERGED_TEXT, 0.0, 6.7).await;
 
-    let n = split_straddling_rows(pool, &meeting_id, &handoff_turns())
+    let n = split_straddling_rows(pool, &meeting_id, &handoff_turns(), SplitMode::Call)
         .await
         .expect("split");
     assert_eq!(n, 1, "exactly one row should split");
@@ -160,7 +160,7 @@ async fn straddling_row_with_word_timestamps_splits_at_word_edge() {
         turn(OFFSET as f32, OFFSET as f32 + 3.0, "spk_0"),
         turn(OFFSET as f32 + 3.4, OFFSET as f32 + 6.3, "spk_1"),
     ];
-    let n = split_straddling_rows(pool, &meeting_id, &turns)
+    let n = split_straddling_rows(pool, &meeting_id, &turns, SplitMode::Call)
         .await
         .expect("split");
     assert_eq!(n, 1, "the word-timestamped straddling row should split");
@@ -193,7 +193,7 @@ async fn overridden_row_is_never_split() {
         .expect("set override");
     assert!(applied);
 
-    let n = split_straddling_rows(pool, &meeting_id, &handoff_turns())
+    let n = split_straddling_rows(pool, &meeting_id, &handoff_turns(), SplitMode::Call)
         .await
         .expect("split");
     assert_eq!(n, 0, "overridden row must not split");
@@ -222,7 +222,7 @@ async fn user_edited_row_is_never_split() {
         .await
         .expect("mark user_edited");
 
-    let n = split_straddling_rows(pool, &meeting_id, &handoff_turns())
+    let n = split_straddling_rows(pool, &meeting_id, &handoff_turns(), SplitMode::Call)
         .await
         .expect("split");
     assert_eq!(n, 0, "a hand-edited row must not split");
@@ -246,7 +246,7 @@ async fn mic_row_is_never_split() {
         .await
         .expect("tag mic");
 
-    let n = split_straddling_rows(pool, &meeting_id, &handoff_turns())
+    let n = split_straddling_rows(pool, &meeting_id, &handoff_turns(), SplitMode::Call)
         .await
         .expect("split");
     assert_eq!(n, 0, "mic rows are single-speaker by construction");
@@ -258,11 +258,11 @@ async fn rerun_is_idempotent() {
     let pool = db.pool();
     let (meeting_id, _) = seed_meeting_with_row(pool, MERGED_TEXT, 0.0, 6.7).await;
 
-    let first = split_straddling_rows(pool, &meeting_id, &handoff_turns())
+    let first = split_straddling_rows(pool, &meeting_id, &handoff_turns(), SplitMode::Call)
         .await
         .expect("split");
     assert_eq!(first, 1);
-    let second = split_straddling_rows(pool, &meeting_id, &handoff_turns())
+    let second = split_straddling_rows(pool, &meeting_id, &handoff_turns(), SplitMode::Call)
         .await
         .expect("re-split");
     assert_eq!(second, 0, "already-tight parts must not split again");
@@ -316,7 +316,7 @@ async fn aligned_keys(
             AlignableSegment::new(ts, te, s.channel)
         })
         .collect();
-    align_turns_to_segments(turns, &alignable)
+    align_turns_to_segments(turns, &alignable, AlignMode::Call)
 }
 
 #[tokio::test]
@@ -334,7 +334,7 @@ async fn system_tagged_row_is_not_carved_into_you_by_an_owner_turn() {
 
     let turns = vec![turn(0.0, 3.0, "spk_0"), turn(3.4, 6.3, LOCAL_SPEAKER_KEY)];
 
-    let n = split_straddling_rows(pool, &meeting_id, &turns)
+    let n = split_straddling_rows(pool, &meeting_id, &turns, SplitMode::Call)
         .await
         .expect("split");
     assert_eq!(
@@ -370,7 +370,7 @@ async fn system_tagged_remote_to_remote_row_still_splits() {
     let (meeting_id, row_id) = seed_meeting_with_row(pool, MERGED_TEXT, 0.0, 6.7).await;
     tag_channel(pool, &row_id, "system").await;
 
-    let n = split_straddling_rows(pool, &meeting_id, &handoff_turns())
+    let n = split_straddling_rows(pool, &meeting_id, &handoff_turns(), SplitMode::Call)
         .await
         .expect("split");
     assert_eq!(n, 1, "remote<->remote handoff still splits");
@@ -399,7 +399,7 @@ async fn microphone_tagged_glued_row_splits_and_aligns_owner_then_remote() {
     // [owner tail (local) + Person A onset (spk_0)] glued into one mic-tagged row.
     let turns = vec![turn(0.0, 3.0, LOCAL_SPEAKER_KEY), turn(3.4, 6.3, "spk_0")];
 
-    let n = split_straddling_rows(pool, &meeting_id, &turns)
+    let n = split_straddling_rows(pool, &meeting_id, &turns, SplitMode::Call)
         .await
         .expect("split");
     assert_eq!(n, 1, "the straddling mic-tagged row should split");
@@ -440,7 +440,7 @@ async fn overridden_glued_row_stays_whole_regardless_of_split_direction() {
     assert!(applied);
 
     let turns = vec![turn(0.0, 3.0, LOCAL_SPEAKER_KEY), turn(3.4, 6.3, "spk_0")];
-    let n = split_straddling_rows(pool, &meeting_id, &turns)
+    let n = split_straddling_rows(pool, &meeting_id, &turns, SplitMode::Call)
         .await
         .expect("split");
     assert_eq!(
@@ -454,4 +454,58 @@ async fn overridden_glued_row_stays_whole_regardless_of_split_direction() {
         .await
         .expect("count");
     assert_eq!(count, 1, "the overridden row stays a single row");
+}
+
+/// specs/0078: in a room recording every voice is on the mic. A mic-tagged row that
+/// straddles two clustered speakers splits (with no owner turns at all), each part KEEPS
+/// the row's `microphone` tag, and room alignment labels the parts by their turns. The
+/// same row in call mode stays whole: there are no owner turns to split a mic row against.
+#[tokio::test]
+async fn room_mode_splits_a_mic_row_between_two_clusters_and_keeps_its_channel() {
+    let (_dir, db) = fresh_db().await;
+    let pool = db.pool();
+    let (meeting_id, row_id) = seed_meeting_with_row(pool, MERGED_TEXT, 0.0, 6.7).await;
+    tag_channel(pool, &row_id, "microphone").await;
+
+    let call = split_straddling_rows(pool, &meeting_id, &handoff_turns(), SplitMode::Call)
+        .await
+        .expect("call split");
+    assert_eq!(
+        call, 0,
+        "call mode never splits a mic row without owner turns"
+    );
+
+    let n = split_straddling_rows(pool, &meeting_id, &handoff_turns(), SplitMode::Room)
+        .await
+        .expect("room split");
+    assert_eq!(n, 1, "room mode splits the mic row at the cluster handoff");
+
+    let channels: Vec<Option<String>> = sqlx::query_scalar::<_, Option<String>>(
+        "SELECT channel FROM transcripts WHERE meeting_id = ? ORDER BY audio_start_time",
+    )
+    .bind(&meeting_id)
+    .fetch_all(pool)
+    .await
+    .expect("rows");
+    assert_eq!(
+        channels,
+        vec![
+            Some("microphone".to_string()),
+            Some("microphone".to_string())
+        ],
+        "room mode never rewrites transcripts.channel"
+    );
+
+    let segments = load_segments(pool, &meeting_id).await.expect("segments");
+    let alignable: Vec<AlignableSegment> = segments
+        .iter()
+        .map(|s| {
+            let (ts, te) = pad_trimmed(s.start, s.end);
+            AlignableSegment::new(ts, te, s.channel)
+        })
+        .collect();
+    assert_eq!(
+        align_turns_to_segments(&handoff_turns(), &alignable, AlignMode::Room),
+        vec!["spk_0".to_string(), "spk_1".to_string()]
+    );
 }

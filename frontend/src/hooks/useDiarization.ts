@@ -77,7 +77,7 @@ interface DiarizationStatusPayload {
   progressPct: number;
 }
 /** `api_diarize_meeting` result (specs/0029 WS3.1). */
-interface DiarizeStartResult {
+export interface DiarizeStartResult {
   started: boolean;
   alreadyRunning: boolean;
 }
@@ -97,7 +97,11 @@ interface UseDiarizationReturn {
   /** Byte-level model-download progress label (specs/0061 W2), or null when
    *  no download is in flight (models already cached, or a run finished). */
   downloadProgress: { label: string } | null;
-  identifySpeakers: () => Promise<void>;
+  /** Start a pass. `start` replaces the default `api_diarize_meeting` call with
+   *  another command that starts one and returns the same DTO (specs/0078:
+   *  `api_set_meeting_audio_setup`), so the model check, progress and errors are
+   *  shared. */
+  identifySpeakers: (start?: () => Promise<DiarizeStartResult>) => Promise<void>;
 }
 
 export function useDiarization({
@@ -281,7 +285,7 @@ export function useDiarization({
     };
   }, [meetingId, resetProgressGuard]);
 
-  const identifySpeakers = useCallback(async () => {
+  const identifySpeakers = useCallback(async (start?: () => Promise<DiarizeStartResult>) => {
     if (!meetingId || isRunning) return;
 
     setIsRunning(true);
@@ -322,10 +326,10 @@ export function useDiarization({
 
       // 2. Start the background pass. Completion/errors arrive via events.
       setStage('starting');
-      const start = await invoke<DiarizeStartResult>('api_diarize_meeting', {
-        meetingId,
-      });
-      if (start?.alreadyRunning) {
+      const started = start
+        ? await start()
+        : await invoke<DiarizeStartResult>('api_diarize_meeting', { meetingId });
+      if (started?.alreadyRunning) {
         // WS3.1: a pass is already live for this meeting — attach, don't restart
         // (and don't treat it as a failure). Pull the current stage/pct so the
         // button reflects the real run instead of sitting at "starting".

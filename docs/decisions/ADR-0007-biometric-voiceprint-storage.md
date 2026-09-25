@@ -68,6 +68,15 @@ that keeps voiceprints off the cloud. This ADR records how we get the feature *a
      voiceprints are stored under this person. The local/mic speaker key (`speakers.is_local = 1`) routes
      to this person regardless of which `person_id` the assign call passed.
 
+   - **Amended by specs/0078 (2026-09-24).** The owner's voiceprint is now gated like anyone
+     else's: the separate on-by-default self-enroll toggle (`self_enroll_voiceprint`) is retired,
+     and the single off-by-default **"Store voiceprints"** consent (`store_voiceprints`, formerly
+     `store_others_voiceprints`; old settings files still load) covers the owner too. Every owner
+     enroll path checks it: the `is_local` row, a speaker assigned to `person-owner-self`, an
+     owner-email attendee, "This is me", and the owner bootstrap from the diarization pass
+     (one sample per meeting, back-linked to `local`). The per-person `voiceprint_opt_out` flag
+     still applies to everyone but the owner.
+
 4. **A voiceprint gallery keyed to the `people` entity; voiceprint is signal, not identity.** Identity
    is the `people` row, anchored by **email** (from calendar-attendee mapping; `speakers.email`
    exists). Voiceprints are *matching-signal* rows attached to a person, **best-N samples** per person

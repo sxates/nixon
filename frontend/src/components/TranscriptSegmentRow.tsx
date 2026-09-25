@@ -8,6 +8,7 @@ import { MeetingAttendee, Person } from "@/types";
 import { speakerColorClass, speakerBgClass } from "@/lib/speaker-colors";
 import { cn } from "@/lib/utils";
 import { InlineSpeakerAssign } from "./MeetingDetails/InlineSpeakerAssign";
+import type { OwnerActionContext } from "./MeetingDetails/SpeakerOwnerAction";
 import { SegmentSpeakerMenu } from "./MeetingDetails/SegmentSpeakerMenu";
 import { SegmentTextEditor } from "./MeetingDetails/SegmentTextEditor";
 
@@ -44,6 +45,8 @@ export interface InlineSpeakerAssignment {
   onCreateSpeaker: (
     displayName: string,
   ) => Promise<{ speakerKey: string; displayName: string } | null>;
+  /** specs/0078 — "This is me" / "This isn't me" in the name's popover. */
+  owner?: OwnerActionContext;
 }
 
 // Helper function to format seconds as recording-relative time [MM:SS]
@@ -280,6 +283,7 @@ export const TranscriptSegment = memo(function TranscriptSegment({
                             people={assignment.people}
                             onAssignAttendee={assignment.onAssignAttendee}
                             onAssignPerson={assignment.onAssignPerson}
+                            owner={assignment.owner}
                         />
                     ) : speakerName ? (
                         <span className={`u-typed font-bold uppercase text-[12px] tracking-[0.02em] whitespace-nowrap ${speakerColorClass(speaker)}`}>

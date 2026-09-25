@@ -26,6 +26,11 @@ import { filterPeople } from '@/lib/people-filter';
 import { cn } from '@/lib/utils';
 import { speakerColorClass } from '@/lib/speaker-colors';
 import type { MeetingAttendee, Person } from '@/types';
+import {
+  ownerActionFor,
+  SpeakerOwnerAction,
+  type OwnerActionContext,
+} from './SpeakerOwnerAction';
 
 export interface InlineSpeakerAssignProps {
   speakerKey: string;
@@ -37,6 +42,8 @@ export interface InlineSpeakerAssignProps {
     attendee: { name: string; email: string },
   ) => Promise<void>;
   onAssignPerson: (speakerKey: string, person: Person) => Promise<void>;
+  /** specs/0078 — "This is me" / "This isn't me"; absent = not offered. */
+  owner?: OwnerActionContext;
 }
 
 export function InlineSpeakerAssign({
@@ -46,6 +53,7 @@ export function InlineSpeakerAssign({
   people,
   onAssignAttendee,
   onAssignPerson,
+  owner,
 }: InlineSpeakerAssignProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -96,8 +104,12 @@ export function InlineSpeakerAssign({
     await onAssignPerson(speakerKey, person);
   };
 
-  // No identities to pick from → just render the name (still styled), no affordance.
-  const hasOptions = attendees.length > 0 || offeredPeople.length > 0;
+  // No identities to pick from (and no owner action) → just render the name (still
+  // styled), no affordance.
+  const hasPickList = attendees.length > 0 || offeredPeople.length > 0;
+  const hasOwnerAction =
+    !!owner && ownerActionFor(speakerKey, speakerKey === 'local', owner) !== null;
+  const hasOptions = hasPickList || hasOwnerAction;
   if (!hasOptions) {
     return (
       <span
@@ -137,14 +149,23 @@ export function InlineSpeakerAssign({
       </PopoverTrigger>
       <PopoverContent align="start" className="w-64 p-2">
         <div className="space-y-2">
-          <Input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Assign to a person…"
-            className="h-8 text-sm"
-            aria-label="Search people to assign"
-            autoFocus
+          <SpeakerOwnerAction
+            speakerKey={speakerKey}
+            isLocal={speakerKey === 'local'}
+            owner={owner}
+            onBeforeAction={() => setOpen(false)}
           />
+
+          {hasPickList && (
+            <Input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Assign to a person…"
+              className="h-8 text-sm"
+              aria-label="Search people to assign"
+              autoFocus
+            />
+          )}
 
           {attendees.length > 0 && (
             <div className="space-y-1">

@@ -73,7 +73,7 @@ function mockInvokeResponses() {
       case 'api_get_expected_speaker_count':
         return Promise.resolve(null);
       case 'api_get_voiceprint_settings':
-        return Promise.resolve({ storeOthersVoiceprints: false, selfEnrollVoiceprint: true });
+        return Promise.resolve({ storeVoiceprints: false });
       case 'api_get_zoom_mute_gate':
         return Promise.resolve(false);
       case 'get_audio_devices':
@@ -249,7 +249,7 @@ describe('RecordingSettings — settings hygiene (specs/0061 W6)', () => {
         case 'api_get_expected_speaker_count':
           return Promise.resolve(null);
         case 'api_get_voiceprint_settings':
-          return Promise.resolve({ storeOthersVoiceprints: false, selfEnrollVoiceprint: true });
+          return Promise.resolve({ storeVoiceprints: false });
         case 'api_get_zoom_mute_gate':
           return Promise.resolve(false);
         case 'get_audio_devices':
@@ -299,7 +299,7 @@ describe('RecordingSettings — settings hygiene (specs/0061 W6)', () => {
         case 'api_get_expected_speaker_count':
           return Promise.resolve(null);
         case 'api_get_voiceprint_settings':
-          return Promise.resolve({ storeOthersVoiceprints: false, selfEnrollVoiceprint: true });
+          return Promise.resolve({ storeVoiceprints: false });
         case 'api_get_zoom_mute_gate':
           return Promise.resolve(false);
         case 'get_audio_devices':

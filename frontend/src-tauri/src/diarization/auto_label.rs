@@ -101,6 +101,38 @@ pub async fn apply(
             );
             continue;
         };
+        // specs/0078: the owner won a room-recording cluster. "You" is keyed on `local`
+        // everywhere downstream, so the cluster is re-keyed rather than linked. Like every
+        // automatic label, this never enrolls a voiceprint.
+        if person_id == crate::people::enroll::OWNER_PERSON_ID {
+            match SpeakersRepository::rekey_to_local(
+                pool,
+                meeting_id,
+                &s.speaker_key,
+                person_id,
+                false,
+            )
+            .await
+            {
+                Ok(Some(r)) => {
+                    applied += 1;
+                    log::info!(
+                        "diarization: auto-labeled {} as the owner (\"You\", {} lines) in meeting {meeting_id}",
+                        s.speaker_key,
+                        r.moved_lines
+                    );
+                }
+                Ok(None) => log::warn!(
+                    "diarization: owner auto-label of {} found no speaker row",
+                    s.speaker_key
+                ),
+                Err(e) => log::warn!(
+                    "diarization: owner auto-label of {} failed (continuing): {e}",
+                    s.speaker_key
+                ),
+            }
+            continue;
+        }
         match PeopleRepository::assign_speaker_to_person(
             pool,
             meeting_id,
@@ -229,6 +261,44 @@ mod tests {
             spk_2.person_id, None,
             "a confirm-first suggestion must never be applied"
         );
+    }
+
+    /// specs/0078: when the owner wins a room cluster, the cluster BECOMES "You" (re-keyed
+    /// to `local`), and no voiceprint sample is written for it.
+    #[tokio::test]
+    async fn an_owner_auto_label_rekeys_the_cluster_to_local_without_enrolling() {
+        use crate::people::enroll::{ensure_owner_person, OWNER_PERSON_ID};
+        let pool = test_pool().await;
+        let meeting =
+            MeetingsRepository::create_meeting(&pool, Some("M".into()), None, None, None, None)
+                .await
+                .unwrap();
+        insert_speaker(&pool, &meeting, "spk_0").await;
+        insert_speaker(&pool, &meeting, "spk_1").await;
+        ensure_owner_person(&pool).await.unwrap();
+
+        let applied = apply(
+            &pool,
+            &meeting,
+            &[suggestion("spk_1", Some(OWNER_PERSON_ID), true)],
+        )
+        .await;
+        assert_eq!(applied, 1);
+
+        let rows = SpeakersRepository::get_by_meeting(&pool, &meeting)
+            .await
+            .unwrap();
+        let keys: Vec<&str> = rows.iter().map(|r| r.speaker_key.as_str()).collect();
+        assert!(
+            keys.contains(&"local"),
+            "the owner cluster is now local: {keys:?}"
+        );
+        assert!(!keys.contains(&"spk_1"), "{keys:?}");
+        let samples: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM voiceprints")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(samples, 0, "an automatic owner label never enrolls");
     }
 
     /// No durable person to link to → nothing to apply, and the rest of the batch survives.

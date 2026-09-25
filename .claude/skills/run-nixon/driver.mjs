@@ -274,7 +274,7 @@ const MOCKS = {
   api_get_custom_openai_config: {},
   builtin_ai_get_model_info: { ready: true },
   api_get_person_voiceprint_count: 0,
-  api_get_voiceprint_settings: { storeOthersVoiceprints: false },
+  api_get_voiceprint_settings: { storeVoiceprints: false },
   api_get_day_agenda: TODAY_AGENDA,
   api_get_upcoming_meetings: [],
   api_get_meetings: LIST_MEETINGS,

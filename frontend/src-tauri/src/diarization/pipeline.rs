@@ -5,9 +5,11 @@
 //! event — specs/0063 W3). This module holds the pass itself, run by `launch` on a
 //! background task and emitting progress/complete/error events:
 //!
-//! 1. Resolve the meeting's recording folder (`meetings.folder_path`) → its
-//!    `system.wav` (`audio::system_channel_wav`). Errors clearly if absent —
-//!    meetings recorded before P1-B1 have no per-channel audio.
+//! 1. Resolve the meeting's recording folder (`meetings.folder_path`) and its audio
+//!    setup (`room::resolve_diarization_input`, specs/0078): a call clusters
+//!    `system.wav`; a room recording (silent system track) clusters `mic.wav` and finds
+//!    the owner among the clusters. Errors clearly if there is no channel audio —
+//!    meetings recorded before P1-B1 have none.
 //! 2. Ensure the two ONNX models are present (download on demand), or error.
 //! 3. Decode `system.wav` to 16 kHz mono f32.
 //! 4. Run [`SherpaDiarizer`] (auto speaker count) → recording-relative speaker turns
@@ -33,16 +35,21 @@ use anyhow::{anyhow, Context, Result};
 use std::path::PathBuf;
 use tauri::{AppHandle, Emitter, Manager, Runtime};
 
-use crate::audio::channel_writer::{system_channel_path, system_channel_wav};
 use crate::database::repositories::speaker::{SpeakerIdentitySnapshot, SpeakersRepository};
 use crate::database::repositories::transcript_speaker_overrides::TranscriptSpeakerOverridesRepository;
 use crate::diarization::align::{
-    align_turns_to_segments, AlignableSegment, Channel, LOCAL_SPEAKER_KEY,
+    align_turns_to_segments, AlignMode, AlignableSegment, Channel, LOCAL_SPEAKER_KEY,
 };
 use crate::diarization::models;
+use crate::diarization::room_types::AudioSetup;
 use crate::diarization::segments::load_segments;
+use crate::diarization::split::{split_straddling_rows, SplitMode};
 use crate::diarization::{Diarizer, SherpaDiarizer};
 use crate::state::AppState;
+
+// The cross-meeting matcher moved to `candidates.rs` (specs/0078); re-exported so the
+// command layer and tests keep their paths.
+pub use crate::diarization::candidates::{compute_suggestions, compute_suggestions_with_emails};
 
 /// Sample rate the diarizer requires (system.wav is already 16 kHz mono).
 const DIARIZATION_SAMPLE_RATE: u32 = 16_000;
@@ -169,62 +176,6 @@ pub fn run_status(meeting_id: &str) -> Option<DiarizationRunStatus> {
     registry_lock().get(meeting_id).cloned()
 }
 
-/// Resolve a meeting's `system.wav` from its persisted recording folder.
-///
-/// Happy path: `meetings.folder_path` is set and its `system.wav` exists → use it.
-///
-/// Fallback: `folder_path` is NULL (the frontend save can race the folder write, see
-/// the module-level note) or points somewhere without a `system.wav`. We then scan
-/// the recordings root and match a folder by the meeting's `created_at`/title
-/// ([`folder_match::best_folder_match`]). On a confident match we use it and
-/// opportunistically backfill `folder_path` so subsequent reads (and the "open
-/// meeting folder" feature) work without re-scanning. Errors are user-actionable.
-async fn resolve_system_wav<R: Runtime>(app: &AppHandle<R>, meeting_id: &str) -> Result<PathBuf> {
-    let state = app.state::<AppState>();
-    let pool = state.db_manager.pool();
-
-    let meta = crate::database::repositories::meeting::MeetingsRepository::get_meeting_metadata(
-        pool, meeting_id,
-    )
-    .await
-    .with_context(|| format!("look up meeting {meeting_id}"))?
-    .ok_or_else(|| anyhow!("meeting {meeting_id} not found"))?;
-
-    // Happy path: stored folder with a system channel (`system.wav`, or `.opus` once kept
-    // audio is compressed, specs/0072).
-    if let Some(folder) = meta.folder_path.as_deref() {
-        if let Some(wav) = system_channel_path(std::path::Path::new(folder)) {
-            return Ok(wav);
-        }
-        log::warn!(
-            "meeting {meeting_id} folder_path is set ({folder}) but has no system channel; \
-             falling back to a recordings-root scan"
-        );
-    }
-
-    // Fallback: locate the recording folder under any known recordings root by name/time.
-    let resolved = super::folder_locate::locate_recording_folder(&meta).with_context(|| {
-        format!("locate recording folder for meeting {meeting_id} (folder_path was unusable)")
-    })?;
-    let wav = system_channel_path(&resolved).unwrap_or_else(|| system_channel_wav(&resolved));
-
-    // Opportunistic backfill so we don't re-scan next time. Best-effort: log + continue.
-    let folder_str = resolved.to_string_lossy().to_string();
-    match crate::database::repositories::meeting::MeetingsRepository::update_folder_path(
-        pool,
-        meeting_id,
-        &folder_str,
-    )
-    .await
-    {
-        Ok(true) => log::info!("backfilled folder_path for meeting {meeting_id} -> {folder_str}"),
-        Ok(false) => log::warn!("folder_path backfill for meeting {meeting_id} updated no rows"),
-        Err(e) => log::warn!("folder_path backfill for meeting {meeting_id} failed: {e}"),
-    }
-
-    Ok(wav)
-}
-
 /// Display name for a speaker key. `local` → "You"; `spk_N` → "Speaker {N+1}";
 /// `unknown` (the WS3.3 overflow bucket) → "Unknown speaker"; anything else (e.g.
 /// a fallback key) is passed through best-effort.
@@ -249,14 +200,19 @@ pub fn display_name_for_key(key: &str) -> String {
 /// `embeddings` is the `spk_N → L2-normalized vector` map from
 /// `diarize_with_embeddings` (specs/0016 1a). For each REMOTE speaker that has an
 /// embedding, we persist the serialized bytes + dim + [`EMBEDDING_MODEL_ID`] so the
-/// cross-meeting matcher has prior art to compare against. The `local`/"You" key is
-/// never voiceprinted here (ADR-0007 §3 self-enroll is a 1c behavior), so it keeps a
-/// NULL embedding. A re-run refreshes embeddings on `ON CONFLICT` (widened `upsert`).
+/// cross-meeting matcher has prior art to compare against. In a call the `local`/"You"
+/// key is never voiceprinted here (ADR-0007 §3), so it keeps a NULL embedding. In a room
+/// recording (`setup.owner_is_clustered()`, specs/0078) `local` is the owner's CLUSTER and keeps
+/// its embedding: the re-run carry-over and "This is me" enrollment read it, and the
+/// `is_local = 1` filters keep it out of matching. A re-run refreshes embeddings on
+/// `ON CONFLICT` (widened `upsert`). `setup` is recorded in `meetings.audio_setup_resolved`
+/// in the same transaction as the speaker keys (specs/0078).
 async fn persist(
     pool: &sqlx::SqlitePool,
     meeting_id: &str,
     assignments: &[(String, String)],
     embeddings: &std::collections::HashMap<String, Vec<f32>>,
+    setup: AudioSetup,
 ) -> Result<usize> {
     use crate::diarization::embedding::{embedding_to_bytes, EMBEDDING_MODEL_ID};
     use sqlx::Acquire;
@@ -311,6 +267,11 @@ async fn persist(
     TranscriptSpeakerOverridesRepository::reapply(&mut tx, meeting_id)
         .await
         .context("re-apply per-segment speaker overrides")?;
+    crate::database::repositories::meeting_audio_setup::MeetingAudioSetupRepository::set_resolved(
+        &mut *tx, meeting_id, setup,
+    )
+    .await
+    .context("record the pass's audio setup")?;
 
     tx.commit().await.context("commit segment speaker keys")?;
     // Return the dedicated connection: everything below runs on the pool, and a
@@ -322,8 +283,8 @@ async fn persist(
     for key in &keys {
         let is_local = key.as_str() == LOCAL_SPEAKER_KEY;
 
-        // Voiceprint only REMOTE speakers (`local` stays NULL — ADR-0007 §3).
-        let bytes = if is_local {
+        // Voiceprint only clustered speakers (a call's `local` stays NULL — ADR-0007 §3).
+        let bytes = if is_local && !setup.owner_is_clustered() {
             None
         } else {
             embeddings.get(key).map(|v| embedding_to_bytes(v))
@@ -462,10 +423,11 @@ async fn restore_user_identities(
             }
         };
 
-        // Deterministic scan (sorted keys) over unclaimed new clusters.
+        // Deterministic scan (sorted keys) over unclaimed new clusters. Never `local`: in a
+        // room pass it carries the owner's embedding, and the owner's identity is fixed.
         let mut best: Option<(&str, f32)> = None;
         for key in new_keys {
-            if claimed.contains(key) {
+            if claimed.contains(key) || key == LOCAL_SPEAKER_KEY {
                 continue;
             }
             let Some(centroid) = new_embeddings.get(key) else {
@@ -647,25 +609,101 @@ fn diarize_audio_blocking<R: Runtime>(
     Ok((turns, embeddings))
 }
 
+/// Split, align and persist one pass's turns (the model-free half of the pass, public so
+/// the routing tests drive the real code). Returns `(speakers persisted, segments)`.
+///
+/// - specs/0044 W1.2: rows that straddle a fast speaker handoff are split at the turn
+///   boundaries BEFORE alignment. Best-effort: the split has its own transaction, so a
+///   failure leaves rows whole and alignment still works.
+/// - specs/0029 WS3.4 / 0043 W1.3: channel-aware alignment on the pad-trimmed speech core
+///   (specs/0044 W1.1). In a call, mic rows are "You" by channel; in a room (specs/0078)
+///   they are attributed from the clustered turns, and the channel tags are never rewritten.
+pub async fn attribute_and_persist(
+    pool: &sqlx::SqlitePool,
+    meeting_id: &str,
+    turns: &[crate::diarization::SpeakerTurn],
+    embeddings: &std::collections::HashMap<String, Vec<f32>>,
+    setup: AudioSetup,
+) -> Result<(usize, usize)> {
+    let room = setup.owner_is_clustered();
+    let (split_mode, align_mode) = if room {
+        (SplitMode::Room, AlignMode::Room)
+    } else {
+        (SplitMode::Call, AlignMode::Call)
+    };
+    if let Err(e) = split_straddling_rows(pool, meeting_id, turns, split_mode).await {
+        log::warn!("diarization split failed for {meeting_id} (continuing unsplit): {e:#}");
+    }
+
+    let segments = load_segments(pool, meeting_id).await?;
+    if segments.is_empty() {
+        return Err(anyhow!(
+            "meeting {meeting_id} has no timed transcript segments to attribute"
+        ));
+    }
+    let alignable: Vec<AlignableSegment> = segments
+        .iter()
+        .map(|s| {
+            let (ts, te) = crate::diarization::align::pad_trimmed(s.start, s.end);
+            AlignableSegment::new(ts, te, s.channel)
+        })
+        .collect();
+    let keys = align_turns_to_segments(turns, &alignable, align_mode);
+    let mic_tagged = alignable
+        .iter()
+        .filter(|s| s.channel == Channel::Microphone)
+        .count();
+    log::info!(
+        "Diarization alignment for meeting {meeting_id}: {} segments ({mic_tagged} mic-tagged{})",
+        alignable.len(),
+        if room {
+            ", attributed from mic clusters"
+        } else {
+            " → \"You\" by channel"
+        }
+    );
+
+    let assignments: Vec<(String, String)> = segments
+        .into_iter()
+        .zip(keys)
+        .map(|(seg, key)| (seg.id, key))
+        .collect();
+    let persisted = persist(pool, meeting_id, &assignments, embeddings, setup).await?;
+    // specs/0078: a room cluster the user assigned to themself (carried onto its new key
+    // by `restore_user_identities`) stays "You" across the re-run.
+    if let Err(e) = crate::diarization::owner_assign::convert_owner_links(pool, meeting_id).await {
+        log::warn!(
+            "diarization: owner-link carry-over for {meeting_id} failed (continuing): {e:#}"
+        );
+    }
+    Ok((persisted, assignments.len()))
+}
+
 /// The async body of `diarize_meeting` ([`crate::diarization::launch::diarize_meeting`]);
 /// factored out so errors funnel to one `diarization-error` emit.
 pub(super) async fn run<R: Runtime>(app: AppHandle<R>, meeting_id: String) -> Result<()> {
     log::info!("Starting diarization for meeting {meeting_id}");
 
-    // specs/0073: hold the meeting's folder lease across every audio read (system.wav here,
-    // mic.wav in `inject_owner_turns`); resolving the WAV re-reads `folder_path` under it.
+    // specs/0073: hold the meeting's folder lease across every audio read (room detection
+    // and the clustered track here, mic.wav in `inject_owner_turns`); resolving the input
+    // re-reads `folder_path` under it.
     let folder_lease = crate::audio::folder_lease::acquire(
         &meeting_id,
         crate::audio::folder_lease::LeaseHolder::Diarization,
     )
     .await;
-    // Resolve audio (async DB + fs check) before the blocking work.
-    let wav = resolve_system_wav(&app, &meeting_id).await?;
+    // specs/0078: which setup (call or room) and which track to cluster; recorded in
+    // `meetings.audio_setup_resolved` when the results persist.
+    let state = app.state::<AppState>();
+    let pool = state.db_manager.pool();
+    let input = crate::diarization::room::resolve_diarization_input(pool, &meeting_id).await?;
+    let setup = input.setup;
 
     // Resolve the speaker count by precedence: manual override > calendar-seed >
     // Auto (specs/0011 calendar-seed). Loaded here (async) so the blocking pass
     // gets a plain value; the calendar lookup is best-effort and never fatal.
     let (speaker_count, count_source) = resolve_meeting_speaker_count(&app, &meeting_id).await;
+    let speaker_count = crate::diarization::room::room_speaker_ceiling(speaker_count, setup);
 
     // specs/0039 WS1: the optional consolidation-floor tuning override (None → the
     // built-in CONSOLIDATE_FLOOR). Loaded here (async) so the blocking pass gets a
@@ -677,7 +715,8 @@ pub(super) async fn run<R: Runtime>(app: AppHandle<R>, meeting_id: String) -> Re
     // Blocking: models + decode + compute (+ per-cluster re-embed for the matcher).
     let app_for_blocking = app.clone();
     let mid = meeting_id.clone();
-    let (mut turns, embeddings) = tauri::async_runtime::spawn_blocking(move || {
+    let wav = input.cluster_wav.clone();
+    let (mut turns, mut embeddings) = tauri::async_runtime::spawn_blocking(move || {
         diarize_audio_blocking(
             app_for_blocking,
             mid,
@@ -702,67 +741,52 @@ pub(super) async fn run<R: Runtime>(app: AppHandle<R>, meeting_id: String) -> Re
         serde_json::json!({ "meeting_id": meeting_id, "stage": STAGE_ATTRIBUTING }),
     );
 
-    // Align + persist (async DB).
-    let state = app.state::<AppState>();
-    let pool = state.db_manager.pool();
-    crate::diarization::owner_turns::inject_owner_turns(&app, pool, &meeting_id, &mut turns).await;
+    // The meeting's calendar attendee emails corroborate gallery matches for the auto-label
+    // gate: the room owner match below and the cross-meeting matcher after persist.
+    let corroborating_emails: Vec<String> = lookup_calendar_attendees(&app, &meeting_id)
+        .await
+        .into_iter()
+        .filter_map(|a| a.email)
+        .map(|e| e.trim().to_lowercase())
+        .filter(|e| !e.is_empty())
+        .collect();
+
+    // Call: the owner is the mic channel; inject its turns so split can cut owner<->remote
+    // rows. Room (specs/0078): the owner is one of the clusters; find it and re-key it to
+    // `local` before split/align.
+    let (owner, owner_clip) = if setup.owner_is_clustered() {
+        let owner = crate::diarization::room::label_owner_cluster(
+            pool,
+            &meeting_id,
+            &mut turns,
+            &mut embeddings,
+            &corroborating_emails,
+        )
+        .await;
+        (owner, None)
+    } else {
+        let clip =
+            crate::diarization::owner_turns::inject_owner_turns(pool, &meeting_id, &mut turns)
+                .await;
+        (None, clip)
+    };
     drop(folder_lease); // the last audio read is done
 
-    // specs/0044 W1.2: a fast speaker handoff (gap shorter than the VAD
-    // redemption window) merges both speakers into ONE transcript row, which
-    // would then take a single max-overlap label — the "first sentence on the
-    // wrong speaker" bug. Split such rows at the turn boundaries BEFORE loading
-    // segments for alignment. Best-effort: the split runs in its own
-    // transaction, so a failure leaves rows whole and alignment still works.
-    if let Err(e) =
-        crate::diarization::split::split_straddling_rows(pool, &meeting_id, &turns).await
-    {
-        log::warn!("diarization split failed for {meeting_id} (continuing unsplit): {e:#}");
-    }
-
-    let segments = load_segments(pool, &meeting_id).await?;
-    if segments.is_empty() {
-        return Err(anyhow!(
-            "meeting {meeting_id} has no timed transcript segments to attribute"
-        ));
-    }
-
-    // specs/0029 WS3.4: channel-aware alignment. Mic-tagged segments stay "You"
-    // unconditionally; system-tagged segments take diarized turns (or the unknown
-    // bucket); mixed/legacy-untagged rows take the max-overlap turn, else the
-    // nearest turn within 1.0s, else the unknown bucket — never "You"
-    // (specs/0043 W1.3).
-    // specs/0044 W1.1: overlaps are scored on the pad-trimmed speech core (the
-    // stored row keeps its STT-context pads; only alignment ignores them).
-    let alignable: Vec<AlignableSegment> = segments
-        .iter()
-        .map(|s| {
-            let (ts, te) = crate::diarization::align::pad_trimmed(s.start, s.end);
-            AlignableSegment::new(ts, te, s.channel)
-        })
-        .collect();
-    let keys = align_turns_to_segments(&turns, &alignable);
-    let mic_tagged = alignable
-        .iter()
-        .filter(|s| s.channel == Channel::Microphone)
-        .count();
+    let (persisted_count, segment_count) =
+        attribute_and_persist(pool, &meeting_id, &turns, &embeddings, setup).await?;
     log::info!(
-        "Diarization alignment for meeting {meeting_id}: {} segments ({mic_tagged} mic-tagged → \"You\" by channel)",
-        alignable.len()
+        "Diarization complete for meeting {meeting_id}: {persisted_count} speakers across \
+         {segment_count} segments ({} pass)",
+        setup.as_str()
     );
-
-    let assignments: Vec<(String, String)> = segments
-        .into_iter()
-        .zip(keys)
-        .map(|(seg, key)| (seg.id, key))
-        .collect();
-
-    let persisted_count = persist(pool, &meeting_id, &assignments, &embeddings).await?;
-
-    log::info!(
-        "Diarization complete for meeting {meeting_id}: {persisted_count} speakers across {} segments",
-        assignments.len()
-    );
+    crate::diarization::owner_bootstrap::enroll_after_pass(
+        pool,
+        &meeting_id,
+        owner.as_ref(),
+        &embeddings,
+        owner_clip,
+    )
+    .await;
 
     // The clusters are committed, so the transcript can show them NOW rather than after the
     // matcher and the auto-label pass (owner feedback 2026-09-21). Emitted after the write,
@@ -772,21 +796,13 @@ pub(super) async fn run<R: Runtime>(app: AppHandle<R>, meeting_id: String) -> Re
 
     // specs/0016 1a/1c: run the cross-meeting matcher over this meeting's freshly-
     // persisted remote voiceprints vs. previously-identified speakers AND the voiceprint
-    // gallery. The meeting's calendar attendee emails corroborate gallery matches for the
-    // auto-label gate. Best-effort: a matcher/DB hiccup must not fail the (already-
+    // gallery. Best-effort: a matcher/DB hiccup must not fail the (already-
     // persisted) diarization pass.
     registry_update(&meeting_id, STAGE_MATCHING, None);
     let _ = app.emit(
         EVENT_PROGRESS,
         serde_json::json!({ "meeting_id": meeting_id, "stage": STAGE_MATCHING }),
     );
-    let corroborating_emails: Vec<String> = lookup_calendar_attendees(&app, &meeting_id)
-        .await
-        .into_iter()
-        .filter_map(|a| a.email)
-        .map(|e| e.trim().to_lowercase())
-        .filter(|e| !e.is_empty())
-        .collect();
     let suggestions = compute_suggestions_with_emails(pool, &meeting_id, &corroborating_emails)
         .await
         .unwrap_or_else(|e| {
@@ -875,123 +891,14 @@ pub(super) async fn run<R: Runtime>(app: AppHandle<R>, meeting_id: String) -> Re
             // which also covers the deferred wait-behind-in-flight-run path this flag
             // misses (it is false for SpeakerRefreshOutcome::DeferredBehindInFlightRun).
             "summaryRefreshing": summary_refreshing,
+            // specs/0078: the setup this pass ran with ("call" | "room" | "hybrid"), and
+            // whether it was "detected" or forced by the user's "override".
+            "audioSetup": setup.as_str(),
+            "audioSetupSource": input.source.as_str(),
         }),
     );
 
     Ok(())
-}
-
-/// Run the cross-meeting matcher for a saved meeting: load this meeting's remote
-/// voiceprints + the prior-identified candidate set (prior per-meeting speakers AND the
-/// durable voiceprint-gallery centroids, specs/0016 1c), then rank by cosine via the pure
-/// [`identity`](crate::diarization::identity) module. Shared by the offline pass and the
-/// `api_get_speaker_suggestions` command so both produce identical results.
-///
-/// `corroborating_emails` (the meeting's calendar-attendee emails) is passed to the
-/// matcher's auto-label gate — only a high-confidence GALLERY match whose person's email
-/// is among them is marked `auto_label`. The DB-only inputs are gathered here; the ranking
-/// itself stays pure.
-/// With NO corroborating emails, so the email-corroborated auto-label route cannot fire —
-/// the voice-only routes still can. Both real callers (the offline pass and
-/// `api_get_speaker_suggestions`) supply the meeting's attendee emails via
-/// [`compute_suggestions_with_emails`]; this wrapper is the email-free case used by tests.
-pub async fn compute_suggestions(
-    pool: &sqlx::SqlitePool,
-    meeting_id: &str,
-) -> Result<Vec<crate::diarization::identity::SpeakerSuggestion>> {
-    compute_suggestions_with_emails(pool, meeting_id, &[]).await
-}
-
-/// As [`compute_suggestions`], but with an explicit corroborating-email set for the
-/// auto-label gate. Both the offline pass and the on-demand command pass the meeting's
-/// calendar attendee emails (specs/0064 W2 — the refetch APPLIES auto-labels too, so it
-/// needs the same inputs the pass had; before that it deliberately passed none).
-pub async fn compute_suggestions_with_emails(
-    pool: &sqlx::SqlitePool,
-    meeting_id: &str,
-    corroborating_emails: &[String],
-) -> Result<Vec<crate::diarization::identity::SpeakerSuggestion>> {
-    use crate::database::repositories::people::PeopleRepository;
-    use crate::database::repositories::voiceprints::VoiceprintsRepository;
-    use crate::diarization::embedding::{embedding_to_bytes, EMBEDDING_MODEL_ID};
-    use crate::diarization::identity::{self, CandidateSample};
-    use crate::people::enroll::OWNER_PERSON_ID;
-
-    let current = SpeakersRepository::get_meeting_embeddings(pool, meeting_id)
-        .await
-        .with_context(|| format!("load embeddings for meeting {meeting_id}"))?;
-    if current.is_empty() {
-        return Ok(Vec::new());
-    }
-
-    let identified = SpeakersRepository::get_identified_with_embeddings(pool)
-        .await
-        .context("load identified candidate speakers")?;
-
-    // 1a candidates: prior per-meeting speaker embeddings (exclude THIS meeting's own
-    // rows so a speaker is never suggested against itself, and any row linked to the
-    // owner — see the W1.4 note below).
-    let mut candidates: Vec<CandidateSample> = identified
-        .into_iter()
-        .filter(|c| c.meeting_id != meeting_id && c.person_id.as_deref() != Some(OWNER_PERSON_ID))
-        .map(|c| CandidateSample {
-            display_name: c.display_name,
-            email: c.email,
-            person_id: c.person_id,
-            embedding: c.embedding,
-            embedding_model: c.embedding_model,
-            from_gallery: false,
-            gallery_sample_count: 0,
-            // The meeting this prior speaker row belongs to — the matcher counts DISTINCT
-            // meetings for the repetition tier (specs/0064 W2 review).
-            meeting_id: Some(c.meeting_id),
-        })
-        .collect();
-
-    // 1c candidates: durable voiceprint-gallery centroids, enriched with each person's
-    // name/email so the matcher can corroborate + label. Best-effort — a gallery read
-    // failure must not sink the (1a) suggestions.
-    match VoiceprintsRepository::all_centroids(pool, EMBEDDING_MODEL_ID).await {
-        Ok(centroids) => {
-            for (person_id, centroid, sample_count) in centroids {
-                // W1.4 (specs/0043): the owner never competes in the gallery. "You" is
-                // assigned via the mic channel (align.rs) — a similarity hit here could
-                // only mislabel a remote cluster (e.g. echo bleed) as the owner.
-                if person_id == OWNER_PERSON_ID {
-                    continue;
-                }
-                let (name, email) = match PeopleRepository::get(pool, &person_id).await {
-                    Ok(Some(p)) => (p.display_name, p.email),
-                    // Centroid with no person row (shouldn't happen — explicit cascades);
-                    // skip rather than label with a placeholder.
-                    _ => continue,
-                };
-                candidates.push(CandidateSample {
-                    display_name: name,
-                    email,
-                    person_id: Some(person_id),
-                    embedding: embedding_to_bytes(&centroid),
-                    embedding_model: Some(EMBEDDING_MODEL_ID.to_string()),
-                    from_gallery: true,
-                    // specs/0044 WS4: enrollment count gates the trusted (voice-only)
-                    // auto-label tier in the matcher.
-                    gallery_sample_count: sample_count,
-                    // A centroid belongs to no single meeting.
-                    meeting_id: None,
-                });
-            }
-        }
-        Err(e) => log::warn!(
-            "diarization: gallery centroid load failed for meeting {meeting_id} ({e}); \
-             matching prior speakers only"
-        ),
-    }
-
-    Ok(identity::match_speakers_with_gallery(
-        &current,
-        &candidates,
-        corroborating_emails,
-    ))
 }
 
 /// Resolve the [`SpeakerCount`](crate::diarization::SpeakerCount) for a meeting by
@@ -1268,10 +1175,7 @@ mod tests {
             registry_update(id, stage, None);
             let s = run_status(id).unwrap();
             assert_eq!(s.stage, stage, "stage is reported");
-            assert_eq!(
-                s.progress_pct, 0,
-                "{stage} must not inherit sherpa's 100%"
-            );
+            assert_eq!(s.progress_pct, 0, "{stage} must not inherit sherpa's 100%");
             assert!(s.running, "the run is still going");
         }
 
@@ -1366,6 +1270,11 @@ mod tests {
         .execute(&pool)
         .await
         .unwrap();
+        // `persist` records the pass's setup on the meeting row (specs/0078).
+        sqlx::query("CREATE TABLE meetings (id TEXT PRIMARY KEY, audio_setup_resolved TEXT, owner_label TEXT)")
+            .execute(&pool)
+            .await
+            .unwrap();
 
         // Two timed transcript segments for meeting m1.
         for (id, s, e) in [("t1", 0.0, 4.0), ("t2", 4.0, 9.0)] {
@@ -1406,7 +1315,7 @@ mod tests {
         let emb: HashMap<String, Vec<f32>> =
             HashMap::from([("spk_0".to_string(), vec![1.0, 0.0, 0.0, 0.0])]);
 
-        persist(&pool, "m1", &assignments("spk_0"), &emb)
+        persist(&pool, "m1", &assignments("spk_0"), &emb, AudioSetup::Call)
             .await
             .unwrap();
         assert_eq!(
@@ -1420,7 +1329,7 @@ mod tests {
             .unwrap());
 
         // ...then a re-run persists the same clustering. The rename must survive.
-        persist(&pool, "m1", &assignments("spk_0"), &emb)
+        persist(&pool, "m1", &assignments("spk_0"), &emb, AudioSetup::Call)
             .await
             .unwrap();
         assert_eq!(display_name(&pool, "spk_0").await.as_deref(), Some("Priya"));
@@ -1434,7 +1343,7 @@ mod tests {
         let voice = vec![0.8, 0.6, 0.0, 0.0]; // L2-normalized
         let emb1: HashMap<String, Vec<f32>> = HashMap::from([("spk_0".to_string(), voice.clone())]);
 
-        persist(&pool, "m1", &assignments("spk_0"), &emb1)
+        persist(&pool, "m1", &assignments("spk_0"), &emb1, AudioSetup::Call)
             .await
             .unwrap();
         SpeakersRepository::rename(&pool, "m1", "spk_0", "Priya")
@@ -1444,7 +1353,7 @@ mod tests {
         // Re-run clusters the same voice under a DIFFERENT key. The stored
         // voiceprint must carry the rename onto the new key.
         let emb2: HashMap<String, Vec<f32>> = HashMap::from([("spk_1".to_string(), voice)]);
-        persist(&pool, "m1", &assignments("spk_1"), &emb2)
+        persist(&pool, "m1", &assignments("spk_1"), &emb2, AudioSetup::Call)
             .await
             .unwrap();
 
@@ -1459,7 +1368,7 @@ mod tests {
         let emb: HashMap<String, Vec<f32>> =
             HashMap::from([("spk_0".to_string(), vec![0.0, 1.0, 0.0, 0.0])]);
 
-        persist(&pool, "m1", &assignments("spk_0"), &emb)
+        persist(&pool, "m1", &assignments("spk_0"), &emb, AudioSetup::Call)
             .await
             .unwrap();
         assert!(SpeakersRepository::assign_to_attendee(
@@ -1472,7 +1381,7 @@ mod tests {
         .await
         .unwrap());
 
-        persist(&pool, "m1", &assignments("spk_0"), &emb)
+        persist(&pool, "m1", &assignments("spk_0"), &emb, AudioSetup::Call)
             .await
             .unwrap();
 
@@ -1493,7 +1402,7 @@ mod tests {
         let emb1: HashMap<String, Vec<f32>> =
             HashMap::from([("spk_0".to_string(), vec![1.0, 0.0, 0.0, 0.0])]);
 
-        persist(&pool, "m1", &assignments("spk_0"), &emb1)
+        persist(&pool, "m1", &assignments("spk_0"), &emb1, AudioSetup::Call)
             .await
             .unwrap();
         SpeakersRepository::rename(&pool, "m1", "spk_0", "Priya")
@@ -1504,7 +1413,7 @@ mod tests {
         // centroid: below TAU_MATCH the rename must be dropped, not misapplied.
         let emb2: HashMap<String, Vec<f32>> =
             HashMap::from([("spk_1".to_string(), vec![0.0, 0.0, 1.0, 0.0])]);
-        persist(&pool, "m1", &assignments("spk_1"), &emb2)
+        persist(&pool, "m1", &assignments("spk_1"), &emb2, AudioSetup::Call)
             .await
             .unwrap();
 
@@ -1569,7 +1478,7 @@ mod tests {
         // channel) and merely similar (cos 0.8, still >= TAU_MATCH) to Priya's.
         let voice = vec![1.0, 0.0, 0.0, 0.0];
         let emb: HashMap<String, Vec<f32>> = HashMap::from([("spk_0".to_string(), voice.clone())]);
-        persist(&pool, "m1", &assignments("spk_0"), &emb)
+        persist(&pool, "m1", &assignments("spk_0"), &emb, AudioSetup::Call)
             .await
             .unwrap();
 

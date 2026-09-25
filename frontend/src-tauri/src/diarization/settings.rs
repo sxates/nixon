@@ -31,22 +31,20 @@ pub struct DiarizationSettings {
     /// audio-derived seed (specs/0050).
     #[serde(default)]
     pub expected_speaker_count: Option<u32>,
-    /// **Global** opt-in to store *other people's* voiceprints (specs/0016 1c,
-    /// ADR-0007 §2). Off by default — persisting a durable voiceprint for anyone who is
-    /// not the device owner requires explicit, off-by-default consent. With this off,
-    /// in-meeting suggestions (1a) and People mapping (1b) still work, but no
-    /// `voiceprints` row is written for non-owner people, so cross-meeting voice auto-ID
-    /// simply doesn't accrue for them. Older settings files lack this field, so it
-    /// `serde`-defaults to `false` — the conservative, consent-required posture.
-    #[serde(default)]
-    pub store_others_voiceprints: bool,
-    /// Whether to self-enroll the **device owner**'s voiceprint (the mic channel = "You";
-    /// ADR-0007 §3). On by default with an opt-out: storing one's own biometric is the
-    /// consent-trivial, highest-quality case and improves "You" robustness across
-    /// devices/headsets. Older settings files lack this field, so it `serde`-defaults to
-    /// `true` via [`default_true`].
-    #[serde(default = "default_true")]
-    pub self_enroll_voiceprint: bool,
+    /// The **one** voiceprint consent (specs/0078 owner decision 1; ADR-0007 §2/§3 as
+    /// amended). Covers every durable voiceprint Nixon stores: other people's AND the
+    /// device owner's ("You"). Off by default — storing anyone's biometric requires
+    /// explicit consent. With this off, in-meeting suggestions and People mapping still
+    /// work, but no `voiceprints` row is written, so cross-meeting voice recognition
+    /// simply doesn't accrue. Per-person `voiceprint_opt_out` still applies on top for
+    /// people other than the owner.
+    ///
+    /// Settings files written before specs/0078 carry this as `store_others_voiceprints`
+    /// (read through the alias; the next save writes the new key). They may also carry
+    /// the retired `self_enroll_voiceprint` owner toggle, which is ignored: serde skips
+    /// unknown fields. Absent → `false`, the consent-required posture.
+    #[serde(default, alias = "store_others_voiceprints")]
+    pub store_voiceprints: bool,
     /// specs/0039 WS1 — optional override for the same-voice **consolidation**
     /// similarity floor (`sherpa::CONSOLIDATE_FLOOR`, default `0.70` since specs/0041
     /// WS1 — the shipped `0.50` fused distinct voices). The offline pass
@@ -58,12 +56,6 @@ pub struct DiarizationSettings {
     /// files lack this field, so it `serde`-defaults to `None`, preserving 1.6 behaviour.
     #[serde(default)]
     pub consolidation_floor: Option<f32>,
-}
-
-/// `serde(default = ...)` helper for fields that default to `true` (an absent field in an
-/// older settings file must read as on, not as the bool `Default` of `false`).
-fn default_true() -> bool {
-    true
 }
 
 /// How the diarization speaker count was decided, surfaced to the frontend on the
@@ -161,10 +153,9 @@ impl Default for DiarizationSettings {
             // Auto cluster count by default (no override); user can set an exact
             // expected count to force Fixed mode (specs/0011 accuracy gate).
             expected_speaker_count: None,
-            // Storing OTHERS' voiceprints is opt-in / off by default (ADR-0007 §2).
-            store_others_voiceprints: false,
-            // Self-enrolling the OWNER's voiceprint is on by default (ADR-0007 §3).
-            self_enroll_voiceprint: true,
+            // Storing any voiceprint, the owner's included, is opt-in / off by default
+            // (specs/0078 owner decision 1; ADR-0007 §2).
+            store_voiceprints: false,
             // No consolidation-floor override by default: use the built-in
             // conservative const (specs/0039 WS1). Set only for real-file tuning.
             consolidation_floor: None,
@@ -222,12 +213,11 @@ pub async fn save_settings(settings: &DiarizationSettings) -> Result<()> {
     let content = serde_json::to_string_pretty(settings)?;
     tokio::fs::write(&path, content).await?;
     log_info!(
-        "Saved diarization settings (diarization_enabled={}, live_diarization_enabled={}, expected_speaker_count={:?}, store_others_voiceprints={}, self_enroll_voiceprint={})",
+        "Saved diarization settings (diarization_enabled={}, live_diarization_enabled={}, expected_speaker_count={:?}, store_voiceprints={})",
         settings.diarization_enabled,
         settings.live_diarization_enabled,
         settings.expected_speaker_count,
-        settings.store_others_voiceprints,
-        settings.self_enroll_voiceprint
+        settings.store_voiceprints
     );
     Ok(())
 }
@@ -344,19 +334,34 @@ mod tests {
 
     #[test]
     fn legacy_settings_default_voiceprint_consent_conservatively() {
-        // A settings file written before 1c lacks the two voiceprint fields. Storing
-        // others' voiceprints must default OFF (consent-required, ADR-0007 §2) and
-        // owner self-enroll must default ON (ADR-0007 §3).
+        // A settings file written before 1c lacks the voiceprint fields. Storing
+        // voiceprints must default OFF (consent-required, ADR-0007 §2 as amended by
+        // specs/0078: one consent covers the owner too).
         let json = r#"{"diarization_enabled":true,"live_diarization_enabled":false}"#;
         let s: DiarizationSettings = serde_json::from_str(json).expect("parse legacy settings");
+        assert!(!s.store_voiceprints, "voiceprint storage must default off");
+    }
+
+    /// specs/0078: a settings file from before the rename still loads. The old
+    /// `store_others_voiceprints` key carries the consent across, and the retired
+    /// `self_enroll_voiceprint` key is ignored rather than failing the parse (a failed
+    /// parse would silently reset every diarization setting to its default).
+    #[test]
+    fn pre_0078_voiceprint_keys_still_load() {
+        let json = r#"{"diarization_enabled":true,"live_diarization_enabled":true,
+            "store_others_voiceprints":true,"self_enroll_voiceprint":false}"#;
+        let s: DiarizationSettings = serde_json::from_str(json).expect("parse pre-0078 settings");
+        assert!(s.store_voiceprints, "the old key is read through the alias");
         assert!(
-            !s.store_others_voiceprints,
-            "others-opt-in must default off"
+            s.live_diarization_enabled,
+            "the rest of the file is not reset"
         );
-        assert!(
-            s.self_enroll_voiceprint,
-            "owner self-enroll must default on"
-        );
+
+        // The next save writes the new key only.
+        let written = serde_json::to_string(&s).unwrap();
+        assert!(written.contains("\"store_voiceprints\":true"), "{written}");
+        assert!(!written.contains("store_others_voiceprints"), "{written}");
+        assert!(!written.contains("self_enroll_voiceprint"), "{written}");
     }
 
     #[test]

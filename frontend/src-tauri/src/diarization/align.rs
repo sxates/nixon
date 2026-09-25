@@ -68,6 +68,17 @@ pub enum Channel {
     Mixed,
 }
 
+/// Where the owner's voice is, for [`align_turns_to_segments`] (specs/0078).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AlignMode {
+    /// A call: the owner is the mic channel and the turns are the system track's
+    /// remote speakers (plus owner turns derived from the mic, used only for splitting).
+    Call,
+    /// A room recording: everyone is on the mic and every turn, `local` included, is a
+    /// clustered voice. Mic-tagged rows are attributed from the turns like any other.
+    Room,
+}
+
 /// A transcript segment to be labeled. Times are recording-relative seconds.
 ///
 /// This is intentionally a thin local struct (not the DB `Transcript` model) so
@@ -165,26 +176,35 @@ fn nearest_turn_within_window(
 ///
 /// Returns one key per input segment, in the same order. `turns` are the
 /// system-channel diarization result (recording-relative seconds).
+///
+/// In [`AlignMode::Room`] (specs/0078) rule 1 is dropped: everyone spoke into the mic, so
+/// a [`Channel::Microphone`] segment follows the [`Channel::Mixed`] rules, and `local`
+/// turns (the owner's clustered voice) label segments like any other turn.
 pub fn align_turns_to_segments(
     turns: &[SpeakerTurn],
     segments: &[AlignableSegment],
+    mode: AlignMode,
 ) -> Vec<String> {
-    // Owner ("local") turns exist only to split the owner's OWN mic-tagged rows;
-    // they must never LABEL a System/Mixed segment — only the Microphone channel
+    // Call mode: owner ("local") turns exist only to split the owner's OWN mic-tagged
+    // rows; they must never LABEL a System/Mixed segment — only the Microphone channel
     // tag yields "You" (specs/0047 W2). Filtering them out here keeps a bleed-
     // induced owner turn from stealing a remote speaker's segment (the reported
     // "You clip in the middle of someone else" symptom). Microphone segments short-
     // circuit before this set is consulted, so their attribution is unaffected.
-    let remote_turns: Vec<SpeakerTurn> = turns
-        .iter()
-        .filter(|t| t.speaker != LOCAL_SPEAKER_KEY)
-        .cloned()
-        .collect();
+    // Room mode: `local` is a real clustered voice, so nothing is filtered.
+    let remote_turns: Vec<SpeakerTurn> = match mode {
+        AlignMode::Call => turns
+            .iter()
+            .filter(|t| t.speaker != LOCAL_SPEAKER_KEY)
+            .cloned()
+            .collect(),
+        AlignMode::Room => turns.to_vec(),
+    };
     segments
         .iter()
         .map(|seg| {
-            // 1. The local user is known by channel; no clustering needed.
-            if seg.channel == Channel::Microphone {
+            // 1. The local user is known by channel; no clustering needed (call only).
+            if mode == AlignMode::Call && seg.channel == Channel::Microphone {
                 return LOCAL_SPEAKER_KEY.to_string();
             }
 
@@ -201,7 +221,7 @@ pub fn align_turns_to_segments(
                 // System-tagged segments are known-not-mic → straight to the
                 // unknown bucket; Mixed/untagged tries the nearest remote turn
                 // within the window first, then the unknown bucket. (Microphone
-                // never reaches here.)
+                // reaches here only in room mode, where it follows the Mixed rule.)
                 None => {
                     if seg.channel == Channel::System {
                         SYSTEM_FALLBACK_KEY.to_string()
@@ -282,7 +302,10 @@ mod tests {
         // Even with a system turn covering the exact span, a mic segment is local.
         let turns = vec![turn(0.0, 10.0, "spk_0")];
         let segs = vec![AlignableSegment::new(0.0, 5.0, Channel::Microphone)];
-        assert_eq!(align_turns_to_segments(&turns, &segs), vec!["local"]);
+        assert_eq!(
+            align_turns_to_segments(&turns, &segs, AlignMode::Call),
+            vec!["local"]
+        );
     }
 
     #[test]
@@ -292,7 +315,10 @@ mod tests {
         let turns = vec![turn(0.0, 5.0, "spk_0"), turn(5.0, 12.0, "spk_1")];
         // 4.5..10.0: overlaps spk_0 by 0.5s, spk_1 by 5.0s -> spk_1 wins.
         let segs = vec![AlignableSegment::new(4.5, 10.0, Channel::System)];
-        assert_eq!(align_turns_to_segments(&turns, &segs), vec!["spk_1"]);
+        assert_eq!(
+            align_turns_to_segments(&turns, &segs, AlignMode::Call),
+            vec!["spk_1"]
+        );
     }
 
     #[test]
@@ -300,7 +326,10 @@ mod tests {
         // pyannote turn 2.0..8.0; VAD segment drifts to 1.8..7.5. Still spk_0.
         let turns = vec![turn(2.0, 8.0, "spk_0")];
         let segs = vec![AlignableSegment::new(1.8, 7.5, Channel::System)];
-        assert_eq!(align_turns_to_segments(&turns, &segs), vec!["spk_0"]);
+        assert_eq!(
+            align_turns_to_segments(&turns, &segs, AlignMode::Call),
+            vec!["spk_0"]
+        );
     }
 
     #[test]
@@ -309,7 +338,7 @@ mod tests {
         // 20.0..25.0 overlaps nothing.
         let segs = vec![AlignableSegment::new(20.0, 25.0, Channel::System)];
         assert_eq!(
-            align_turns_to_segments(&turns, &segs),
+            align_turns_to_segments(&turns, &segs, AlignMode::Call),
             vec![SYSTEM_FALLBACK_KEY]
         );
     }
@@ -321,7 +350,7 @@ mod tests {
             AlignableSegment::new(1.0, 2.0, Channel::System),
         ];
         assert_eq!(
-            align_turns_to_segments(&[], &segs),
+            align_turns_to_segments(&[], &segs, AlignMode::Call),
             vec![SYSTEM_FALLBACK_KEY, SYSTEM_FALLBACK_KEY]
         );
     }
@@ -329,7 +358,10 @@ mod tests {
     #[test]
     fn empty_turns_still_label_mic_as_local() {
         let segs = vec![AlignableSegment::new(0.0, 1.0, Channel::Microphone)];
-        assert_eq!(align_turns_to_segments(&[], &segs), vec!["local"]);
+        assert_eq!(
+            align_turns_to_segments(&[], &segs, AlignMode::Call),
+            vec!["local"]
+        );
     }
 
     #[test]
@@ -349,7 +381,7 @@ mod tests {
             AlignableSegment::new(9.5, 11.5, Channel::System), // spk_0
         ];
         assert_eq!(
-            align_turns_to_segments(&turns, &segs),
+            align_turns_to_segments(&turns, &segs, AlignMode::Call),
             vec!["spk_0", "spk_1", "local", "spk_2", "spk_0"]
         );
     }
@@ -432,7 +464,7 @@ mod tests {
         let turns = vec![turn(1.0, 4.0, "spk_0")];
         let segs = vec![AlignableSegment::new(1.0, 4.0, Channel::Microphone)];
         assert_eq!(
-            align_turns_to_segments(&turns, &segs),
+            align_turns_to_segments(&turns, &segs, AlignMode::Call),
             vec![LOCAL_SPEAKER_KEY]
         );
     }
@@ -444,7 +476,7 @@ mod tests {
         // bucket ("unknown" → "Unknown speaker").
         let segs = vec![AlignableSegment::new(20.0, 25.0, Channel::System)];
         assert_eq!(
-            align_turns_to_segments(&[turn(0.0, 5.0, "spk_0")], &segs),
+            align_turns_to_segments(&[turn(0.0, 5.0, "spk_0")], &segs, AlignMode::Call),
             vec![crate::diarization::UNKNOWN_SPEAKER_KEY]
         );
     }
@@ -453,7 +485,10 @@ mod tests {
     fn mixed_segment_takes_max_overlap_turn() {
         let turns = vec![turn(0.0, 5.0, "spk_0"), turn(5.0, 12.0, "spk_1")];
         let segs = vec![AlignableSegment::new(4.5, 10.0, Channel::Mixed)];
-        assert_eq!(align_turns_to_segments(&turns, &segs), vec!["spk_1"]);
+        assert_eq!(
+            align_turns_to_segments(&turns, &segs, AlignMode::Call),
+            vec!["spk_1"]
+        );
     }
 
     // --- specs/0047 W2: owner turns must not win a non-mic segment ---
@@ -467,7 +502,10 @@ mod tests {
         // yields "You").
         let turns = vec![turn(0.0, 10.0, LOCAL_SPEAKER_KEY), turn(1.5, 4.0, "spk_0")];
         let segs = vec![AlignableSegment::new(1.0, 4.0, Channel::System)];
-        assert_eq!(align_turns_to_segments(&turns, &segs), vec!["spk_0"]);
+        assert_eq!(
+            align_turns_to_segments(&turns, &segs, AlignMode::Call),
+            vec!["spk_0"]
+        );
     }
 
     #[test]
@@ -476,7 +514,10 @@ mod tests {
         // it resolves to the remote speaker, never the owner.
         let turns = vec![turn(0.0, 10.0, LOCAL_SPEAKER_KEY), turn(1.5, 4.0, "spk_0")];
         let segs = vec![AlignableSegment::new(1.0, 4.0, Channel::Mixed)];
-        assert_eq!(align_turns_to_segments(&turns, &segs), vec!["spk_0"]);
+        assert_eq!(
+            align_turns_to_segments(&turns, &segs, AlignMode::Call),
+            vec!["spk_0"]
+        );
     }
 
     #[test]
@@ -486,7 +527,7 @@ mod tests {
         let turns = vec![turn(0.0, 10.0, LOCAL_SPEAKER_KEY)];
         let segs = vec![AlignableSegment::new(1.0, 4.0, Channel::System)];
         assert_eq!(
-            align_turns_to_segments(&turns, &segs),
+            align_turns_to_segments(&turns, &segs, AlignMode::Call),
             vec![SYSTEM_FALLBACK_KEY]
         );
     }
@@ -498,7 +539,7 @@ mod tests {
         let turns = vec![turn(0.0, 5.0, LOCAL_SPEAKER_KEY)];
         let segs = vec![AlignableSegment::new(5.3, 6.5, Channel::Mixed)];
         assert_eq!(
-            align_turns_to_segments(&turns, &segs),
+            align_turns_to_segments(&turns, &segs, AlignMode::Call),
             vec![SYSTEM_FALLBACK_KEY]
         );
     }
@@ -511,7 +552,7 @@ mod tests {
         let turns = vec![turn(0.0, 10.0, LOCAL_SPEAKER_KEY), turn(1.0, 4.0, "spk_0")];
         let segs = vec![AlignableSegment::new(1.0, 4.0, Channel::Microphone)];
         assert_eq!(
-            align_turns_to_segments(&turns, &segs),
+            align_turns_to_segments(&turns, &segs, AlignMode::Call),
             vec![LOCAL_SPEAKER_KEY]
         );
     }
@@ -523,7 +564,7 @@ mod tests {
         let turns = vec![turn(0.0, 5.0, "spk_0")];
         let segs = vec![AlignableSegment::new(20.0, 25.0, Channel::Mixed)];
         assert_eq!(
-            align_turns_to_segments(&turns, &segs),
+            align_turns_to_segments(&turns, &segs, AlignMode::Call),
             vec![SYSTEM_FALLBACK_KEY]
         );
     }
@@ -534,7 +575,10 @@ mod tests {
         // ends 0.5s before it starts) -> the nearest turn wins: spk_1.
         let turns = vec![turn(0.0, 5.0, "spk_0"), turn(6.8, 9.0, "spk_1")];
         let segs = vec![AlignableSegment::new(5.5, 6.5, Channel::Mixed)];
-        assert_eq!(align_turns_to_segments(&turns, &segs), vec!["spk_1"]);
+        assert_eq!(
+            align_turns_to_segments(&turns, &segs, AlignMode::Call),
+            vec!["spk_1"]
+        );
     }
 
     #[test]
@@ -545,7 +589,7 @@ mod tests {
         let turns = vec![turn(0.0, 5.0, "spk_0")];
         let segs = vec![AlignableSegment::new(5.5, 6.5, Channel::System)];
         assert_eq!(
-            align_turns_to_segments(&turns, &segs),
+            align_turns_to_segments(&turns, &segs, AlignMode::Call),
             vec![SYSTEM_FALLBACK_KEY]
         );
     }
@@ -576,6 +620,7 @@ mod tests {
                 .iter()
                 .map(|&(s, e)| AlignableSegment::new(s, e, Channel::Mixed))
                 .collect::<Vec<_>>(),
+            AlignMode::Call,
         );
         assert_eq!(via_mixed, legacy);
 
@@ -588,6 +633,7 @@ mod tests {
                 .iter()
                 .map(|&(s, e)| AlignableSegment::new(s, e, Channel::Mixed))
                 .collect::<Vec<_>>(),
+            AlignMode::Call,
         );
         assert_eq!(via_mixed_empty, legacy_empty);
         assert!(via_mixed_empty.iter().all(|k| k == SYSTEM_FALLBACK_KEY));
@@ -629,13 +675,16 @@ mod tests {
         let turns = vec![turn(0.0, 5.6, "spk_0"), turn(5.6, 5.9, "spk_1")];
         let raw = AlignableSegment::new(5.2, 6.3, Channel::System);
         assert_eq!(
-            align_turns_to_segments(&turns, std::slice::from_ref(&raw)),
+            align_turns_to_segments(&turns, std::slice::from_ref(&raw), AlignMode::Call),
             vec!["spk_0"],
             "without trimming the padded row is misattributed"
         );
         let (ts, te) = pad_trimmed(raw.start, raw.end);
         let trimmed = AlignableSegment::new(ts, te, Channel::System);
-        assert_eq!(align_turns_to_segments(&turns, &[trimmed]), vec!["spk_1"]);
+        assert_eq!(
+            align_turns_to_segments(&turns, &[trimmed], AlignMode::Call),
+            vec!["spk_1"]
+        );
     }
 
     #[test]
@@ -646,6 +695,46 @@ mod tests {
         let segs = vec![AlignableSegment::new(2.0, 6.0, Channel::System)];
         // `max_by` returns the last element among equal maxima; assert the
         // observed deterministic behavior so a future change is caught.
-        assert_eq!(align_turns_to_segments(&turns, &segs), vec!["spk_1"]);
+        assert_eq!(
+            align_turns_to_segments(&turns, &segs, AlignMode::Call),
+            vec!["spk_1"]
+        );
+    }
+
+    // ----- specs/0078: room mode -------------------------------------------------
+
+    #[test]
+    fn room_mode_attributes_mic_rows_from_the_turns() {
+        // Everyone is on the mic: a mic row takes its max-overlap turn, the owner's
+        // clustered `local` turn included, instead of short-circuiting to "You".
+        let turns = vec![turn(0.0, 5.0, "spk_0"), turn(5.0, 10.0, "local")];
+        let segs = vec![
+            AlignableSegment::new(0.5, 4.5, Channel::Microphone),
+            AlignableSegment::new(5.5, 9.5, Channel::Microphone),
+        ];
+        assert_eq!(
+            align_turns_to_segments(&turns, &segs, AlignMode::Room),
+            vec!["spk_0", "local"]
+        );
+        // The same rows in call mode are all "You" (rule 1).
+        assert_eq!(
+            align_turns_to_segments(&turns, &segs, AlignMode::Call),
+            vec!["local", "local"]
+        );
+    }
+
+    #[test]
+    fn room_mode_mic_rows_follow_the_mixed_fallbacks() {
+        let turns = vec![turn(0.0, 5.0, "spk_1")];
+        let segs = vec![
+            // No overlap, but within the nearest-turn window.
+            AlignableSegment::new(5.5, 7.0, Channel::Microphone),
+            // Far from every turn: the unknown bucket, never "You".
+            AlignableSegment::new(30.0, 32.0, Channel::Microphone),
+        ];
+        assert_eq!(
+            align_turns_to_segments(&turns, &segs, AlignMode::Room),
+            vec!["spk_1", SYSTEM_FALLBACK_KEY]
+        );
     }
 }
