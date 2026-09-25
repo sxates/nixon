@@ -50,6 +50,27 @@ describe('PersonAvatar (specs/0056 W6)', () => {
     expect(lg.container.firstElementChild!.className).toMatch(/h-14 w-14/);
   });
 
+  it('tries again when the photo changes after a failed load', () => {
+    const OTHER = 'data:image/png;base64,T1RIRVI=';
+    const { container, rerender } = render(
+      <PersonAvatar name="Priya Patel" photoDataUri={URI} size="xs" colorClass="bg-chart-1" />,
+    );
+    fireEvent.error(container.querySelector('img')!);
+    expect(container.querySelector('img')).toBeNull();
+    rerender(<PersonAvatar name="Priya Patel" photoDataUri={OTHER} size="xs" colorClass="bg-chart-1" />);
+    expect(container.querySelector('img')?.getAttribute('src')).toBe(OTHER);
+  });
+
+  it('renders the given fallback (the legend dot) instead of initials when the photo fails', () => {
+    const dot = <span data-testid="dot" />;
+    const { container, getByTestId } = render(
+      <PersonAvatar name="Priya Patel" photoDataUri={URI} size="xxs" colorClass="bg-chart-1" fallback={dot} />,
+    );
+    fireEvent.error(container.querySelector('img')!);
+    expect(getByTestId('dot')).toBeTruthy();
+    expect(container.textContent).not.toContain('PP');
+  });
+
   it('initials(): first + last, single name, and empty', () => {
     expect(initials('Priya Sharma')).toBe('PS');
     expect(initials('  priya  ')).toBe('P');

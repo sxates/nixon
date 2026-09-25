@@ -41,6 +41,9 @@ export interface SpeakerChipProps {
   onMerge: (fromKey: string, intoKey: string) => Promise<void>;
   /** Re-fetch speakers + transcript after editing the Person behind a speaker. */
   onPersonSaved: () => void | Promise<void>;
+  /** The group's cached directory photo (`controller.speakerPhotos`, first member key that
+   *  has one); null => the colour dot. */
+  photoDataUri: string | null;
 }
 
 /** Build one chip's props — the exact shape the legend's removed chip-cloud loop passed. */
@@ -69,5 +72,9 @@ export function speakerChipProps(
     onAssignPerson: c.assignPerson,
     onMerge: c.mergeSpeakers,
     onPersonSaved: ctx.onPersonSaved,
+    photoDataUri:
+      [group.primary.speakerKey, ...group.keys]
+        .map((k) => c.speakerPhotos.get(k))
+        .find(Boolean) ?? null,
   };
 }

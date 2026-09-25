@@ -7,6 +7,8 @@ import {
 } from '@/components/VirtualizedTranscriptView';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { buildSpeakerPhotoMap } from '@/lib/speaker-photos';
+import { speakerChipProps } from '@/components/MeetingDetails/speaker-chip-props';
+import type { UseSpeakersReturn } from '@/hooks/useSpeakers';
 import type { MeetingAttendee, MeetingSpeaker, Person, TranscriptSegmentData } from '@/types';
 
 // Owner feedback: Google directory photos were on people/attendee chips but the transcript's
@@ -114,5 +116,21 @@ describe('transcript run-header avatar', () => {
     fireEvent.error(header('s1').querySelector('img')!);
     expect(header('s1').querySelector('img')).toBeNull();
     expect(header('s1').textContent).toContain('AL');
+  });
+});
+
+describe('speakerChipProps — legend photo', () => {
+  it("takes the group's photo from controller.speakerPhotos (any member key), else null", () => {
+    const primary = speaker({ speakerKey: 'spk_0', displayName: 'Ada Lovelace' });
+    const other = speaker({ speakerKey: 'spk_3', displayName: 'Ada Lovelace' });
+    const controller = {
+      speakerPhotos: new Map([['spk_3', PHOTO_A]]),
+      crossMeetingSuggestions: new Map(),
+    } as unknown as UseSpeakersReturn;
+    const ctx = { allSpeakers: [primary], controller, onPersonSaved: vi.fn() };
+    const merged = { primary, members: [primary, other], keys: ['spk_0', 'spk_3'] };
+    expect(speakerChipProps(merged, ctx).photoDataUri).toBe(PHOTO_A);
+    const alone = { primary, members: [primary], keys: ['spk_0'] };
+    expect(speakerChipProps(alone, ctx).photoDataUri).toBeNull();
   });
 });

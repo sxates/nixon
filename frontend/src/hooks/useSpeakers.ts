@@ -23,6 +23,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { toast } from 'sonner';
 import { safeListen } from '@/lib/safe-listen';
 import { notifyMeetingParticipantsChanged } from '@/lib/participants-events';
+import { buildSpeakerPhotoMap, type SpeakerPhotoMap } from '@/lib/speaker-photos';
 import type {
   MeetingSpeaker,
   MeetingAttendee,
@@ -77,6 +78,9 @@ export interface UseSpeakersReturn {
    *  of the person's voiceprint opt-out. */
   assignPerson: (speakerKey: string, person: Person) => Promise<void>;
   mergeSpeakers: (fromKey: string, intoKey: string) => Promise<void>;
+  /** speakerKey → cached directory photo, resolved once from speakers + attendees + people
+   *  (`buildSpeakerPhotoMap`). Read by the transcript's run headers and the legend. */
+  speakerPhotos: SpeakerPhotoMap;
 }
 
 export function useSpeakers({
@@ -394,6 +398,11 @@ export function useSpeakers({
     return map;
   }, [rawSuggestions, dismissedKeys]);
 
+  const speakerPhotos = useMemo(
+    () => buildSpeakerPhotoMap(speakers, attendees, people),
+    [speakers, attendees, people],
+  );
+
   return {
     speakers,
     attendees,
@@ -407,5 +416,6 @@ export function useSpeakers({
     assignAttendee,
     assignPerson,
     mergeSpeakers,
+    speakerPhotos,
   };
 }

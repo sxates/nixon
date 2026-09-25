@@ -7,10 +7,11 @@ const norm = (email: string | null | undefined) => email?.trim().toLowerCase() |
 
 /**
  * Resolve each meeting speaker's Google directory photo from data the meeting view already
- * holds (`useSpeakers`: the speakers, the calendar attendees and the ranked people list — all
- * three carry `photoDataUri` joined from `attendee_photos` by the backend). No IPC: the
- * transcript can have 1,000+ rows, so the map is built once per view and every row does one
- * `Map.get`.
+ * holds (`useSpeakers`). Speakers carry no photo themselves — only a `personId` and an
+ * `email`; the photos come from the ranked people list and the calendar attendees, which the
+ * backend joins to `attendee_photos` by normalized email. No IPC: the transcript can have
+ * 1,000+ rows, so `useSpeakers` builds this map once (`controller.speakerPhotos`) and every
+ * row does one `Map.get`.
  *
  * Precedence per speaker: the linked Person (`personId`) → a Person or attendee with the
  * speaker's email → for the local "You" speaker with no email, the attendee marked

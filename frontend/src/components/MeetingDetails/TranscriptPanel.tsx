@@ -16,7 +16,6 @@ import type { UseSpeakersReturn } from '@/hooks/useSpeakers';
 import { useBacklog } from '@/contexts/DeferredBacklogProvider';
 import { isUnprocessedRecording } from '@/lib/processing-mode';
 import { isMeetingInFlight } from '@/lib/deferred-backlog';
-import { buildSpeakerPhotoMap } from '@/lib/speaker-photos';
 import {
   AUDIO_FAILED_NOTE,
   canTranscribe,
@@ -259,17 +258,8 @@ export function TranscriptPanel({
     [meetingId, reconcileInBackground],
   );
 
-  // Directory photos for the run-header avatars — resolved once per view from the
-  // controller's already-loaded speakers/attendees/people, never per row.
-  const speakerPhotos = useMemo(
-    () =>
-      buildSpeakerPhotoMap(
-        speakersController.speakers,
-        speakersController.attendees,
-        speakersController.people,
-      ),
-    [speakersController.speakers, speakersController.attendees, speakersController.people],
-  );
+  // Directory photos for the run-header avatars — built once by useSpeakers, never per row.
+  const speakerPhotos = speakersController.speakerPhotos;
 
   // Inline assignment wiring for the transcript — only when viewing (not recording)
   // and the meeting has a speaker directory to pick from. Absent => names are static.
