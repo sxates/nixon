@@ -166,7 +166,11 @@ export function TimelineBlock({
         left: `${lane * widthPct}%`,
         width: `calc(${widthPct}% - ${LANE_GAP_PX}px)`,
       }}
-      className={`group absolute cursor-pointer overflow-hidden rounded-[3px] border px-3 py-1.5 text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring ${blockClasses(
+      className={`group absolute cursor-pointer overflow-hidden rounded-[3px] border px-3 py-1.5 text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+        // A compact block has one line (no meta row); centre it, or a block a few px
+        // taller than another shows its title riding high (owner feedback 2026-09-24).
+        compact ? 'flex flex-col justify-center' : ''
+      } ${blockClasses(
         state,
       )}`}
     >
