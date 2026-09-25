@@ -45,6 +45,7 @@ import {
 } from '@/lib/today-timeline';
 import { prepRouteForEvent } from '@/lib/prep';
 import { useDayAgenda } from '@/hooks/useDayAgenda';
+import { useProcessingMeetingIds } from '@/contexts/ProcessingMeetingsContext';
 import { TodayHeader } from '@/components/Today/TodayHeader';
 import { TodayToolbar } from '@/components/Today/TodayToolbar';
 import { DayTimeline } from '@/components/Today/DayTimeline';
@@ -103,9 +104,11 @@ function HomeView() {
     [isRecording, activeRecordingMeetingId, currentMeetingId, liveTitle, items, weekItems],
   );
 
+  // Meetings with work in flight — the rail's own sources, so the agenda agrees with it.
+  const processingIds = useProcessingMeetingIds();
   const ctx: TimelineContext = useMemo(
-    () => ({ now, isRecording, recordingThisId }),
-    [now, isRecording, recordingThisId],
+    () => ({ now, isRecording, recordingThisId, processingIds }),
+    [now, isRecording, recordingThisId, processingIds],
   );
 
   // Range label for week mode (e.g. "Jul 6 – Jul 12"), reused in the header + summary.

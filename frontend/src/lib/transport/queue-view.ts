@@ -84,7 +84,10 @@ function backlogRow(item: BacklogItem): QueueRow {
 export function buildQueueView(
   backlog: BacklogView,
   llm: LlmActivityView | null,
-  recording: { isProcessing: boolean; title: string | null } = { isProcessing: false, title: null },
+  recording: { isProcessing: boolean; title: string | null; meetingId?: string | null } = {
+    isProcessing: false,
+    title: null,
+  },
 ): QueueView {
   const transcribing: QueueRow[] = recording.isProcessing
     ? [
@@ -94,7 +97,7 @@ export function buildQueueView(
           stage: 'transcribing',
           stageLabel: QUEUE_STAGE_LABEL.transcribing,
           source: 'recording',
-          meetingId: null,
+          meetingId: recording.meetingId ?? null,
         },
       ]
     : [];
@@ -163,4 +166,29 @@ export function buildQueueView(
   const nextUp = rows.find((r) => r !== runningRow && r.stage !== 'done' && r.stage !== 'error') ?? null;
   const lamp = failures > 0 ? 'red' : runningRow ? 'amber' : 'off';
   return { rows, running: runningRow, nextUp, count: rows.filter((r) => r.stage !== 'done').length, lamp, failures };
+}
+
+/** Row stages that mean "work is running for this meeting right now". */
+const IN_FLIGHT: readonly QueueStage[] = ['transcribing', 'diarizing', 'summarizing', 'llm'];
+
+/**
+ * The meetings that show "Processing" on Today and All Meetings: derived from the SAME rows
+ * the queue rail draws (`buildQueueView`), so a list can never disagree with the rail.
+ *
+ * In flight = a row that is running (transcribing / speakers / summarizing / any AI task,
+ * including a prep brief for an upcoming meeting), or a WAITING row that will run without the
+ * user doing anything: a queued AI task (the registry drains its own queue), or a backlog item
+ * while a drain is under way. A backlog item parked until AC power / a click is not
+ * "Processing" (nothing is happening to it), and a failed row never is — failures stay with
+ * the queue's own error UI.
+ */
+export function processingMeetingIds(view: QueueView, backlogDraining: boolean): Set<string> {
+  const ids = new Set<string>();
+  for (const row of view.rows) {
+    if (!row.meetingId) continue;
+    const running = IN_FLIGHT.includes(row.stage);
+    const willRun = row.stage === 'waiting' && (row.source === 'llm' || backlogDraining);
+    if (running || willRun) ids.add(row.meetingId);
+  }
+  return ids;
 }

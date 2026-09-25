@@ -154,6 +154,7 @@ export function itemPhase(
 
 export type TimelineVisualState =
   | 'recording' // the live session
+  | 'processing' // post-recording work (or a prep brief) in flight for its meeting
   | 'now-joinable' // happening now, has a join link, can Join & Record
   | 'now' // happening now, not joinable
   | 'past-recorded' // ended, has a recording to open
@@ -164,6 +165,8 @@ export interface TimelineContext {
   now: Date;
   isRecording: boolean;
   recordingThisId: string | null;
+  /** Meetings with work in flight (`useProcessingMeetingIds`, the rail's own sources). */
+  processingIds?: ReadonlySet<string>;
 }
 
 /**
@@ -195,6 +198,9 @@ export function findRecordingRowId(
 export function itemVisualState(item: DayAgendaItem, ctx: TimelineContext): TimelineVisualState {
   const { now, isRecording, recordingThisId } = ctx;
   if (recordingThisId && item.id === recordingThisId) return 'recording';
+  // Precedence: Recording > Processing > Now > Recorded. A row can only show it when it is
+  // tied to a meeting — an unclaimed calendar occurrence has no meeting for work to run on.
+  if (item.meetingId && ctx.processingIds?.has(item.meetingId)) return 'processing';
   const phase = itemPhase(item, now, recordingThisId);
   if (phase === 'now') {
     const canJoin = canJoinAgendaItem({
