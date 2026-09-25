@@ -82,8 +82,10 @@ function ThemedToaster({ offset }: { offset?: { bottom: string } }) {
 }
 
 /** specs/0057 — bottom-center toasts would land underneath the fixed transport rail, so they
- *  clear its height plus the normal 16px gutter. Onboarding has no rail, hence no offset. */
-const RAIL_TOAST_OFFSET = { bottom: 'calc(var(--rail-h) + 16px)' }
+ *  clear its height plus the normal 16px gutter. Onboarding has no rail, hence no offset.
+ *  `--toast-lift` is set only while the transcript's selection bar is up (SelectionActionBar),
+ *  so a toast stacks above that bar instead of over it. */
+const RAIL_TOAST_OFFSET = { bottom: 'calc(var(--rail-h) + 16px + var(--toast-lift, 0px))' }
 
 export default function RootLayout({
   children,
