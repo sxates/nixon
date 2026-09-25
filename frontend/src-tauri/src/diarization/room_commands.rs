@@ -89,9 +89,10 @@ pub async fn api_mark_speaker_as_me<R: Runtime>(
         .map_err(|e| format!("{e:#}"))?;
     log::info!(
         "marked {speaker_key} as the owner in meeting {meeting_id}: {} lines, merged={}, \
-         {} other samples quarantined, enrolled={}",
+         displaced={:?}, {} other samples quarantined, enrolled={}",
         outcome.rekey.moved_lines,
         outcome.rekey.merged_into_existing,
+        outcome.rekey.displaced_to,
         outcome.rekey.quarantined_other_samples,
         outcome.enrolled
     );
@@ -164,7 +165,8 @@ pub(crate) struct MarkOutcome {
     pub enrolled: bool,
 }
 
-/// "This is me" with the voiceprint consent passed in. The re-key is one transaction;
+/// "This is me" with the voiceprint consent passed in. Also the core of assigning a room
+/// cluster to yourself (`owner_assign`). The re-key is one transaction;
 /// enrollment runs after it and is best-effort (a failure is logged, not returned), like
 /// every enroll-on-confirm path.
 ///
@@ -200,11 +202,20 @@ pub(crate) async fn mark_speaker_as_me(
         .await
         .context("Couldn't read that speaker's voice")?
         .map(|(_, bytes, model)| (bytes, model));
-    let rekey =
-        SpeakersRepository::rekey_to_local(pool, meeting_id, speaker_key, OWNER_PERSON_ID, true)
-            .await
-            .context("Couldn't mark that speaker as you")?
-            .ok_or_else(|| anyhow!("That speaker is no longer in this meeting"))?;
+    // In a room/hybrid meeting an automatic "You" is a guess this corrects: it is moved
+    // out rather than merged with (`claim_as_local`). In a call `local` is the mic.
+    let displace =
+        crate::diarization::owner_assign::owner_is_clustered_here(pool, meeting_id).await;
+    let rekey = SpeakersRepository::claim_as_local(
+        pool,
+        meeting_id,
+        speaker_key,
+        OWNER_PERSON_ID,
+        displace,
+    )
+    .await
+    .context("Couldn't mark that speaker as you")?
+    .ok_or_else(|| anyhow!("That speaker is no longer in this meeting"))?;
 
     let enrolled =
         match enroll_marked_owner(pool, meeting_id, confirmed_voice, store_voiceprints).await {

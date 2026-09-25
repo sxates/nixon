@@ -32,6 +32,7 @@ pub mod launch;
 pub mod live;
 pub mod model_commands;
 pub mod models;
+pub mod owner_assign; // specs/0078: assigning a room cluster to yourself = "This is me"
 pub mod owner_bootstrap; // specs/0078 W5: owner voiceprint from the mic / a single room voice
 pub mod owner_turns;
 pub mod pipeline;

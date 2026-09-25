@@ -991,3 +991,69 @@ async fn a_rename_is_never_restored_onto_you() {
     assert_eq!(you.display_name, "You", "{speakers:?}");
     assert!(speakers.iter().all(|s| s.display_name != "Priya"));
 }
+
+/// specs/0078 follow-up (fix 3): a room cluster the user assigned to themself before that
+/// meant "This is me" is carried onto its key by the re-run's identity restore; the pass
+/// then re-keys it to "You" instead of leaving the owner as a stranger `spk_N`. A call
+/// re-run keeps today's link.
+#[tokio::test]
+async fn a_rerun_turns_a_room_cluster_assigned_to_you_into_you() {
+    use app_lib::database::repositories::people::PeopleRepository;
+
+    for (setup, expect_you) in [(AudioSetup::Room, true), (AudioSetup::Call, false)] {
+        let (_dir, db) = fresh_db().await;
+        let pool = db.pool();
+        ensure_owner_person(pool).await.unwrap();
+        let meeting = seed_room_meeting(pool).await;
+        if setup == AudioSetup::Call {
+            // In a call only system rows are clustered: make the second voice remote.
+            sqlx::query(
+                "UPDATE transcripts SET channel = 'system'
+                 WHERE meeting_id = ? AND transcript LIKE 'second%'",
+            )
+            .bind(&meeting)
+            .execute(pool)
+            .await
+            .unwrap();
+        }
+        // The first pass identified nobody as the owner...
+        let first = room_turns();
+        attribute_and_persist(pool, &meeting, &first, &room_embeddings(), setup)
+            .await
+            .unwrap();
+        let cluster = if setup == AudioSetup::Room {
+            "spk_0"
+        } else {
+            "spk_1"
+        };
+        // ...then the user linked a cluster to the owner person the old way.
+        assert!(PeopleRepository::assign_speaker_to_person(
+            pool,
+            &meeting,
+            cluster,
+            OWNER_PERSON_ID
+        )
+        .await
+        .unwrap());
+
+        attribute_and_persist(pool, &meeting, &first, &room_embeddings(), setup)
+            .await
+            .unwrap();
+        let speakers = SpeakersRepository::get_by_meeting(pool, &meeting)
+            .await
+            .unwrap();
+        let owner_linked: Vec<&str> = speakers
+            .iter()
+            .filter(|s| s.person_id.as_deref() == Some(OWNER_PERSON_ID))
+            .map(|s| s.speaker_key.as_str())
+            .collect();
+        if expect_you {
+            assert_eq!(owner_linked, vec!["local"], "{setup:?}: {speakers:?}");
+            let rows = stored_rows(pool, &meeting).await;
+            let keys: Vec<&str> = rows.iter().map(|(k, _)| k.as_str()).collect();
+            assert_eq!(keys, vec!["local", "spk_1", "local", "spk_1", "local"]);
+        } else {
+            assert_eq!(owner_linked, vec![cluster], "{setup:?}: {speakers:?}");
+        }
+    }
+}

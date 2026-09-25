@@ -21,7 +21,6 @@
 
 use tauri::{AppHandle, Manager, Runtime};
 
-use crate::database::repositories::meeting_participant::MeetingParticipantsRepository;
 use crate::database::repositories::owner_emails::OwnerEmailsRepository;
 use crate::database::repositories::people::{PeopleRepository, Person};
 use crate::people::enroll::OWNER_PERSON_ID;
@@ -187,8 +186,10 @@ pub async fn api_set_person_voiceprint_opt_out<R: Runtime>(
 }
 
 /// Associate a detected speaker in a transcript with a durable person (specs/0016 1b):
-/// sets `speakers.person_id` and copies the person's name/email onto the speaker row.
-/// Succeeds regardless of the person's `voiceprint_opt_out` flag (identity, not voice).
+/// sets `speakers.person_id` and copies the person's name/email onto the speaker row, adds
+/// the person to the roster, and enrolls behind the voiceprint consent. Succeeds regardless
+/// of the person's `voiceprint_opt_out` flag (identity, not voice). In a room recording,
+/// assigning a cluster to yourself is "This is me" (specs/0078, `diarization::owner_assign`).
 #[tauri::command]
 pub async fn api_assign_speaker_to_person<R: Runtime>(
     app: AppHandle<R>,
@@ -196,63 +197,18 @@ pub async fn api_assign_speaker_to_person<R: Runtime>(
     speaker_key: String,
     person_id: String,
 ) -> Result<(), String> {
-    if meeting_id.trim().is_empty() || speaker_key.trim().is_empty() {
-        return Err("meeting and speaker are required".to_string());
-    }
-    if person_id.trim().is_empty() {
-        return Err("a person must be selected".to_string());
-    }
     let state = app.state::<AppState>();
     let pool = state.db_manager.pool();
-
-    let assigned =
-        PeopleRepository::assign_speaker_to_person(pool, &meeting_id, &speaker_key, &person_id)
-            .await
-            .map_err(|e| format!("Failed to assign speaker to person: {e}"))?;
-    if !assigned {
-        return Err(
-            "Couldn't link that speaker — the person or speaker no longer exists".to_string(),
-        );
-    }
-
-    // specs/0038 WS6.c: identifying a speaker also puts that person on the meeting's
-    // participant roster, so a named speaker always shows up as a participant. The owner
-    // ("You") is implicit and never a roster row (specs/0018) — `add_identified` skips the
-    // singleton owner person and dedupes on the `(meeting_id, person_id)` PK, so re-assigning
-    // the same speaker never duplicates the row. Best-effort: the identity link is already
-    // committed — a roster-add failure (or the owner skip) must not fail the command.
-    if let Err(e) =
-        MeetingParticipantsRepository::add_identified(pool, &meeting_id, &person_id).await
-    {
-        log::warn!(
-            "speaker-assign: roster add for person {person_id} in meeting {meeting_id} failed (continuing): {e}"
-        );
-    }
-
-    // Enroll-on-confirm (specs/0016 1c, ADR-0007 §2/§3): opportunistically add this
-    // cluster's voiceprint to the person's gallery, behind the consent gate. Best-effort
-    // — the identity is already linked; a gating no-op or an enroll error must not fail
-    // the command. The owner path covers the local/mic row AND a cluster assigned to the
-    // owner person (specs/0078 open question 6), under the one `store_voiceprints` consent.
-    match crate::people::enroll::enroll_voiceprint_for_speaker(
+    let consent = crate::people::enroll::voiceprint_consent().await;
+    crate::diarization::owner_assign::assign_speaker_to_person(
         pool,
         &meeting_id,
         &speaker_key,
         &person_id,
-        // An explicit human "this speaker is that person" — highest attribution trust
-        // (specs/0039 WS3). The WS3 cluster-quality guards still apply inside.
-        crate::people::enroll::EnrollConfidence::UserConfirmed,
+        consent,
     )
     .await
-    {
-        Ok(true) => log::info!(
-            "enrolled voiceprint for {speaker_key} in meeting {meeting_id} (person {person_id})"
-        ),
-        Ok(false) => {} // correctly gated off, or nothing to enroll — expected.
-        Err(e) => log::warn!(
-            "voiceprint enroll for {speaker_key} in meeting {meeting_id} failed (continuing): {e:#}"
-        ),
-    }
+    .map_err(|e| format!("{e:#}"))?;
 
     // specs/0044 WS3: the speaker now resolves to a real person name — debounced
     // refresh of a pristine summary whose name set is stale. Fire-and-forget.

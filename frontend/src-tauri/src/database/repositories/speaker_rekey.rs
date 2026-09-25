@@ -12,7 +12,7 @@
 //! `speaker.rs` small.
 
 use chrono::Utc;
-use sqlx::{Error as SqlxError, SqlitePool};
+use sqlx::{Error as SqlxError, SqliteConnection, SqlitePool};
 
 use super::meeting_audio_setup::{OWNER_LABEL_CONFIRMED, OWNER_LABEL_REJECTED};
 use super::speaker::SpeakersRepository;
@@ -35,6 +35,9 @@ pub struct RekeyToLocal {
     /// just said it is their own voice, so those samples would teach someone else's
     /// gallery the owner's voice. Quarantine is restorable from the People page.
     pub quarantined_other_samples: u64,
+    /// The `spk_N` key an automatic "You" was moved to so this cluster could take its
+    /// place ([`SpeakersRepository::claim_as_local`]); `None` when nothing was displaced.
+    pub displaced_to: Option<String>,
 }
 
 /// What [`SpeakersRepository::rekey_from_local`] changed.
@@ -83,160 +86,74 @@ impl SpeakersRepository {
         if speaker_key == LOCAL {
             return Ok(None);
         }
-        let now = Utc::now();
         let mut tx = pool.begin().await?;
-
-        let cluster: Option<EmbeddingColumns> = sqlx::query_as(
-            "SELECT embedding, embedding_dim, embedding_model FROM speakers
-             WHERE meeting_id = ? AND speaker_key = ?",
+        let out = to_local_in(
+            &mut tx,
+            meeting_id,
+            speaker_key,
+            owner_person_id,
+            user_confirmed,
         )
-        .bind(meeting_id)
-        .bind(speaker_key)
-        .fetch_optional(&mut *tx)
         .await?;
-        let Some((embedding, embedding_dim, embedding_model)) = cluster else {
-            return Ok(None); // dropping `tx` rolls back (nothing was written)
-        };
-        let local_exists: bool = sqlx::query_scalar(
+        if out.is_some() {
+            tx.commit().await?;
+        }
+        Ok(out)
+    }
+
+    /// A user's "this cluster is me" ("This is me", or assigning the cluster to the owner
+    /// in a room recording): [`Self::rekey_to_local`] with `user_confirmed`, plus the
+    /// automatic-"You" swap, in ONE transaction.
+    ///
+    /// With `displace_automatic` (the caller's "the owner is clustered here": a room or
+    /// hybrid pass) and an existing `local` the user never confirmed
+    /// (`meetings.owner_label <> 'confirmed'`), that automatic "You" was a guess the user
+    /// is now correcting, so it is moved out first, exactly as [`Self::rekey_from_local`]
+    /// moves it (next free `spk_N`, its lines with it, lines the user pinned to "You" kept
+    /// on `local`), but without quarantining samples or recording a rejection. Then the
+    /// cluster takes `local`. A user-confirmed `local` is merged into as before: the user
+    /// said both are them. Nothing is displaced when every `local` line is pinned (the
+    /// merge already gives `local` the cluster's voice).
+    ///
+    /// `Ok(None)` when the meeting has no `speakers` row for `speaker_key` (nothing is
+    /// written).
+    pub async fn claim_as_local(
+        pool: &SqlitePool,
+        meeting_id: &str,
+        speaker_key: &str,
+        owner_person_id: &str,
+        displace_automatic: bool,
+    ) -> Result<Option<RekeyToLocal>, SqlxError> {
+        if speaker_key == LOCAL {
+            return Ok(None);
+        }
+        let mut tx = pool.begin().await?;
+        let cluster_exists: bool = sqlx::query_scalar(
             "SELECT EXISTS(SELECT 1 FROM speakers WHERE meeting_id = ? AND speaker_key = ?)",
         )
         .bind(meeting_id)
-        .bind(LOCAL)
+        .bind(speaker_key)
         .fetch_one(&mut *tx)
         .await?;
-
-        let moved_lines =
-            sqlx::query("UPDATE transcripts SET speaker = ? WHERE meeting_id = ? AND speaker = ?")
-                .bind(LOCAL)
-                .bind(meeting_id)
-                .bind(speaker_key)
-                .execute(&mut *tx)
-                .await?
-                .rows_affected();
-        sqlx::query(
-            "UPDATE transcript_speaker_overrides SET speaker_key = ?
-             WHERE meeting_id = ? AND speaker_key = ?",
-        )
-        .bind(LOCAL)
-        .bind(meeting_id)
-        .bind(speaker_key)
-        .execute(&mut *tx)
-        .await?;
-
-        let quarantined_other_samples = sqlx::query(
-            "UPDATE voiceprints SET quarantined_at = ?
-             WHERE source_meeting_id = ? AND source_speaker_key = ?
-               AND person_id <> ? AND quarantined_at IS NULL",
-        )
-        .bind(now.to_rfc3339())
-        .bind(meeting_id)
-        .bind(speaker_key)
-        .bind(owner_person_id)
-        .execute(&mut *tx)
-        .await?
-        .rows_affected();
-        sqlx::query(
-            "UPDATE voiceprints SET source_speaker_key = ?
-             WHERE source_meeting_id = ? AND source_speaker_key = ?",
-        )
-        .bind(LOCAL)
-        .bind(meeting_id)
-        .bind(speaker_key)
-        .execute(&mut *tx)
-        .await?;
-
-        // Replace an automatic `local`'s embedding with the one the user just confirmed.
-        let replace_embedding = user_confirmed
-            && embedding.is_some()
-            && local_exists
-            && sqlx::query_scalar::<_, Option<String>>(
-                "SELECT owner_label FROM meetings WHERE id = ?",
-            )
-            .bind(meeting_id)
-            .fetch_optional(&mut *tx)
-            .await?
-            .flatten()
-            .as_deref()
-                != Some(OWNER_LABEL_CONFIRMED);
-
-        if replace_embedding {
-            sqlx::query(
-                "UPDATE speakers SET
-                    is_local = 1, person_id = ?, embedding = ?, embedding_dim = ?,
-                    embedding_model = ?, updated_at = ?
-                 WHERE meeting_id = ? AND speaker_key = ?",
-            )
-            .bind(owner_person_id)
-            .bind(&embedding)
-            .bind(embedding_dim)
-            .bind(&embedding_model)
-            .bind(now)
-            .bind(meeting_id)
-            .bind(LOCAL)
-            .execute(&mut *tx)
-            .await?;
-            sqlx::query("DELETE FROM speakers WHERE meeting_id = ? AND speaker_key = ?")
-                .bind(meeting_id)
-                .bind(speaker_key)
-                .execute(&mut *tx)
-                .await?;
-        } else if local_exists {
-            // SQLite evaluates every SET expression against the OLD row, so the CASEs all
-            // see the pre-update `embedding`: the three columns move together or not at all.
-            sqlx::query(
-                "UPDATE speakers SET
-                    is_local        = 1,
-                    person_id       = ?,
-                    embedding_dim   = CASE WHEN embedding IS NULL THEN ? ELSE embedding_dim END,
-                    embedding_model = CASE WHEN embedding IS NULL THEN ? ELSE embedding_model END,
-                    embedding       = COALESCE(embedding, ?),
-                    updated_at      = ?
-                 WHERE meeting_id = ? AND speaker_key = ?",
-            )
-            .bind(owner_person_id)
-            .bind(embedding_dim)
-            .bind(&embedding_model)
-            .bind(&embedding)
-            .bind(now)
-            .bind(meeting_id)
-            .bind(LOCAL)
-            .execute(&mut *tx)
-            .await?;
-            sqlx::query("DELETE FROM speakers WHERE meeting_id = ? AND speaker_key = ?")
-                .bind(meeting_id)
-                .bind(speaker_key)
-                .execute(&mut *tx)
-                .await?;
-        } else {
-            sqlx::query(
-                "UPDATE speakers SET
-                    speaker_key = ?, is_local = 1, person_id = ?, display_name = 'You',
-                    email = NULL, updated_at = ?
-                 WHERE meeting_id = ? AND speaker_key = ?",
-            )
-            .bind(LOCAL)
-            .bind(owner_person_id)
-            .bind(now)
-            .bind(meeting_id)
-            .bind(speaker_key)
-            .execute(&mut *tx)
-            .await?;
+        if !cluster_exists {
+            return Ok(None);
         }
-
-        if user_confirmed {
-            sqlx::query("UPDATE meetings SET owner_label = ? WHERE id = ?")
-                .bind(OWNER_LABEL_CONFIRMED)
-                .bind(meeting_id)
-                .execute(&mut *tx)
-                .await?;
-        }
-
+        let displaced_to =
+            if displace_automatic && automatic_local_has_lines(&mut tx, meeting_id).await? {
+                from_local_in(&mut tx, meeting_id, owner_person_id, false)
+                    .await?
+                    .map(|r| r.new_key)
+            } else {
+                None
+            };
+        let Some(mut out) =
+            to_local_in(&mut tx, meeting_id, speaker_key, owner_person_id, true).await?
+        else {
+            return Ok(None);
+        };
+        out.displaced_to = displaced_to;
         tx.commit().await?;
-        Ok(Some(RekeyToLocal {
-            moved_lines,
-            merged_into_existing: local_exists,
-            quarantined_other_samples,
-        }))
+        Ok(Some(out))
     }
 
     /// "This isn't me": move the meeting's `local` speaker to the next free `spk_N`
@@ -263,36 +180,216 @@ impl SpeakersRepository {
         meeting_id: &str,
         owner_person_id: &str,
     ) -> Result<Option<RekeyFromLocal>, SqlxError> {
-        let now = Utc::now();
         let mut tx = pool.begin().await?;
+        let out = from_local_in(&mut tx, meeting_id, owner_person_id, true).await?;
+        if out.is_some() {
+            tx.commit().await?;
+        }
+        Ok(out)
+    }
+}
 
-        let local_exists: bool = sqlx::query_scalar(
-            "SELECT EXISTS(SELECT 1 FROM speakers WHERE meeting_id = ? AND speaker_key = ?)",
+/// The body of [`SpeakersRepository::rekey_to_local`], on the caller's transaction.
+async fn to_local_in(
+    conn: &mut SqliteConnection,
+    meeting_id: &str,
+    speaker_key: &str,
+    owner_person_id: &str,
+    user_confirmed: bool,
+) -> Result<Option<RekeyToLocal>, SqlxError> {
+    let now = Utc::now();
+
+    let cluster: Option<EmbeddingColumns> = sqlx::query_as(
+        "SELECT embedding, embedding_dim, embedding_model FROM speakers
+             WHERE meeting_id = ? AND speaker_key = ?",
+    )
+    .bind(meeting_id)
+    .bind(speaker_key)
+    .fetch_optional(&mut *conn)
+    .await?;
+    let Some((embedding, embedding_dim, embedding_model)) = cluster else {
+        return Ok(None); // nothing was written
+    };
+    let local_exists: bool = sqlx::query_scalar(
+        "SELECT EXISTS(SELECT 1 FROM speakers WHERE meeting_id = ? AND speaker_key = ?)",
+    )
+    .bind(meeting_id)
+    .bind(LOCAL)
+    .fetch_one(&mut *conn)
+    .await?;
+
+    let moved_lines =
+        sqlx::query("UPDATE transcripts SET speaker = ? WHERE meeting_id = ? AND speaker = ?")
+            .bind(LOCAL)
+            .bind(meeting_id)
+            .bind(speaker_key)
+            .execute(&mut *conn)
+            .await?
+            .rows_affected();
+    sqlx::query(
+        "UPDATE transcript_speaker_overrides SET speaker_key = ?
+             WHERE meeting_id = ? AND speaker_key = ?",
+    )
+    .bind(LOCAL)
+    .bind(meeting_id)
+    .bind(speaker_key)
+    .execute(&mut *conn)
+    .await?;
+
+    let quarantined_other_samples = sqlx::query(
+        "UPDATE voiceprints SET quarantined_at = ?
+             WHERE source_meeting_id = ? AND source_speaker_key = ?
+               AND person_id <> ? AND quarantined_at IS NULL",
+    )
+    .bind(now.to_rfc3339())
+    .bind(meeting_id)
+    .bind(speaker_key)
+    .bind(owner_person_id)
+    .execute(&mut *conn)
+    .await?
+    .rows_affected();
+    sqlx::query(
+        "UPDATE voiceprints SET source_speaker_key = ?
+             WHERE source_meeting_id = ? AND source_speaker_key = ?",
+    )
+    .bind(LOCAL)
+    .bind(meeting_id)
+    .bind(speaker_key)
+    .execute(&mut *conn)
+    .await?;
+
+    // Replace an automatic `local`'s embedding with the one the user just confirmed.
+    let replace_embedding = user_confirmed
+        && embedding.is_some()
+        && local_exists
+        && sqlx::query_scalar::<_, Option<String>>("SELECT owner_label FROM meetings WHERE id = ?")
+            .bind(meeting_id)
+            .fetch_optional(&mut *conn)
+            .await?
+            .flatten()
+            .as_deref()
+            != Some(OWNER_LABEL_CONFIRMED);
+
+    if replace_embedding {
+        sqlx::query(
+            "UPDATE speakers SET
+                    is_local = 1, person_id = ?, embedding = ?, embedding_dim = ?,
+                    embedding_model = ?, updated_at = ?
+                 WHERE meeting_id = ? AND speaker_key = ?",
         )
+        .bind(owner_person_id)
+        .bind(&embedding)
+        .bind(embedding_dim)
+        .bind(&embedding_model)
+        .bind(now)
         .bind(meeting_id)
         .bind(LOCAL)
-        .fetch_one(&mut *tx)
+        .execute(&mut *conn)
         .await?;
-        if !local_exists {
-            return Ok(None);
-        }
+        sqlx::query("DELETE FROM speakers WHERE meeting_id = ? AND speaker_key = ?")
+            .bind(meeting_id)
+            .bind(speaker_key)
+            .execute(&mut *conn)
+            .await?;
+    } else if local_exists {
+        // SQLite evaluates every SET expression against the OLD row, so the CASEs all
+        // see the pre-update `embedding`: the three columns move together or not at all.
+        sqlx::query(
+            "UPDATE speakers SET
+                    is_local        = 1,
+                    person_id       = ?,
+                    embedding_dim   = CASE WHEN embedding IS NULL THEN ? ELSE embedding_dim END,
+                    embedding_model = CASE WHEN embedding IS NULL THEN ? ELSE embedding_model END,
+                    embedding       = COALESCE(embedding, ?),
+                    updated_at      = ?
+                 WHERE meeting_id = ? AND speaker_key = ?",
+        )
+        .bind(owner_person_id)
+        .bind(embedding_dim)
+        .bind(&embedding_model)
+        .bind(&embedding)
+        .bind(now)
+        .bind(meeting_id)
+        .bind(LOCAL)
+        .execute(&mut *conn)
+        .await?;
+        sqlx::query("DELETE FROM speakers WHERE meeting_id = ? AND speaker_key = ?")
+            .bind(meeting_id)
+            .bind(speaker_key)
+            .execute(&mut *conn)
+            .await?;
+    } else {
+        sqlx::query(
+            "UPDATE speakers SET
+                    speaker_key = ?, is_local = 1, person_id = ?, display_name = 'You',
+                    email = NULL, updated_at = ?
+                 WHERE meeting_id = ? AND speaker_key = ?",
+        )
+        .bind(LOCAL)
+        .bind(owner_person_id)
+        .bind(now)
+        .bind(meeting_id)
+        .bind(speaker_key)
+        .execute(&mut *conn)
+        .await?;
+    }
 
-        // Every `spk_N` key this meeting has ever used, anywhere a key can live, so the new
-        // key can't collide with a stale override or a sample's back-link.
-        let used: Vec<String> = sqlx::query_scalar(
-            "SELECT speaker_key FROM speakers WHERE meeting_id = ?1
+    if user_confirmed {
+        sqlx::query("UPDATE meetings SET owner_label = ? WHERE id = ?")
+            .bind(OWNER_LABEL_CONFIRMED)
+            .bind(meeting_id)
+            .execute(&mut *conn)
+            .await?;
+    }
+
+    Ok(Some(RekeyToLocal {
+        moved_lines,
+        merged_into_existing: local_exists,
+        quarantined_other_samples,
+        displaced_to: None,
+    }))
+}
+
+/// The body of [`SpeakersRepository::rekey_from_local`], on the caller's transaction.
+/// `reject` is "This isn't me": it quarantines the owner samples back-linked to `local`
+/// and records `owner_label = 'rejected'`. Without it (the automatic-"You" swap in
+/// [`SpeakersRepository::claim_as_local`]) only the rows move.
+async fn from_local_in(
+    conn: &mut SqliteConnection,
+    meeting_id: &str,
+    owner_person_id: &str,
+    reject: bool,
+) -> Result<Option<RekeyFromLocal>, SqlxError> {
+    let now = Utc::now();
+
+    let local_exists: bool = sqlx::query_scalar(
+        "SELECT EXISTS(SELECT 1 FROM speakers WHERE meeting_id = ? AND speaker_key = ?)",
+    )
+    .bind(meeting_id)
+    .bind(LOCAL)
+    .fetch_one(&mut *conn)
+    .await?;
+    if !local_exists {
+        return Ok(None); // nothing was written
+    }
+
+    // Every `spk_N` key this meeting has ever used, anywhere a key can live, so the new
+    // key can't collide with a stale override or a sample's back-link.
+    let used: Vec<String> = sqlx::query_scalar(
+        "SELECT speaker_key FROM speakers WHERE meeting_id = ?1
              UNION SELECT speaker FROM transcripts WHERE meeting_id = ?1 AND speaker IS NOT NULL
              UNION SELECT speaker_key FROM transcript_speaker_overrides WHERE meeting_id = ?1
              UNION SELECT source_speaker_key FROM voiceprints
                     WHERE source_meeting_id = ?1 AND source_speaker_key IS NOT NULL",
-        )
-        .bind(meeting_id)
-        .fetch_all(&mut *tx)
-        .await?;
-        let next = next_free_cluster_index(&used);
-        let new_key = format!("spk_{next}");
+    )
+    .bind(meeting_id)
+    .fetch_all(&mut *conn)
+    .await?;
+    let next = next_free_cluster_index(&used);
+    let new_key = format!("spk_{next}");
 
-        let quarantined_owner_samples = sqlx::query(
+    let quarantined_owner_samples = if reject {
+        sqlx::query(
             "UPDATE voiceprints SET quarantined_at = ?
              WHERE source_meeting_id = ? AND source_speaker_key = ?
                AND person_id = ? AND quarantined_at IS NULL",
@@ -301,70 +398,98 @@ impl SpeakersRepository {
         .bind(meeting_id)
         .bind(LOCAL)
         .bind(owner_person_id)
-        .execute(&mut *tx)
+        .execute(&mut *conn)
         .await?
-        .rows_affected();
+        .rows_affected()
+    } else {
+        0
+    };
 
-        let moved_lines = sqlx::query(
-            "UPDATE transcripts SET speaker = ?1
+    let moved_lines = sqlx::query(
+        "UPDATE transcripts SET speaker = ?1
              WHERE meeting_id = ?2 AND speaker = ?3
                AND id NOT IN (SELECT transcript_id FROM transcript_speaker_overrides
                                WHERE meeting_id = ?2 AND speaker_key = ?3)",
-        )
-        .bind(&new_key)
-        .bind(meeting_id)
-        .bind(LOCAL)
-        .execute(&mut *tx)
-        .await?
-        .rows_affected();
-        let kept_lines: i64 = sqlx::query_scalar(
-            "SELECT COUNT(*) FROM transcripts WHERE meeting_id = ? AND speaker = ?",
-        )
-        .bind(meeting_id)
-        .bind(LOCAL)
-        .fetch_one(&mut *tx)
-        .await?;
-        sqlx::query(
-            "UPDATE speakers SET
+    )
+    .bind(&new_key)
+    .bind(meeting_id)
+    .bind(LOCAL)
+    .execute(&mut *conn)
+    .await?
+    .rows_affected();
+    let kept_lines: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM transcripts WHERE meeting_id = ? AND speaker = ?")
+            .bind(meeting_id)
+            .bind(LOCAL)
+            .fetch_one(&mut *conn)
+            .await?;
+    sqlx::query(
+        "UPDATE speakers SET
                 speaker_key = ?, is_local = 0, person_id = NULL, email = NULL,
                 display_name = ?, updated_at = ?
              WHERE meeting_id = ? AND speaker_key = ?",
-        )
-        .bind(&new_key)
-        .bind(format!("Speaker {}", next + 1))
-        .bind(now)
-        .bind(meeting_id)
-        .bind(LOCAL)
-        .execute(&mut *tx)
-        .await?;
-        if kept_lines > 0 {
-            sqlx::query(
-                "INSERT INTO speakers
+    )
+    .bind(&new_key)
+    .bind(format!("Speaker {}", next + 1))
+    .bind(now)
+    .bind(meeting_id)
+    .bind(LOCAL)
+    .execute(&mut *conn)
+    .await?;
+    if kept_lines > 0 {
+        sqlx::query(
+            "INSERT INTO speakers
                     (id, meeting_id, speaker_key, display_name, is_local, created_at, updated_at)
                  VALUES (?, ?, ?, 'You', 1, ?, ?)",
-            )
-            .bind(format!("speaker-{}", uuid::Uuid::new_v4()))
-            .bind(meeting_id)
-            .bind(LOCAL)
-            .bind(now)
-            .bind(now)
-            .execute(&mut *tx)
-            .await?;
-        }
+        )
+        .bind(format!("speaker-{}", uuid::Uuid::new_v4()))
+        .bind(meeting_id)
+        .bind(LOCAL)
+        .bind(now)
+        .bind(now)
+        .execute(&mut *conn)
+        .await?;
+    }
+    if reject {
         sqlx::query("UPDATE meetings SET owner_label = ? WHERE id = ?")
             .bind(OWNER_LABEL_REJECTED)
             .bind(meeting_id)
-            .execute(&mut *tx)
+            .execute(&mut *conn)
             .await?;
-
-        tx.commit().await?;
-        Ok(Some(RekeyFromLocal {
-            new_key,
-            moved_lines,
-            kept_lines: kept_lines as u64,
-            quarantined_owner_samples,
-        }))
     }
+
+    Ok(Some(RekeyFromLocal {
+        new_key,
+        moved_lines,
+        kept_lines: kept_lines as u64,
+        quarantined_owner_samples,
+    }))
+}
+
+/// Whether this meeting's `local` is an automatic "You" (`owner_label` is not
+/// 'confirmed') with at least one line the user didn't pin to "You" by hand.
+async fn automatic_local_has_lines(
+    conn: &mut SqliteConnection,
+    meeting_id: &str,
+) -> Result<bool, SqlxError> {
+    let label: Option<Option<String>> =
+        sqlx::query_scalar("SELECT owner_label FROM meetings WHERE id = ?")
+            .bind(meeting_id)
+            .fetch_optional(&mut *conn)
+            .await?;
+    if label.flatten().as_deref() == Some(OWNER_LABEL_CONFIRMED) {
+        return Ok(false);
+    }
+    sqlx::query_scalar(
+        "SELECT EXISTS(SELECT 1 FROM transcripts
+                        WHERE meeting_id = ?1 AND speaker = ?2
+                          AND id NOT IN (SELECT transcript_id FROM transcript_speaker_overrides
+                                          WHERE meeting_id = ?1 AND speaker_key = ?2))",
+    )
+    .bind(meeting_id)
+    .bind(LOCAL)
+    .fetch_one(&mut *conn)
+    .await
 }
 
 /// One past the highest `spk_N` index in `keys` (0 when there is none).

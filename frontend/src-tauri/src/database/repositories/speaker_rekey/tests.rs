@@ -185,6 +185,7 @@ async fn fresh_rekey_moves_the_cluster_onto_local() {
             moved_lines: 2,
             merged_into_existing: false,
             quarantined_other_samples: 1,
+            displaced_to: None,
         }
     );
 
@@ -440,4 +441,161 @@ fn next_free_index_skips_every_used_key() {
         next_free_cluster_index(&keys(&["spk_0", "spk_10", "spk_2"])),
         11
     );
+}
+
+// ----- claim_as_local: the automatic-"You" swap (specs/0078 follow-up) -----
+
+async fn owner_label(pool: &SqlitePool, m: &str) -> Option<String> {
+    sqlx::query_scalar("SELECT owner_label FROM meetings WHERE id = ?")
+        .bind(m)
+        .fetch_one(pool)
+        .await
+        .unwrap()
+}
+
+/// A room meeting with an automatic "You" (voice A, lines u0..u2, u1 pinned to "You" by
+/// hand, one owner sample back-linked to `local`) and a cluster `spk_1` (voice B, lines
+/// c0, c1).
+async fn automatic_you_and_a_cluster(pool: &SqlitePool) {
+    meeting(pool, "m1").await;
+    sample(pool, "vp-owner", OWNER, "m1", "local").await;
+    speaker(pool, "m1", "local", "You", true, Some(EMB_A)).await;
+    sqlx::query("UPDATE speakers SET person_id = ? WHERE speaker_key = 'local'")
+        .bind(OWNER)
+        .execute(pool)
+        .await
+        .unwrap();
+    speaker(pool, "m1", "spk_1", "Speaker 2", false, Some(EMB_B)).await;
+    for id in ["u0", "u1", "u2"] {
+        line(pool, "m1", id, "local").await;
+    }
+    override_row(pool, "m1", "u1", "local").await;
+    line(pool, "m1", "c0", "spk_1").await;
+    line(pool, "m1", "c1", "spk_1").await;
+}
+
+#[tokio::test]
+async fn claim_swaps_out_an_automatic_you_keeping_pinned_lines() {
+    let pool = pool().await;
+    automatic_you_and_a_cluster(&pool).await;
+
+    let out = SpeakersRepository::claim_as_local(&pool, "m1", "spk_1", OWNER, true)
+        .await
+        .unwrap()
+        .expect("the cluster exists");
+    assert_eq!(out.displaced_to.as_deref(), Some("spk_2"));
+    assert_eq!(out.moved_lines, 2);
+
+    // The automatic "You" moved out with its unpinned lines; its voice went with it.
+    assert_eq!(line_key(&pool, "u0").await.as_deref(), Some("spk_2"));
+    assert_eq!(line_key(&pool, "u2").await.as_deref(), Some("spk_2"));
+    let displaced = row(&pool, "m1", "spk_2").await.expect("displaced row");
+    assert_eq!(
+        displaced,
+        (
+            "Speaker 3".to_string(),
+            0,
+            None,
+            None,
+            Some(EMB_A.to_vec()),
+            Some("model-x".to_string())
+        )
+    );
+    // The pinned line (and its override) stay "You"; the cluster joins it.
+    assert_eq!(line_key(&pool, "u1").await.as_deref(), Some("local"));
+    assert_eq!(override_key(&pool, "u1").await, "local");
+    assert_eq!(line_key(&pool, "c0").await.as_deref(), Some("local"));
+    assert_eq!(line_key(&pool, "c1").await.as_deref(), Some("local"));
+    let you = row(&pool, "m1", "local").await.expect("a You row");
+    assert_eq!(you.1, 1);
+    assert_eq!(you.2.as_deref(), Some(OWNER));
+    assert_eq!(
+        you.4.as_deref(),
+        Some(EMB_B),
+        "You now carries the confirmed voice"
+    );
+    assert!(row(&pool, "m1", "spk_1").await.is_none());
+    assert_eq!(owner_label(&pool, "m1").await.as_deref(), Some("confirmed"));
+    // Nothing is quarantined by the swap.
+    assert_eq!(
+        sample_state(&pool, "vp-owner").await,
+        (Some("local".to_string()), false)
+    );
+}
+
+#[tokio::test]
+async fn claim_merges_into_a_user_confirmed_you() {
+    let pool = pool().await;
+    automatic_you_and_a_cluster(&pool).await;
+    sqlx::query("UPDATE meetings SET owner_label = 'confirmed' WHERE id = 'm1'")
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    let out = SpeakersRepository::claim_as_local(&pool, "m1", "spk_1", OWNER, true)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(out.displaced_to, None);
+    assert!(out.merged_into_existing);
+    for id in ["u0", "u1", "u2", "c0", "c1"] {
+        assert_eq!(line_key(&pool, id).await.as_deref(), Some("local"), "{id}");
+    }
+    assert!(row(&pool, "m1", "spk_2").await.is_none());
+    assert_eq!(
+        row(&pool, "m1", "local").await.unwrap().4.as_deref(),
+        Some(EMB_A),
+        "a confirmed You keeps its voice"
+    );
+}
+
+#[tokio::test]
+async fn claim_without_displacement_merges_as_before() {
+    // A call meeting: `local` is the mic, never displaced.
+    let pool = pool().await;
+    automatic_you_and_a_cluster(&pool).await;
+
+    let out = SpeakersRepository::claim_as_local(&pool, "m1", "spk_1", OWNER, false)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(out.displaced_to, None);
+    assert!(out.merged_into_existing);
+    assert_eq!(line_key(&pool, "u0").await.as_deref(), Some("local"));
+    assert_eq!(owner_label(&pool, "m1").await.as_deref(), Some("confirmed"));
+}
+
+#[tokio::test]
+async fn claim_does_not_displace_a_you_whose_lines_are_all_pinned() {
+    let pool = pool().await;
+    automatic_you_and_a_cluster(&pool).await;
+    override_row(&pool, "m1", "u0", "local").await;
+    override_row(&pool, "m1", "u2", "local").await;
+
+    let out = SpeakersRepository::claim_as_local(&pool, "m1", "spk_1", OWNER, true)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(out.displaced_to, None);
+    assert!(
+        row(&pool, "m1", "spk_2").await.is_none(),
+        "no empty Speaker row"
+    );
+    assert_eq!(
+        row(&pool, "m1", "local").await.unwrap().4.as_deref(),
+        Some(EMB_B),
+        "the automatic voice is replaced by the confirmed one"
+    );
+}
+
+#[tokio::test]
+async fn claim_of_a_missing_cluster_writes_nothing() {
+    let pool = pool().await;
+    automatic_you_and_a_cluster(&pool).await;
+    let out = SpeakersRepository::claim_as_local(&pool, "m1", "spk_9", OWNER, true)
+        .await
+        .unwrap();
+    assert!(out.is_none());
+    assert_eq!(line_key(&pool, "u0").await.as_deref(), Some("local"));
+    assert!(row(&pool, "m1", "local").await.is_some());
 }

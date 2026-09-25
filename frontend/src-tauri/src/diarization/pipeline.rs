@@ -669,6 +669,13 @@ pub async fn attribute_and_persist(
         .map(|(seg, key)| (seg.id, key))
         .collect();
     let persisted = persist(pool, meeting_id, &assignments, embeddings, setup).await?;
+    // specs/0078: a room cluster the user assigned to themself (carried onto its new key
+    // by `restore_user_identities`) stays "You" across the re-run.
+    if let Err(e) = crate::diarization::owner_assign::convert_owner_links(pool, meeting_id).await {
+        log::warn!(
+            "diarization: owner-link carry-over for {meeting_id} failed (continuing): {e:#}"
+        );
+    }
     Ok((persisted, assignments.len()))
 }
 
