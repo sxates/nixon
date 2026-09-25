@@ -33,6 +33,5 @@ frontend/src-tauri/src/audio/decoder.rs
 frontend/src/components/VirtualizedTranscriptView.tsx
 frontend/src-tauri/src/audio/transcription/worker.rs
 frontend/src/hooks/useRecordingStart.ts
-frontend/src/hooks/meeting-details/useSummaryGeneration.ts
 frontend/src-tauri/src/database/repositories/voiceprints.rs
 frontend/src-tauri/src/database/repositories/setting.rs
