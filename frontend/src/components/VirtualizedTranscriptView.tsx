@@ -125,6 +125,8 @@ export const VirtualizedTranscriptView: React.FC<VirtualizedTranscriptViewProps>
 }) => {
     // Create scroll ref first - shared between virtualizer and auto-scroll hook
     const scrollRef = useRef<HTMLDivElement>(null);
+    // The whole view (scroll box + selection bar): scopes the bar's Escape shortcut.
+    const viewRef = useRef<HTMLDivElement>(null);
     // Ref for infinite scroll trigger element
     const loadMoreTriggerRef = useRef<HTMLDivElement>(null);
 
@@ -565,7 +567,7 @@ export const VirtualizedTranscriptView: React.FC<VirtualizedTranscriptViewProps>
     return (
         // Positioning wrapper only (non-scrolling) — anchors the "Jump to latest" pill
         // over the scroll container without joining the scroll chain.
-        <div className="relative flex h-full min-h-0 flex-col">
+        <div ref={viewRef} className="relative flex h-full min-h-0 flex-col">
         {/* tabIndex: the container must be focusable for keyboard scrolling and for the
             follow-lock's keydown unlock listener (ArrowUp/PageUp/Home) to receive events. */}
         <div
@@ -775,6 +777,7 @@ export const VirtualizedTranscriptView: React.FC<VirtualizedTranscriptViewProps>
                     setNewSpeakerOpen(true);
                 }}
                 onClear={clearSelection}
+                scopeRef={viewRef}
             />
         )}
 

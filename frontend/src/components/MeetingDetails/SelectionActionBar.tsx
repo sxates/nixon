@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, type RefObject } from 'react';
 import { UserPlus, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -28,6 +28,34 @@ interface SelectionActionBarProps {
   onReassign: (speakerKey: string, displayName: string) => void;
   onNewSpeaker: () => void;
   onClear: () => void;
+  /** The transcript view's root: Escape only clears while the transcript owns it. */
+  scopeRef: RefObject<HTMLElement>;
+}
+
+/** Keys these own Escape themselves (close a menu, cancel an edit, collapse a picker). */
+const OWNS_ESCAPE =
+  '[role="menu"], [role="dialog"], [role="listbox"], [role="combobox"], select, input, textarea, [contenteditable="true"]';
+
+/** Rendered: not inside a `display: none` subtree (the meeting tabs stay mounted hidden). */
+function isShown(el: HTMLElement): boolean {
+  for (let n: HTMLElement | null = el; n; n = n.parentElement) {
+    if (getComputedStyle(n).display === 'none') return false;
+  }
+  return true;
+}
+
+/**
+ * Whether an Escape keydown is the transcript's to handle: focus is inside the transcript
+ * view, or nothing has focus (the body) while the transcript is the view on screen. Escape
+ * pressed in the sidebar, the notes editor, a menu or a field is left alone.
+ */
+export function escapeBelongsToTranscript(e: KeyboardEvent, scope: HTMLElement | null): boolean {
+  if (e.key !== 'Escape' || e.defaultPrevented || !scope) return false;
+  const target = e.target instanceof Element ? e.target : null;
+  if (target?.closest(OWNS_ESCAPE)) return false;
+  if (target && scope.contains(target)) return true;
+  const onBody = !target || target === document.body || target === document.documentElement;
+  return onBody && isShown(scope);
 }
 
 /**
@@ -39,8 +67,8 @@ interface SelectionActionBarProps {
  * has scrolled, and settles over the transcript's own foot at the end (where the caller adds
  * `SELECTION_BAR_CLEARANCE` so it covers nothing).
  *
- * Escape clears the selection unless the key belongs to something else (the reassign menu,
- * a dialog, a text field — those handle their own Escape).
+ * Escape clears the selection only when the transcript owns the key
+ * (`escapeBelongsToTranscript`).
  */
 export function SelectionActionBar({
   count,
@@ -48,21 +76,15 @@ export function SelectionActionBar({
   onReassign,
   onNewSpeaker,
   onClear,
+  scopeRef,
 }: SelectionActionBarProps) {
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape' || e.defaultPrevented) return;
-      const target = e.target instanceof Element ? e.target : null;
-      if (
-        target?.closest('[role="menu"], [role="dialog"], input, textarea, [contenteditable="true"]')
-      ) {
-        return;
-      }
-      onClear();
+      if (escapeBelongsToTranscript(e, scopeRef.current)) onClear();
     };
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
-  }, [onClear]);
+  }, [onClear, scopeRef]);
 
   useEffect(() => {
     const root = document.documentElement;

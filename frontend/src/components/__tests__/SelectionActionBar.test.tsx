@@ -51,7 +51,7 @@ function selectTwo() {
   fireEvent.click(boxes[3]);
 }
 
-const bar = () => screen.queryByRole('toolbar', { name: /selected transcript lines/i });
+const bar = () => screen.queryByRole('toolbar', { name: /selected transcript lines/i, hidden: true });
 const content = () =>
   screen.getByRole('region', { name: /meeting transcript/i }).firstElementChild as HTMLElement;
 
@@ -90,6 +90,54 @@ describe('transcript selection action bar', () => {
     expect(bar()).toBeNull();
     expect(screen.getAllByRole('checkbox').every((b) => b.getAttribute('aria-checked') === 'false')).toBe(true);
     expect(content().className).not.toMatch(/pb-16/);
+  });
+
+  it('Escape from focus inside the transcript clears', () => {
+    renderView();
+    selectTwo();
+    const box = screen.getAllByRole('checkbox')[1];
+    box.focus();
+    fireEvent.keyDown(box, { key: 'Escape' });
+    expect(bar()).toBeNull();
+  });
+
+  it('Escape pressed in the sidebar or the notes editor leaves the selection alone', () => {
+    renderView();
+    selectTwo();
+    const sidebarLink = document.createElement('button');
+    sidebarLink.textContent = 'Today';
+    const notes = document.createElement('div');
+    notes.setAttribute('contenteditable', 'true');
+    document.body.append(sidebarLink, notes);
+    fireEvent.keyDown(sidebarLink, { key: 'Escape' });
+    expect(bar()).not.toBeNull();
+    fireEvent.keyDown(notes, { key: 'Escape' });
+    expect(bar()).not.toBeNull();
+    sidebarLink.remove();
+    notes.remove();
+  });
+
+  it('Escape on the body is ignored while the transcript tab is hidden', () => {
+    const { container } = renderView();
+    selectTwo();
+    (container.firstElementChild as HTMLElement).style.display = 'none';
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+    expect(bar()).not.toBeNull();
+  });
+
+  it('Escape inside a listbox or combobox is left to it, even within the transcript', () => {
+    renderView();
+    selectTwo();
+    const region = screen.getByRole('region', { name: /meeting transcript/i });
+    for (const role of ['listbox', 'combobox']) {
+      const el = document.createElement('div');
+      el.setAttribute('role', role);
+      el.tabIndex = 0;
+      region.appendChild(el);
+      fireEvent.keyDown(el, { key: 'Escape' });
+      expect(bar()).not.toBeNull();
+      el.remove();
+    }
   });
 
   it('Escape inside a text field is left to the field', () => {
