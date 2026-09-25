@@ -28,8 +28,22 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
   meetings.
 - **"Who was on the mic?"** The transcript's "…" menu lets you tell Nixon how a meeting was
   recorded (in a room, or on a call) and re-identify speakers when it guessed wrong.
+- **See what's still being worked on.** Meetings show "Processing" in Today, the week view
+  and All Meetings while Nixon is transcribing, identifying speakers, summarizing or
+  writing a prep brief for them. A meeting that's starting now keeps its Join & record
+  button.
+- **Faces in the transcript.** Speakers linked to someone with a photo from your calendar
+  show that photo next to their lines and in the speaker list.
 
 ### Changed
+
+- **Reassigning lines stays in reach.** When you select several transcript lines, the
+  "Reassign to…" bar floats at the bottom of the transcript wherever you've scrolled. Press
+  Escape to clear the selection.
+- **Naming yourself works everywhere.** In a meeting recorded in a room, picking yourself as
+  a speaker's person makes that speaker "You", just like "This is me".
+- **Short meetings line up in Today.** A short meeting's title and status now sit centered
+  in its block, the same as every other block.
 
 - **One switch for voiceprints.** Speaker settings now have a single "Store voiceprints"
   switch that covers your own voice as well as other people's. Nixon learns your voice, like
