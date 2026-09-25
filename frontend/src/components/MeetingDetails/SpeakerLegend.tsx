@@ -45,6 +45,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { PersonFormDialog } from '@/components/People/PersonFormDialog';
+import { PersonAvatar } from '@/components/People/PersonAvatar';
+import { buildSpeakerPhotoMap } from '@/lib/speaker-photos';
 import { speakerBgClass, speakerColorClass } from '@/lib/speaker-colors';
 import {
   groupSeconds,
@@ -108,6 +110,12 @@ export function SpeakerLegend({
   // Only the fields the legend itself reads; the per-chip props come from
   // `speakerChipProps(group, { controller, … })`.
   const { speakers, isLoading, refresh } = controller;
+  // Directory photos, resolved once per view from the controller's loaded data (the same
+  // map the transcript's run headers use), so a name cell can show the face.
+  const photos = useMemo(
+    () => buildSpeakerPhotoMap(speakers, controller.attendees, controller.people),
+    [speakers, controller.attendees, controller.people],
+  );
 
   // After editing the Person behind a speaker (specs/0017), re-fetch speakers (the
   // legend shows the resolved name) and the transcript labels.
@@ -234,6 +242,7 @@ export function SpeakerLegend({
                   controller,
                   onPersonSaved: handlePersonSaved,
                 })}
+                photoDataUri={photos.get(groups[r.index ?? r.channel - 1].primary.speakerKey)}
               />
             )}
           />
@@ -257,7 +266,8 @@ function SpeakerChip({
   onAssignPerson,
   onMerge,
   onPersonSaved,
-}: SpeakerChipProps) {
+  photoDataUri,
+}: SpeakerChipProps & { photoDataUri?: string | null }) {
   // specs/0019 WS2.4 — when this chip stands for several consolidated speakers, apply
   // every correction to all of them so the group doesn't split back apart. Sequential
   // (not Promise.all) so the per-call refresh/refetch settles once per key in order.
@@ -401,14 +411,24 @@ function SpeakerChip({
     {/* 0.1.0 canvas feedback: no box around the name — plain text with the pencil shown on
         hover/focus only (`group/chip`), so the strip reads as a list, not a row of buttons. */}
     <div className="group/chip inline-flex items-center gap-0.5 text-xs">
-      {/* Color dot (matches the in-transcript name color). */}
-      <span
-        className={cn(
-          'inline-block h-2.5 w-2.5 flex-shrink-0 rounded-full',
-          speakerBgClass(speaker.speakerKey),
-        )}
-        aria-hidden
-      />
+      {/* The speaker's directory photo when known (same PersonAvatar as the transcript's
+          run header), else the color dot that matches the in-transcript name color. */}
+      {photoDataUri ? (
+        <PersonAvatar
+          name={speaker.displayName}
+          photoDataUri={photoDataUri}
+          size="xxs"
+          colorClass={speakerBgClass(speaker.speakerKey)}
+        />
+      ) : (
+        <span
+          className={cn(
+            'inline-block h-2.5 w-2.5 flex-shrink-0 rounded-full',
+            speakerBgClass(speaker.speakerKey),
+          )}
+          aria-hidden
+        />
+      )}
 
       {/* Click the name to rename / pick an attendee. */}
       <Popover open={renameOpen} onOpenChange={(o) => { setRenameOpen(o); if (o) setPickQuery(''); }}>

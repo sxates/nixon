@@ -12,6 +12,10 @@ export function initials(name: string): string {
 }
 
 const SIZE_CLASSES = {
+  /** A speaker-legend name cell (replaces the 10px colour dot when a photo exists). */
+  xxs: 'h-4 w-4 text-[8px]',
+  /** A transcript run header. */
+  xs: 'h-7 w-7 text-[11px]',
   /** The People directory row. */
   sm: 'h-8 w-8 text-xs',
   /** The person page header. */
@@ -33,6 +37,7 @@ interface PersonAvatarProps {
  * carries a `photoDataUri`, else the colored initials chip. Same pattern as `AvatarStack`'s
  * attendee avatar — a failed image load (`onError`) degrades to initials without flashing a
  * broken image. No network: the URI is local base64 read through `attendee_photos`.
+ * Also the transcript's speaker avatar and the speaker legend (via `lib/speaker-photos`).
  */
 export function PersonAvatar({ name, photoDataUri, size, colorClass }: PersonAvatarProps) {
   const [photoFailed, setPhotoFailed] = useState(false);

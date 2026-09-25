@@ -10,6 +10,8 @@ import { cn } from "@/lib/utils";
 import { InlineSpeakerAssign } from "./MeetingDetails/InlineSpeakerAssign";
 import { SegmentSpeakerMenu } from "./MeetingDetails/SegmentSpeakerMenu";
 import { SegmentTextEditor } from "./MeetingDetails/SegmentTextEditor";
+import { PersonAvatar } from "./People/PersonAvatar";
+import type { SpeakerPhotoMap } from "@/lib/speaker-photos";
 
 /** specs/0019 WS2.1 — wiring that lets a transcript line reassign its speaker inline.
  *  Provided by the meeting-details panel (not during live recording); absent => the
@@ -44,6 +46,9 @@ export interface InlineSpeakerAssignment {
   onCreateSpeaker: (
     displayName: string,
   ) => Promise<{ speakerKey: string; displayName: string } | null>;
+  /** speakerKey → cached directory photo, built ONCE per meeting view
+   *  (`buildSpeakerPhotoMap`); a run header shows it instead of initials. */
+  speakerPhotos?: SpeakerPhotoMap;
 }
 
 // Helper function to format seconds as recording-relative time [MM:SS]
@@ -70,26 +75,18 @@ function cleanStopWords(text: string): string {
     return cleanedText.replace(/\s+/g, ' ').trim();
 }
 
-// Derive up to 2 uppercase initials from a speaker label.
-// "Sarah Chen" -> "SC", "You" -> "Y", "alex" -> "A".
-function speakerInitials(speakerName: string): string {
-    const parts = speakerName.trim().split(/\s+/).filter(Boolean);
-    if (parts.length === 0) return '';
-    if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
-    return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
-}
-
-// Speaker avatar: colored circle with initials when diarized, neutral dot otherwise.
+// Speaker avatar: the speaker's directory photo when one is known (the shared PersonAvatar,
+// which falls back to the colored initials chip), a neutral dot when undiarized.
 function SpeakerAvatar({
     speaker,
     speakerName,
+    photoDataUri,
 }: {
     speaker?: string | null;
     speakerName?: string | null;
+    photoDataUri?: string | null;
 }) {
-    const initials = speakerName ? speakerInitials(speakerName) : '';
-
-    if (!speakerName || !initials) {
+    if (!speakerName || !speakerName.trim()) {
         // Undiarized: neutral avatar with a subtle person dot (no "undefined").
         return (
             <div
@@ -102,12 +99,12 @@ function SpeakerAvatar({
     }
 
     return (
-        <div
-            className={`w-7 h-7 flex-shrink-0 rounded-full flex items-center justify-center text-[11px] font-semibold ${speakerBgClass(speaker) === 'bg-muted' ? 'text-foreground' : 'text-background'} ${speakerBgClass(speaker)}`}
-            aria-hidden="true"
-        >
-            {initials}
-        </div>
+        <PersonAvatar
+            name={speakerName}
+            photoDataUri={photoDataUri}
+            size="xs"
+            colorClass={speakerBgClass(speaker)}
+        />
     );
 }
 
@@ -270,7 +267,11 @@ export const TranscriptSegment = memo(function TranscriptSegment({
                 <div className="mb-1 flex items-center gap-[11px]">
                     {/* Keeps the header's avatar aligned with the checkbox column below. */}
                     {selectable && onToggleSelect && <div className="w-4 flex-shrink-0" aria-hidden="true" />}
-                    <SpeakerAvatar speaker={speaker} speakerName={speakerName} />
+                    <SpeakerAvatar
+                        speaker={speaker}
+                        speakerName={speakerName}
+                        photoDataUri={speaker ? assignment?.speakerPhotos?.get(speaker) : null}
+                    />
                     {speakerName && speaker && assignment ? (
                         // WS2.1: name a speaker right from the transcript line.
                         <InlineSpeakerAssign
