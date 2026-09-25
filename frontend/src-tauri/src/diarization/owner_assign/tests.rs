@@ -339,3 +339,54 @@ async fn owner_linked_clusters_in_a_call_are_left_alone() {
         assert_linked_not_rekeyed(&pool).await;
     }
 }
+
+/// A swap retires the owner-bootstrap sample of the displaced automatic "You" and enrolls
+/// the voice the user just confirmed, through "This is me" and through the assign route.
+#[tokio::test]
+async fn a_swap_quarantines_the_guess_sample_and_enrolls_the_confirmed_voice() {
+    for via_route in [false, true] {
+        let pool = two_clusters(Some("room")).await;
+        speaker(&pool, "m1", "local", &[0.0, 0.0, 1.0], 4).await;
+        assert!(enroll::enroll_owner_sample_gated(
+            &pool,
+            "m1",
+            &[0.0, 0.0, 1.0],
+            EMBEDDING_MODEL_ID,
+            EnrollConfidence::OwnerBootstrap,
+            true,
+        )
+        .await
+        .unwrap());
+
+        if via_route {
+            assign_speaker_to_person(&pool, "m1", "spk_0", OWNER_PERSON_ID, true)
+                .await
+                .unwrap();
+        } else {
+            let out = room_commands::mark_speaker_as_me(&pool, "m1", "spk_0", true)
+                .await
+                .unwrap();
+            assert!(out.enrolled);
+            assert_eq!(out.rekey.quarantined_displaced_owner_samples, 1);
+        }
+
+        let samples: Vec<(Option<String>, bool, Vec<u8>)> = sqlx::query_as(
+            "SELECT source_speaker_key, quarantined_at IS NOT NULL, embedding FROM voiceprints
+             WHERE person_id = ? ORDER BY source_speaker_key",
+        )
+        .bind(OWNER_PERSON_ID)
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+        let guess = embedding_to_bytes(&l2_normalize(&[0.0, 0.0, 1.0]));
+        let confirmed = embedding_to_bytes(&l2_normalize(&[1.0, 0.0, 0.0]));
+        assert_eq!(
+            samples,
+            vec![
+                (Some("local".to_string()), false, confirmed),
+                (Some("spk_2".to_string()), true, guess),
+            ],
+            "via_route={via_route}"
+        );
+    }
+}

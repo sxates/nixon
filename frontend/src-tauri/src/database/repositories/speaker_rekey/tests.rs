@@ -186,6 +186,7 @@ async fn fresh_rekey_moves_the_cluster_onto_local() {
             merged_into_existing: false,
             quarantined_other_samples: 1,
             displaced_to: None,
+            quarantined_displaced_owner_samples: 0,
         }
     );
 
@@ -516,10 +517,11 @@ async fn claim_swaps_out_an_automatic_you_keeping_pinned_lines() {
     );
     assert!(row(&pool, "m1", "spk_1").await.is_none());
     assert_eq!(owner_label(&pool, "m1").await.as_deref(), Some("confirmed"));
-    // Nothing is quarantined by the swap.
+    // The displaced guess's owner sample is quarantined and follows its cluster.
+    assert_eq!(out.quarantined_displaced_owner_samples, 1);
     assert_eq!(
         sample_state(&pool, "vp-owner").await,
-        (Some("local".to_string()), false)
+        (Some("spk_2".to_string()), true)
     );
 }
 
@@ -546,6 +548,11 @@ async fn claim_merges_into_a_user_confirmed_you() {
         row(&pool, "m1", "local").await.unwrap().4.as_deref(),
         Some(EMB_A),
         "a confirmed You keeps its voice"
+    );
+    assert_eq!(
+        sample_state(&pool, "vp-owner").await,
+        (Some("local".to_string()), false),
+        "a confirmed You's sample is left alone"
     );
 }
 

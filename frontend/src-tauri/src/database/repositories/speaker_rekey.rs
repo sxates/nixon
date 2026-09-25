@@ -38,6 +38,9 @@ pub struct RekeyToLocal {
     /// The `spk_N` key an automatic "You" was moved to so this cluster could take its
     /// place ([`SpeakersRepository::claim_as_local`]); `None` when nothing was displaced.
     pub displaced_to: Option<String>,
+    /// Owner samples back-linked to the displaced automatic "You", now quarantined and
+    /// back-linked to [`Self::displaced_to`] instead.
+    pub quarantined_displaced_owner_samples: u64,
 }
 
 /// What [`SpeakersRepository::rekey_from_local`] changed.
@@ -110,8 +113,9 @@ impl SpeakersRepository {
     /// (`meetings.owner_label <> 'confirmed'`), that automatic "You" was a guess the user
     /// is now correcting, so it is moved out first, exactly as [`Self::rekey_from_local`]
     /// moves it (next free `spk_N`, its lines with it, lines the user pinned to "You" kept
-    /// on `local`), but without quarantining samples or recording a rejection. Then the
-    /// cluster takes `local`. A user-confirmed `local` is merged into as before: the user
+    /// on `local`), without recording a rejection. The owner samples back-linked to that
+    /// `local` came from the wrong voice: they are quarantined and re-pointed at the
+    /// displaced key. Then the cluster takes `local`. A user-confirmed `local` is merged into as before: the user
     /// said both are them. Nothing is displaced when every `local` line is pinned (the
     /// merge already gives `local` the cluster's voice).
     ///
@@ -146,12 +150,34 @@ impl SpeakersRepository {
             } else {
                 None
             };
+        // Owner samples back-linked to the displaced "You" were taken from the wrong voice
+        // (the owner bootstrap enrolls an automatic "You"; samples don't record how they
+        // were enrolled, so every one that predates the swap goes). Quarantined, and
+        // re-pointed at the cluster they came from so a restore stays tied to it. Done
+        // before the claimed cluster's own samples move onto `local` below.
+        let mut quarantined_displaced = 0;
+        if let Some(new_key) = &displaced_to {
+            quarantined_displaced = sqlx::query(
+                "UPDATE voiceprints SET
+                    quarantined_at = COALESCE(quarantined_at, ?), source_speaker_key = ?
+                 WHERE source_meeting_id = ? AND source_speaker_key = ? AND person_id = ?",
+            )
+            .bind(Utc::now().to_rfc3339())
+            .bind(new_key)
+            .bind(meeting_id)
+            .bind(LOCAL)
+            .bind(owner_person_id)
+            .execute(&mut *tx)
+            .await?
+            .rows_affected();
+        }
         let Some(mut out) =
             to_local_in(&mut tx, meeting_id, speaker_key, owner_person_id, true).await?
         else {
             return Ok(None);
         };
         out.displaced_to = displaced_to;
+        out.quarantined_displaced_owner_samples = quarantined_displaced;
         tx.commit().await?;
         Ok(Some(out))
     }
@@ -347,6 +373,7 @@ async fn to_local_in(
         merged_into_existing: local_exists,
         quarantined_other_samples,
         displaced_to: None,
+        quarantined_displaced_owner_samples: 0,
     }))
 }
 
