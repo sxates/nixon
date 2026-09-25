@@ -46,7 +46,9 @@ vi.mock('@/components/People/VoiceprintRetractionListener', () => ({ default: vi
 vi.mock('@/components/PermissionsModal', () => ({ default: vi.fn(() => null) }));
 vi.mock('@/components/Updates/UpdatedNotice', () => ({ UpdatedNotice: vi.fn(() => null) }));
 vi.mock('@/components/RecordingsMoveWatcher', () => ({ RecordingsMoveWatcher: vi.fn(() => null) }));
-vi.mock('@/components/ProcessingMeetingsBridge', () => ({ ProcessingMeetingsBridge: vi.fn(() => null) }));
+vi.mock('@/contexts/QueueViewContext', () => ({
+  QueueViewProvider: ({ children }: { children: React.ReactNode }) => children,
+}));
 vi.mock('@/contexts/LlmActivityProvider', () => ({
   LlmActivityProvider: ({ children }: { children: React.ReactNode }) => children,
 }));

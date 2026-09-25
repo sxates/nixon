@@ -21,8 +21,3 @@ export function useBacklog(): UseDeferredBacklogReturn {
   if (!ctx) throw new Error('useBacklog must be used within a DeferredBacklogProvider');
   return ctx;
 }
-
-/** Like `useBacklog` but null outside the provider (list pages rendered standalone). */
-export function useOptionalBacklog(): UseDeferredBacklogReturn | null {
-  return useContext(BacklogContext);
-}

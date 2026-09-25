@@ -41,6 +41,7 @@ import {
   dayLabel,
   findRecordingRowId,
   canEditManualItem,
+  dayCounts,
   type TimelineContext,
 } from '@/lib/today-timeline';
 import { prepRouteForEvent } from '@/lib/prep';
@@ -138,12 +139,13 @@ function HomeView() {
         day: 'numeric',
       }),
     ];
-    const total = visibleItems.length;
-    const recorded = visibleItems.filter((it) => it.status.recorded).length;
+    // Counted off the chips' own state, so a Processing row isn't also called "recorded".
+    const { total, recorded, processing } = dayCounts(visibleItems, ctx);
     if (total > 0) parts.push(`${total} meeting${total === 1 ? '' : 's'}`);
     if (recorded > 0) parts.push(`${recorded} recorded`);
+    if (processing > 0) parts.push(`${processing} processing`);
     return parts.join(' · ');
-  }, [viewMode, viewDate, visibleItems, weekItems, weekDays, weekRangeLabel, weekHasToday]);
+  }, [viewMode, viewDate, visibleItems, weekItems, weekDays, weekRangeLabel, weekHasToday, ctx]);
 
   // Explicit Join & Record (the live-meeting button) — opens Zoom + starts recording.
   // Kept separate from the body click so viewing a meeting never auto-joins it.

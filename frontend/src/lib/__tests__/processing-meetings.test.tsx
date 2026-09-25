@@ -7,7 +7,7 @@ import {
   usePublishProcessingMeetingIds,
 } from '@/contexts/ProcessingMeetingsContext';
 import { buildQueueView, processingMeetingIds } from '@/lib/transport/queue-view';
-import { itemVisualState, type TimelineContext } from '@/lib/today-timeline';
+import { dayCounts, itemVisualState, type TimelineContext } from '@/lib/today-timeline';
 import { StateChip } from '@/components/Today/TimelineBlock';
 import type { BacklogItem, BacklogItemStatus, BacklogView } from '@/lib/deferred-backlog';
 import type { LlmActivityView } from '@/contexts/LlmActivityProvider';
@@ -30,7 +30,7 @@ function ids(b: BacklogView, llm: LlmActivityView | null, rec = { isProcessing: 
 }
 
 describe('processingMeetingIds', () => {
-  it('includes every running backlog stage and running/queued AI tasks with a meeting', () => {
+  it('includes every running backlog stage, running AI tasks (prep too) and queued post-recording AI work', () => {
     const got = ids(
       backlog([
         backlogItem('m-trans', 'transcribing'),
@@ -40,10 +40,19 @@ describe('processingMeetingIds', () => {
       {
         ...NO_LLM,
         running: [{ id: 1, kind: 'prepBrief', label: 'Prep', note: null, meetingId: 'm-prep' }],
-        queued: [{ id: 2, kind: 'actionItems', label: 'Items', meetingId: 'm-queued' }],
+        queued: [{ id: 2, kind: 'meetingSummary', label: 'Summary', meetingId: 'm-queued' }],
       },
     );
     expect([...got].sort()).toEqual(['m-diar', 'm-prep', 'm-queued', 'm-sum', 'm-trans']);
+  });
+
+  it('a queued prep brief is not Processing — only a running one is', () => {
+    const week = ['m-mon', 'm-tue', 'm-wed', 'm-thu', 'm-fri'];
+    const got = ids(backlog([]), {
+      ...NO_LLM,
+      queued: week.map((m, i) => ({ id: 10 + i, kind: 'prepBrief' as const, label: 'Prep', meetingId: m })),
+    });
+    expect(got.size).toBe(0);
   });
 
   it('excludes failures, finished work, and a parked backlog item with no drain running', () => {
@@ -107,11 +116,55 @@ describe('itemVisualState — Processing precedence', () => {
     ).toBe('recording');
   });
 
-  it('Processing beats Recorded (past) and Now', () => {
+  it('Processing beats Recorded', () => {
+    expect(itemVisualState(item({}), ctx({}))).toBe('past-recorded');
     expect(itemVisualState(item({}), ctx({ processingIds: processing }))).toBe('processing');
+  });
+
+  it('a meeting happening now keeps Now even while work runs for it', () => {
     const live = item({ source: 'calendar', startTime: iso(11), endTime: iso(13) });
-    expect(itemVisualState(live, ctx({}))).toBe('now');
-    expect(itemVisualState(live, ctx({ processingIds: processing }))).toBe('processing');
+    expect(itemVisualState(live, ctx({ processingIds: processing }))).toBe('now');
+  });
+
+  it('a running prep on a now-joinable meeting keeps Join & record', () => {
+    const joinable = item({
+      source: 'calendar',
+      startTime: iso(11),
+      endTime: iso(13),
+      zoomUrl: 'https://zoom.example.test/j/1',
+      status: { recorded: false, transcribed: false, summarized: false, speakersIdentified: false },
+    });
+    const prepRunning = ids(backlog([]), {
+      ...NO_LLM,
+      running: [{ id: 1, kind: 'prepBrief', label: 'Prep', note: null, meetingId: 'm-1' }],
+    });
+    expect(prepRunning.has('m-1')).toBe(true);
+    expect(itemVisualState(joinable, ctx({ processingIds: prepRunning }))).toBe('now-joinable');
+  });
+
+  it('queued prep briefs across the week leave every row unprocessed', () => {
+    const days = [5, 6, 7, 8, 9];
+    const rows = days.map((d) =>
+      item({
+        id: `row-${d}`,
+        meetingId: `m-${d}`,
+        source: 'calendar',
+        startTime: new Date(2026, 6, d, 15).toISOString(),
+        endTime: new Date(2026, 6, d, 16).toISOString(),
+        status: { recorded: false, transcribed: false, summarized: false, speakersIdentified: false },
+      }),
+    );
+    const processingIds = ids(backlog([]), {
+      ...NO_LLM,
+      queued: days.map((d) => ({ id: d, kind: 'prepBrief' as const, label: 'Prep', meetingId: `m-${d}` })),
+    });
+    expect(rows.map((r) => itemVisualState(r, ctx({ processingIds })))).toEqual(days.map(() => 'upcoming'));
+  });
+
+  it('the day header counts a Processing meeting as processing, not recorded', () => {
+    const rows = [item({ id: 'a', meetingId: 'm-1' }), item({ id: 'b', meetingId: 'm-2' }), item({ id: 'c', meetingId: 'm-3' })];
+    expect(dayCounts(rows, ctx({ processingIds: new Set(['m-3']) }))).toEqual({ total: 3, recorded: 2, processing: 1 });
+    expect(dayCounts(rows, ctx({}))).toEqual({ total: 3, recorded: 3, processing: 0 });
   });
 
   it('a prep brief running for an upcoming meeting shows Processing on its row', () => {
