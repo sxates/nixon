@@ -1,6 +1,6 @@
 [package]
 name = "nixon"
-version = "0.11.0"
+version = "0.12.0"
 description = "Nixon — a local-first, on-device meeting assistant for macOS that records, transcribes, and summarizes your meetings privately."
 authors = ["Ada Example <brian@sxates.com>"]
 license = "MIT"

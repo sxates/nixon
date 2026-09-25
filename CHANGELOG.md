@@ -19,6 +19,10 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 ## [Unreleased]
 
+_(nothing yet)_
+
+## [0.12.0] - 2026-09-24
+
 ### Added
 
 - **In-person meetings get their speakers.** When a meeting is recorded in a room, with
