@@ -268,6 +268,8 @@ export function TranscriptPanel({
     () => ownerActionContext({ speakers: ownerSpeakers, audioSetup, markAsMe, unmarkMe }),
     [ownerSpeakers, audioSetup, markAsMe, unmarkMe],
   );
+  // Directory photos for the run-header avatars — built once by useSpeakers, never per row.
+  const speakerPhotos = speakersController.speakerPhotos;
 
   // Inline assignment wiring for the transcript — only when viewing (not recording)
   // and the meeting has a speaker directory to pick from. Absent => names are static.
@@ -295,8 +297,10 @@ export function TranscriptPanel({
       onReassignSegments: reassignSegments,
       onCreateSpeaker: createSpeaker,
       owner: ownerCtx,
+      speakerPhotos,
     };
   }, [
+    speakerPhotos,
     isRecording,
     meetingId,
     speakersController.attendees,
@@ -441,8 +445,10 @@ export function TranscriptPanel({
         </div>
       )}
 
-      {/* Transcript content - use virtualized view for better performance */}
-      <div className="flex-1 overflow-hidden pb-4">
+      {/* Transcript content - use virtualized view for better performance. `overflow-clip`,
+          not `overflow-hidden`: hidden makes this div a scroll container, which would pin the
+          selection bar's `sticky` to it instead of to the page column that actually scrolls. */}
+      <div className="flex-1 overflow-clip pb-4">
         <VirtualizedTranscriptView
           segments={convertedSegments}
           isRecording={isRecording}

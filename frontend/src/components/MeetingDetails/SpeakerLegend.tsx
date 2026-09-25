@@ -45,6 +45,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { PersonFormDialog } from '@/components/People/PersonFormDialog';
+import { PersonAvatar } from '@/components/People/PersonAvatar';
 import { speakerBgClass, speakerColorClass } from '@/lib/speaker-colors';
 import {
   groupSeconds,
@@ -228,15 +229,18 @@ export function SpeakerLegend({
             rows={rows}
             selectedKey={selectedSpeakerKey}
             onSelect={onSelectSpeaker ? (key) => onSelectSpeaker(key) : undefined}
-            renderName={(r) => (
-              <SpeakerChip
-                {...speakerChipProps(groups[r.index ?? r.channel - 1], {
-                  allSpeakers: groupPrimaries,
-                  controller,
-                  onPersonSaved: handlePersonSaved,
-                })}
-              />
-            )}
+            renderName={(r) => {
+              const group = groups[r.index ?? r.channel - 1];
+              return (
+                <SpeakerChip
+                  {...speakerChipProps(group, {
+                    allSpeakers: groupPrimaries,
+                    controller,
+                    onPersonSaved: handlePersonSaved,
+                  })}
+                />
+              );
+            }}
           />
         </div>
       )}
@@ -260,6 +264,7 @@ function SpeakerChip({
   onMerge,
   onPersonSaved,
   owner,
+  photoDataUri,
 }: SpeakerChipProps) {
   // specs/0019 WS2.4 — when this chip stands for several consolidated speakers, apply
   // every correction to all of them so the group doesn't split back apart. Sequential
@@ -404,13 +409,24 @@ function SpeakerChip({
     {/* 0.1.0 canvas feedback: no box around the name — plain text with the pencil shown on
         hover/focus only (`group/chip`), so the strip reads as a list, not a row of buttons. */}
     <div className="group/chip inline-flex items-center gap-0.5 text-xs">
-      {/* Color dot (matches the in-transcript name color). */}
-      <span
-        className={cn(
-          'inline-block h-2.5 w-2.5 flex-shrink-0 rounded-full',
-          speakerBgClass(speaker.speakerKey),
-        )}
-        aria-hidden
+      {/* The speaker's directory photo when known (same PersonAvatar as the transcript's
+          run header). No photo, or one that fails to load, is the color dot that matches
+          the in-transcript name color — never an initials chip. */}
+      <PersonAvatar
+        name={speaker.displayName}
+        photoDataUri={photoDataUri}
+        size="xxs"
+        colorClass={speakerBgClass(speaker.speakerKey)}
+        fallback={
+          <span
+            data-speaker-dot
+            className={cn(
+              'inline-block h-2.5 w-2.5 flex-shrink-0 rounded-full',
+              speakerBgClass(speaker.speakerKey),
+            )}
+            aria-hidden
+          />
+        }
       />
 
       {/* Click the name to rename / pick an attendee. */}

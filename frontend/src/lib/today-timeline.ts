@@ -154,6 +154,7 @@ export function itemPhase(
 
 export type TimelineVisualState =
   | 'recording' // the live session
+  | 'processing' // post-recording work (or a prep brief) in flight for its meeting
   | 'now-joinable' // happening now, has a join link, can Join & Record
   | 'now' // happening now, not joinable
   | 'past-recorded' // ended, has a recording to open
@@ -164,6 +165,8 @@ export interface TimelineContext {
   now: Date;
   isRecording: boolean;
   recordingThisId: string | null;
+  /** Meetings with work in flight (`useProcessingMeetingIds`, the rail's own sources). */
+  processingIds?: ReadonlySet<string>;
 }
 
 /**
@@ -205,6 +208,10 @@ export function itemVisualState(item: DayAgendaItem, ctx: TimelineContext): Time
     });
     return canJoin ? 'now-joinable' : 'now';
   }
+  // Precedence: Recording > Now / Join & record > Processing > Recorded / upcoming. A meeting
+  // happening now keeps its Now chip even while a prep brief runs for it. A row can only show
+  // Processing when it is tied to a meeting — an unclaimed calendar occurrence has none.
+  if (item.meetingId && ctx.processingIds?.has(item.meetingId)) return 'processing';
   if (phase === 'past') {
     // `meetingId` alone counts as recorded for recordings and claimed events — but NOT for a
     // meeting added in Nixon, which always carries its own placeholder row: that read
@@ -213,6 +220,24 @@ export function itemVisualState(item: DayAgendaItem, ctx: TimelineContext): Time
     return hasRecording ? 'past-recorded' : 'past-unrecorded';
   }
   return 'upcoming';
+}
+
+/**
+ * The day header's counts ("3 meetings · 2 recorded · 1 processing"), read off the SAME
+ * visual state the chips show: a meeting whose chip says Processing is counted as processing,
+ * not as recorded, so the header never says "3 recorded" over a row that reads PROCESSING.
+ */
+export function dayCounts(
+  items: DayAgendaItem[],
+  ctx: TimelineContext,
+): { total: number; recorded: number; processing: number } {
+  let recorded = 0;
+  let processing = 0;
+  for (const it of items) {
+    if (itemVisualState(it, ctx) === 'processing') processing += 1;
+    else if (it.status.recorded) recorded += 1;
+  }
+  return { total: items.length, recorded, processing };
 }
 
 // ---------------------------------------------------------------------------

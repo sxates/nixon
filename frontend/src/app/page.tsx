@@ -41,10 +41,12 @@ import {
   dayLabel,
   findRecordingRowId,
   canEditManualItem,
+  dayCounts,
   type TimelineContext,
 } from '@/lib/today-timeline';
 import { prepRouteForEvent } from '@/lib/prep';
 import { useDayAgenda } from '@/hooks/useDayAgenda';
+import { useProcessingMeetingIds } from '@/contexts/ProcessingMeetingsContext';
 import { TodayHeader } from '@/components/Today/TodayHeader';
 import { TodayToolbar } from '@/components/Today/TodayToolbar';
 import { DayTimeline } from '@/components/Today/DayTimeline';
@@ -103,9 +105,11 @@ function HomeView() {
     [isRecording, activeRecordingMeetingId, currentMeetingId, liveTitle, items, weekItems],
   );
 
+  // Meetings with work in flight — the rail's own sources, so the agenda agrees with it.
+  const processingIds = useProcessingMeetingIds();
   const ctx: TimelineContext = useMemo(
-    () => ({ now, isRecording, recordingThisId }),
-    [now, isRecording, recordingThisId],
+    () => ({ now, isRecording, recordingThisId, processingIds }),
+    [now, isRecording, recordingThisId, processingIds],
   );
 
   // Range label for week mode (e.g. "Jul 6 – Jul 12"), reused in the header + summary.
@@ -135,12 +139,13 @@ function HomeView() {
         day: 'numeric',
       }),
     ];
-    const total = visibleItems.length;
-    const recorded = visibleItems.filter((it) => it.status.recorded).length;
+    // Counted off the chips' own state, so a Processing row isn't also called "recorded".
+    const { total, recorded, processing } = dayCounts(visibleItems, ctx);
     if (total > 0) parts.push(`${total} meeting${total === 1 ? '' : 's'}`);
     if (recorded > 0) parts.push(`${recorded} recorded`);
+    if (processing > 0) parts.push(`${processing} processing`);
     return parts.join(' · ');
-  }, [viewMode, viewDate, visibleItems, weekItems, weekDays, weekRangeLabel, weekHasToday]);
+  }, [viewMode, viewDate, visibleItems, weekItems, weekDays, weekRangeLabel, weekHasToday, ctx]);
 
   // Explicit Join & Record (the live-meeting button) — opens Zoom + starts recording.
   // Kept separate from the body click so viewing a meeting never auto-joins it.

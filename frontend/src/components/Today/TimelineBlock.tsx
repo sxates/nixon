@@ -5,6 +5,7 @@ import type { DayAgendaItem } from '@/lib/day-agenda';
 import { formatClockTime } from '@/lib/calendar';
 import type { TimelineContext, TimelineVisualState } from '@/lib/today-timeline';
 import { RecordingBadge } from '@/components/RecordingBadge';
+import { ProcessingBadge } from '@/components/ProcessingBadge';
 import { AgendaAttendees } from './AgendaAttendees';
 import { AgendaRowMenu } from './AgendaRowMenu';
 
@@ -28,6 +29,7 @@ export function blockClasses(state: TimelineVisualState): string {
     case 'upcoming':
       return 'border-border bg-card hover:border-brand/40';
     case 'past-recorded':
+    case 'processing':
       return 'border-border bg-card hover:border-brand/40';
     case 'recording':
     case 'now-joinable':
@@ -49,6 +51,8 @@ export function barClass(state: TimelineVisualState): string | null {
   switch (state) {
     case 'recording':
       return 'bg-record';
+    case 'processing':
+      return 'bg-brand';
     case 'now-joinable':
       return 'bg-brand';
     case 'now':
@@ -79,6 +83,8 @@ export function StateChip({ state }: { state: TimelineVisualState }): JSX.Elemen
   switch (state) {
     case 'recording':
       return <RecordingBadge />;
+    case 'processing':
+      return <ProcessingBadge />;
     case 'now-joinable':
       return chip('text-brand', 'Join & record');
     case 'now':
@@ -160,7 +166,11 @@ export function TimelineBlock({
         left: `${lane * widthPct}%`,
         width: `calc(${widthPct}% - ${LANE_GAP_PX}px)`,
       }}
-      className={`group absolute cursor-pointer overflow-hidden rounded-[3px] border px-3 py-1.5 text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring ${blockClasses(
+      className={`group absolute cursor-pointer overflow-hidden rounded-[3px] border px-3 py-1.5 text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+        // A compact block has one line (no meta row); centre it, or a block a few px
+        // taller than another shows its title riding high (owner feedback 2026-09-24).
+        compact ? 'flex flex-col justify-center' : ''
+      } ${blockClasses(
         state,
       )}`}
     >

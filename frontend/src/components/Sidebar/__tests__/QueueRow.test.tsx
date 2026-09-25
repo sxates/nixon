@@ -25,10 +25,13 @@ vi.mock('@/contexts/QueueOpenContext', async () => {
   return { useQueueOpen: () => { const [open, setOpen] = react.useState(false); return { open, setOpen }; } };
 });
 vi.mock('@/contexts/TranscriptContext', () => ({ useTranscripts: () => transcripts }));
+vi.mock('@/components/Sidebar/SidebarProvider', () => ({ useSidebar: () => ({ activeRecordingMeetingId: null }) }));
 vi.mock('@tauri-apps/api/core', () => ({ invoke: invokeMock }));
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 
 import { QueueRow } from '@/components/Sidebar/QueueRow';
+// The row reads the shared view computed once by QueueViewProvider (AppShell).
+import { QueueViewProvider } from '@/contexts/QueueViewContext';
 
 beforeEach(() => {
   Object.assign(llm, { running: [], history: [], hasFailure: false });
@@ -44,13 +47,13 @@ beforeEach(() => {
 describe('QueueRow (specs/0064 W5)', () => {
   // The lamp inside the labelled trigger must not pollute its accessible name.
   it('is named by its own text, not the lamp', () => {
-    render(<QueueRow />);
+    render(<QueueViewProvider><QueueRow /></QueueViewProvider>);
     expect(screen.getByRole('button', { name: 'Queue 0 Idle' })).toBeTruthy();
   });
 
   it('shows count and stage, and opens the panel', () => {
     backlog.view = { items: [{ meeting: { id: 'a', title: 'Hiring loop debrief', folderPath: '/x', transcriptCount: 1 }, status: 'transcribing' }], pendingCount: 0, processing: true, active: null, activeOrdinal: 1, total: 1 } as typeof backlog.view;
-    render(<QueueRow />);
+    render(<QueueViewProvider><QueueRow /></QueueViewProvider>);
 
     const btn = screen.getByRole('button', { name: /queue/i });
     expect(btn.textContent).toMatch(/1/);
@@ -70,7 +73,7 @@ describe('QueueRow (specs/0064 W5)', () => {
       hasFailure: true,
       history: [{ id: 7, kind: 'prepBrief', label: 'Prep brief — Q3 planning', error: 'Ollama unreachable', meetingId: 'q3', outcome: { type: 'failed', error: 'Ollama unreachable' } }],
     });
-    render(<QueueRow />);
+    render(<QueueViewProvider><QueueRow /></QueueViewProvider>);
 
     fireEvent.click(screen.getByRole('button', { name: /queue/i }));
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
@@ -82,7 +85,7 @@ describe('QueueRow (specs/0064 W5)', () => {
 
   it('collapses to the lamp alone, still named and still opening the panel', () => {
     backlog.view = { items: [{ meeting: { id: 'a', title: 'Hiring loop debrief', folderPath: '/x', transcriptCount: 1 }, status: 'transcribing' }], pendingCount: 0, processing: true, active: null, activeOrdinal: 1, total: 1 } as typeof backlog.view;
-    render(<QueueRow collapsed />);
+    render(<QueueViewProvider><QueueRow collapsed /></QueueViewProvider>);
 
     // No visible label text — the state is the lamp — but the button still says what it is.
     const btn = screen.getByRole('button', { name: /queue 1/i });
@@ -94,7 +97,7 @@ describe('QueueRow (specs/0064 W5)', () => {
 
   it('keeps the status line to one line so the rows below it never shift', () => {
     backlog.view = { items: [{ meeting: { id: 'a', title: 'A meeting with a very long title that would otherwise wrap onto a second line', folderPath: '/x', transcriptCount: 1 }, status: 'transcribing' }], pendingCount: 0, processing: true, active: null, activeOrdinal: 1, total: 1 } as typeof backlog.view;
-    render(<QueueRow />);
+    render(<QueueViewProvider><QueueRow /></QueueViewProvider>);
 
     const line = screen.getByText(/A meeting with a very long title/);
     expect(line.className).toContain('truncate');

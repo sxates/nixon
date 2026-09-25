@@ -43,6 +43,7 @@ function makeSpeakersController(speakers: MeetingSpeaker[]): UseSpeakersReturn {
     people: [],
     suggestion: null,
     crossMeetingSuggestions: new Map(),
+    speakerPhotos: new Map(),
     dismissSuggestion: vi.fn(),
     isLoading: false,
     refresh: vi.fn().mockResolvedValue(undefined),

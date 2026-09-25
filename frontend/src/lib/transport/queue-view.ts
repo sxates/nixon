@@ -22,6 +22,8 @@ export interface QueueRow {
    * `api_llm_activity_retry_task` actually takes (specs/0063 W3 Task 6).
    */
   taskId?: number;
+  /** `llm` rows only: the registry task kind (a queued prep brief is not "Processing"). */
+  kind?: LlmTaskKind;
 }
 
 export interface QueueView {
@@ -82,9 +84,12 @@ function backlogRow(item: BacklogItem): QueueRow {
  * ordered queue: active backlog item, running AI tasks, waiting items, failures, done.
  */
 export function buildQueueView(
-  backlog: BacklogView,
+  backlog: Pick<BacklogView, 'items'>,
   llm: LlmActivityView | null,
-  recording: { isProcessing: boolean; title: string | null } = { isProcessing: false, title: null },
+  recording: { isProcessing: boolean; title: string | null; meetingId?: string | null } = {
+    isProcessing: false,
+    title: null,
+  },
 ): QueueView {
   const transcribing: QueueRow[] = recording.isProcessing
     ? [
@@ -94,7 +99,7 @@ export function buildQueueView(
           stage: 'transcribing',
           stageLabel: QUEUE_STAGE_LABEL.transcribing,
           source: 'recording',
-          meetingId: null,
+          meetingId: recording.meetingId ?? null,
         },
       ]
     : [];
@@ -107,6 +112,7 @@ export function buildQueueView(
     source: 'llm',
     meetingId: t.meetingId,
     taskId: t.id,
+    kind: t.kind,
   }));
   const backlogWaiting = backlog.items.filter((i) => i.status === 'waiting').map(backlogRow);
   // specs/0074 W4 — a queued prep brief (background work waiting its turn, distinct from a
@@ -119,6 +125,7 @@ export function buildQueueView(
     source: 'llm',
     meetingId: t.meetingId,
     taskId: t.id,
+    kind: t.kind,
   }));
   const waiting = [...backlogWaiting, ...llmWaiting];
   const backlogErrors = backlog.items.filter((i) => i.status === 'error').map(backlogRow);
@@ -163,4 +170,34 @@ export function buildQueueView(
   const nextUp = rows.find((r) => r !== runningRow && r.stage !== 'done' && r.stage !== 'error') ?? null;
   const lamp = failures > 0 ? 'red' : runningRow ? 'amber' : 'off';
   return { rows, running: runningRow, nextUp, count: rows.filter((r) => r.stage !== 'done').length, lamp, failures };
+}
+
+/** Row stages that mean "work is running for this meeting right now". */
+const IN_FLIGHT: readonly QueueStage[] = ['transcribing', 'diarizing', 'summarizing', 'llm'];
+
+/**
+ * The meetings that show "Processing" on Today and All Meetings: derived from the SAME rows
+ * the queue rail draws (`buildQueueView`), so a list can never disagree with the rail.
+ *
+ * In flight = a row that is running (transcribing / speakers / summarizing / any AI task,
+ * including a prep brief for an upcoming meeting), or a WAITING row of post-recording work
+ * that will run without the user doing anything: a queued AI task other than a prep brief
+ * (the registry drains its own queue), or a backlog item while a drain is under way.
+ *
+ * Not "Processing": a queued prep brief (the prep pass plans a week of them, and a whole week
+ * of agenda rows lit up for work that hasn't started would be noise — a prep brief counts
+ * only while it runs), a backlog item parked until AC power / a click (nothing is happening
+ * to it), and a failed row — failures stay with the queue's own error UI.
+ */
+export function processingMeetingIds(view: QueueView, backlogDraining: boolean): Set<string> {
+  const ids = new Set<string>();
+  for (const row of view.rows) {
+    if (!row.meetingId) continue;
+    const running = IN_FLIGHT.includes(row.stage);
+    const willRun =
+      row.stage === 'waiting' &&
+      (row.source === 'llm' ? row.kind !== 'prepBrief' : backlogDraining);
+    if (running || willRun) ids.add(row.meetingId);
+  }
+  return ids;
 }

@@ -33,13 +33,13 @@ const item: DayAgendaItem = {
   dismissed: false,
 };
 
-function renderBlock(state: TimelineVisualState, canJoin = false) {
+function renderBlock(state: TimelineVisualState, canJoin = false, height = 60) {
   const { container } = render(
     <TimelineBlock
       item={item}
       state={state}
       top={0}
-      height={60}
+      height={height}
       lane={0}
       laneCount={1}
       canJoin={canJoin}
@@ -192,5 +192,17 @@ describe('TimelineBlock manual entry actions (specs/0069 W3)', () => {
     // Never "Hide from timeline" — deleting a manual row is the way to get rid of
     // it, not hiding it (it isn't a calendar event to dismiss).
     expect(screen.queryByText('Hide from timeline')).not.toBeInTheDocument();
+  });
+});
+
+describe('TimelineBlock vertical alignment (owner feedback 2026-09-24)', () => {
+  it('a compact block centres its single line, so blocks of different heights line up', () => {
+    const block = renderBlock('past-recorded', false, 40).querySelector('[role="button"]')!;
+    expect(block.className).toContain('justify-center');
+  });
+
+  it('a full block keeps its two lines anchored to the top', () => {
+    const block = renderBlock('past-recorded', false, 60).querySelector('[role="button"]')!;
+    expect(block.className).not.toContain('justify-center');
   });
 });

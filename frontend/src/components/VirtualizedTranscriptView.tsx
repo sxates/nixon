@@ -2,25 +2,17 @@
 
 import { useRef, useReducer, useState, useMemo, useCallback, startTransition, useEffect } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { ArrowDown, UserPlus, X } from "lucide-react";
+import { ArrowDown } from "lucide-react";
 import { useAutoScroll } from "@/hooks/useAutoScroll";
 import { showJumpToLatest } from "@/lib/auto-scroll";
 import { useTranscriptStreaming } from "@/hooks/useTranscriptStreaming";
 import { TranscriptEmptyState } from "./TranscriptEmptyState";
 import { motion } from "framer-motion";
 import { TranscriptSegmentData } from "@/types";
-import { speakerBgClass } from "@/lib/speaker-colors";
 import { cn } from "@/lib/utils";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "./ui/dropdown-menu";
+import { SelectionActionBar, SELECTION_BAR_CLEARANCE } from "./MeetingDetails/SelectionActionBar";
 import {
   Dialog,
   DialogContent,
@@ -133,6 +125,8 @@ export const VirtualizedTranscriptView: React.FC<VirtualizedTranscriptViewProps>
 }) => {
     // Create scroll ref first - shared between virtualizer and auto-scroll hook
     const scrollRef = useRef<HTMLDivElement>(null);
+    // The whole view (scroll box + selection bar): scopes the bar's Escape shortcut.
+    const viewRef = useRef<HTMLDivElement>(null);
     // Ref for infinite scroll trigger element
     const loadMoreTriggerRef = useRef<HTMLDivElement>(null);
 
@@ -429,6 +423,7 @@ export const VirtualizedTranscriptView: React.FC<VirtualizedTranscriptViewProps>
 
     const selectionCount = selectedIds.size;
     const selectionActive = selectionCount > 0;
+    const selectionBarVisible = spanSelectable && !!assignment && selectionActive;
 
     // Infinite scroll: IntersectionObserver to trigger loading more
     useEffect(() => {
@@ -572,7 +567,7 @@ export const VirtualizedTranscriptView: React.FC<VirtualizedTranscriptViewProps>
     return (
         // Positioning wrapper only (non-scrolling) — anchors the "Jump to latest" pill
         // over the scroll container without joining the scroll chain.
-        <div className="relative flex h-full min-h-0 flex-col">
+        <div ref={viewRef} className="relative flex h-full min-h-0 flex-col">
         {/* tabIndex: the container must be focusable for keyboard scrolling and for the
             follow-lock's keydown unlock listener (ArrowUp/PageUp/Home) to receive events. */}
         <div
@@ -583,8 +578,9 @@ export const VirtualizedTranscriptView: React.FC<VirtualizedTranscriptViewProps>
             className="flex flex-col h-full overflow-y-auto bg-paper px-4 py-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
             {/* Content. The redundant in-list "Recording" status bar was removed —
-                the recording state + timer already live in the screen header. */}
-            <div>
+                the recording state + timer already live in the screen header. While the
+                selection bar is up, the foot gets clearance so it covers no line. */}
+            <div className={selectionBarVisible ? SELECTION_BAR_CLEARANCE : undefined}>
             {segments.length === 0 ? (
                 // Empty state
                 <TranscriptEmptyState
@@ -769,70 +765,20 @@ export const VirtualizedTranscriptView: React.FC<VirtualizedTranscriptViewProps>
             </div>
         </div>
 
-        {/* specs/0039 WS2 — span reassignment action bar. Floats over the transcript
-            (like "Jump to latest") so it survives scroll; selection state lives in the
-            view, not the DOM. Only in the meeting-details view (spanSelectable). */}
-        {spanSelectable && assignment && selectionActive && (
-            <div className="absolute bottom-3 left-1/2 z-20 flex -translate-x-1/2 items-center gap-1.5 rounded-[3px] bg-panel border border-border px-2 py-1.5 shadow-lg">
-                <span className="pl-1.5 text-xs font-medium text-foreground tabular-nums">
-                    {selectionCount} {selectionCount === 1 ? 'line' : 'lines'} selected
-                </span>
-                <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                        <Button size="sm" className="h-7 px-2.5 text-xs">
-                            Reassign to…
-                        </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="center" side="top" className="w-56">
-                        <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
-                            Reassign {selectionCount} {selectionCount === 1 ? 'line' : 'lines'} to…
-                        </DropdownMenuLabel>
-                        <DropdownMenuSeparator />
-                        <div className="max-h-56 overflow-y-auto">
-                            {assignment.speakers.map((s) => (
-                                <DropdownMenuItem
-                                    key={s.speakerKey}
-                                    onSelect={() => {
-                                        void reassignSpanTo(s.speakerKey, s.displayName);
-                                    }}
-                                    className="text-sm"
-                                >
-                                    <span
-                                        className={cn(
-                                            'mr-2 inline-block h-2.5 w-2.5 flex-shrink-0 rounded-full',
-                                            speakerBgClass(s.speakerKey),
-                                        )}
-                                        aria-hidden
-                                    />
-                                    <span className="flex-1 truncate">{s.displayName}</span>
-                                </DropdownMenuItem>
-                            ))}
-                        </div>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                            onSelect={(e) => {
-                                // Keep the selection; open the naming dialog.
-                                e.preventDefault();
-                                setNewSpeakerName('');
-                                setNewSpeakerOpen(true);
-                            }}
-                            className="text-sm"
-                        >
-                            <UserPlus size={13} className="mr-2 flex-shrink-0 text-muted-foreground" />
-                            New speaker…
-                        </DropdownMenuItem>
-                    </DropdownMenuContent>
-                </DropdownMenu>
-                <button
-                    type="button"
-                    onClick={clearSelection}
-                    className="rounded-[3px] p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                    aria-label="Clear selection"
-                    title="Clear selection"
-                >
-                    <X size={14} />
-                </button>
-            </div>
+        {/* specs/0039 WS2 — span reassignment action bar: sticks to the bottom of the
+            visible viewport while lines are selected (SelectionActionBar). */}
+        {selectionBarVisible && (
+            <SelectionActionBar
+                count={selectionCount}
+                speakers={assignment.speakers}
+                onReassign={(key, name) => void reassignSpanTo(key, name)}
+                onNewSpeaker={() => {
+                    setNewSpeakerName('');
+                    setNewSpeakerOpen(true);
+                }}
+                onClear={clearSelection}
+                scopeRef={viewRef}
+            />
         )}
 
         {/* specs/0039 WS2 — name a brand-new speaker for the selected span. */}

@@ -4,6 +4,8 @@ import { OnboardingFlow } from '@/components/onboarding'
 import { DownloadProgressToastProvider } from '@/components/shared/DownloadProgressToast'
 import CommandPalette from '@/components/CommandPalette'
 import { LlmActivityProvider } from '@/contexts/LlmActivityProvider'
+import { ProcessingMeetingsProvider } from '@/contexts/ProcessingMeetingsContext'
+import { QueueViewProvider } from '@/contexts/QueueViewContext'
 import { TransportRail } from '@/components/Transport/TransportRail'
 import ResumeRecordingPrompt from '@/components/ResumeRecordingPrompt'
 import MeetingAutoDetect from '@/components/MeetingAutoDetect'
@@ -32,6 +34,7 @@ export function AppShell({ showOnboarding, onOnboardingComplete, children }: App
 
   return (
     <div className="flex">
+      <ProcessingMeetingsProvider>
       {/* Download progress toast provider - listens for background downloads.
           Post-onboarding only (specs/0061 W1) — during onboarding the download
           steps show their own progress cards. */}
@@ -44,14 +47,20 @@ export function AppShell({ showOnboarding, onOnboardingComplete, children }: App
           re-render the whole page tree on each background task transition
           — a prep pass emits a burst of them. */}
       <LlmActivityProvider>
+        {/* The one queue view: the sidebar's queue row reads it, and it publishes the
+            "Processing" meeting ids for Today / All Meetings — only when the set changes, so
+            the page tree still doesn't re-render per activity event. */}
+        <QueueViewProvider>
         <Sidebar />
         {/* specs/0057 decision 7 — THE transport: fixed bottom rail on
             every post-onboarding route, with the deck status, the REC/HOLD/
             STOP keys and the one global queue. Replaces GlobalRecordingBar
             and the deferred-backlog pill. */}
         <TransportRail />
+        </QueueViewProvider>
       </LlmActivityProvider>
       <MainContent>{children}</MainContent>
+      </ProcessingMeetingsProvider>
       {/* ⌘K command palette — global, every route (post-onboarding) */}
       <CommandPalette />
       {/* Request OS notification permission up front (post-onboarding) */}

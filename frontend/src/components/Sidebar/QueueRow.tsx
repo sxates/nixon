@@ -2,12 +2,8 @@
 
 import React from 'react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { useBacklog } from '@/contexts/DeferredBacklogProvider';
-import { useOptionalLlmActivity } from '@/contexts/LlmActivityProvider';
-import { useRecordingState } from '@/contexts/RecordingStateContext';
-import { useTranscripts } from '@/contexts/TranscriptContext';
+import { useQueueView } from '@/contexts/QueueViewContext';
 import { useQueueOpen } from '@/contexts/QueueOpenContext';
-import { buildQueueView } from '@/lib/transport/queue-view';
 import { cn } from '@/lib/utils';
 import { LampDot } from '@/components/Transport/LampDot';
 import { QueuePanel } from '@/components/Transport/QueuePanel';
@@ -27,18 +23,9 @@ import { SIDEBAR_ROW } from './row';
  * opens this one (specs/0063 W3).
  */
 export function QueueRow({ collapsed = false }: { collapsed?: boolean }) {
-  const { view: backlog } = useBacklog();
-  // useOptionalLlmActivity, never the throwing hook: the sidebar is mounted app-wide and must
-  // survive a tree where the LLM provider isn't above it.
-  const llm = useOptionalLlmActivity();
-  const { isProcessing } = useRecordingState();
-  // The '+ New Call' guard is the context's placeholder-for-unnamed-session, not a real
-  // title. No sidebar-title fallback (specs/0063 W3 Task 6): `buildQueueView` already falls
-  // back to a generic "Recording" title, so a plain null on the rare gap is enough.
-  const { meetingTitle } = useTranscripts();
-  const recordingTitle = meetingTitle && meetingTitle !== '+ New Call' ? meetingTitle : null;
+  // Computed once in QueueViewProvider (AppShell) and shared with the "Processing" status.
+  const view = useQueueView();
   const { open, setOpen } = useQueueOpen();
-  const view = buildQueueView(backlog, llm, { isProcessing, title: recordingTitle });
 
   const line = view.running
     ? `${view.running.stageLabel} · ${view.running.title}`

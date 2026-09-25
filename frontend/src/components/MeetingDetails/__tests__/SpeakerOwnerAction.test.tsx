@@ -44,6 +44,9 @@ function makeController(
     audioSetup: { override: 'auto', resolved },
     markAsMe: vi.fn().mockResolvedValue(undefined),
     unmarkMe: vi.fn().mockResolvedValue(undefined),
+    setAudioSetup: vi.fn().mockResolvedValue({ started: true, alreadyRunning: false }),
+    refetchAudioSetup: vi.fn().mockResolvedValue(undefined),
+    speakerPhotos: new Map(),
   };
 }
 

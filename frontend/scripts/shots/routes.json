@@ -75,8 +75,48 @@
     ]
   },
   {
+    "name": "today-list-processing",
+    "route": "/?view=list&processing=1",
+    "ignore": [
+      {
+        "x": 338,
+        "y": 816,
+        "w": 106,
+        "h": 22,
+        "why": "footer TapeCounter roller digits (specs/0060 Task 3). Moved here in specs/0066: specs/0064 W6 reordered the rail (reel, then counter-over-meter, then title, keys right), so the old box at x=470 sat over \"Deck ready\" while the digits flaked unignored at x=343..434 — measured, not guessed."
+      },
+      {
+        "x": 88,
+        "y": 26,
+        "w": 250,
+        "h": 30,
+        "why": "Today greeting (\"Good morning/afternoon/evening\") is derived from the wall clock, so two runs at different hours differ by real glyphs, not sub-pixels (specs/0066). The List view (specs/0069 W4) shares this same header."
+      }
+    ]
+  },
+  {
     "name": "today-week",
     "route": "/?view=week",
+    "ignore": [
+      {
+        "x": 338,
+        "y": 816,
+        "w": 106,
+        "h": 22,
+        "why": "footer TapeCounter roller digits (specs/0060 Task 3). Moved here in specs/0066: specs/0064 W6 reordered the rail (reel, then counter-over-meter, then title, keys right), so the old box at x=470 sat over \"Deck ready\" while the digits flaked unignored at x=343..434 — measured, not guessed."
+      },
+      {
+        "x": 88,
+        "y": 26,
+        "w": 250,
+        "h": 30,
+        "why": "Today greeting (\"Good morning/afternoon/evening\") is derived from the wall clock, so two runs at different hours differ by real glyphs, not sub-pixels (specs/0066). The List view (specs/0069 W4) shares this same header."
+      }
+    ]
+  },
+  {
+    "name": "today-week-processing",
+    "route": "/?view=week&processing=1",
     "ignore": [
       {
         "x": 338,
@@ -161,6 +201,20 @@
   {
     "name": "meetings",
     "route": "/meetings",
+    "sidebar": "open",
+    "ignore": [
+      {
+        "x": 338,
+        "y": 816,
+        "w": 106,
+        "h": 22,
+        "why": "footer TapeCounter roller digits (specs/0060 Task 3). Moved here in specs/0066: specs/0064 W6 reordered the rail (reel, then counter-over-meter, then title, keys right), so the old box at x=470 sat over \"Deck ready\" while the digits flaked unignored at x=343..434 \u2014 measured, not guessed."
+      }
+    ]
+  },
+  {
+    "name": "meetings-processing",
+    "route": "/meetings?processing=1",
     "sidebar": "open",
     "ignore": [
       {

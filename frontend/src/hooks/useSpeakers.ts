@@ -30,6 +30,7 @@ import {
   type DiarizationCompleteSetupPayload,
   type MeetingAudioSetup,
 } from '@/hooks/useAudioSetup';
+import { buildSpeakerPhotoMap, type SpeakerPhotoMap } from '@/lib/speaker-photos';
 import type {
   MeetingSpeaker,
   MeetingAttendee,
@@ -97,6 +98,9 @@ export interface UseSpeakersReturn {
   markAsMe: (speakerKeys: string | string[]) => Promise<void>;
   /** specs/0078 "This isn't me": this meeting's "You" becomes the next "Speaker N". */
   unmarkMe: () => Promise<void>;
+  /** speakerKey → cached directory photo, resolved once from speakers + attendees + people
+   *  (`buildSpeakerPhotoMap`). Read by the transcript's run headers and the legend. */
+  speakerPhotos: SpeakerPhotoMap;
 }
 
 export function useSpeakers({
@@ -465,6 +469,11 @@ export function useSpeakers({
     return map;
   }, [rawSuggestions, dismissedKeys]);
 
+  const speakerPhotos = useMemo(
+    () => buildSpeakerPhotoMap(speakers, attendees, people),
+    [speakers, attendees, people],
+  );
+
   return {
     speakers,
     attendees,
@@ -483,5 +492,6 @@ export function useSpeakers({
     refetchAudioSetup,
     markAsMe,
     unmarkMe,
+    speakerPhotos,
   };
 }

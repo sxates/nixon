@@ -25,6 +25,8 @@ import { avatarColorClass } from '@/lib/avatar-colors';
 import { PageHeader } from '@/components/ui/page-header';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 import { RecordingBadge } from '@/components/RecordingBadge';
+import { ProcessingBadge } from '@/components/ProcessingBadge';
+import { useProcessingMeetingIds } from '@/contexts/ProcessingMeetingsContext';
 import { formatReelTag } from '@/lib/reel-number';
 
 /** Month grid vs. list of rows (specs/0054 W3), as an underlined segmented control. */
@@ -126,6 +128,7 @@ function MeetingRow({
   meeting,
   spineClass,
   isRecordingThis = false,
+  isProcessing = false,
   onOpen,
   onRequestDelete,
 }: {
@@ -133,6 +136,8 @@ function MeetingRow({
   spineClass: string;
   /** This meeting is the live recording (specs/0029 WS4.4) — show the Recording marker. */
   isRecordingThis?: boolean;
+  /** Work is in flight for it (`useProcessingMeetingIds`); Recording wins over it. */
+  isProcessing?: boolean;
   onOpen: (id: string) => void;
   onRequestDelete: (meeting: DashboardMeeting) => void;
 }) {
@@ -160,7 +165,7 @@ function MeetingRow({
           <span className="min-w-0 flex-1 truncate text-[13.5px] font-semibold text-foreground">
             {title}
           </span>
-          {isRecordingThis && <RecordingBadge />}
+          {isRecordingThis ? <RecordingBadge /> : isProcessing && <ProcessingBadge />}
         </span>
         {/* fix round 1: the wrapper stays a permanent grid item (5 tracks below `sm`
             too) — only its CONTENTS collapse via `sm:contents`, so `display:none`
@@ -213,6 +218,7 @@ export default function AllMeetingsPage() {
   const router = useRouter();
   const { refetchMeetings, activeRecordingMeetingId } = useSidebar();
   const { isRecording } = useRecordingState();
+  const processingIds = useProcessingMeetingIds();
   const { openImportDialog } = useImportDialog();
   const [meetings, setMeetings] = useState<DashboardMeeting[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -433,6 +439,7 @@ export default function AllMeetingsPage() {
                           meeting={m}
                           spineClass={avatarColorClass(m.id)}
                           isRecordingThis={isRecording && m.id === activeRecordingMeetingId}
+                          isProcessing={processingIds.has(m.id)}
                           onOpen={handleOpen}
                           onRequestDelete={setMeetingToDelete}
                         />

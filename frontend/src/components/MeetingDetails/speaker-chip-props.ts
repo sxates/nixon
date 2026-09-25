@@ -47,6 +47,9 @@ export interface SpeakerChipProps {
   onPersonSaved: () => void | Promise<void>;
   /** specs/0078 — "This is me" / "This isn't me" wiring. */
   owner: OwnerActionContext;
+  /** The group's cached directory photo (`controller.speakerPhotos`, first member key that
+   *  has one); null => the colour dot. */
+  photoDataUri: string | null;
 }
 
 /** Build one chip's props — the exact shape the legend's removed chip-cloud loop passed. */
@@ -76,5 +79,9 @@ export function speakerChipProps(
     onMerge: c.mergeSpeakers,
     onPersonSaved: ctx.onPersonSaved,
     owner: ownerActionContext(c),
+    photoDataUri:
+      [group.primary.speakerKey, ...group.keys]
+        .map((k) => c.speakerPhotos.get(k))
+        .find(Boolean) ?? null,
   };
 }
