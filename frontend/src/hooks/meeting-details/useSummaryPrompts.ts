@@ -8,6 +8,8 @@ import {
   type SummaryPrompt,
 } from '@/lib/summary-prompts';
 
+const NOT_READY_MESSAGE = "Save isn't available until the meeting has started recording.";
+
 /** Backend errors reject with a user-readable string; fall back for anything else. */
 function errorMessage(error: unknown, fallback: string): string {
   if (typeof error === 'string' && error) return error;
@@ -37,6 +39,7 @@ export function useSummaryPrompts(meetingId?: string | null) {
   const pendingSelectRef = useRef<string | null>(null);
   // Once the user picks this mount, a late-resolving state load must not clobber it.
   const userSelectedRef = useRef(false);
+  const prevTargetRef = useRef<string | null>(null);
   // Always-current state for callbacks that need has_series without re-creating.
   const stateRef = useRef<MeetingPromptState | null>(null);
   stateRef.current = state;
@@ -56,6 +59,16 @@ export function useSummaryPrompts(meetingId?: string | null) {
 
   // Initial per-meeting state load (guarded against stale resolution).
   useEffect(() => {
+    // Switching directly between two different persistable meetings on one hook
+    // instance: drop the previous meeting's pick/queue/state. (null -> id keeps
+    // the queued pick so it can flush.)
+    const prev = prevTargetRef.current;
+    prevTargetRef.current = targetMeetingId;
+    if (prev && targetMeetingId && prev !== targetMeetingId) {
+      userSelectedRef.current = false;
+      pendingSelectRef.current = null;
+      setState(null);
+    }
     if (!targetMeetingId) {
       setState(null);
       setLoading(false);
@@ -139,7 +152,10 @@ export function useSummaryPrompts(meetingId?: string | null) {
 
   const saveOneOff = useCallback(
     async (body: string, extractActionItems: boolean) => {
-      if (!targetMeetingId) return;
+      if (!targetMeetingId) {
+        toast.error(NOT_READY_MESSAGE);
+        throw new Error(NOT_READY_MESSAGE);
+      }
       userSelectedRef.current = true;
       try {
         await invokeTauri('api_set_meeting_custom_prompt', {
@@ -157,7 +173,10 @@ export function useSummaryPrompts(meetingId?: string | null) {
   );
 
   const clearOneOff = useCallback(async () => {
-    if (!targetMeetingId) return;
+    if (!targetMeetingId) {
+      toast.error(NOT_READY_MESSAGE);
+      return;
+    }
     userSelectedRef.current = true;
     try {
       await invokeTauri('api_set_meeting_custom_prompt', {
@@ -175,7 +194,8 @@ export function useSummaryPrompts(meetingId?: string | null) {
   const saveFollowup = useCallback(
     async (opts: { name?: string; toLibrary: boolean; toSeries: boolean }) => {
       if (!targetMeetingId) {
-        throw new Error('No meeting to save the prompt from');
+        toast.error(NOT_READY_MESSAGE);
+        throw new Error(NOT_READY_MESSAGE);
       }
       try {
         const saved = (await invokeTauri('api_save_custom_prompt_followup', {

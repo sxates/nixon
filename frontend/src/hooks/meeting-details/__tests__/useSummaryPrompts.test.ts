@@ -202,6 +202,41 @@ describe('useSummaryPrompts', () => {
     });
   });
 
+  it('saveOneOff and saveFollowup toast and reject without a persistable id; clearOneOff toasts', async () => {
+    const { result } = renderHook(() => useSummaryPrompts(null));
+    await expect(result.current.saveOneOff('x', true)).rejects.toBeTruthy();
+    expect(toastError).toHaveBeenCalledTimes(1);
+    await expect(
+      result.current.saveFollowup({ toLibrary: true, toSeries: false }),
+    ).rejects.toBeTruthy();
+    expect(toastError).toHaveBeenCalledTimes(2);
+    await act(async () => {
+      await result.current.clearOneOff();
+    });
+    expect(toastError).toHaveBeenCalledTimes(3);
+    expect(invokeMock).not.toHaveBeenCalledWith('api_set_meeting_custom_prompt', expect.anything());
+    expect(invokeMock).not.toHaveBeenCalledWith(
+      'api_save_custom_prompt_followup',
+      expect.anything(),
+    );
+  });
+
+  it('reloads state for a different meeting after a pick on the previous one', async () => {
+    const ID_B = 'meeting-aaaaaaaa-e89b-42d3-a456-426614174000';
+    const { result, rerender } = renderHook(
+      ({ id }: { id: string }) => useSummaryPrompts(id),
+      { initialProps: { id: REAL_ID } },
+    );
+    await waitFor(() => expect(result.current.state?.prompt_id).toBe('p1'));
+    await act(async () => {
+      await result.current.selectPrompt('p2');
+    });
+    currentState = baseState({ source: 'meeting', prompt_id: 'pB', prompt_name: 'pB' });
+    rerender({ id: ID_B });
+    await waitFor(() => expect(result.current.state?.prompt_id).toBe('pB'));
+    expect(invokeMock).toHaveBeenCalledWith('api_get_meeting_prompt_state', { meetingId: ID_B });
+  });
+
   it('never loads state against fabricated ids', async () => {
     sidebarState.currentMeeting = { id: 'intro-call', title: '+ New Call' };
     renderHook(() => useSummaryPrompts());
