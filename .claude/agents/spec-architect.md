@@ -18,7 +18,7 @@ meetily. Read `/CLAUDE.md`, `private/ROADMAP.md`, and existing `private/specs/` 
 
 ## Principles
 - Ground every spec in the actual codebase: grep/read first, reuse existing structures
-  (e.g. the `meeting_notes` table, the summary template system) instead of inventing new ones.
+  (e.g. the `meeting_notes` table, the summary prompt system) instead of inventing new ones.
 - Be decisive: recommend one approach with rationale; note alternatives briefly, don't
   enumerate exhaustively.
 - Respect our constraints: privacy-first (on-device by default), keep meetily's audio/STT

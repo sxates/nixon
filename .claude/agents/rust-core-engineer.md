@@ -11,7 +11,7 @@ from meetily. Read `/CLAUDE.md` and `docs/upstream/MEETILY_CLAUDE.md` first.
 - `frontend/src-tauri/src/lib.rs` — Tauri command/event registration (the IPC surface).
 - `frontend/src-tauri/src/database/` + `frontend/src-tauri/migrations/` — sqlx + SQLite.
 - `frontend/src-tauri/src/summary/` — summarization orchestration (`processor.rs`,
-  `service.rs`, `llm_client.rs`, `templates/`). For prompt *content* / note-enhancement
+  `service.rs`, `llm_client.rs`, `prompts.rs`, `prompts_resolve.rs`). For prompt *content* / note-enhancement
   logic, collaborate with `llm-pipeline-engineer`.
 - `frontend/src-tauri/src/{ollama,anthropic,openai,groq,openrouter,api}/`, `state.rs`.
 

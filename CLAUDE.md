@@ -54,7 +54,7 @@ The app lives under `frontend/` (Tauri 2 + Next.js 14 + React 18). ~44k LOC of R
 | Audio capture (macOS) | `frontend/src-tauri/src/audio/capture/core_audio.rs`, `capture/system.rs` | **Core Audio process tap — no BlackHole required**; needs audio-capture permission |
 | Audio mixing + VAD | `frontend/src-tauri/src/audio/pipeline.rs`, `audio/vad.rs` | RMS ducking; Silero VAD drops silence |
 | Transcription (STT) | `frontend/src-tauri/src/whisper_engine/`, `parakeet_engine/`, `audio/transcription/` | Whisper.cpp (whisper-rs) + Nvidia Parakeet; real-time/streaming |
-| Summarization | `frontend/src-tauri/src/summary/processor.rs`, `service.rs`, `llm_client.rs`, `templates/` | chunking + template-fill report |
+| Summarization | `frontend/src-tauri/src/summary/processor.rs`, `service.rs`, `llm_client.rs`, `prompts.rs`, `prompts_resolve.rs`, `prompt_sanitize.rs` | chunking + user-prompt report (saved prompts, per-meeting one-off, series carry-forward; specs/0079) |
 | LLM providers | `frontend/src-tauri/src/{ollama,anthropic,openai,groq,openrouter}/` | Ollama (local) + cloud |
 | Database | `frontend/src-tauri/src/database/` (sqlx) + `frontend/src-tauri/migrations/` | SQLite at `~/Library/Application Support/<bundle-id>/meeting_minutes.sqlite`; bundle id = **`ai.vinyl.app`** (production `Nixon.app`) or **`ai.vinyl.app.debug`** (dev "Dev Nixon") — isolated from each other and from meetily's `com.meetily.ai` (ADR-0004); `api_set_segment_text` (specs/0061 W5) edits this DB only — the recording folder's `transcripts.json` stays the raw, unedited capture |
 | Frontend UI | `frontend/src/` | Next.js; BlockNote editor (`components/BlockNoteEditor/`, `AISummary/`) |
@@ -198,7 +198,7 @@ tap/mic itself still needs the manual smoke test in #4.) The fixture seeder is c
 | `audio-engineer` | audio capture/mixing/VAD, Whisper/Parakeet, GPU accel, **diarization** |
 | `rust-core-engineer` | Tauri commands/state, sqlx DB, summary orchestration, LLM providers |
 | `frontend-engineer` | Next.js/React/TS, BlockNote editor, Tauri IPC, recording & notes UX |
-| `llm-pipeline-engineer` | prompts, summarization & **note-enhancement** logic, templates, evals |
+| `llm-pipeline-engineer` | prompts, summarization & **note-enhancement** logic, summary prompts, evals |
 | `spec-architect` | writing specs, decomposing features, ADRs |
 
 Reviews: use the built-in `/code-review` skill.

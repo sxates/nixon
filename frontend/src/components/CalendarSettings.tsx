@@ -106,7 +106,7 @@ function CapabilityRow({
 
 /**
  * Badge marking the row that is Nixon's active calendar source — same house
- * style as SOURCE_BADGE_CLASS in TemplateSettings (the "custom" variant).
+ * style as the "custom" source badge used elsewhere in Settings.
  */
 const ACTIVE_BADGE_CLASS =
   'flex-shrink-0 rounded-[3px] px-2 py-0.5 text-[11px] font-semibold bg-brand/10 text-brand';

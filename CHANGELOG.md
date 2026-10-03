@@ -19,7 +19,13 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 ## [Unreleased]
 
-_(nothing yet)_
+### Changed
+
+- Summary templates are replaced by prompts. Write how you want your notes to look in plain language, keep a few favorites in Settings → Summary, or write a one-off prompt for a single meeting. Your existing templates were converted to prompts automatically, and a prompt you pick for a recurring meeting is reused for the next one. Each prompt can turn action-item extraction on or off.
+
+### Internal
+
+- Summary prompt sanitizer, resolver and one-time template conversion (specs/0079); removed the template builder, the Auto outline derivation and their commands.
 
 ## [0.12.0] - 2026-09-24
 
