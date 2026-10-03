@@ -14,7 +14,7 @@ import { CalendarSettings } from '@/components/CalendarSettings';
 import { OwnerEmailSettings } from '@/components/OwnerEmailSettings';
 import { SummaryModelSettings } from '@/components/SummaryModelSettings';
 import { SummaryModelSection } from '@/components/SummaryModelSection';
-import { TemplateSettings } from '@/components/TemplateSettings';
+import { SummaryPromptSettings } from '@/components/SummaryPrompts/SummaryPromptSettings';
 import { DeveloperSettings } from '@/components/DeveloperSettings';
 import { About } from '@/components/About';
 import { useConfig } from '@/contexts/ConfigContext';
@@ -185,9 +185,9 @@ function SettingsPageContent() {
           </TabsContent>
           <TabsContent value="summaryModels" className="space-y-8">
             <SummaryModelSettings />
-            {/* A template is how a summary is shaped, so it belongs to this subject rather
-                than a tab of its own (owner, specs/0067). */}
-            <TemplateSettings />
+            {/* A prompt is how a summary is shaped, so it belongs to this subject rather
+                than a tab of its own (owner, specs/0067; prompts replace templates, specs/0079). */}
+            <SummaryPromptSettings />
             {/* Last: the model is the one thing here nobody should need to choose. */}
             <SummaryModelSection />
           </TabsContent>
