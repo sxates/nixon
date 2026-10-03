@@ -181,17 +181,6 @@ pub fn invoke_handler() -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Sen
         // threads with {person}" synthesis + the plain recent-meetings list.
         aggregation::rollup::api_person_rollup,
         aggregation::rollup::api_recent_meetings_with_person,
-        // Template commands
-        summary::template_commands::api_list_templates,
-        summary::template_commands::api_get_template_details,
-        summary::template_commands::api_validate_template,
-        summary::template_commands::api_get_meeting_template,
-        summary::template_commands::api_set_meeting_template,
-        summary::template_commands::api_save_template,
-        summary::template_commands::api_delete_template,
-        summary::template_commands::api_set_template_hidden,
-        summary::template_commands::api_suggest_template_for_title,
-        summary::template_commands::api_clear_summary_outline,
         // Summary prompts (specs/0079)
         summary::prompt_commands::api_list_summary_prompts,
         summary::prompt_commands::api_save_summary_prompt,

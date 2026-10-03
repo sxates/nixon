@@ -194,7 +194,7 @@ pub async fn initialize_fresh_database(app: AppHandle) -> Result<(), String> {
     app.manage(AppState {
         db_manager: db_manager.clone(),
     });
-    // specs/0079: bundled templates dir is set during app setup, before UI commands run.
+    // specs/0079: one-time template -> prompt conversion for this fresh-install / import path.
     crate::summary::prompt_migration::spawn_conversion(db_manager.pool().clone());
 
     // Set default model configuration for fresh installs

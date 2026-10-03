@@ -276,49 +276,12 @@ impl MeetingsRepository {
 
         Ok((transcripts, total.0))
     }
-
-    /// Suggests a summary template for a (new) meeting from its title
-    /// (specs/0020 task 6): the template of the **most recent** prior meeting
-    /// (by `created_at`) whose normalized title matches, skipping meetings with
-    /// no explicit template and optionally excluding the meeting itself.
-    ///
-    /// Normalization is `LOWER(TRIM(...))` applied by SQLite to *both* sides so
-    /// the column and the parameter are folded identically (Rust's Unicode
-    /// `to_lowercase` disagrees with SQLite's ASCII-only `LOWER` on non-ASCII
-    /// titles). The Rust-side [`normalize_title`] mirrors the v1 semantics and
-    /// guards the degenerate empty-title case, which must never match anything.
-    pub async fn suggest_template_for_title(
-        pool: &SqlitePool,
-        title: &str,
-        exclude_meeting_id: Option<&str>,
-    ) -> Result<Option<String>, SqlxError> {
-        if normalize_title(title).is_empty() {
-            return Ok(None);
-        }
-
-        let row: Option<(String,)> = sqlx::query_as(
-            "SELECT template_id FROM meetings \
-             WHERE LOWER(TRIM(title)) = LOWER(TRIM(?1)) \
-               AND template_id IS NOT NULL \
-               AND TRIM(template_id) != '' \
-               AND (?2 IS NULL OR id != ?2) \
-             ORDER BY created_at DESC \
-             LIMIT 1",
-        )
-        .bind(title)
-        .bind(exclude_meeting_id)
-        .fetch_optional(pool)
-        .await?;
-
-        Ok(row.map(|(template_id,)| template_id))
-    }
 }
 
 /// Normalizes a meeting title for auto-select matching (specs/0020 task 6):
 /// v1 is trim + lowercase, i.e. recurring calendar events that repeat their
 /// title verbatim (possibly with stray whitespace/case differences) match.
-/// Keep in sync with the SQL-side `LOWER(TRIM(...))` in
-/// [`MeetingsRepository::suggest_template_for_title`].
+/// Keep in sync with the SQL-side `LOWER(TRIM(...))` in the series title match.
 pub fn normalize_title(title: &str) -> String {
     title.trim().to_lowercase()
 }
@@ -329,148 +292,6 @@ mod tests {
     use crate::database::repositories::meeting::test_support::{
         dt, memory_db, recorded_with_summary,
     };
-
-    /// specs/0020 task 6: auto-select a template from the most recent
-    /// same-titled meeting.
-    #[tokio::test]
-    async fn suggest_template_for_title_matching() {
-        let pool = memory_db().await;
-        let base = Utc::now() - chrono::Duration::days(3);
-
-        // Older meeting: "Weekly Sync" → retrospective.
-        let older = MeetingsRepository::create_meeting(
-            &pool,
-            Some("Weekly Sync".to_string()),
-            None,
-            None,
-            None,
-            Some(base),
-        )
-        .await
-        .unwrap();
-        assert!(
-            MeetingsRepository::set_meeting_template(&pool, &older, Some("retrospective"))
-                .await
-                .unwrap()
-        );
-
-        // Newer meeting, same title modulo case/whitespace → project_sync.
-        let newer = MeetingsRepository::create_meeting(
-            &pool,
-            Some("  weekly SYNC ".to_string()),
-            None,
-            None,
-            None,
-            Some(base + chrono::Duration::days(1)),
-        )
-        .await
-        .unwrap();
-        assert!(
-            MeetingsRepository::set_meeting_template(&pool, &newer, Some("project_sync"))
-                .await
-                .unwrap()
-        );
-
-        // Hit is case/whitespace-insensitive and the most recent wins.
-        assert_eq!(
-            MeetingsRepository::suggest_template_for_title(&pool, "weekly sync", None)
-                .await
-                .unwrap(),
-            Some("project_sync".to_string())
-        );
-        assert_eq!(
-            MeetingsRepository::suggest_template_for_title(&pool, "  WEEKLY SYNC  ", None)
-                .await
-                .unwrap(),
-            Some("project_sync".to_string())
-        );
-
-        // Excluding the newest match falls back to the next most recent.
-        assert_eq!(
-            MeetingsRepository::suggest_template_for_title(&pool, "Weekly Sync", Some(&newer))
-                .await
-                .unwrap(),
-            Some("retrospective".to_string())
-        );
-
-        // A different title misses.
-        assert_eq!(
-            MeetingsRepository::suggest_template_for_title(&pool, "Daily Standup", None)
-                .await
-                .unwrap(),
-            None
-        );
-    }
-
-    /// specs/0020 task 6: NULL/blank template_id rows never win, and blank
-    /// titles never match.
-    #[tokio::test]
-    async fn suggest_template_for_title_ignores_untemplated_and_blank() {
-        let pool = memory_db().await;
-        let base = Utc::now() - chrono::Duration::days(3);
-
-        let templated = MeetingsRepository::create_meeting(
-            &pool,
-            Some("Weekly Sync".to_string()),
-            None,
-            None,
-            None,
-            Some(base),
-        )
-        .await
-        .unwrap();
-        assert!(
-            MeetingsRepository::set_meeting_template(&pool, &templated, Some("retrospective"))
-                .await
-                .unwrap()
-        );
-
-        // Newer meeting with NULL template_id (never set) is skipped.
-        MeetingsRepository::create_meeting(
-            &pool,
-            Some("Weekly Sync".to_string()),
-            None,
-            None,
-            None,
-            Some(base + chrono::Duration::days(1)),
-        )
-        .await
-        .unwrap();
-
-        // Newest meeting with an (illegally) empty-string template_id is skipped
-        // too — the setter normalizes '' to NULL, so force it with raw SQL.
-        let newest = MeetingsRepository::create_meeting(
-            &pool,
-            Some("Weekly Sync".to_string()),
-            None,
-            None,
-            None,
-            Some(base + chrono::Duration::days(2)),
-        )
-        .await
-        .unwrap();
-        sqlx::query("UPDATE meetings SET template_id = '' WHERE id = ?")
-            .bind(&newest)
-            .execute(&pool)
-            .await
-            .unwrap();
-
-        assert_eq!(
-            MeetingsRepository::suggest_template_for_title(&pool, "Weekly Sync", None)
-                .await
-                .unwrap(),
-            Some("retrospective".to_string())
-        );
-
-        // A blank/whitespace title never matches anything (even though blank
-        // titles can't be persisted, the query must not treat '' as a key).
-        assert_eq!(
-            MeetingsRepository::suggest_template_for_title(&pool, "   ", None)
-                .await
-                .unwrap(),
-            None
-        );
-    }
 
     #[test]
     fn normalize_title_trims_and_lowercases() {

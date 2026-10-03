@@ -10,10 +10,12 @@ use sqlx::SqlitePool;
 use tracing::warn;
 
 use crate::database::repositories::summary_prompt::SummaryPromptRepository;
+use crate::summary::legacy_templates::{
+    custom_templates_dir, get_in, hidden_ids_in, list_ids_in, Template,
+};
 use crate::summary::prompt_sanitize::{
     sanitize_prompt_body, sanitize_prompt_name, MAX_PROMPT_CHARS,
 };
-use crate::summary::templates::{get_template, hidden_template_ids, list_template_ids, Template};
 
 pub const AUTO_PRESET_NAME: &str = "Let the model choose the structure";
 /// Same text as the resolver's fallback, so the two cannot drift.
@@ -92,8 +94,9 @@ pub async fn convert_templates_once(pool: &SqlitePool) -> Result<Option<Conversi
     id_map.insert(AUTO_ID.into(), auto.id.clone());
     report.prompts_created += 1;
 
-    for id in select_templates(list_template_ids(), &hidden_template_ids(), &referenced) {
-        let t = match get_template(&id) {
+    let dir = custom_templates_dir();
+    for id in select_templates(list_ids_in(&dir), &hidden_ids_in(&dir), &referenced) {
+        let t = match get_in(&dir, &id) {
             Ok(t) => t,
             Err(e) => {
                 warn!("Skipping template '{id}' during prompt conversion: {e}");
@@ -174,7 +177,7 @@ mod tests {
     use super::*;
     use crate::database::repositories::meeting::test_support::memory_db;
     use crate::database::repositories::meeting::MeetingsRepository;
-    use crate::summary::templates::TemplateSection;
+    use crate::summary::legacy_templates::{TemplateSection, LEGACY_BUILTINS};
     use chrono::Utc;
 
     fn section(title: &str, instruction: &str, format: &str) -> TemplateSection {
@@ -241,11 +244,32 @@ mod tests {
     }
 
     async fn builtin_names() -> Vec<String> {
-        crate::summary::templates::list_template_ids()
-            .into_iter()
-            .filter(|id| crate::summary::templates::is_builtin_or_bundled(id))
-            .filter_map(|id| get_template(&id).ok().map(|t| t.name))
+        LEGACY_BUILTINS
+            .iter()
+            .map(|(_, json)| serde_json::from_str::<Template>(json).unwrap().name)
             .collect()
+    }
+
+    #[test]
+    fn frozen_builtins_match_the_five_shipped_templates() {
+        let ids: Vec<&str> = LEGACY_BUILTINS.iter().map(|(id, _)| *id).collect();
+        assert_eq!(
+            ids,
+            [
+                "daily_standup",
+                "standard_meeting",
+                "project_sync",
+                "retrospective",
+                "sales_marketing_client_call"
+            ]
+        );
+        for (id, json) in LEGACY_BUILTINS {
+            let t: Template =
+                serde_json::from_str(json).unwrap_or_else(|e| panic!("{id} parse: {e}"));
+            assert!(!render_template_as_prompt(&t).trim().is_empty(), "{id}");
+        }
+        let t: Template = serde_json::from_str(LEGACY_BUILTINS[1].1).unwrap();
+        assert_eq!(t.name, "Standard Meeting Notes");
     }
 
     #[tokio::test]
@@ -306,7 +330,10 @@ mod tests {
             )
             .await
             .unwrap();
-            MeetingsRepository::set_meeting_template(&pool, &id, tpl)
+            sqlx::query("UPDATE meetings SET template_id = ? WHERE id = ?")
+                .bind(tpl)
+                .bind(&id)
+                .execute(&pool)
                 .await
                 .unwrap();
             ids.push(id);

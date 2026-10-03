@@ -1099,7 +1099,7 @@ mod tests {
     // output quality is the manual smoke (specs/0034 Verification).
     // =====================================================================
 
-    /// `templates/standard_meeting.json` shape — Summary / Key Decisions / Action Items
+    /// The legacy `standard_meeting` template shape — Summary / Key Decisions / Action Items
     /// (owner-task-due table). Covers every resolution outcome at once: roster name →
     /// person FK, roster email → person FK, "me" → self flag, off-roster name → raw
     /// fallback, verbatim due hints, notes as the second recall source.

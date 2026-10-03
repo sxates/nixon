@@ -5,7 +5,6 @@
   "time_of_day": "11:00",
   "duration_seconds": 600,
   "audio_state": "failed",
-  "template_id": "standard_meeting",
   "participants": [
     "person-rafael",
     "person-sun"

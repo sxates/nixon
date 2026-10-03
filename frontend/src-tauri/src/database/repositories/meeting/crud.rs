@@ -250,56 +250,6 @@ impl MeetingsRepository {
         Ok(result.rows_affected() > 0)
     }
 
-    /// Reads the persisted per-meeting summary template id (specs/0029 WS4.3 — the
-    /// specs/0020 `meetings.template_id` persistence slice). Returns `None` both when
-    /// the meeting has no explicit choice (NULL = "use the default template") and when
-    /// the meeting doesn't exist — callers that need existence use the setter's bool.
-    pub async fn get_meeting_template(
-        pool: &SqlitePool,
-        meeting_id: &str,
-    ) -> Result<Option<String>, SqlxError> {
-        if meeting_id.trim().is_empty() {
-            return Err(SqlxError::Protocol(
-                "meeting_id cannot be empty".to_string(),
-            ));
-        }
-
-        let row: Option<(Option<String>,)> =
-            sqlx::query_as("SELECT template_id FROM meetings WHERE id = ?")
-                .bind(meeting_id)
-                .fetch_optional(pool)
-                .await?;
-
-        Ok(row.and_then(|(template_id,)| template_id))
-    }
-
-    /// Persists the summary template for one meeting. `None` (or a blank string,
-    /// normalized here) clears the choice back to NULL = "use the default template".
-    /// Returns whether a row was updated (false ⇒ meeting not found). Deliberately
-    /// does not bump `updated_at` (mirrors `update_folder_path`): picking a template
-    /// is metadata, not a content edit.
-    pub async fn set_meeting_template(
-        pool: &SqlitePool,
-        meeting_id: &str,
-        template_id: Option<&str>,
-    ) -> Result<bool, SqlxError> {
-        if meeting_id.trim().is_empty() {
-            return Err(SqlxError::Protocol(
-                "meeting_id cannot be empty".to_string(),
-            ));
-        }
-
-        let template_id = template_id.map(str::trim).filter(|t| !t.is_empty());
-
-        let result = sqlx::query("UPDATE meetings SET template_id = ? WHERE id = ?")
-            .bind(template_id)
-            .bind(meeting_id)
-            .execute(pool)
-            .await?;
-
-        Ok(result.rows_affected() > 0)
-    }
-
     /// Reads the per-meeting processing-mode override (low-power-mode spec §3).
     /// NULL/absent → None → "follow the global decision".
     pub async fn get_processing_mode(
@@ -322,7 +272,7 @@ impl MeetingsRepository {
     /// Persists the processing-mode override. `None`/blank clears to NULL.
     /// Only 'live' and 'defer' are accepted. Returns whether a row was updated
     /// (false ⇒ meeting not found). Does not bump `updated_at` (metadata, not
-    /// content — mirrors `set_meeting_template`).
+    /// content — mirrors `update_folder_path`).
     pub async fn set_processing_mode(
         pool: &SqlitePool,
         meeting_id: &str,
@@ -586,103 +536,5 @@ mod tests {
             .unwrap()
             .expect("recorded meeting exists");
         assert!(recorded.calendar_event_id.is_none());
-    }
-
-    /// specs/0029 WS4.3: per-meeting template persistence (the specs/0020 slice).
-    #[tokio::test]
-    async fn meeting_template_get_set_roundtrip() {
-        let pool = memory_db().await;
-        let id = MeetingsRepository::create_meeting(&pool, None, None, None, None, None)
-            .await
-            .expect("create_meeting");
-
-        // Fresh meeting: no explicit template (NULL = "use the default").
-        assert_eq!(
-            MeetingsRepository::get_meeting_template(&pool, &id)
-                .await
-                .unwrap(),
-            None
-        );
-
-        // Set + read back.
-        assert!(
-            MeetingsRepository::set_meeting_template(&pool, &id, Some("daily_standup"))
-                .await
-                .unwrap()
-        );
-        assert_eq!(
-            MeetingsRepository::get_meeting_template(&pool, &id)
-                .await
-                .unwrap(),
-            Some("daily_standup".to_string())
-        );
-
-        // Overwrite with a new choice.
-        assert!(
-            MeetingsRepository::set_meeting_template(&pool, &id, Some("standard_meeting"))
-                .await
-                .unwrap()
-        );
-        assert_eq!(
-            MeetingsRepository::get_meeting_template(&pool, &id)
-                .await
-                .unwrap(),
-            Some("standard_meeting".to_string())
-        );
-
-        // The metadata read (MeetingModel) carries the column too.
-        let meta = MeetingsRepository::get_meeting_metadata(&pool, &id)
-            .await
-            .unwrap()
-            .expect("meeting exists");
-        assert_eq!(meta.template_id.as_deref(), Some("standard_meeting"));
-
-        // Clear back to default; whitespace-only normalizes to a clear as well.
-        assert!(MeetingsRepository::set_meeting_template(&pool, &id, None)
-            .await
-            .unwrap());
-        assert_eq!(
-            MeetingsRepository::get_meeting_template(&pool, &id)
-                .await
-                .unwrap(),
-            None
-        );
-        assert!(
-            MeetingsRepository::set_meeting_template(&pool, &id, Some("  "))
-                .await
-                .unwrap()
-        );
-        assert_eq!(
-            MeetingsRepository::get_meeting_template(&pool, &id)
-                .await
-                .unwrap(),
-            None
-        );
-    }
-
-    #[tokio::test]
-    async fn meeting_template_missing_meeting_and_bad_input() {
-        let pool = memory_db().await;
-
-        // Unknown meeting: set reports "no row updated", get reports None.
-        assert!(
-            !MeetingsRepository::set_meeting_template(&pool, "meeting-missing", Some("x"))
-                .await
-                .unwrap()
-        );
-        assert_eq!(
-            MeetingsRepository::get_meeting_template(&pool, "meeting-missing")
-                .await
-                .unwrap(),
-            None
-        );
-
-        // Empty meeting_id is rejected outright (matches the other repo methods).
-        assert!(MeetingsRepository::set_meeting_template(&pool, "  ", None)
-            .await
-            .is_err());
-        assert!(MeetingsRepository::get_meeting_template(&pool, "")
-            .await
-            .is_err());
     }
 }

@@ -2,7 +2,7 @@
 //!
 //! Historically several subsystems built their own storage paths from a
 //! hardcoded `"Meetily"`/`"meetily"` literal joined onto `dirs::data_dir()` /
-//! `dirs::config_dir()` (templates, model fallbacks, Zoom/notification settings).
+//! `dirs::config_dir()` (model fallbacks, Zoom/notification settings).
 //! That bypassed the Tauri bundle identifier, so dev and prod shared the same
 //! on-disk location — breaking the dev/prod isolation guaranteed by ADR-0004 and
 //! leaking across the rebrand.
