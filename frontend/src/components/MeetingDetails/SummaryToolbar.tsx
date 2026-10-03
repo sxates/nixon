@@ -1,9 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Check, ChevronDown, Loader2, MoreHorizontal, RefreshCw } from 'lucide-react';
-import { invoke } from '@tauri-apps/api/core';
-import { toast } from 'sonner';
+import { Loader2, MoreHorizontal } from 'lucide-react';
 
 import { ModelConfig, ModelSettingsModal } from '@/components/ModelSettingsModal';
 import { Button } from '@/components/ui/button';
@@ -17,10 +15,11 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { VisuallyHidden } from '@/components/ui/visually-hidden';
+import { PromptPicker } from '@/components/SummaryPrompts/PromptPicker';
+import type { MeetingPromptState, SummaryPrompt } from '@/lib/summary-prompts';
 import { useSummaryGenerationGuards } from '@/hooks/meeting-details/useSummaryGenerationGuards';
 
 export type SummaryStatus =
@@ -41,10 +40,13 @@ export interface SummaryToolbarProps {
   onGenerateSummary: (customPrompt: string) => Promise<void>;
   onStopGeneration: () => void;
 
-  /* Template */
-  availableTemplates: Array<{ id: string; name: string; description: string }>;
-  selectedTemplate: string;
-  onTemplateSelect: (templateId: string, templateName: string) => void;
+  /* Prompt */
+  prompts: SummaryPrompt[];
+  promptState: MeetingPromptState | null;
+  onPromptSelect: (promptId: string, promptName: string) => void;
+  /** Opens the "Custom for this meeting…" dialog (the panel owns it). */
+  onCustomPrompt: () => void;
+  onClearCustomPrompt: () => void;
 
   /* Flyout */
   isSaving: boolean;
@@ -57,20 +59,15 @@ export interface SummaryToolbarProps {
   onSaveModelConfig: (config?: ModelConfig) => Promise<void>;
   /** Lets the parent open model settings itself (the empty-state card links to it). */
   onOpenModelSettings?: (openFn: () => void) => void;
-
-  /** Meeting id for "Re-think structure" (specs/0053 W3). */
-  meetingId?: string;
-  /** Regenerate path reused by "Re-think structure" after clearing the derived outline. */
-  onRegenerate?: () => Promise<void>;
 }
 
 /**
  * The Summary tab's action bar (specs/0064 W3).
  *
  * Replaces the two button groups that between them showed up to eight controls — Stop,
- * Generate/Regenerate, the template picker, Re-think structure,
+ * Generate/Regenerate, the prompt picker,
  * Save and Copy — which the owner reported as "overkill". What is left is the primary action,
- * the template picker, and a "…" flyout for everything that is occasionally useful.
+ * the prompt picker, and a "…" flyout for everything that is occasionally useful.
  *
  * Save is the exception that proves the rule: it lives in the flyout, but the instant the
  * summary or title has unsaved edits it appears as a real button, because that is the only
@@ -88,9 +85,11 @@ export function SummaryToolbar({
   isModelConfigLoading,
   onGenerateSummary,
   onStopGeneration,
-  availableTemplates,
-  selectedTemplate,
-  onTemplateSelect,
+  prompts,
+  promptState,
+  onPromptSelect,
+  onCustomPrompt,
+  onClearCustomPrompt,
   isSaving,
   isDirty,
   onSave,
@@ -99,11 +98,8 @@ export function SummaryToolbar({
   setModelConfig,
   onSaveModelConfig,
   onOpenModelSettings,
-  meetingId,
-  onRegenerate,
 }: SummaryToolbarProps) {
   const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
-  const [isRethinking, setIsRethinking] = useState(false);
 
   const { isCheckingModels, generate } = useSummaryGenerationGuards({
     modelConfig,
@@ -124,36 +120,6 @@ export function SummaryToolbar({
     summaryStatus === 'summarizing' ||
     summaryStatus === 'regenerating' ||
     summaryStatus === 'speaker_refresh';
-
-  // specs/0020 task 7: the trigger shows the ACTIVE template's name at a glance, falling back
-  // to the generic label while the list/selection is still loading.
-  const selectedTemplateName =
-    availableTemplates.find((template) => template.id === selectedTemplate)?.name ?? 'Template';
-
-  // "Re-think structure" (specs/0053 W3): clears the meeting's derived Auto outline so the
-  // next summary re-derives its section structure from the transcript, instead of reusing
-  // whatever was picked last time. Only meaningful on Auto — a fixed template has no derived
-  // outline to clear.
-  const canRethinkStructure = selectedTemplate === 'auto' && hasSummary && !!meetingId;
-  const handleRethinkStructure = async () => {
-    if (!meetingId) return;
-    setIsRethinking(true);
-    try {
-      await invoke('api_clear_summary_outline', { meetingId });
-      toast.success('Structure cleared — the next summary will re-think it');
-      if (onRegenerate) {
-        await onRegenerate();
-      }
-    } catch (error) {
-      toast.error(
-        `Could not clear the summary structure: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
-      );
-    } finally {
-      setIsRethinking(false);
-    }
-  };
 
   if (!hasTranscripts) {
     return null;
@@ -225,37 +191,14 @@ export function SummaryToolbar({
           </Button>
         )}
 
-        {availableTemplates.length > 0 && (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="outline"
-                size="xs"
-                aria-label={`Summary template: ${selectedTemplateName}`}
-                title={`Summary template: ${selectedTemplateName}`}
-                className="max-w-[160px]"
-              >
-                <span className="truncate">{selectedTemplateName}</span>
-                <ChevronDown size={14} className="text-muted-foreground" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              {availableTemplates.map((template) => (
-                <DropdownMenuItem
-                  key={template.id}
-                  onClick={() => onTemplateSelect(template.id, template.name)}
-                  title={template.description}
-                  className="flex items-center justify-between gap-2"
-                >
-                  <span>{template.name}</span>
-                  {selectedTemplate === template.id && (
-                    <Check className="h-4 w-4 text-brand" />
-                  )}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )}
+        <PromptPicker
+          prompts={prompts}
+          promptState={promptState}
+          onPromptSelect={onPromptSelect}
+          onCustomPrompt={onCustomPrompt}
+          onClearCustomPrompt={onClearCustomPrompt}
+          className="max-w-[160px]"
+        />
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -285,22 +228,6 @@ export function SummaryToolbar({
             >
               Copy
             </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            {canRethinkStructure && (
-              <DropdownMenuItem
-                onSelect={() => {
-                  void handleRethinkStructure();
-                }}
-                disabled={isRethinking || isGenerating}
-              >
-                {isRethinking ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <RefreshCw className="mr-2 h-4 w-4" />
-                )}
-                Re-think structure
-              </DropdownMenuItem>
-            )}
           </DropdownMenuContent>
         </DropdownMenu>
       </ButtonGroup>

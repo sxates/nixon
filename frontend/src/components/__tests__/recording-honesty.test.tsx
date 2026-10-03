@@ -57,11 +57,14 @@ const titleEdit = {
   cancelTitleEdit: vi.fn(),
 } as unknown as React.ComponentProps<typeof RecordingHeader>['titleEdit'];
 
-const templates = {
-  availableTemplates: [],
-  selectedTemplate: null,
-  handleTemplateSelection: vi.fn(),
-} as unknown as React.ComponentProps<typeof RecordingHeader>['templates'];
+const promptsApi = {
+  prompts: [],
+  state: null,
+  selectPrompt: vi.fn(),
+  saveOneOff: vi.fn(),
+  clearOneOff: vi.fn(),
+  saveFollowup: vi.fn(),
+} as unknown as React.ComponentProps<typeof RecordingHeader>['promptsApi'];
 
 const SEGMENTS: TranscriptSegmentData[] = [
   { id: 's1', timestamp: 0, text: 'first line', speaker: 'spk_0', speakerName: 'You' },
@@ -74,7 +77,7 @@ function renderHeader() {
       isRecordingActive
       activeRecordingMeetingId="m1"
       titleEdit={titleEdit}
-      templates={templates}
+      promptsApi={promptsApi}
     />,
   );
 }

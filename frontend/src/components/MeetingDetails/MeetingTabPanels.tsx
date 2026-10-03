@@ -9,7 +9,7 @@ import { ModelConfig } from '@/components/ModelSettingsModal';
 import type { TranscriptSegmentData } from '@/types';
 import type { useMeetingData } from '@/hooks/meeting-details/useMeetingData';
 import type { useSummaryGeneration } from '@/hooks/meeting-details/useSummaryGeneration';
-import type { useTemplates } from '@/hooks/meeting-details/useTemplates';
+import type { PromptsApi } from '@/components/SummaryPrompts/CustomPromptFlow';
 import type { useCopyOperations } from '@/hooks/meeting-details/useCopyOperations';
 import type { useMeetingOperations } from '@/hooks/meeting-details/useMeetingOperations';
 import type { MeetingTabKey } from '@/hooks/meeting-details/useMeetingTabs';
@@ -36,7 +36,7 @@ interface MeetingTabPanelsProps {
   hasOpenedPrep: boolean;
   meetingData: ReturnType<typeof useMeetingData>;
   summaryGeneration: ReturnType<typeof useSummaryGeneration>;
-  templates: ReturnType<typeof useTemplates>;
+  promptsApi: PromptsApi;
   copyOperations: ReturnType<typeof useCopyOperations>;
   meetingOperations: ReturnType<typeof useMeetingOperations>;
   modelConfig: ModelConfig;
@@ -86,7 +86,7 @@ export function MeetingTabPanels({
   hasOpenedPrep,
   meetingData,
   summaryGeneration,
-  templates,
+  promptsApi,
   copyOperations,
   meetingOperations,
   modelConfig,
@@ -146,9 +146,7 @@ export function MeetingTabPanels({
           onDirtyChange={meetingData.setIsSummaryDirty}
           summaryError={summaryGeneration.summaryError}
           onRegenerateSummary={summaryGeneration.handleRegenerateSummary}
-          availableTemplates={templates.availableTemplates}
-          selectedTemplate={templates.selectedTemplate}
-          onTemplateSelect={templates.handleTemplateSelection}
+          promptsApi={promptsApi}
           isModelConfigLoading={false}
           onOpenModelSettings={onRegisterModalOpen}
         />

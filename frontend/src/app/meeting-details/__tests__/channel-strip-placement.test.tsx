@@ -72,8 +72,8 @@ vi.mock('@/hooks/meeting-details/useMeetingData', () => ({
 vi.mock('@/hooks/meeting-details/useSummaryGeneration', () => ({
   useSummaryGeneration: () => ({}),
 }));
-vi.mock('@/hooks/meeting-details/useTemplates', () => ({
-  useTemplates: () => ({ availableTemplates: [], selectedTemplate: null }),
+vi.mock('@/hooks/meeting-details/useSummaryPrompts', () => ({
+  useSummaryPrompts: () => ({ prompts: [], state: null }),
 }));
 vi.mock('@/hooks/meeting-details/useCopyOperations', () => ({
   useCopyOperations: () => ({}),

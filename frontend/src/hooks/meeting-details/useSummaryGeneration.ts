@@ -26,7 +26,6 @@ interface UseSummaryGenerationProps {
   transcripts: Transcript[];
   modelConfig: ModelConfig;
   isModelConfigLoading: boolean;
-  selectedTemplate: string;
   onMeetingUpdated?: () => Promise<void>;
   updateMeetingTitle: (title: string) => void;
   setAiSummary: (summary: Summary | null) => void;
@@ -41,7 +40,6 @@ export function useSummaryGeneration({
   transcripts: _transcripts,
   modelConfig,
   isModelConfigLoading,
-  selectedTemplate,
   onMeetingUpdated,
   updateMeetingTitle,
   setAiSummary,
@@ -120,14 +118,12 @@ export function useSummaryGeneration({
   const processSummary = useCallback(async ({
     transcriptText,
     transcriptTexts,
-    customPrompt = '',
     isRegeneration = false,
     notesGrounded = false,
     background = false,
   }: {
     transcriptText: string;
     transcriptTexts?: string[];
-    customPrompt?: string;
     isRegeneration?: boolean;
     // Notes-only / pre-transcript meetings (spec 0015): there's no transcript,
     // but the backend grounds the summary on the user's saved notes. When true we
@@ -149,8 +145,6 @@ export function useSummaryGeneration({
         throw new Error('No transcript text available. Please add some text first.');
       }
 
-      console.log('Processing transcript with template:', selectedTemplate);
-
       // Resolve explicit metadata override first; Auto detects the transcript
       // language. For a notes-grounded summary there's no transcript to detect
       // from, so pass null and let the backend fall back to the notes' language.
@@ -169,8 +163,6 @@ export function useSummaryGeneration({
         meetingId: meeting.id,
         chunkSize: 40000,
         overlap: 1000,
-        customPrompt: customPrompt,
-        templateId: selectedTemplate,
         summaryLanguage,
         background,
       }) as any;
@@ -375,7 +367,6 @@ export function useSummaryGeneration({
     meeting.created_at,
     meeting.calendarEventId,
     modelConfig,
-    selectedTemplate,
     startSummaryPolling,
     setAiSummary,
     updateMeetingTitle,
@@ -506,7 +497,8 @@ export function useSummaryGeneration({
 
   // Public API: Generate summary from transcripts
   const handleGenerateSummary = useCallback(async (
-    customPrompt: string = '',
+    // The prompt is resolved by the backend from the meeting's stored state (specs/0079).
+    _customPrompt: string = '',
     opts: { background?: boolean } = {},
   ) => {
     // Check if model config is still loading
@@ -566,7 +558,6 @@ export function useSummaryGeneration({
     console.log('🚀 Starting summary generation with config:', {
       provider: modelConfig.provider,
       model: modelConfig.model,
-      template: selectedTemplate
     });
 
     // Check if Ollama provider has models available
@@ -703,11 +694,10 @@ export function useSummaryGeneration({
 
     await processSummary({
       ...summaryPayload,
-      customPrompt,
       notesGrounded,
       background: opts.background ?? false,
     });
-  }, [meeting.id, meeting.folder_path, fetchAllTranscripts, meetingHasNotes, transcribeMeetingAudio, refetchTranscripts, buildSummaryTranscriptPayload, processSummary, modelConfig, isModelConfigLoading, selectedTemplate]);
+  }, [meeting.id, meeting.folder_path, fetchAllTranscripts, meetingHasNotes, transcribeMeetingAudio, refetchTranscripts, buildSummaryTranscriptPayload, processSummary, modelConfig, isModelConfigLoading]);
 
   // Public API: Regenerate summary from the current saved transcript
   const handleRegenerateSummary = useCallback(async () => {

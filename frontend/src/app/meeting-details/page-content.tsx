@@ -19,7 +19,7 @@ import { SpeakerLegend } from '@/components/MeetingDetails/SpeakerLegend';
 // Custom hooks
 import { useMeetingData } from '@/hooks/meeting-details/useMeetingData';
 import { useSummaryGeneration } from '@/hooks/meeting-details/useSummaryGeneration';
-import { useTemplates } from '@/hooks/meeting-details/useTemplates';
+import { useSummaryPrompts } from '@/hooks/meeting-details/useSummaryPrompts';
 import { useCopyOperations } from '@/hooks/meeting-details/useCopyOperations';
 import { useMeetingOperations } from '@/hooks/meeting-details/useMeetingOperations';
 import { useMeetingTabs, MeetingTabKey } from '@/hooks/meeting-details/useMeetingTabs';
@@ -266,16 +266,14 @@ export default function PageContent({
 
   // Custom hooks
   const meetingData = useMeetingData({ meeting, summaryData, onMeetingUpdated });
-  // No explicit id (falls back to the sidebar's viewed meeting); the title feeds
-  // the auto-select-by-title suggestion (specs/0020 task 10).
-  const templates = useTemplates(undefined, meetingData.meetingTitle);
+  // No explicit id: falls back to the sidebar's viewed meeting.
+  const promptsApi = useSummaryPrompts();
 
   const summaryGeneration = useSummaryGeneration({
     meeting,
     transcripts: meetingData.transcripts,
     modelConfig: modelConfig,
     isModelConfigLoading: false, // ConfigContext loads on mount
-    selectedTemplate: templates.selectedTemplate,
     onMeetingUpdated,
     updateMeetingTitle: meetingData.updateMeetingTitle,
     setAiSummary: meetingData.setAiSummary,
@@ -454,7 +452,7 @@ export default function PageContent({
             hasOpenedPrep={hasOpenedPrep}
             meetingData={meetingData}
             summaryGeneration={summaryGeneration}
-            templates={templates}
+            promptsApi={promptsApi}
             copyOperations={copyOperations}
             meetingOperations={meetingOperations}
             modelConfig={modelConfig}
