@@ -37,7 +37,7 @@ export interface SummaryToolbarProps {
   hasSummary: boolean;
   hasTranscripts: boolean;
   isModelConfigLoading: boolean;
-  onGenerateSummary: (customPrompt: string) => Promise<void>;
+  onGenerateSummary: () => Promise<void>;
   onStopGeneration: () => void;
 
   /* Prompt */

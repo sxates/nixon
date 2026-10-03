@@ -12,6 +12,7 @@ vi.mock('@/components/AISummary/BlockNoteSummaryView', async () => {
 vi.mock('@/components/EmptyStateSummary', () => ({ EmptyStateSummary: () => null }));
 vi.mock('../SummaryGenerating', () => ({ SummaryGenerating: () => null }));
 
+import { toast } from 'sonner';
 import { SummaryPanel } from '../SummaryPanel';
 
 const prompts = [
@@ -36,9 +37,9 @@ function setup(opts: { hasSummary?: boolean } = {}) {
   const api = {
     prompts,
     state: state(),
-    selectPrompt: vi.fn(async () => {}),
+    selectPrompt: vi.fn(async (_id: string) => true),
     saveOneOff: vi.fn(async () => {}),
-    clearOneOff: vi.fn(async () => {}),
+    clearOneOff: vi.fn(async () => true),
     saveFollowup: vi.fn(async () => ({})),
   };
   const props = {
@@ -164,6 +165,42 @@ describe('SummaryPanel prompt flows (specs/0079 W4)', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Use for this meeting' }));
     await waitFor(() => expect(api.saveOneOff).toHaveBeenCalled());
     expect(screen.getByLabelText('Prompt')).toHaveValue('Be brief');
+    expect(onRegenerateSummary).not.toHaveBeenCalled();
+  });
+
+  it('a failed pick never arms regeneration; a later successful pick of the same prompt regenerates exactly once', async () => {
+    const { api, onRegenerateSummary, rerenderWith } = setup();
+    api.selectPrompt.mockResolvedValueOnce(false); // persist failed (hook toasts)
+    await userEvent.click(screen.getByRole('button', { name: /summary prompt/i }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Standup' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Regenerate' }));
+    await waitFor(() => expect(api.selectPrompt).toHaveBeenCalledTimes(1));
+
+    // Even if the state later reports that prompt (e.g. via another path), nothing fires.
+    const picked = { ...api, state: state({ source: 'meeting', prompt_id: 'p-standup', prompt_name: 'Standup' }) };
+    rerenderWith(picked);
+    rerenderWith(api);
+    expect(onRegenerateSummary).not.toHaveBeenCalled();
+
+    // Second attempt succeeds.
+    await userEvent.click(screen.getByRole('button', { name: /summary prompt/i }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Standup' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Regenerate' }));
+    await waitFor(() => expect(api.selectPrompt).toHaveBeenCalledTimes(2));
+    rerenderWith(picked);
+    await waitFor(() => expect(onRegenerateSummary).toHaveBeenCalledTimes(1));
+    rerenderWith({ ...picked });
+    expect(onRegenerateSummary).toHaveBeenCalledTimes(1);
+  });
+
+  it('Remove custom prompt toasts "Regenerate to apply" and does not regenerate', async () => {
+    const { api, onRegenerateSummary, rerenderWith } = setup();
+    rerenderWith({ ...api, state: state({ source: 'custom', custom_body: 'Be brief' }) as never });
+    await userEvent.click(screen.getByRole('button', { name: /summary prompt/i }));
+    await userEvent.click(screen.getByRole('menuitem', { name: /remove custom prompt/i }));
+    await waitFor(() => expect(api.clearOneOff).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(toast.info).toHaveBeenCalledWith('Regenerate to apply'));
+    expect(screen.queryByText('Regenerate summary?')).toBeNull();
     expect(onRegenerateSummary).not.toHaveBeenCalled();
   });
 });

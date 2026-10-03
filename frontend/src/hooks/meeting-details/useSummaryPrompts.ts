@@ -40,10 +40,6 @@ export function useSummaryPrompts(meetingId?: string | null) {
   // Once the user picks this mount, a late-resolving state load must not clobber it.
   const userSelectedRef = useRef(false);
   const prevTargetRef = useRef<string | null>(null);
-  // Always-current state for callbacks that need has_series without re-creating.
-  const stateRef = useRef<MeetingPromptState | null>(null);
-  stateRef.current = state;
-
   const loadPrompts = useCallback(async () => {
     try {
       const list = (await invokeTauri('api_list_summary_prompts')) as SummaryPrompt[];
@@ -113,18 +109,23 @@ export function useSummaryPrompts(meetingId?: string | null) {
   }, [loadPrompts, refreshFor, targetMeetingId]);
 
   const persistPick = useCallback(
-    async (id: string, promptId: string) => {
+    /** Resolves true only when the backend call succeeded. */
+    async (id: string, promptId: string): Promise<boolean> => {
       try {
+        // Always ask for series stickiness: the backend no-ops the series mapping when
+        // there is no usable series key, and our state may not have loaded yet.
         await invokeTauri('api_set_meeting_summary_prompt', {
           meetingId: id,
           promptId,
-          applyToSeries: stateRef.current?.has_series ?? false,
+          applyToSeries: true,
         });
-        await refreshFor(id);
       } catch (error) {
         console.error('Failed to save prompt choice:', error);
         toast.error(errorMessage(error, 'Could not save prompt choice'));
+        return false;
       }
+      await refreshFor(id);
+      return true;
     },
     [refreshFor],
   );
@@ -139,13 +140,17 @@ export function useSummaryPrompts(meetingId?: string | null) {
   }, [targetMeetingId, persistPick]);
 
   const selectPrompt = useCallback(
-    async (promptId: string) => {
+    /**
+     * Resolves true only when the pick was persisted. A pick queued because the meeting
+     * row doesn't exist yet resolves false (it is flushed later, not persisted now).
+     */
+    async (promptId: string): Promise<boolean> => {
       userSelectedRef.current = true;
       if (targetMeetingId) {
-        await persistPick(targetMeetingId, promptId);
-      } else {
-        pendingSelectRef.current = promptId;
+        return persistPick(targetMeetingId, promptId);
       }
+      pendingSelectRef.current = promptId;
+      return false;
     },
     [targetMeetingId, persistPick],
   );
@@ -172,10 +177,11 @@ export function useSummaryPrompts(meetingId?: string | null) {
     [targetMeetingId, refreshFor],
   );
 
-  const clearOneOff = useCallback(async () => {
+  /** Resolves true only when the one-off prompt was cleared. */
+  const clearOneOff = useCallback(async (): Promise<boolean> => {
     if (!targetMeetingId) {
       toast.error(NOT_READY_MESSAGE);
-      return;
+      return false;
     }
     userSelectedRef.current = true;
     try {
@@ -186,9 +192,10 @@ export function useSummaryPrompts(meetingId?: string | null) {
       });
     } catch (error) {
       toast.error(errorMessage(error, 'Could not clear the custom prompt'));
-      return;
+      return false;
     }
     await refreshFor(targetMeetingId);
+    return true;
   }, [targetMeetingId, refreshFor]);
 
   const saveFollowup = useCallback(

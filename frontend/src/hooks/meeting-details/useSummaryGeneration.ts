@@ -498,7 +498,6 @@ export function useSummaryGeneration({
   // Public API: Generate summary from transcripts
   const handleGenerateSummary = useCallback(async (
     // The prompt is resolved by the backend from the meeting's stored state (specs/0079).
-    _customPrompt: string = '',
     opts: { background?: boolean } = {},
   ) => {
     // Check if model config is still loading

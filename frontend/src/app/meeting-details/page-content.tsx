@@ -266,8 +266,8 @@ export default function PageContent({
 
   // Custom hooks
   const meetingData = useMeetingData({ meeting, summaryData, onMeetingUpdated });
-  // No explicit id: falls back to the sidebar's viewed meeting.
-  const promptsApi = useSummaryPrompts();
+  // Explicit id: the sidebar's viewed meeting can lag on deep links.
+  const promptsApi = useSummaryPrompts(meeting.id);
 
   const summaryGeneration = useSummaryGeneration({
     meeting,

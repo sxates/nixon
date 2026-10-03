@@ -69,7 +69,7 @@ describe('useSummaryPrompts', () => {
     expect(invokeMock).toHaveBeenCalledWith('api_get_meeting_prompt_state', { meetingId: REAL_ID });
   });
 
-  it('selectPrompt persists with applyToSeries = has_series, then refreshes', async () => {
+  it('selectPrompt persists with applyToSeries true, then refreshes', async () => {
     currentState = baseState({ has_series: true });
     const { result } = renderHook(() => useSummaryPrompts(REAL_ID));
     await waitFor(() => expect(result.current.state?.has_series).toBe(true));
@@ -101,9 +101,49 @@ describe('useSummaryPrompts', () => {
       expect(invokeMock).toHaveBeenCalledWith('api_set_meeting_summary_prompt', {
         meetingId: REAL_ID,
         promptId: 'p2',
-        applyToSeries: false,
+        applyToSeries: true,
       }),
     );
+  });
+
+  it('queued pick flushes with applyToSeries true', async () => {
+    const { result, rerender } = renderHook(
+      ({ id }: { id: string | null }) => useSummaryPrompts(id),
+      { initialProps: { id: null as string | null } },
+    );
+    await act(async () => {});
+    let ret: boolean | undefined;
+    await act(async () => {
+      ret = await result.current.selectPrompt('p2');
+    });
+    expect(ret).toBe(false);
+    rerender({ id: REAL_ID });
+    await waitFor(() =>
+      expect(invokeMock).toHaveBeenCalledWith('api_set_meeting_summary_prompt', {
+        meetingId: REAL_ID,
+        promptId: 'p2',
+        applyToSeries: true,
+      }),
+    );
+  });
+
+  it('selectPrompt resolves false when the backend rejects, true otherwise', async () => {
+    const { result } = renderHook(() => useSummaryPrompts(REAL_ID));
+    await waitFor(() => expect(result.current.state).not.toBeNull());
+    let ok: boolean | undefined;
+    await act(async () => {
+      ok = await result.current.selectPrompt('p2');
+    });
+    expect(ok).toBe(true);
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    invokeMock.mockImplementation((cmd: string) =>
+      cmd === 'api_set_meeting_summary_prompt' ? Promise.reject('nope') : Promise.resolve(currentState),
+    );
+    await act(async () => {
+      ok = await result.current.selectPrompt('p2');
+    });
+    expect(ok).toBe(false);
+    errSpy.mockRestore();
   });
 
   it('does not let a late state load overwrite a pick made this mount', async () => {
@@ -204,6 +244,7 @@ describe('useSummaryPrompts', () => {
 
   it('saveOneOff and saveFollowup toast and reject without a persistable id; clearOneOff toasts', async () => {
     const { result } = renderHook(() => useSummaryPrompts(null));
+    await act(async () => {});
     await expect(result.current.saveOneOff('x', true)).rejects.toBeTruthy();
     expect(toastError).toHaveBeenCalledTimes(1);
     await expect(
@@ -242,5 +283,12 @@ describe('useSummaryPrompts', () => {
     renderHook(() => useSummaryPrompts());
     await waitFor(() => expect(invokeMock).toHaveBeenCalledWith('api_list_summary_prompts'));
     expect(invokeMock).not.toHaveBeenCalledWith('api_get_meeting_prompt_state', expect.anything());
+  });
+
+  it("falls back to the sidebar's viewed meeting when no id is passed", async () => {
+    sidebarState.currentMeeting = { id: REAL_ID, title: 'Viewed' };
+    const { result } = renderHook(() => useSummaryPrompts());
+    await waitFor(() => expect(result.current.state?.prompt_id).toBe('p1'));
+    expect(invokeMock).toHaveBeenCalledWith('api_get_meeting_prompt_state', { meetingId: REAL_ID });
   });
 });

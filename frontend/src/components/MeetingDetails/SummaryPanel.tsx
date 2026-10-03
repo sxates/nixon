@@ -7,6 +7,7 @@ import { SummaryGenerating } from './SummaryGenerating';
 import { ModelConfig } from '@/components/ModelSettingsModal';
 import { SummaryToolbar } from './SummaryToolbar';
 import { useEffect, useRef, useState, RefObject } from 'react';
+import { toast } from 'sonner';
 import { AlertTriangle, Loader2 } from 'lucide-react';
 import { useDiarizationActive } from '@/hooks/useDiarizationActive';
 import { Button } from '@/components/ui/button';
@@ -43,7 +44,7 @@ interface SummaryPanelProps {
   modelConfig: ModelConfig;
   setModelConfig: (config: ModelConfig | ((prev: ModelConfig) => ModelConfig)) => void;
   onSaveModelConfig: (config?: ModelConfig) => Promise<void>;
-  onGenerateSummary: (customPrompt: string) => Promise<void>;
+  onGenerateSummary: () => Promise<void>;
   onStopGeneration: () => void;
   onSaveSummary: (summary: Summary | { markdown?: string; summary_json?: any[] }) => Promise<void>;
   onSummaryChange: (summary: Summary) => void;
@@ -124,7 +125,11 @@ export function SummaryPanel({
 
   const hasExistingSummary = !!aiSummary && !isSummaryLoading;
 
+  const dismissPending = () => setPendingPrompt(null);
+
   const handlePromptSelect = (promptId: string, promptName: string) => {
+    // Any new pick invalidates a previously armed regeneration.
+    setRegenerateArmedId(null);
     if (shouldConfirmPromptChange(promptId, promptState, hasExistingSummary)) {
       setPendingPrompt({ id: promptId, name: promptName });
       return;
@@ -136,8 +141,9 @@ export function SummaryPanel({
     if (!pendingPrompt) return;
     const { id } = pendingPrompt;
     setPendingPrompt(null);
-    await selectPrompt(id);
-    setRegenerateArmedId(id);
+    // Arm only when the pick actually persisted; a failed pick must not leave a
+    // stale arm that a later successful pick would fire a second time.
+    if (await selectPrompt(id)) setRegenerateArmedId(id);
   };
 
   useEffect(() => {
@@ -152,7 +158,9 @@ export function SummaryPanel({
     onPromptSelect: handlePromptSelect,
     onCustomPrompt: () => setCustomFlowOpen(true),
     onClearCustomPrompt: () => {
-      void clearOneOff();
+      void clearOneOff().then((cleared) => {
+        if (cleared) toast.info('Regenerate to apply');
+      });
     },
   };
 
@@ -255,7 +263,7 @@ export function SummaryPanel({
           </div>
           {/* Empty state message */}
           <EmptyStateSummary
-            onGenerate={() => onGenerateSummary('')}
+            onGenerate={() => onGenerateSummary()}
             hasModel={modelConfig.provider !== null && modelConfig.model !== null}
             isGenerating={isSummaryLoading}
           />
@@ -331,7 +339,7 @@ export function SummaryPanel({
       <Dialog
         open={!!pendingPrompt}
         onOpenChange={(next) => {
-          if (!next) setPendingPrompt(null);
+          if (!next) dismissPending();
         }}
       >
         <DialogContent className="max-w-md">
@@ -343,7 +351,7 @@ export function SummaryPanel({
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setPendingPrompt(null)}>
+            <Button variant="outline" onClick={dismissPending}>
               Cancel
             </Button>
             <Button variant="brand" onClick={() => void handleConfirmRegenerate()} disabled={!pendingPrompt}>
