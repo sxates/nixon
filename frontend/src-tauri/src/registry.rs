@@ -192,6 +192,15 @@ pub fn invoke_handler() -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Sen
         summary::template_commands::api_set_template_hidden,
         summary::template_commands::api_suggest_template_for_title,
         summary::template_commands::api_clear_summary_outline,
+        // Summary prompts (specs/0079)
+        summary::prompt_commands::api_list_summary_prompts,
+        summary::prompt_commands::api_save_summary_prompt,
+        summary::prompt_commands::api_delete_summary_prompt,
+        summary::prompt_commands::api_set_default_summary_prompt,
+        summary::prompt_commands::api_get_meeting_prompt_state,
+        summary::prompt_commands::api_set_meeting_summary_prompt,
+        summary::prompt_commands::api_set_meeting_custom_prompt,
+        summary::prompt_commands::api_save_custom_prompt_followup,
         // Built-in AI commands
         summary::summary_engine::commands::builtin_ai_list_models,
         summary::summary_engine::commands::builtin_ai_get_model_info,
