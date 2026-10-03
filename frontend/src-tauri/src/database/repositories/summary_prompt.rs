@@ -297,6 +297,31 @@ impl SummaryPromptRepository {
         Ok(res.rows_affected() > 0)
     }
 
+    /// First free library name: `base`, then `base 2`, `base 3`, ... (case-insensitive),
+    /// never longer than `MAX_NAME_CHARS` (the base is truncated to fit the suffix).
+    pub async fn unique_name(pool: &SqlitePool, base: &str) -> Result<String> {
+        use crate::summary::prompt_sanitize::MAX_NAME_CHARS;
+        let base: String = base.chars().take(MAX_NAME_CHARS).collect();
+        let mut candidate = base.clone();
+        let mut n = 2usize;
+        loop {
+            let taken: Option<i64> = sqlx::query_scalar(
+                "SELECT 1 FROM summary_prompts WHERE name = ? COLLATE NOCASE AND in_library = 1",
+            )
+            .bind(&candidate)
+            .fetch_optional(pool)
+            .await?;
+            if taken.is_none() {
+                return Ok(candidate);
+            }
+            let suffix = format!(" {n}");
+            let keep = MAX_NAME_CHARS - suffix.chars().count();
+            let head: String = base.chars().take(keep).collect();
+            candidate = format!("{}{}", head.trim_end(), suffix);
+            n += 1;
+        }
+    }
+
     pub async fn get_meta(pool: &SqlitePool, key: &str) -> Result<Option<String>> {
         Ok(
             sqlx::query_scalar("SELECT value FROM summary_prompts_meta WHERE key = ?")
@@ -464,6 +489,44 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(f.custom_summary_prompt, None);
+    }
+
+    #[tokio::test]
+    async fn unique_name_suffixes_collisions_case_insensitively_within_limit() {
+        let pool = memory_db().await;
+        assert_eq!(
+            SummaryPromptRepository::unique_name(&pool, "Standup")
+                .await
+                .unwrap(),
+            "Standup"
+        );
+        SummaryPromptRepository::create(&pool, "Standup", "x", true, true)
+            .await
+            .unwrap();
+        assert_eq!(
+            SummaryPromptRepository::unique_name(&pool, "standup")
+                .await
+                .unwrap(),
+            "standup 2"
+        );
+        SummaryPromptRepository::create(&pool, "Standup 2", "x", true, true)
+            .await
+            .unwrap();
+        assert_eq!(
+            SummaryPromptRepository::unique_name(&pool, "Standup")
+                .await
+                .unwrap(),
+            "Standup 3"
+        );
+        let long = "x".repeat(60);
+        SummaryPromptRepository::create(&pool, &long, "x", true, true)
+            .await
+            .unwrap();
+        let got = SummaryPromptRepository::unique_name(&pool, &long)
+            .await
+            .unwrap();
+        assert_eq!(got.chars().count(), 60);
+        assert!(got.ends_with(" 2"), "{got}");
     }
 
     #[test]

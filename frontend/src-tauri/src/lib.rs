@@ -382,6 +382,23 @@ pub fn run() {
                 log::warn!("Failed to resolve resource directory for templates");
             }
 
+            // specs/0079: one-time template -> saved prompt conversion. Needs the DB pool
+            // (absent during first-launch onboarding; the next launch converts) and the
+            // bundled templates dir set above. Never blocks startup; unset marker retries.
+            if let Some(app_state) = _app.try_state::<state::AppState>() {
+                let pool = app_state.db_manager.pool().clone();
+                tauri::async_runtime::spawn(async move {
+                    match summary::prompt_migration::convert_templates_once(&pool).await {
+                        Ok(Some(r)) => log::info!(
+                            "Converted summary templates to prompts: {} prompts, {} meetings mapped, {} skipped",
+                            r.prompts_created, r.meetings_mapped, r.skipped.len()
+                        ),
+                        Ok(None) => {}
+                        Err(e) => log::error!("Template to prompt conversion failed (will retry next launch): {e:#}"),
+                    }
+                });
+            }
+
             Ok(())
         })
         .on_window_event(|window, event| {

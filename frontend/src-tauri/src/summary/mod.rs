@@ -42,6 +42,7 @@ pub mod llm_wire;
 pub(crate) mod metadata;
 pub mod outline;
 pub mod processor;
+pub mod prompt_migration;
 pub mod prompt_sanitize;
 pub mod prompts_resolve;
 pub mod prompts;
