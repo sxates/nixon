@@ -87,12 +87,30 @@ pub async fn convert_templates_once(pool: &SqlitePool) -> Result<Option<Conversi
     let mut id_map: HashMap<String, String> = HashMap::new();
 
     // Auto preset first, so it exists (and becomes the default) before anything else.
-    let auto_name = SummaryPromptRepository::unique_name(pool, AUTO_PRESET_NAME).await?;
-    let auto =
-        SummaryPromptRepository::create(pool, &auto_name, AUTO_PRESET_BODY, true, true).await?;
-    SummaryPromptRepository::set_default(pool, &auto.id).await?;
+    // A crash between the writes below and the marker must not duplicate it on the retry:
+    // reuse a library prompt that already carries the preset's name.
+    let existing = SummaryPromptRepository::list(pool).await?;
+    let auto = match existing
+        .iter()
+        .find(|p| p.in_library && p.name.eq_ignore_ascii_case(AUTO_PRESET_NAME))
+    {
+        Some(found) => {
+            if SummaryPromptRepository::get_default(pool).await?.is_none() {
+                SummaryPromptRepository::set_default(pool, &found.id).await?;
+            }
+            found.clone()
+        }
+        None => {
+            let auto_name = SummaryPromptRepository::unique_name(pool, AUTO_PRESET_NAME).await?;
+            let created =
+                SummaryPromptRepository::create(pool, &auto_name, AUTO_PRESET_BODY, true, true)
+                    .await?;
+            SummaryPromptRepository::set_default(pool, &created.id).await?;
+            report.prompts_created += 1;
+            created
+        }
+    };
     id_map.insert(AUTO_ID.into(), auto.id.clone());
-    report.prompts_created += 1;
 
     let dir = custom_templates_dir();
     for id in select_templates(list_ids_in(&dir), &hidden_ids_in(&dir), &referenced) {
@@ -109,14 +127,23 @@ pub async fn convert_templates_once(pool: &SqlitePool) -> Result<Option<Conversi
         let body = sanitize_prompt_body(&rendered)
             .unwrap_or_else(|_| rendered.chars().take(MAX_PROMPT_CHARS).collect());
         let created = async {
+            // Crash-safe retry: an identical (name AND body) prompt from an interrupted
+            // earlier run is reused instead of creating a "... 2" duplicate.
+            let existing = SummaryPromptRepository::list(pool).await?;
+            if let Some(same) = existing.iter().find(|p| p.name == base && p.body == body) {
+                return Ok((same.id.clone(), false));
+            }
             let name = SummaryPromptRepository::unique_name(pool, &base).await?;
-            SummaryPromptRepository::create(pool, &name, &body, true, true).await
+            let p = SummaryPromptRepository::create(pool, &name, &body, true, true).await?;
+            Ok::<_, anyhow::Error>((p.id, true))
         }
         .await;
         match created {
-            Ok(p) => {
-                id_map.insert(id, p.id);
-                report.prompts_created += 1;
+            Ok((prompt_id, is_new)) => {
+                id_map.insert(id, prompt_id);
+                if is_new {
+                    report.prompts_created += 1;
+                }
             }
             Err(e) => {
                 warn!("Skipping template '{id}' during prompt conversion: {e:#}");
@@ -401,6 +428,104 @@ mod tests {
                 .unwrap()
                 .as_deref(),
             Some("1")
+        );
+    }
+
+    #[tokio::test]
+    async fn rerun_without_marker_does_not_duplicate_and_keeps_default_and_mapping() {
+        let pool = memory_db().await;
+        let meeting = MeetingsRepository::create_meeting(
+            &pool,
+            Some("M".into()),
+            None,
+            None,
+            None,
+            Some(Utc::now()),
+        )
+        .await
+        .unwrap();
+        sqlx::query("UPDATE meetings SET template_id = 'standard_meeting' WHERE id = ?")
+            .bind(&meeting)
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        convert_templates_once(&pool).await.unwrap().unwrap();
+        let first = SummaryPromptRepository::list(&pool).await.unwrap();
+        let first_default = SummaryPromptRepository::get_default(&pool)
+            .await
+            .unwrap()
+            .unwrap()
+            .id;
+        let first_map = SummaryPromptRepository::meeting_fields(&pool, &meeting)
+            .await
+            .unwrap()
+            .unwrap()
+            .summary_prompt_id;
+        assert!(first_map.is_some());
+
+        // Simulate a crash between the writes and the marker.
+        sqlx::query("DELETE FROM summary_prompts_meta WHERE key = ?")
+            .bind(MARKER)
+            .execute(&pool)
+            .await
+            .unwrap();
+        let report = convert_templates_once(&pool).await.unwrap().unwrap();
+        assert_eq!(report.prompts_created, 0);
+
+        let second = SummaryPromptRepository::list(&pool).await.unwrap();
+        assert_eq!(second.len(), first.len(), "duplicates: {second:?}");
+        assert!(second.iter().all(|p| !p.name.ends_with(" 2")));
+        assert_eq!(
+            SummaryPromptRepository::get_default(&pool)
+                .await
+                .unwrap()
+                .unwrap()
+                .id,
+            first_default
+        );
+        assert_eq!(
+            SummaryPromptRepository::meeting_fields(&pool, &meeting)
+                .await
+                .unwrap()
+                .unwrap()
+                .summary_prompt_id,
+            first_map
+        );
+    }
+
+    #[tokio::test]
+    async fn existing_auto_preset_is_reused_and_made_default_when_none() {
+        let pool = memory_db().await;
+        let mine = SummaryPromptRepository::create(
+            &pool,
+            &AUTO_PRESET_NAME.to_uppercase(),
+            "whatever",
+            true,
+            true,
+        )
+        .await
+        .unwrap();
+        sqlx::query("UPDATE summary_prompts SET is_default = 0")
+            .execute(&pool)
+            .await
+            .unwrap();
+        convert_templates_once(&pool).await.unwrap().unwrap();
+        let prompts = SummaryPromptRepository::list(&pool).await.unwrap();
+        assert_eq!(
+            prompts
+                .iter()
+                .filter(|p| p.name.eq_ignore_ascii_case(AUTO_PRESET_NAME))
+                .count(),
+            1
+        );
+        assert_eq!(
+            SummaryPromptRepository::get_default(&pool)
+                .await
+                .unwrap()
+                .unwrap()
+                .id,
+            mine.id
         );
     }
 }

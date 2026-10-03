@@ -106,18 +106,31 @@ pub fn list_ids_in(dir: &Path) -> Vec<String> {
     ids.into_iter().collect()
 }
 
-/// Load a template: a custom file in `dir` wins over the built-in of the same id.
-pub fn get_in(dir: &Path, id: &str) -> Result<Template, String> {
-    let json = match std::fs::read_to_string(dir.join(format!("{id}.json"))) {
-        Ok(content) => content,
-        Err(_) => builtin_json(id)
-            .map(str::to_string)
-            .ok_or_else(|| format!("Template '{id}' not found"))?,
-    };
+fn parse_and_validate(json: &str) -> Result<Template, String> {
     let t: Template =
-        serde_json::from_str(&json).map_err(|e| format!("Failed to parse template JSON: {e}"))?;
+        serde_json::from_str(json).map_err(|e| format!("Failed to parse template JSON: {e}"))?;
     t.validate()?;
     Ok(t)
+}
+
+/// Load a template: a valid custom file in `dir` wins over the built-in of the same id.
+/// A custom file that is unparsable or invalid never hides a built-in: it falls back to the
+/// embedded copy (only the id is logged, never the file's contents).
+pub fn get_in(dir: &Path, id: &str) -> Result<Template, String> {
+    if let Ok(json) = std::fs::read_to_string(dir.join(format!("{id}.json"))) {
+        match parse_and_validate(&json) {
+            Ok(t) => return Ok(t),
+            Err(e) => {
+                let Some(builtin) = builtin_json(id) else {
+                    return Err(e);
+                };
+                log::warn!("Custom template '{id}' is invalid; using the built-in instead");
+                return parse_and_validate(builtin);
+            }
+        }
+    }
+    let builtin = builtin_json(id).ok_or_else(|| format!("Template '{id}' not found"))?;
+    parse_and_validate(builtin)
 }
 
 /// Hidden ids from `dir`'s sidecar; missing or corrupt means nothing is hidden.
@@ -151,5 +164,25 @@ mod tests {
         assert!(get_in(p, "nope").is_err());
         assert!(hidden_ids_in(p).contains("extra"));
         assert!(hidden_ids_in(&p.join("missing")).is_empty());
+    }
+
+    #[test]
+    fn corrupt_override_of_a_builtin_falls_back_to_the_builtin() {
+        let dir = tempfile::tempdir().unwrap();
+        let p = dir.path();
+        std::fs::write(p.join("standard_meeting.json"), "{ not json").unwrap();
+        // Parses but fails validation (no sections).
+        std::fs::write(
+            p.join("daily_standup.json"),
+            r#"{"name":"X","description":"d","sections":[]}"#,
+        )
+        .unwrap();
+        let std = get_in(p, "standard_meeting").unwrap();
+        assert!(!std.sections.is_empty());
+        let standup = get_in(p, "daily_standup").unwrap();
+        assert_ne!(standup.name, "X");
+        // A corrupt file for a non-builtin id is still an error.
+        std::fs::write(p.join("extra.json"), "{ not json").unwrap();
+        assert!(get_in(p, "extra").is_err());
     }
 }

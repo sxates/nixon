@@ -47,7 +47,8 @@ impl fmt::Display for PromptError {
 impl std::error::Error for PromptError {}
 
 /// Characters removed from prompts: C0/C1 controls (except `\n`, `\t`), bidi overrides and
-/// isolates, zero-width characters and the BOM.
+/// isolates, zero-width characters, the BOM, Unicode TAG characters, the soft hyphen, the
+/// Mongolian vowel separator and the line/paragraph separators.
 fn is_stripped(c: char) -> bool {
     if c == '\n' || c == '\t' {
         return false;
@@ -61,6 +62,11 @@ fn is_stripped(c: char) -> bool {
                 | '\u{2066}'..='\u{2069}'
                 | '\u{061C}'
                 | '\u{FEFF}'
+                | '\u{E0000}'..='\u{E007F}'
+                | '\u{00AD}'
+                | '\u{180E}'
+                | '\u{2028}'
+                | '\u{2029}'
         )
 }
 
@@ -286,5 +292,23 @@ mod tests {
         );
         // Garbage-only values degrade to empty (the resolver falls back).
         assert_eq!(prompt_for_request("\u{200B}\u{202E}  "), "");
+    }
+
+    #[test]
+    fn strips_tag_characters_soft_hyphen_mvs_and_line_separators() {
+        for (label, ch) in [
+            ("tag", '\u{E0041}'),
+            ("tag-range-start", '\u{E0000}'),
+            ("tag-range-end", '\u{E007F}'),
+            ("soft hyphen", '\u{00AD}'),
+            ("mongolian vowel separator", '\u{180E}'),
+            ("line separator", '\u{2028}'),
+            ("paragraph separator", '\u{2029}'),
+        ] {
+            let body = sanitize_prompt_body(&format!("ab{ch}cd")).unwrap();
+            assert_eq!(body, "abcd", "{label} survived in body");
+            let name = sanitize_prompt_name(&format!("ab{ch}cd")).unwrap();
+            assert_eq!(name, "abcd", "{label} survived in name");
+        }
     }
 }

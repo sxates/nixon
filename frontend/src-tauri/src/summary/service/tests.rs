@@ -226,6 +226,9 @@ fn cache_source_ignores_action_items_flag() {
 /// (`Ok(None)` -> full regeneration), never panic and never reuse the cache.
 #[test]
 fn old_shaped_cached_source_is_a_cache_miss_not_an_error() {
+    // DELIBERATE old-shape fixture (backward compatibility): cache sources written before
+    // specs/0079 carry `template_id` / `template_fingerprint` and must decode as a cache
+    // miss, never as an error. Do not "modernize" this JSON.
     let raw = serde_json::json!({
         "markdown": "traduit",
         "english_cache": {

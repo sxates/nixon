@@ -21,7 +21,7 @@ pub struct MeetingModel {
     /// must not overwrite it. SQLite stores 0/1; sqlx decodes to bool. Defaults to false.
     #[serde(default)]
     pub title_manually_set: bool,
-    // legacy (specs/0079): unused; read only by the one-time prompt conversion
+    // legacy (specs/0079): unused; column kept, row decodes it
     #[serde(default)]
     #[sqlx(default)]
     pub template_id: Option<String>,
