@@ -77,3 +77,42 @@ async fn resolver_follows_series_across_meetings() {
     let r = resolve_summary_prompt(pool, &other).await;
     assert_eq!(r.source, PromptSource::Default);
 }
+
+#[tokio::test]
+async fn final_system_prompt_embeds_resolved_one_off_prompt() {
+    let (_dir, db) = fresh_db().await;
+    let pool = db.pool();
+    let meeting =
+        MeetingsRepository::create_meeting(pool, Some("Standup".into()), None, None, None, None)
+            .await
+            .unwrap();
+    SummaryPromptRepository::set_meeting_custom_prompt(
+        pool,
+        &meeting,
+        Some("Write exactly three bullets"),
+        true,
+    )
+    .await
+    .unwrap();
+
+    let resolved = resolve_summary_prompt(pool, &meeting).await;
+    assert_eq!(resolved.source, PromptSource::Custom);
+    let system = app_lib::summary::prompts::build_final_synthesis_system_prompt(
+        &resolved.body,
+        "depth guidance",
+        false,
+        false,
+        false,
+    );
+    assert!(system
+        .contains("<summary_instructions>\nWrite exactly three bullets\n</summary_instructions>"));
+}
+
+/// A prompt that drops the title line must not rename the meeting or crash.
+#[test]
+fn markdown_without_title_line_yields_no_meeting_name() {
+    assert_eq!(
+        app_lib::summary::extract_meeting_name_from_markdown("## Decisions\n- ship it"),
+        None
+    );
+}

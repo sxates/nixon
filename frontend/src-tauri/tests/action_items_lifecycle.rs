@@ -1015,3 +1015,61 @@ async fn zero_candidate_run_without_pristine_rows_writes_ledger() {
         "ledger advances when there was nothing pristine to protect"
     );
 }
+
+/// specs/0079: a summary prompt with action items turned off records a SKIPPED
+/// `ActionItems` task (never silent, specs/0052) and writes no `action_items` rows.
+/// With `extract_enabled == false` the function returns before any LLM call, so the
+/// provider config below is never used.
+#[tokio::test]
+async fn extraction_is_skipped_and_recorded_when_disabled() {
+    use app_lib::llm_activity::registry::TaskOutcome;
+    use app_lib::llm_activity::{LlmActivityState, LlmTaskRegistry, TaskKind};
+    use app_lib::summary::provider_config::ProviderConfig;
+    use app_lib::summary::LLMProvider;
+    use std::sync::Arc;
+    use tauri::Manager;
+
+    let (_dir, db) = fresh_db().await;
+    let pool = db.pool();
+    let meeting_id = create_meeting(pool).await;
+
+    let reg = Arc::new(LlmTaskRegistry::new());
+    let app = tauri::test::mock_app();
+    app.handle().manage(LlmActivityState(Arc::clone(&reg)));
+
+    let provider_config = ProviderConfig {
+        provider: LLMProvider::Ollama,
+        model_provider: "ollama".to_string(),
+        model_name: "unused".to_string(),
+        api_key: String::new(),
+        ollama_endpoint: None,
+        custom_openai_endpoint: None,
+        custom_openai_max_tokens: None,
+        custom_openai_temperature: None,
+        custom_openai_top_p: None,
+    };
+
+    app_lib::action_items::run_background_extraction(
+        app.handle(),
+        pool,
+        &meeting_id,
+        false,
+        "## Action Items\n- send the deck to Alice",
+        None,
+        &provider_config,
+    )
+    .await;
+
+    let view = reg.view();
+    assert_eq!(view.history.len(), 1, "exactly one skipped record");
+    assert!(matches!(view.history[0].kind, TaskKind::ActionItems));
+    assert!(matches!(
+        view.history[0].outcome,
+        TaskOutcome::Skipped { .. }
+    ));
+    assert!(!view.has_failure, "a skip is not a failure");
+    assert!(
+        items(pool, &meeting_id).await.is_empty(),
+        "no action_items rows may be written when extraction is off"
+    );
+}

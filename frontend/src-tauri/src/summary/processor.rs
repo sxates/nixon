@@ -1,5 +1,4 @@
 use crate::summary::llm_client::{generate_summary, LLMProvider};
-use crate::summary::outline::{Outline, TemplateChoice};
 use crate::summary::prompts::{
     build_chunk_summary_user_prompt, build_combine_summary_user_prompt,
     build_final_synthesis_system_prompt, build_user_notes_block,
@@ -603,13 +602,8 @@ fn is_valid_meeting_title(title: &str) -> bool {
 /// * `model_name` - Specific model name
 /// * `api_key` - API key for the provider
 /// * `text` - Full transcript text to summarize
-/// * `custom_prompt` - Optional user-provided context
-/// * `template_id` - Template identifier (e.g., "daily_standup", "standard_meeting"),
-///   used for logging and cache identity even when `template_choice` is `DeriveAuto`.
-/// * `template_choice` - Either a resolved [`Template`](crate::summary::templates::Template)
-///   (`Fixed`) or a request to derive one from content mid-pipeline (`DeriveAuto`,
-///   specs/0053 W3). Resolved AFTER the map/reduce collapse so a long meeting's
-///   derivation reads the reduced text, not the raw transcript.
+/// * `summary_instructions` - The user's free-form summary prompt (specs/0079). Must
+///   already be sanitized and delimiter-escaped (`ResolvedPrompt.body`).
 /// * `token_threshold` - Token limit for single-pass processing (default 4000)
 /// * `ollama_endpoint` - Optional custom Ollama endpoint
 /// * `custom_openai_endpoint` - Optional custom OpenAI-compatible endpoint
@@ -623,8 +617,8 @@ fn is_valid_meeting_title(title: &str) -> bool {
 /// * `cached_english` - Optional previously-generated English summary to skip pass 1 when translating
 /// * `user_notes` - Optional manual notes the user took during the meeting; when
 ///   present and non-empty they are injected into the FINAL synthesis pass as
-///   high-priority, authoritative grounding (notes inform content; the template
-///   still governs structure). Kept whole — never chunked per-transcript-chunk.
+///   high-priority, authoritative grounding (notes inform content; the summary
+///   instructions still govern structure). Kept whole — never chunked per-transcript-chunk.
 /// * `transcript_has_speakers` - true when `text` is speaker-attributed (each line
 ///   prefixed with a resolved display name from diarization, specs/0010). When set,
 ///   the FINAL synthesis pass also gets [`SPEAKER_ATTRIBUTION_INSTRUCTIONS`] so the
@@ -639,15 +633,13 @@ fn is_valid_meeting_title(title: &str) -> bool {
 ///   `transcript_has_speakers` is true (roles key on speaker display names).
 ///
 /// # Returns
-/// Tuple of `(final_summary_markdown, english_summary_markdown, chunk_accounting, derived_outline)`:
+/// Tuple of `(final_summary_markdown, english_summary_markdown, chunk_accounting)`:
 /// - `english_summary_markdown` is the canonical AI-generated English summary
 ///   (equals `final_summary_markdown` when the target language is English).
 /// - `chunk_accounting` reports how many map-pass chunks were attempted, processed,
 ///   and **failed** (dropped after retries). When `failed > 0` the report is
 ///   *partial* — the caller MUST surface that to the user rather than presenting it
 ///   as complete. Single-pass and cached summaries report `ChunkAccounting::single_pass()`.
-/// - `derived_outline` is `Some` only for `DeriveAuto` when reached (not the cached-English
-///   fast path) and derivation succeeded (`Outline::derived`) — never on fallback (specs/0053 W3, I2).
 #[allow(clippy::too_many_arguments)]
 pub async fn generate_meeting_summary(
     client: &Client,
@@ -655,9 +647,7 @@ pub async fn generate_meeting_summary(
     model_name: &str,
     api_key: &str,
     text: &str,
-    custom_prompt: &str,
-    template_id: &str,
-    template_choice: TemplateChoice<'_>,
+    summary_instructions: &str,
     token_threshold: usize,
     ollama_endpoint: Option<&str>,
     custom_openai_endpoint: Option<&str>,
@@ -672,7 +662,7 @@ pub async fn generate_meeting_summary(
     user_notes: Option<&str>,
     transcript_has_speakers: bool,
     role_preamble: Option<&str>,
-) -> Result<(String, String, ChunkAccounting, Option<Outline>), String> {
+) -> Result<(String, String, ChunkAccounting), String> {
     if let Some(token) = cancellation_token {
         if token.is_cancelled() {
             return Err("Summary generation was cancelled".to_string());
@@ -686,14 +676,14 @@ pub async fn generate_meeting_summary(
     let total_tokens = rough_token_count(text);
     info!("Transcript length: {} tokens", total_tokens);
 
-    let (mut english_markdown, accounting, derived_outline) = if let Some(cached) =
+    let (mut english_markdown, accounting) = if let Some(cached) =
         resolve_cached_english(cached_english, summary_language)
     {
         info!(
             "✓ Using cached English summary ({} chars), skipping pass 1",
             cached.len()
         );
-        (cached.to_string(), ChunkAccounting::single_pass(), None)
+        (cached.to_string(), ChunkAccounting::single_pass())
     } else {
         let content_to_summarize: String;
         let accounting: ChunkAccounting;
@@ -829,39 +819,6 @@ pub async fn generate_meeting_summary(
             };
         }
 
-        // specs/0053 W3: Auto derives its section list HERE, after the map/reduce collapse
-        // (a long meeting reads the reduced text, not the transcript) — below is identical either way.
-        let (template, derived_outline) = match template_choice {
-            TemplateChoice::Fixed(t) => (t.clone(), None),
-            TemplateChoice::DeriveAuto => {
-                let outline = crate::summary::outline::derive_outline(
-                    client,
-                    provider,
-                    model_name,
-                    api_key,
-                    &content_to_summarize,
-                    ollama_endpoint,
-                    custom_openai_endpoint,
-                    app_data_dir,
-                    cancellation_token,
-                )
-                .await;
-                let template = crate::summary::outline::to_template(&outline);
-                // specs/0053 I2: don't persist a fallback as if it were real —
-                // that would pin the meeting to it forever; retry next run.
-                (template, outline.derived.then_some(outline))
-            }
-        };
-
-        info!(
-            "Generating final markdown report with template: {}",
-            template_id
-        );
-
-        // Generate markdown structure and section instructions using template methods
-        let clean_template_markdown = template.to_markdown_structure();
-        let section_instructions = template.to_section_instructions();
-
         // Notes-aware summary (spec 0003 pivot): when the user took their own
         // notes, fold the anti-hallucination grounding instructions into the
         // FINAL system prompt and include the notes WHOLE in the final user
@@ -888,8 +845,7 @@ pub async fn generate_meeting_summary(
         // (not the chunk-reduced text), so a long meeting that went through
         // map-reduce still asks for a detailed report.
         let final_system_prompt = build_final_synthesis_system_prompt(
-            &section_instructions,
-            &clean_template_markdown,
+            summary_instructions,
             &length_guidance(total_tokens),
             user_notes.is_some(),
             transcript_has_speakers,
@@ -903,18 +859,14 @@ pub async fn generate_meeting_summary(
             Some(preamble) => format!("{preamble}\n\n{content_to_summarize}"),
             None => content_to_summarize,
         };
+        let content_to_summarize =
+            crate::summary::prompt_sanitize::neutralize_delimiters(&content_to_summarize);
 
         let mut final_user_prompt =
             format!("<transcript_chunks>\n{content_to_summarize}\n</transcript_chunks>\n");
 
         if let Some(notes) = user_notes {
             final_user_prompt.push_str(&build_user_notes_block(notes));
-        }
-
-        if !custom_prompt.is_empty() {
-            final_user_prompt.push_str("\n\nUser Provided Context:\n\n<user_context>\n");
-            final_user_prompt.push_str(custom_prompt);
-            final_user_prompt.push_str("\n</user_context>");
         }
 
         // Check cancellation before final summary generation
@@ -945,7 +897,7 @@ pub async fn generate_meeting_summary(
         let english_markdown = clean_llm_markdown_output(&raw_markdown);
         info!("Summary pass completed ({} chars)", english_markdown.len());
 
-        (english_markdown, accounting, derived_outline)
+        (english_markdown, accounting)
     };
 
     let final_markdown = match resolve_final_language_action(
@@ -1011,12 +963,7 @@ pub async fn generate_meeting_summary(
             accounting.processed, accounting.total, accounting.failed
         );
     }
-    Ok((
-        final_markdown,
-        english_markdown,
-        accounting,
-        derived_outline,
-    ))
+    Ok((final_markdown, english_markdown, accounting))
 }
 
 /// Hierarchical (recursive) reduce of chunk summaries into a single combined summary.
