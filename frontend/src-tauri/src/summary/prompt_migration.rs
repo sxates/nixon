@@ -132,15 +132,41 @@ pub async fn convert_templates_once(pool: &SqlitePool) -> Result<Option<Conversi
     for (meeting_id, template_id) in rows {
         if let Some(prompt_id) = id_map.get(template_id.trim()) {
             if *prompt_id != auto.id {
-                SummaryPromptRepository::set_meeting_prompt_id(pool, &meeting_id, Some(prompt_id))
-                    .await?;
-                report.meetings_mapped += 1;
+                match SummaryPromptRepository::set_meeting_prompt_id(
+                    pool,
+                    &meeting_id,
+                    Some(prompt_id),
+                )
+                .await
+                {
+                    Ok(_) => report.meetings_mapped += 1,
+                    Err(e) => warn!("Failed to map meeting {meeting_id} to a prompt: {e:#}"),
+                }
             }
         }
     }
     // Marker last: a failure above leaves it unset so the next launch retries.
     SummaryPromptRepository::set_meta(pool, MARKER, "1").await?;
     Ok(Some(report))
+}
+
+/// Fire-and-forget conversion for startup and the fresh-install / legacy-import command
+/// paths. Marker-idempotent, so calling it from several places is safe. Never blocks.
+pub fn spawn_conversion(pool: SqlitePool) {
+    tauri::async_runtime::spawn(async move {
+        match convert_templates_once(&pool).await {
+            Ok(Some(r)) => log::info!(
+                "Converted summary templates to prompts: {} prompts, {} meetings mapped, {} skipped",
+                r.prompts_created,
+                r.meetings_mapped,
+                r.skipped.len()
+            ),
+            Ok(None) => {}
+            Err(e) => log::error!(
+                "Template to prompt conversion failed (will retry next launch): {e:#}"
+            ),
+        }
+    });
 }
 
 #[cfg(test)]
@@ -322,6 +348,16 @@ mod tests {
             names.contains(&"Standard Meeting Notes 2".to_string()),
             "{names:?}"
         );
+    }
+
+    #[tokio::test]
+    async fn repeated_calls_do_not_duplicate_prompts() {
+        let pool = memory_db().await;
+        convert_templates_once(&pool).await.unwrap().unwrap();
+        let n = SummaryPromptRepository::list(&pool).await.unwrap().len();
+        assert!(convert_templates_once(&pool).await.unwrap().is_none());
+        assert!(convert_templates_once(&pool).await.unwrap().is_none());
+        assert_eq!(SummaryPromptRepository::list(&pool).await.unwrap().len(), n);
     }
 
     #[tokio::test]
