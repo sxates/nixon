@@ -17,7 +17,8 @@ use crate::summary::prompt_sanitize::{
     sanitize_prompt_body, sanitize_prompt_name, MAX_PROMPT_CHARS,
 };
 
-pub const AUTO_PRESET_NAME: &str = "Let the model choose the structure";
+/// Kept short: it is the label on the meeting page's prompt picker button, which truncates.
+pub const AUTO_PRESET_NAME: &str = "Auto";
 /// Same text as the resolver's fallback, so the two cannot drift.
 pub const AUTO_PRESET_BODY: &str = crate::summary::prompts_resolve::FALLBACK_PROMPT;
 
