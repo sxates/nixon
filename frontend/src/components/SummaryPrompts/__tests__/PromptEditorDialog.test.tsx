@@ -9,6 +9,7 @@ vi.mock('sonner', () => ({
 }));
 
 import { PromptEditorDialog } from '../PromptEditorDialog';
+import { PROMPT_NOTES_HINT } from '../PromptNotesHint';
 import type { SummaryPrompt } from '@/lib/summary-prompts';
 
 const existing: SummaryPrompt = {
@@ -35,6 +36,13 @@ function setup(prompt: SummaryPrompt | null = null) {
 const saveButton = () => screen.getByRole('button', { name: /^(save|create prompt)$/i });
 
 describe('PromptEditorDialog (specs/0079 W4)', () => {
+  it('tells the user they can refer to "my notes" and ties the hint to the textarea', () => {
+    setup();
+    expect(screen.getByText(PROMPT_NOTES_HINT)).toBeInTheDocument();
+    expect(PROMPT_NOTES_HINT).toContain('"my notes"');
+    expect(screen.getByLabelText('Prompt')).toHaveAccessibleDescription(PROMPT_NOTES_HINT);
+  });
+
   beforeEach(() => {
     invokeMock.mockReset();
   });

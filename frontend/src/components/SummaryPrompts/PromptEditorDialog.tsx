@@ -22,6 +22,7 @@ import {
   MAX_PROMPT_NAME_CHARS,
   type SummaryPrompt,
 } from '@/lib/summary-prompts';
+import { PromptNotesHint } from './PromptNotesHint';
 
 interface PromptEditorDialogProps {
   /** Controlled open state. */
@@ -118,11 +119,15 @@ export function PromptEditorDialog({ open, onOpenChange, prompt, onSaved }: Prom
               onChange={(e) => setBody(e.target.value)}
               placeholder="e.g. Write short bullet notes grouped by topic. Call out decisions."
               rows={10}
+              aria-describedby="summary-prompt-notes-hint"
             />
-            <div
-              className={`text-right text-xs ${overCap ? 'text-destructive' : 'text-muted-foreground'}`}
-            >
-              {`${body.length} / ${MAX_PROMPT_CHARS}`}
+            <div className="flex items-start justify-between gap-3">
+              <PromptNotesHint id="summary-prompt-notes-hint" />
+              <div
+                className={`shrink-0 text-right text-xs ${overCap ? 'text-destructive' : 'text-muted-foreground'}`}
+              >
+                {`${body.length} / ${MAX_PROMPT_CHARS}`}
+              </div>
             </div>
           </div>
 

@@ -3,6 +3,7 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import { OneOffPromptDialog } from '../OneOffPromptDialog';
+import { PROMPT_NOTES_HINT } from '../PromptNotesHint';
 
 function setup(onSubmit: (body: string, extract: boolean) => Promise<void> = vi.fn(async () => {})) {
   const onOpenChange = vi.fn();
@@ -21,6 +22,13 @@ function setup(onSubmit: (body: string, extract: boolean) => Promise<void> = vi.
 const submit = () => screen.getByRole('button', { name: 'Use for this meeting' });
 
 describe('OneOffPromptDialog (specs/0079 W4)', () => {
+  it('tells the user they can refer to "my notes" and ties the hint to the textarea', () => {
+    setup();
+    expect(screen.getByText(PROMPT_NOTES_HINT)).toBeInTheDocument();
+    expect(PROMPT_NOTES_HINT).toContain('"my notes"');
+    expect(screen.getByLabelText('Prompt')).toHaveAccessibleDescription(PROMPT_NOTES_HINT);
+  });
+
   it('disables submit when empty', () => {
     setup();
     expect(submit()).toBeDisabled();

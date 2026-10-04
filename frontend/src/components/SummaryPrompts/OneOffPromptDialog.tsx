@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { MAX_PROMPT_CHARS } from '@/lib/summary-prompts';
+import { PromptNotesHint } from './PromptNotesHint';
 
 interface OneOffPromptDialogProps {
   open: boolean;
@@ -83,11 +84,15 @@ export function OneOffPromptDialog({
               onChange={(e) => setBody(e.target.value)}
               placeholder="e.g. Focus on decisions and open questions."
               rows={8}
+              aria-describedby="one-off-prompt-notes-hint"
             />
-            <div
-              className={`text-right text-xs ${overCap ? 'text-destructive' : 'text-muted-foreground'}`}
-            >
-              {`${body.length} / ${MAX_PROMPT_CHARS}`}
+            <div className="flex items-start justify-between gap-3">
+              <PromptNotesHint id="one-off-prompt-notes-hint" />
+              <div
+                className={`shrink-0 text-right text-xs ${overCap ? 'text-destructive' : 'text-muted-foreground'}`}
+              >
+                {`${body.length} / ${MAX_PROMPT_CHARS}`}
+              </div>
             </div>
           </div>
 
