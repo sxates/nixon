@@ -282,11 +282,11 @@ impl SummaryService {
         };
         let user_notes = match (prep_notes, user_notes) {
             (Some(prep), Some(notes)) => Some(format!(
-                "## Intended agenda (what I planned to cover, written before the meeting)\n\n{prep}\n\n\
-                 ## Notes taken during the meeting\n\n{notes}"
+                "## Agenda (what I planned to cover, written before the meeting)\n\n{prep}\n\n\
+                 ## My Notes (taken during the meeting)\n\n{notes}"
             )),
             (Some(prep), None) => Some(format!(
-                "## Intended agenda (what I planned to cover, written before the meeting)\n\n{prep}"
+                "## Agenda (what I planned to cover, written before the meeting)\n\n{prep}"
             )),
             (None, notes) => notes,
         };
