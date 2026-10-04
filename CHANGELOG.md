@@ -22,6 +22,7 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 ### Changed
 
 - Summary templates are replaced by prompts. Write how you want your notes to look in plain language, keep a few favorites in Settings → Summary, or write a one-off prompt for a single meeting. Your existing templates were converted to prompts automatically, and a prompt you pick for a recurring meeting is reused for the next one. Each prompt can turn action-item extraction on or off.
+- The Prep tab is now called Agenda, and the notes tab is My Notes everywhere. In a summary prompt you can refer to them as "my notes" and "my agenda", for example "put my notes at the very top" or "list anything from my agenda that wasn't discussed". Agenda items that weren't discussed are now listed as not covered unless your prompt says otherwise.
 
 ### Internal
 

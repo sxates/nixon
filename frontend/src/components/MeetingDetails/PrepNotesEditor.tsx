@@ -53,7 +53,7 @@ export function PrepNotesEditor({ meetingId, initialMarkdown, initialJson }: Pre
       });
     } catch (error) {
       console.error('Failed to autosave prep notes:', error);
-      toast.error('Could not save your prep notes', {
+      toast.error('Could not save your agenda', {
         description: 'Your typing is kept on screen; we will retry on the next change.',
         duration: 4000,
       });
@@ -87,7 +87,7 @@ export function PrepNotesEditor({ meetingId, initialMarkdown, initialJson }: Pre
     <NoteEditor
       initialHtml={initialHtml}
       onChange={handleChange}
-      label="Prep notes — what I plan to cover"
+      label="Agenda — what I plan to cover"
       placeholder="What do you want to cover? Jot your agenda — it stays in view during the call and shapes the summary."
       className="rounded-lg border border-border bg-card px-4 pb-3 pt-3"
       bodyClassName="min-h-[180px] pb-4"

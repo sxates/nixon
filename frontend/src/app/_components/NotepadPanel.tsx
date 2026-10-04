@@ -232,7 +232,7 @@ export function NotepadPanel({
   );
 
   const isBare = variant === 'bare';
-  const label = !isBare && showHeader ? 'My notes' : undefined;
+  const label = !isBare && showHeader ? 'My Notes' : undefined;
 
   if (initialHtml === null) {
     // Brief loading window — keep layout stable, no spinner chrome.

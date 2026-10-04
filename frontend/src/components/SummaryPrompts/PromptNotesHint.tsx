@@ -8,7 +8,7 @@
  * try to).
  */
 export const PROMPT_NOTES_HINT =
-  'Your meeting notes are included automatically. Refer to them as "my notes" to direct how they\'re used, for example "lead with the decisions from my notes" or "keep my notes as their own section".';
+  'Your notes and agenda are included automatically. Refer to them as "my notes" and "my agenda" to direct how they\'re used, for example "put my notes at the very top" or "list anything from my agenda that wasn\'t discussed".';
 
 export function PromptNotesHint({ id }: { id: string }) {
   return (

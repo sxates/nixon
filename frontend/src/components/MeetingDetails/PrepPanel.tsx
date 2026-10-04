@@ -123,7 +123,7 @@ export function PrepPanel({
       setLoadError(null);
     } catch (err) {
       console.error('Failed to load prep view:', err);
-      setLoadError('We could not load the prep for this meeting. Please try again.');
+      setLoadError('We could not load the agenda for this meeting. Please try again.');
     }
   }, [meetingId, applyView]);
 
@@ -274,7 +274,7 @@ export function PrepPanel({
     return (
       <div className="flex h-40 items-center justify-center text-muted-foreground">
         <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-        <span className="text-sm">Loading prep…</span>
+        <span className="text-sm">Loading agenda…</span>
       </div>
     );
   }
@@ -282,7 +282,7 @@ export function PrepPanel({
   return (
     <div className="flex flex-col gap-8">
       {/* ── Prep notes (agenda) ───────────────────────────────────────────── */}
-      <section aria-label="Prep notes">
+      <section aria-label="Agenda">
         <PrepNotesEditor
           meetingId={meetingId}
           initialMarkdown={view.prepNotesMarkdown}
