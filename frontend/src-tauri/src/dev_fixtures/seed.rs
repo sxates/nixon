@@ -38,7 +38,6 @@ const WIPE_TABLES: &[&str] = &[
     "ask_ai_history",
     "action_item_extractions",
     "action_items",
-    "meeting_summary_outlines",
     "summary_processes",
     "meeting_notes",
     "meeting_participants",
@@ -59,7 +58,6 @@ const WIPE_TABLES: &[&str] = &[
 const MEETING_SCOPED_TABLES: &[&str] = &[
     "action_item_extractions",
     "action_items",
-    "meeting_summary_outlines",
     "summary_processes",
     "meeting_notes",
     "meeting_participants",
@@ -345,8 +343,8 @@ async fn insert_meeting_row(
     // (a `failed` meeting's identification didn't finish).
     let done = matches!(m.audio_state.as_deref(), Some("processed" | "purged"));
     let identified = (done && !m.speakers.is_empty()).then(|| start.to_rfc3339());
-    sqlx::query("INSERT INTO meetings (id, title, created_at, updated_at, folder_path, origin, template_id, title_manually_set, audio_state, speakers_identified_at) VALUES (?, ?, ?, ?, ?, 'recorded', ?, 1, ?, ?)")
-        .bind(&m.id).bind(&m.title).bind(start.to_rfc3339()).bind(start.to_rfc3339()).bind(folder_path).bind(&m.template_id)
+    sqlx::query("INSERT INTO meetings (id, title, created_at, updated_at, folder_path, origin, title_manually_set, audio_state, speakers_identified_at) VALUES (?, ?, ?, ?, ?, 'recorded', 1, ?, ?)")
+        .bind(&m.id).bind(&m.title).bind(start.to_rfc3339()).bind(start.to_rfc3339()).bind(folder_path)
         .bind(&m.audio_state).bind(identified)
         .execute(pool).await
         .with_context(|| format!("insert meetings row for {}", m.id))?;

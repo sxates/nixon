@@ -32,17 +32,14 @@ use tauri::{AppHandle, Manager};
 use tracing::{error, info, warn};
 
 use crate::database::repositories::meeting_note::MeetingNotesRepository;
-use crate::database::repositories::summary_outline::SummaryOutlineRepository;
 use crate::database::repositories::{
     meeting::MeetingsRepository, people::PeopleRepository, summary::SummaryProcessesRepository,
 };
 use crate::llm_activity::{LlmActivityState, Origin, TaskKind};
 use crate::summary::cache_key::{
     build_summary_cache_source, stable_text_fingerprint, strip_title_if_present,
-    template_cache_fingerprint,
 };
 use crate::summary::llm_client::LLMProvider;
-use crate::summary::outline::{Outline, TemplateChoice, AUTO_TEMPLATE_ID};
 use crate::summary::processor::{
     build_role_preamble, extract_meeting_name_from_markdown, generate_meeting_summary,
 };
@@ -51,7 +48,6 @@ use crate::summary::service::{
     build_summary_result_json, extract_cached_english_markdown, resolve_context_budget,
     SummaryService,
 };
-use crate::summary::templates::Template;
 
 impl SummaryService {
     /// Processes transcript in the background and generates summary
@@ -77,8 +73,6 @@ impl SummaryService {
     /// * `text` - Full transcript text
     /// * `model_provider` - LLM provider name (e.g., "ollama", "openai")
     /// * `model_name` - Specific model (e.g., "gpt-4", "llama3.2:latest")
-    /// * `custom_prompt` - Optional user-provided context
-    /// * `template_id` - Template identifier (e.g., "daily_standup", "standard_meeting")
     /// * `origin` - `Origin::Foreground` for a run the user is watching live (has its
     ///   own progress UI); `Origin::Background` for anything unattended. The caller
     ///   decides — see `summary/commands.rs`'s two call sites.
@@ -90,8 +84,6 @@ impl SummaryService {
         text: String,
         model_provider: String,
         model_name: String,
-        custom_prompt: String,
-        template_id: String,
         summary_language: Option<String>,
         origin: Origin,
     ) {
@@ -126,8 +118,6 @@ impl SummaryService {
             text,
             model_provider,
             model_name,
-            custom_prompt,
-            template_id,
             summary_language,
         )
         .await;
@@ -153,8 +143,6 @@ impl SummaryService {
         mut text: String,
         model_provider: String,
         model_name: String,
-        custom_prompt: String,
-        template_id: String,
         summary_language: Option<String>,
     ) -> Result<Option<String>, String> {
         let start_time = Instant::now();
@@ -165,6 +153,15 @@ impl SummaryService {
 
         // Register cancellation token for this meeting
         let cancellation_token = Self::register_cancellation_token(&meeting_id);
+
+        // specs/0079: one infallible resolver picks the free-form summary prompt
+        // (one-off > per-meeting > default > built-in fallback), already sanitized.
+        let resolved =
+            crate::summary::prompts_resolve::resolve_summary_prompt(&pool, &meeting_id).await;
+        info!(
+            "Summary prompt source for {meeting_id}: {:?}",
+            resolved.source
+        );
 
         // Diarization-aware transcript (specs/0010 P2 Task 9) + the resolved-name
         // fingerprint (specs/0044 WS3), from one shared loader in summary::refresh:
@@ -285,11 +282,11 @@ impl SummaryService {
         };
         let user_notes = match (prep_notes, user_notes) {
             (Some(prep), Some(notes)) => Some(format!(
-                "## Intended agenda (what I planned to cover, written before the meeting)\n\n{prep}\n\n\
-                 ## Notes taken during the meeting\n\n{notes}"
+                "## Agenda (what I planned to cover, written before the meeting)\n\n{prep}\n\n\
+                 ## My Notes (taken during the meeting)\n\n{notes}"
             )),
             (Some(prep), None) => Some(format!(
-                "## Intended agenda (what I planned to cover, written before the meeting)\n\n{prep}"
+                "## Agenda (what I planned to cover, written before the meeting)\n\n{prep}"
             )),
             (None, notes) => notes,
         };
@@ -320,70 +317,9 @@ impl SummaryService {
             info!("📝 Detected transcript summary language: {}", code);
         }
 
-        // specs/0053 W3: `auto` is a reserved id, never a file. A meeting with an
-        // already-derived outline behaves like a fixed template (same fingerprint,
-        // same cache path); otherwise this run derives one and bypasses the cache.
-        let stored_outline = if template_id == AUTO_TEMPLATE_ID {
-            SummaryOutlineRepository::get(&pool, &meeting_id)
-                .await
-                .unwrap_or_else(|e| {
-                    warn!("Failed to read the stored outline for {meeting_id}: {e:#}");
-                    None
-                })
-        } else {
-            None
-        };
-
-        let auto_template: Option<Template> = stored_outline.as_ref().and_then(|s| {
-            match serde_json::from_str::<Outline>(&s.outline_json) {
-                Ok(outline) => Some(crate::summary::outline::to_template(&outline)),
-                Err(e) => {
-                    // Privacy: never `e`'s Display — for `invalid type`/`unknown
-                    // variant`/`unknown field` it embeds the offending meeting-derived value verbatim (specs/0053 C2).
-                    warn!("Stored outline for {meeting_id} did not deserialize (category={:?}, line={}, column={}); re-deriving", e.classify(), e.line(), e.column());
-                    None
-                }
-            }
-        });
-
-        let template = match (&auto_template, template_id.as_str()) {
-            // Auto with a usable stored outline.
-            (Some(t), _) => t.clone(),
-            // Auto with nothing stored: a placeholder that is never rendered —
-            // processor.rs derives the real one. Its fingerprint deliberately
-            // will not match any cached summary.
-            (None, id) if id == AUTO_TEMPLATE_ID => {
-                crate::summary::outline::to_template(&crate::summary::outline::fallback_outline())
-            }
-            // Every fixed template: unchanged path, except a dangling id now
-            // degrades to the default (specs/0061 W6) — see
-            // `Self::resolve_fixed_template`. If even the default fails to resolve
-            // (specs/0061 review, I4 — e.g. a corrupt custom override of
-            // `standard_meeting`), fail the run the same way the pre-fallback code
-            // did rather than panicking inside this spawned background task.
-            (None, id) => match Self::resolve_fixed_template(&meeting_id, id) {
-                Ok(template) => template,
-                Err(e) => {
-                    Self::update_process_failed(&pool, &meeting_id, &e).await;
-                    return Err(e);
-                }
-            },
-        };
-
-        let will_derive = template_id == AUTO_TEMPLATE_ID && auto_template.is_none();
-
-        let template_fingerprint = if will_derive {
-            // Not yet known — force a cache miss for this run.
-            format!("auto:underived:{meeting_id}")
-        } else {
-            template_cache_fingerprint(&template)
-        };
-
         let cache_source = build_summary_cache_source(
             &text,
-            &custom_prompt,
-            &template_id,
-            &template_fingerprint,
+            &resolved.body,
             token_threshold,
             &model_provider,
             &model_name,
@@ -428,13 +364,7 @@ impl SummaryService {
             &model_name,
             &final_api_key,
             &text,
-            &custom_prompt,
-            &template_id,
-            if will_derive {
-                TemplateChoice::DeriveAuto
-            } else {
-                TemplateChoice::Fixed(&template)
-            },
+            &resolved.body,
             token_threshold,
             ollama_endpoint.as_deref(),
             custom_openai_endpoint.as_deref(),
@@ -458,28 +388,7 @@ impl SummaryService {
         Self::cleanup_cancellation_token(&meeting_id);
 
         match result {
-            Ok((final_markdown, english_markdown, accounting, derived_outline)) => {
-                // specs/0053 W3: persist before anything else consumes it — the
-                // extraction gate reads has_commitments, and the next
-                // regeneration reads the outline back to keep the shape stable.
-                if let Some(outline) = &derived_outline {
-                    match serde_json::to_string(outline) {
-                        Ok(json) => {
-                            if let Err(e) = SummaryOutlineRepository::upsert(
-                                &pool,
-                                &meeting_id,
-                                &json,
-                                outline.has_commitments,
-                            )
-                            .await
-                            {
-                                warn!("Failed to persist the outline for {meeting_id}: {e:#}");
-                            }
-                        }
-                        Err(e) => warn!("Failed to serialize the outline for {meeting_id}: {e}"),
-                    }
-                }
-
+            Ok((final_markdown, english_markdown, accounting)) => {
                 // `num_chunks` persisted to the process row = chunks that actually made it
                 // into the report (successfully processed), preserving prior semantics.
                 let num_chunks = accounting.processed;
@@ -601,12 +510,13 @@ impl SummaryService {
                     // no separate extraction provider setting) and the STORED (title-
                     // stripped) markdown, so the manual command's re-read fingerprints
                     // identically.
+                    let extract_enabled = resolved.extract_action_items;
                     tauri::async_runtime::spawn(async move {
                         crate::action_items::run_background_extraction(
                             &app,
                             &pool,
                             &meeting_id,
-                            &template_id,
+                            extract_enabled,
                             &stored_summary_markdown,
                             user_notes.as_deref(),
                             &provider_config,

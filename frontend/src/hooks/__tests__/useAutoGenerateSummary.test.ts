@@ -30,7 +30,7 @@ describe('useAutoGenerateSummary — origin (specs/0063 W3 Task 6b)', () => {
     const p = params();
     renderHook(() => useAutoGenerateSummary(p));
     await waitFor(() => expect(p.generateSummary).toHaveBeenCalled());
-    expect(p.generateSummary).toHaveBeenCalledWith('', { background: true });
+    expect(p.generateSummary).toHaveBeenCalledWith({ background: true });
   });
 
   it('still runs only once per meeting even as later transcript pages arrive', async () => {
@@ -66,7 +66,7 @@ describe('useAutoGenerateSummary — origin (specs/0063 W3 Task 6b)', () => {
     invokeMock.mockResolvedValue(true); // api_meeting_audio_available
     renderHook(() => useAutoGenerateSummary(p));
     await waitFor(() => expect(p.generateSummary).toHaveBeenCalled());
-    expect(p.generateSummary).toHaveBeenCalledWith('', { background: true });
+    expect(p.generateSummary).toHaveBeenCalledWith({ background: true });
   });
 });
 

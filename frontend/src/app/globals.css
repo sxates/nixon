@@ -395,6 +395,22 @@
     font-family: var(--font-plex-sans), "Helvetica Neue", sans-serif;
     font-size: 14px !important;
   }
+  /* Summary headings must never out-shout the meeting title above them. BlockNote sizes
+     headings from `--level` in em (h1 3em, h2 2em), which at this 14px base is 42px and 28px,
+     bigger than the 22px title (MeetingIdentityHeader). Cap the scale below the title:
+     20 / 18 / 16px. `summary-heading-scale.test.ts` fails if a heading size reaches the
+     title's size. Same element as BlockNote's own `--level`, so the em-based
+     font-size rule picks these up. */
+  .summary-doc [data-content-type="heading"][data-level="1"],
+  .summary-doc [data-content-type="heading"]:not([data-level]) {
+    --level: 20px;
+  }
+  .summary-doc [data-content-type="heading"][data-level="2"] {
+    --level: 18px;
+  }
+  .summary-doc [data-content-type="heading"][data-level="3"] {
+    --level: 16px;
+  }
   /* Remove BlockNote's 54px editor inset so the summary text aligns with the
      title/tabs/toolbar at the column's own padding edge. */
   .summary-doc .bn-editor {

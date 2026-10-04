@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 
 const { level, mode } = vi.hoisted(() => ({
   level: { rms: 0, peak: 0, peakLatched: false, mic: { rms: 0, peak: 0 }, sys: { rms: 0, peak: 0 } },
@@ -29,12 +30,18 @@ const titleEdit = {
   cancelTitleEdit: vi.fn(),
 } as unknown as React.ComponentProps<typeof RecordingHeader>['titleEdit'];
 
-const templates = { availableTemplates: [], selectedTemplate: null, handleTemplateSelection: vi.fn() } as unknown as
-  React.ComponentProps<typeof RecordingHeader>['templates'];
+const promptsApi = {
+  prompts: [],
+  state: null,
+  selectPrompt: vi.fn(),
+  saveOneOff: vi.fn(),
+  clearOneOff: vi.fn(),
+  saveFollowup: vi.fn(),
+} as unknown as React.ComponentProps<typeof RecordingHeader>['promptsApi'];
 
 function renderHeader(
   recording: boolean,
-  overrides?: Partial<React.ComponentProps<typeof RecordingHeader>['templates']>,
+  overrides?: Partial<React.ComponentProps<typeof RecordingHeader>['promptsApi']>,
 ) {
   return render(
     <RecordingHeader
@@ -42,7 +49,7 @@ function renderHeader(
       isRecordingActive={recording}
       activeRecordingMeetingId={recording ? 'm1' : null}
       titleEdit={titleEdit}
-      templates={{ ...templates, ...overrides }}
+      promptsApi={{ ...promptsApi, ...overrides }}
     />,
   );
 }
@@ -97,19 +104,19 @@ describe('RecordingHeader', () => {
     expect(screen.queryByRole('button', { name: /pause|resume|stop/i })).toBeNull();
   });
 
-  // Owner feedback 2026-09-21: "A better order: Participants, then Live, then Template" —
+  // Owner feedback 2026-09-21: "A better order: Participants, then Live, then Prompt" —
   // and the three used to be h-9 / h-9 / h-7, so the row stepped. Asserted on DOM order
   // rather than coordinates so it survives a restyle.
   //
   // The middle control is found by its ACTION label since specs/0071 W1: it used to be
   // named "Transcription mode: Live…", i.e. its own state, which is what made the owner
   // press it expecting to go live.
-  it('per-meeting controls run Participants → transcript toggle → Template, same height', () => {
+  it('per-meeting controls run Participants → transcript toggle → Prompt, same height', () => {
     mode.liveTranscription = true;
     renderHeader(true, {
-      availableTemplates: [{ id: 't1', name: 'Standup', description: 'Short' }],
-      selectedTemplate: 't1',
-    } as unknown as React.ComponentProps<typeof RecordingHeader>['templates']);
+      prompts: [{ id: 'p1', name: 'Standup' }],
+      state: { source: 'meeting', prompt_id: 'p1', prompt_name: 'Standup', has_series: false },
+    } as unknown as React.ComponentProps<typeof RecordingHeader>['promptsApi']);
 
     const participants = screen.getByRole('button', { name: 'Participants' });
     const live = screen.getByRole('button', { name: 'Pause transcript' });
@@ -128,6 +135,26 @@ describe('RecordingHeader', () => {
 
   // The channel name used to be a `u-section-label` span UNDER each meter, costing the
   // header a text row per channel. It is now engraved inside the well.
+  it('prompt picker selects a saved prompt and offers the one-off dialog', async () => {
+    const selectPrompt = vi.fn();
+    renderHeader(true, {
+      prompts: [
+        { id: 'p1', name: 'Standup' },
+        { id: 'p2', name: 'Retro' },
+      ],
+      state: { source: 'meeting', prompt_id: 'p1', prompt_name: 'Standup', has_series: false },
+      selectPrompt,
+    } as unknown as React.ComponentProps<typeof RecordingHeader>['promptsApi']);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Summary prompt: Standup' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Retro' }));
+    expect(selectPrompt).toHaveBeenCalledWith('p2');
+
+    await userEvent.click(screen.getByRole('button', { name: /summary prompt/i }));
+    await userEvent.click(screen.getByRole('menuitem', { name: /custom for this meeting/i }));
+    expect(await screen.findByRole('dialog', { name: /custom prompt for this meeting/i })).toBeInTheDocument();
+  });
+
   it('each meter carries its channel label inside its own svg', () => {
     renderHeader(true);
     const meters = screen.getAllByRole('img', { name: /VU$/ });

@@ -2,16 +2,9 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { BatteryLow, Check, ChevronDown, ChevronLeft, Pencil } from 'lucide-react';
+import { BatteryLow, ChevronLeft, Pencil } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import { toast } from 'sonner';
-import { Button } from '@/components/ui/button';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import {
   Tooltip,
   TooltipContent,
@@ -26,7 +19,8 @@ import { useRecordEmptyPhase } from '@/hooks/useRecordEmptyPhase';
 import { modeChipDisplay } from '@/lib/processing-mode';
 import { rmsToVu } from '@/lib/transport/vu-ballistics';
 import type { UseRecordingTitleEditReturn } from '@/hooks/useRecordingTitleEdit';
-import type { useTemplates } from '@/hooks/meeting-details/useTemplates';
+import { PromptPicker } from '@/components/SummaryPrompts/PromptPicker';
+import { CustomPromptFlow, type PromptsApi } from '@/components/SummaryPrompts/CustomPromptFlow';
 
 /**
  * Compact per-meeting live/defer mode chip (low-power-mode spec §5). Driven by
@@ -71,7 +65,7 @@ function ModeChip({ meetingId }: { meetingId: string }) {
       // eye reads (specs/0071 W1). It used to announce the mode and then the switch, which is
       // the same trap in longer form.
       aria-label={label}
-      // h-8 matches the template picker and the participants trigger beside it — the three
+      // h-8 matches the prompt picker and the participants trigger beside it — the three
       // per-meeting controls used to be h-7 / h-9 / h-9 and visibly failed to line up
       // (owner feedback 2026-09-21).
       className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border bg-card px-3 text-xs font-semibold text-foreground transition-colors hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
@@ -93,23 +87,18 @@ function ModeChip({ meetingId }: { meetingId: string }) {
   );
 }
 
-/** The per-meeting template picker's slice of useTemplates (specs/0029 WS4.3). */
-type TemplatesApi = Pick<
-  ReturnType<typeof useTemplates>,
-  'availableTemplates' | 'selectedTemplate' | 'handleTemplateSelection'
->;
-
 interface RecordingHeaderProps {
   meetingTitle: string;
   isRecordingActive: boolean;
   activeRecordingMeetingId: string | null;
   titleEdit: UseRecordingTitleEditReturn;
-  templates: TemplatesApi;
+  /** Per-meeting prompt picker's slice of useSummaryPrompts (specs/0079). */
+  promptsApi: PromptsApi;
 }
 
 /**
  * Recording header, specs/0057 Plan 2: a control-panel faceplate — back · title · identity
- * line · template · mode · participants · two channel VU meters + lamps. The transport rail (mounted in
+ * line · prompt · mode · participants · two channel VU meters + lamps. The transport rail (mounted in
  * the app layout) owns REC/HOLD/STOP, the reels and the tape counter, so nothing here
  * duplicates a control or a clock any more.
  */
@@ -118,7 +107,7 @@ export function RecordingHeader({
   isRecordingActive,
   activeRecordingMeetingId,
   titleEdit,
-  templates,
+  promptsApi,
 }: RecordingHeaderProps) {
   const router = useRouter();
   const {
@@ -130,9 +119,7 @@ export function RecordingHeader({
     commitTitleEdit,
     cancelTitleEdit,
   } = titleEdit;
-  const { availableTemplates, selectedTemplate, handleTemplateSelection } = templates;
-  const selectedTemplateName =
-    availableTemplates.find((t) => t.id === selectedTemplate)?.name ?? 'Template';
+  const [customFlowOpen, setCustomFlowOpen] = useState(false);
   const level = useRecordingLevel(isRecordingActive);
   // Starting or saving is not idle: the idle subhead would flash on the way in and out.
   const transition = useRecordEmptyPhase();
@@ -217,12 +204,12 @@ export function RecordingHeader({
         {/* 0.1.0 canvas feedback: the per-meeting controls sit under the title, not in the
             meter bridge. Rendered only when at least one is live so an idle header carries
             no empty row. */}
-        {/* Per-meeting controls, ordered Participants → Live → Template (owner feedback
+        {/* Per-meeting controls, ordered Participants → Live → Prompt (owner feedback
             2026-09-21): who is here, then how it is being processed, then what the summary
             will look like — decreasing immediacy, left to right. All three are h-8; they
             used to be h-9 / h-9 / h-7 and the row visibly stepped. Rendered only when at
             least one is live, so an idle header carries no empty row. */}
-        {(isRecordingActive && availableTemplates.length > 0) || activeRecordingMeetingId ? (
+        {isRecordingActive || activeRecordingMeetingId ? (
           <div className="mt-2.5 flex flex-wrap items-center gap-2">
             {/* Participants for the in-progress meeting (specs/0017). Use the authoritative
                 SQLite meeting id (`activeRecordingMeetingId`, set at recording start), NOT the
@@ -238,37 +225,29 @@ export function RecordingHeader({
             {isRecordingActive && activeRecordingMeetingId && (
               <ModeChip meetingId={activeRecordingMeetingId} />
             )}
-            {/* Per-meeting summary template picker (specs/0029 WS4.3): quiet dropdown,
-                persisted against the recording's SQLite id; the eventual summary uses it. */}
-            {isRecordingActive && availableTemplates.length > 0 && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="outline"
-                    size="xs"
-                    title="Summary template — used when this meeting is summarized"
-                    className="h-8 max-w-[180px] text-muted-foreground"
-                  >
-                    <span className="truncate">{selectedTemplateName}</span>
-                    <ChevronDown className="h-3 w-3 flex-shrink-0" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  {availableTemplates.map((template) => (
-                    <DropdownMenuItem
-                      key={template.id}
-                      onClick={() => handleTemplateSelection(template.id, template.name)}
-                      title={template.description}
-                      className="flex items-center justify-between gap-2"
-                    >
-                      <span>{template.name}</span>
-                      {selectedTemplate === template.id && (
-                        <Check className="h-4 w-4 text-brand" />
-                      )}
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
+            {/* Per-meeting summary prompt picker (specs/0079): persisted against the
+                recording's SQLite id; the eventual summary uses it. */}
+            {isRecordingActive && (
+              <>
+                <PromptPicker
+                  prompts={promptsApi.prompts}
+                  promptState={promptsApi.state}
+                  onPromptSelect={(id) => {
+                    void promptsApi.selectPrompt(id);
+                  }}
+                  onCustomPrompt={() => setCustomFlowOpen(true)}
+                  onClearCustomPrompt={() => {
+                    void promptsApi.clearOneOff();
+                  }}
+                  title="Summary prompt — used when this meeting is summarized"
+                  className="h-8 max-w-[180px] text-muted-foreground"
+                />
+                <CustomPromptFlow
+                  open={customFlowOpen}
+                  onClose={() => setCustomFlowOpen(false)}
+                  promptsApi={promptsApi}
+                />
+              </>
             )}
           </div>
         ) : null}

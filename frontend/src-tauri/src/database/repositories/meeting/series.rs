@@ -83,7 +83,7 @@ impl MeetingsRepository {
         }
 
         // Title folding stays SQL-side on BOTH operands (SQLite's ASCII-only LOWER must be
-        // applied identically to the column and the parameter — see suggest_template_for_title).
+        // applied identically to the column and the parameter — see `normalize_title`).
         // The `TRIM(?3) <> ''` guard keeps a blank title from matching blank-titled rows.
         // With a series key (?1 NOT NULL) the title arm additionally requires the prior to
         // be unaffiliated — NULL calendar_series_key and no link row pointing at a

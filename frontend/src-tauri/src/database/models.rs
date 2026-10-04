@@ -21,9 +21,7 @@ pub struct MeetingModel {
     /// must not overwrite it. SQLite stores 0/1; sqlx decodes to bool. Defaults to false.
     #[serde(default)]
     pub title_manually_set: bool,
-    /// Per-meeting summary template id (specs/0029 WS4.3 — the specs/0020 persistence
-    /// slice); NULL means "use the default template". `#[sqlx(default)]` so legacy
-    /// explicit-column SELECTs that predate the column still decode (as None).
+    // legacy (specs/0079): unused; column kept, row decodes it
     #[serde(default)]
     #[sqlx(default)]
     pub template_id: Option<String>,

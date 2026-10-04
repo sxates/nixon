@@ -182,7 +182,7 @@ pub fn run() {
             }
 
             // Capture the identifier-derived app-data dir as the single source of
-            // truth for all storage paths (templates, settings, model fallbacks).
+            // truth for all storage paths (settings, model fallbacks).
             // See `app_paths` / ADR-0004 (dev/prod isolation).
             match _app.handle().path().app_data_dir() {
                 Ok(dir) => {
@@ -372,14 +372,11 @@ pub fn run() {
             // backlog processing when back on AC.
             power::spawn_power_monitor(_app.handle().clone());
 
-            // Initialize bundled templates directory for dynamic template discovery
-            log::info!("Initializing bundled templates directory...");
-            if let Ok(resource_path) = _app.handle().path().resource_dir() {
-                let templates_dir = resource_path.join("templates");
-                log::info!("Setting bundled templates directory to: {:?}", templates_dir);
-                summary::templates::set_bundled_templates_dir(templates_dir);
-            } else {
-                log::warn!("Failed to resolve resource directory for templates");
+            // specs/0079: one-time template -> saved prompt conversion. Needs the DB pool
+            // (absent during first-launch onboarding / legacy import; those command paths call it too).
+            // Never blocks startup; unset marker retries.
+            if let Some(app_state) = _app.try_state::<state::AppState>() {
+                summary::prompt_migration::spawn_conversion(app_state.db_manager.pool().clone());
             }
 
             Ok(())

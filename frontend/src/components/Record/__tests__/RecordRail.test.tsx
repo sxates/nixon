@@ -54,7 +54,7 @@ describe('RecordRail (specs/0056 W4)', () => {
 
     expect(screen.getByRole('tablist', { name: 'Recording side panel' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /notes/i })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByRole('tab', { name: /prep/i })).toHaveAttribute('aria-selected', 'false');
+    expect(screen.getByRole('tab', { name: /agenda/i })).toHaveAttribute('aria-selected', 'false');
 
     expect(await screen.findByTestId('notepad-panel')).toBeInTheDocument();
     expect(screen.getByTestId('agenda-panel')).toBeInTheDocument();
@@ -65,13 +65,13 @@ describe('RecordRail (specs/0056 W4)', () => {
     render(<RecordRail meetingId="m-1" />);
     await screen.findByTestId('notepad-panel');
 
-    fireEvent.click(screen.getByRole('tab', { name: /prep/i }));
+    fireEvent.click(screen.getByRole('tab', { name: /agenda/i }));
 
     const prep = screen.getByTestId('prep-panel');
     expect(prep).toBeInTheDocument();
     // The scroller directly wrapping PrepPanel carries the record-screen gutter.
     expect(prep.parentElement?.className).toContain('px-5');
-    expect(screen.getByRole('tab', { name: /prep/i })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: /agenda/i })).toHaveAttribute('aria-selected', 'true');
 
     // Notes panel stays mounted (hidden) so NotepadPanel's autosave lifecycle is untouched.
     const notepad = screen.getByTestId('notepad-panel');
@@ -84,7 +84,7 @@ describe('RecordRail (specs/0056 W4)', () => {
     render(<RecordRail meetingId="m-1" />);
     await screen.findByTestId('notepad-panel');
 
-    fireEvent.click(screen.getByRole('tab', { name: /prep/i }));
+    fireEvent.click(screen.getByRole('tab', { name: /agenda/i }));
     expect(screen.getByTestId('prep-panel')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('tab', { name: /notes/i }));
@@ -97,7 +97,7 @@ describe('RecordRail (specs/0056 W4)', () => {
 
   it('shows the carried-over open item count as a badge on the Prep tab', () => {
     render(<RecordRail meetingId="m-1" />);
-    const prepTab = screen.getByRole('tab', { name: /prep/i });
+    const prepTab = screen.getByRole('tab', { name: /agenda/i });
     expect(prepTab).toHaveTextContent('3');
     expect(screen.getByLabelText('3 carried-over open items')).toBeInTheDocument();
   });
@@ -106,7 +106,7 @@ describe('RecordRail (specs/0056 W4)', () => {
     render(<RecordRail meetingId={null} />);
     expect(screen.getAllByRole('tab')).toHaveLength(1);
     expect(screen.getByRole('tab', { name: /notes/i })).toBeInTheDocument();
-    expect(screen.queryByRole('tab', { name: /prep/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: /agenda/i })).not.toBeInTheDocument();
     expect(screen.queryByTestId('agenda-panel')).not.toBeInTheDocument();
     expect(await screen.findByTestId('notepad-panel')).toBeInTheDocument();
   });
@@ -114,7 +114,7 @@ describe('RecordRail (specs/0056 W4)', () => {
   it('ArrowRight from Notes moves focus to (and activates) Prep', () => {
     render(<RecordRail meetingId="m-1" />);
     const notesTab = screen.getByRole('tab', { name: /notes/i });
-    const prepTab = screen.getByRole('tab', { name: /prep/i });
+    const prepTab = screen.getByRole('tab', { name: /agenda/i });
 
     notesTab.focus();
     fireEvent.keyDown(notesTab, { key: 'ArrowRight' });

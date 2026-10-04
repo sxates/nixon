@@ -35,7 +35,6 @@ import { useConfig } from '@/contexts/ConfigContext';
 import { retranscriptionProviderFor } from '@/lib/deferred-transcription';
 import { logInfo, logWarn } from '@/lib/app-log';
 import { resolveSummaryLanguage } from '@/lib/resolve-summary-language';
-import { DEFAULT_TEMPLATE_ID } from '@/hooks/meeting-details/useTemplates';
 import type { Transcript } from '@/types';
 import {
   backlogReducer,
@@ -245,15 +244,6 @@ export function useDeferredBacklog(): UseDeferredBacklogReturn {
       if (!modelConfig?.model || !modelConfig.provider) return 'skipped-no-provider';
 
       const { transcriptText, transcriptTexts } = buildSummaryTranscriptPayload(allTranscripts);
-      let templateId = DEFAULT_TEMPLATE_ID;
-      try {
-        const persisted = await invoke<string | null>('api_get_meeting_template', {
-          meetingId: m.id,
-        });
-        if (persisted) templateId = persisted;
-      } catch (error) {
-        console.warn('[deferred-backlog] template load failed, using default:', error);
-      }
       const summaryLanguage = await resolveSummaryLanguage(m.id, transcriptTexts);
 
       // Deliberately NOT `background: true` (specs/0063 W3 Task 6b). The drain already has a
@@ -267,8 +257,6 @@ export function useDeferredBacklog(): UseDeferredBacklogReturn {
         meetingId: m.id,
         chunkSize: 40000,
         overlap: 1000,
-        customPrompt: '',
-        templateId,
         summaryLanguage,
       });
 

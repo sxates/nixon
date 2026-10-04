@@ -88,29 +88,28 @@ export function useMeetingTabs({
     setActiveTab('transcript');
   }, [deepLinkSegmentId, isNotesOnly, onDeepLinkConsumed]);
 
-  // specs/0036 — the Prep tab. For a scheduled (upcoming) meeting it's the ONLY
-  // content tab besides My notes (there's no recording yet). For a recorded/
-  // notes-only meeting it's appended AFTER the existing tabs and labelled to read
-  // as pre-meeting context ("Prep (before)"), kept secondary to Summary.
+  // specs/0036 — the Agenda tab (internally `prep`). For a scheduled (upcoming) meeting it's
+  // the ONLY content tab besides My Notes (there's no recording yet). For a recorded/
+  // notes-only meeting it's appended AFTER the existing tabs, kept secondary to Summary.
   const tabs: MeetingTab[] =
     isScheduled
       ? [
-          { key: 'prep', label: 'Prep' },
-          { key: 'notes', label: 'My notes' },
+          { key: 'prep', label: 'Agenda' },
+          { key: 'notes', label: 'My Notes' },
         ]
       : isNotesOnly
         ? [
             // Notes-only: no Transcript tab. Stable order with recorded meetings
             // (Summary first); the default active tab is 'notes' (see activeTab init).
             { key: 'summary', label: 'Summary' },
-            { key: 'notes', label: 'My notes' },
-            { key: 'prep', label: 'Prep (before)' },
+            { key: 'notes', label: 'My Notes' },
+            { key: 'prep', label: 'Agenda' },
           ]
         : [
             { key: 'summary', label: 'Summary' },
             { key: 'transcript', label: 'Transcript' },
-            { key: 'notes', label: 'My notes' },
-            { key: 'prep', label: 'Prep (before)' },
+            { key: 'notes', label: 'My Notes' },
+            { key: 'prep', label: 'Agenda' },
           ];
 
   // Roving-focus support for the tablist (WAI-ARIA tabs pattern): arrow/Home/End move focus

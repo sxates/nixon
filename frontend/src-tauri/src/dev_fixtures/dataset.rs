@@ -58,8 +58,6 @@ pub struct FixtureMeeting {
     #[serde(default)]
     pub audio_state: Option<String>,
     #[serde(default)]
-    pub template_id: Option<String>,
-    #[serde(default)]
     pub participants: Vec<String>,
     pub speakers: Vec<FixtureSpeaker>,
     pub segments: Vec<FixtureSegment>,
@@ -231,7 +229,6 @@ mod tests {
                 time_of_day: "14:00".into(),
                 duration_seconds: 60,
                 audio_state: None,
-                template_id: None,
                 participants: vec!["person-a".into()],
                 speakers: vec![FixtureSpeaker {
                     key: "local".into(),

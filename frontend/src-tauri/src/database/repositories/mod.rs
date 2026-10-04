@@ -20,7 +20,7 @@ pub mod setting;
 pub mod speaker;
 pub mod speaker_rekey; // specs/0078: "This is me" / "This isn't me" re-keys
 pub mod summary;
-pub mod summary_outline;
+pub mod summary_prompt; // specs/0079
 pub mod transcript;
 pub mod transcript_chunk;
 /// Bounded transcript excerpts for Ask AI evidence (split out of `transcript.rs`, specs/0056 W3).

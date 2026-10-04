@@ -9,7 +9,7 @@ interface UseAutoGenerateSummaryParams {
   /** Loaded transcript count — arriving pages re-arm the one-shot check (WS7.3). */
   transcriptCount: number;
   modelConfig: ModelConfig;
-  generateSummary: (customPrompt: string, opts?: { background?: boolean }) => Promise<void>;
+  generateSummary: (opts?: { background?: boolean }) => Promise<void>;
   /** The deferred backlog has this meeting queued or running — it owns the summary. */
   isProcessingInBacklog?: boolean;
   onAutoGenerateComplete?: () => void;
@@ -81,7 +81,7 @@ export function useAutoGenerateSummary({
       // specs/0063 W3 Task 6b: nobody asked for this run, and the user is free to navigate
       // away from the meeting while it works. Registering it as background work is what puts
       // it in the rail's Queue, so it stays visible (and its failure retryable) off-page.
-      await generateSummary('', { background: true });
+      await generateSummary({ background: true });
 
       // Notify parent that auto-generation is complete (only if not cancelled)
       if (onAutoGenerateComplete && !cancelled) {

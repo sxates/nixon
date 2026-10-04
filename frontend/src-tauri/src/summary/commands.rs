@@ -338,8 +338,6 @@ pub async fn api_process_transcript<R: Runtime>(
     meeting_id: Option<String>,
     _chunk_size: Option<i32>,
     _overlap: Option<i32>,
-    custom_prompt: Option<String>,
-    template_id: Option<String>,
     summary_language: Option<String>,
     _auth_token: Option<String>,
     // specs/0063 W3 Task 6b — `true` only for a run the user did not ask for and is not
@@ -357,31 +355,6 @@ pub async fn api_process_transcript<R: Runtime>(
     );
 
     let pool = state.db_manager.pool().clone();
-    let final_prompt = custom_prompt.unwrap_or_default();
-
-    // Template resolution (specs/0020 task 4): an explicit caller choice wins;
-    // otherwise honor the meeting's persisted `meetings.template_id`; otherwise
-    // the shared default. For a brand-new meeting id (no `meeting_id` supplied,
-    // so `m_id` has no row yet) the DB read finds nothing and we land on the
-    // default. A DB error degrades to the default rather than blocking the
-    // summary — the choice is metadata, not a hard dependency.
-    let final_template_id = match template_id
-        .map(|t| t.trim().to_string())
-        .filter(|t| !t.is_empty())
-    {
-        Some(explicit) => explicit,
-        None => MeetingsRepository::get_meeting_template(&pool, &m_id)
-            .await
-            .unwrap_or_else(|e| {
-                log_warn!(
-                    "Failed to read persisted template for {}; using default: {}",
-                    &m_id,
-                    e
-                );
-                None
-            })
-            .unwrap_or_else(|| crate::summary::templates::DEFAULT_SUMMARY_TEMPLATE_ID.to_string()),
-    };
 
     // Normalise empty / whitespace-only to None so "" and null behave identically
     let summary_language = summary_language.and_then(|s| {
@@ -428,8 +401,6 @@ pub async fn api_process_transcript<R: Runtime>(
             text,
             model,
             model_name,
-            final_prompt,
-            final_template_id,
             summary_language,
             // specs/0063 W3 fix round 1 (I1), refined by Task 6b: this command serves both
             // the Generate/Regenerate button the user is watching live (which renders its
@@ -566,21 +537,6 @@ pub async fn start_summary_generation_for_meeting<R: Runtime>(
     .await
     .map_err(|e| format!("Failed to save transcript data: {}", e))?;
 
-    // Honor the meeting's persisted template choice (specs/0020 task 4); fall
-    // back to the shared default when none is set. A DB error degrades to the
-    // default rather than blocking the one-click/auto-summarize path.
-    let template_id = MeetingsRepository::get_meeting_template(&pool, &meeting_id)
-        .await
-        .unwrap_or_else(|e| {
-            log_warn!(
-                "Failed to read persisted template for {}; using default: {}",
-                meeting_id,
-                e
-            );
-            None
-        })
-        .unwrap_or_else(|| crate::summary::templates::DEFAULT_SUMMARY_TEMPLATE_ID.to_string());
-
     let meeting_id_clone = meeting_id.clone();
     tauri::async_runtime::spawn(async move {
         SummaryService::process_transcript_background(
@@ -590,9 +546,7 @@ pub async fn start_summary_generation_for_meeting<R: Runtime>(
             text,
             model,
             model_name,
-            String::new(), // no custom prompt
-            template_id,   // persisted per-meeting choice, else DEFAULT_SUMMARY_TEMPLATE_ID
-            None,          // auto-detect summary language
+            None, // auto-detect summary language
             // specs/0063 W3 fix round 1 (I1): this path has no live viewer — its two
             // real callers are `summary/refresh.rs` (the automatic post-diarization
             // re-summarize) and `llm_activity/retry.rs` (a Queue retry), neither of

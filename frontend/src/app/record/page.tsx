@@ -13,11 +13,11 @@ import { useRecordingStateSync } from '@/hooks/useRecordingStateSync';
 import { useRecordingStart } from '@/hooks/useRecordingStart';
 import { useRecordingStop } from '@/hooks/useRecordingStop';
 import { useTranscriptionErrorListeners } from '@/hooks/useTranscriptionErrorListeners';
-import { useRecordingTitleEdit, TITLE_PLACEHOLDER } from '@/hooks/useRecordingTitleEdit';
+import { useRecordingTitleEdit } from '@/hooks/useRecordingTitleEdit';
 import { useGlobalBarStop } from '@/hooks/useGlobalBarStop';
 import { useStartupRecovery } from '@/hooks/useStartupRecovery';
 import { TranscriptRecovery } from '@/components/TranscriptRecovery';
-import { useTemplates } from '@/hooks/meeting-details/useTemplates';
+import { useSummaryPrompts } from '@/hooks/meeting-details/useSummaryPrompts';
 import { RecordingHeader } from '@/components/Record/RecordingHeader';
 import { RecordRail } from '@/components/Record/RecordRail';
 
@@ -56,14 +56,10 @@ export default function Home() {
   // Rename-while-recording (specs/0029 WS4.3) — inline click-to-edit title state.
   const titleEdit = useRecordingTitleEdit();
 
-  // ── Per-meeting summary template (specs/0029 WS4.3, the specs/0020 slice) ──
-  // Explicitly bound to the recording's SQLite id; selections made before the row
-  // exists are queued inside the hook and flushed once the id arrives.
-  // The title feeds the auto-select-by-title suggestion (specs/0020 task 10);
-  // the '+ New Call' placeholder is a UI affordance, not a real title, so it's
-  // withheld until the user (or Join & Record) names the meeting.
-  const { availableTemplates, selectedTemplate, handleTemplateSelection } =
-    useTemplates(activeRecordingMeetingId, meetingTitle === TITLE_PLACEHOLDER ? null : meetingTitle);
+  // ── Per-meeting summary prompt (specs/0079) ──
+  // Explicitly bound to the recording's SQLite id; picks made before the row exists are
+  // queued inside the hook and flushed once the id arrives.
+  const promptsApi = useSummaryPrompts(activeRecordingMeetingId);
 
   // Stop triggered from the transport rail on another route (flag + window event).
   useGlobalBarStop({ setIsStopping, handleRecordingStop });
@@ -110,7 +106,7 @@ export default function Home() {
         isRecordingActive={isRecordingActive}
         activeRecordingMeetingId={activeRecordingMeetingId}
         titleEdit={titleEdit}
-        templates={{ availableTemplates, selectedTemplate, handleTemplateSelection }}
+        promptsApi={promptsApi}
       />
 
       <div className="relative flex flex-1 overflow-hidden">

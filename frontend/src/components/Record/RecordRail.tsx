@@ -46,10 +46,10 @@ export function RecordRail({ meetingId }: { meetingId: string | null }) {
 
   const tabs: RecordTab[] = meetingId
     ? [
-        { key: 'notes', label: 'Notes' },
-        { key: 'prep', label: 'Prep' },
+        { key: 'notes', label: 'My Notes' },
+        { key: 'prep', label: 'Agenda' },
       ]
-    : [{ key: 'notes', label: 'Notes' }];
+    : [{ key: 'notes', label: 'My Notes' }];
 
   // Lazy-mount Prep on first activation; keep it mounted afterwards so the loaded
   // brief / open items persist across switches (mirrors useMeetingTabs).

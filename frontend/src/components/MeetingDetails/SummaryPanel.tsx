@@ -7,6 +7,7 @@ import { SummaryGenerating } from './SummaryGenerating';
 import { ModelConfig } from '@/components/ModelSettingsModal';
 import { SummaryToolbar } from './SummaryToolbar';
 import { useEffect, useRef, useState, RefObject } from 'react';
+import { toast } from 'sonner';
 import { AlertTriangle, Loader2 } from 'lucide-react';
 import { useDiarizationActive } from '@/hooks/useDiarizationActive';
 import { Button } from '@/components/ui/button';
@@ -18,7 +19,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { shouldConfirmTemplateChange } from '@/hooks/meeting-details/useTemplates';
+import { shouldConfirmPromptChange } from '@/lib/summary-prompts';
+import { CustomPromptFlow, type PromptsApi } from '@/components/SummaryPrompts/CustomPromptFlow';
 
 interface SummaryPanelProps {
   meeting: {
@@ -42,16 +44,15 @@ interface SummaryPanelProps {
   modelConfig: ModelConfig;
   setModelConfig: (config: ModelConfig | ((prev: ModelConfig) => ModelConfig)) => void;
   onSaveModelConfig: (config?: ModelConfig) => Promise<void>;
-  onGenerateSummary: (customPrompt: string) => Promise<void>;
+  onGenerateSummary: () => Promise<void>;
   onStopGeneration: () => void;
   onSaveSummary: (summary: Summary | { markdown?: string; summary_json?: any[] }) => Promise<void>;
   onSummaryChange: (summary: Summary) => void;
   onDirtyChange: (isDirty: boolean) => void;
   summaryError: string | null;
   onRegenerateSummary: () => Promise<void>;
-  availableTemplates: Array<{ id: string, name: string, description: string }>;
-  selectedTemplate: string;
-  onTemplateSelect: (templateId: string, templateName: string) => void;
+  /** Saved prompts + this meeting's prompt state (specs/0079). */
+  promptsApi: PromptsApi;
   isModelConfigLoading?: boolean;
   onOpenModelSettings?: (openFn: () => void) => void;
   /**
@@ -90,9 +91,7 @@ export function SummaryPanel({
   onDirtyChange,
   summaryError,
   onRegenerateSummary,
-  availableTemplates,
-  selectedTemplate,
-  onTemplateSelect,
+  promptsApi,
   isModelConfigLoading = false,
   onOpenModelSettings,
   variant = 'panel',
@@ -110,42 +109,60 @@ export function SummaryPanel({
   const diarizationActive = useDiarizationActive(meeting.id);
   const preliminary = diarizationActive || summaryStatus === 'speaker_refresh';
 
-  // ── Confirm-before-regenerate (specs/0020 task 8) ──────────────────────────
-  // Picking a DIFFERENT template while a summary is displayed must ask before
-  // anything persists (regeneration costs minutes on local models). Cancel leaves
-  // the selection untouched — nothing was persisted yet, so the dropdown + label
-  // keep showing the template of the summary on screen. With no summary the
-  // selection persists silently, exactly as before.
-  const [pendingTemplate, setPendingTemplate] = useState<{ id: string; name: string } | null>(null);
-  // After confirm, regeneration is deferred one render so `onRegenerateSummary`
-  // (rebuilt by useSummaryGeneration from the NEW selectedTemplate) can't fire
-  // with a stale template closure.
+  // ── Confirm-before-regenerate (specs/0020 task 8, now keyed on prompt id) ───────
+  // Picking a DIFFERENT prompt while a summary is displayed must ask before anything
+  // persists (regeneration costs minutes on local models). Cancel leaves the selection
+  // untouched. With no summary the selection persists silently.
+  const { prompts, state: promptState, selectPrompt, clearOneOff } = promptsApi;
+  const [pendingPrompt, setPendingPrompt] = useState<{ id: string; name: string } | null>(null);
+  // Latched so the confirm dialog's copy doesn't flip while it animates closed.
+  const lastPendingNameRef = useRef('');
+  if (pendingPrompt) lastPendingNameRef.current = pendingPrompt.name;
+  // After confirm, regeneration waits until the pick has persisted and the refreshed
+  // state reports it.
   const [regenerateArmedId, setRegenerateArmedId] = useState<string | null>(null);
+  const [customFlowOpen, setCustomFlowOpen] = useState(false);
 
   const hasExistingSummary = !!aiSummary && !isSummaryLoading;
 
-  const handleTemplateSelect = (templateId: string, templateName: string) => {
-    if (shouldConfirmTemplateChange(templateId, selectedTemplate, hasExistingSummary)) {
-      setPendingTemplate({ id: templateId, name: templateName });
+  const dismissPending = () => setPendingPrompt(null);
+
+  const handlePromptSelect = (promptId: string, promptName: string) => {
+    // Any new pick invalidates a previously armed regeneration.
+    setRegenerateArmedId(null);
+    if (shouldConfirmPromptChange(promptId, promptState, hasExistingSummary)) {
+      setPendingPrompt({ id: promptId, name: promptName });
       return;
     }
-    onTemplateSelect(templateId, templateName);
+    void selectPrompt(promptId);
   };
 
-  const handleConfirmRegenerate = () => {
-    if (!pendingTemplate) return;
-    onTemplateSelect(pendingTemplate.id, pendingTemplate.name); // persists via useTemplates
-    setRegenerateArmedId(pendingTemplate.id);
-    setPendingTemplate(null);
+  const handleConfirmRegenerate = async () => {
+    if (!pendingPrompt) return;
+    const { id } = pendingPrompt;
+    setPendingPrompt(null);
+    // Arm only when the pick actually persisted; a failed pick must not leave a
+    // stale arm that a later successful pick would fire a second time.
+    if (await selectPrompt(id)) setRegenerateArmedId(id);
   };
 
   useEffect(() => {
-    // Fire only once the parent re-rendered with the newly selected template, so
-    // the regenerate handler passes the right templateId to the backend.
-    if (!regenerateArmedId || selectedTemplate !== regenerateArmedId) return;
+    if (!regenerateArmedId || promptState?.prompt_id !== regenerateArmedId) return;
     setRegenerateArmedId(null);
     void onRegenerateSummary();
-  }, [regenerateArmedId, selectedTemplate, onRegenerateSummary]);
+  }, [regenerateArmedId, promptState?.prompt_id, onRegenerateSummary]);
+
+  const toolbarPromptProps = {
+    prompts,
+    promptState,
+    onPromptSelect: handlePromptSelect,
+    onCustomPrompt: () => setCustomFlowOpen(true),
+    onClearCustomPrompt: () => {
+      void clearOneOff().then((cleared) => {
+        if (cleared) toast.info('Regenerate to apply');
+      });
+    },
+  };
 
   // Partial-summary indicator (specs/0028 `summary_status`, surfaced in 0030 WS4).
   // The backend attaches chunk-outcome accounting to the stored result: when some
@@ -183,9 +200,7 @@ export function SummaryPanel({
                 onGenerateSummary={onGenerateSummary}
                 onStopGeneration={onStopGeneration}
                 summaryStatus={summaryStatus}
-                availableTemplates={availableTemplates}
-                selectedTemplate={selectedTemplate}
-                onTemplateSelect={handleTemplateSelect}
+                {...toolbarPromptProps}
                 hasTranscripts={transcripts.length > 0}
                 hasSummary={!!aiSummary}
                 isModelConfigLoading={isModelConfigLoading}
@@ -194,8 +209,6 @@ export function SummaryPanel({
                 isDirty={isTitleDirty || (summaryRef.current?.isDirty || false)}
                 onSave={onSaveAll}
                 onCopy={onCopySummary}
-                meetingId={meeting.id}
-                onRegenerate={onRegenerateSummary}
               />
             </div>
           </div>
@@ -213,9 +226,7 @@ export function SummaryPanel({
               onGenerateSummary={onGenerateSummary}
               onStopGeneration={onStopGeneration}
               summaryStatus={summaryStatus}
-              availableTemplates={availableTemplates}
-              selectedTemplate={selectedTemplate}
-              onTemplateSelect={handleTemplateSelect}
+              {...toolbarPromptProps}
               hasTranscripts={transcripts.length > 0}
               hasSummary={!!aiSummary}
               isModelConfigLoading={isModelConfigLoading}
@@ -239,9 +250,7 @@ export function SummaryPanel({
               onGenerateSummary={onGenerateSummary}
               onStopGeneration={onStopGeneration}
               summaryStatus={summaryStatus}
-              availableTemplates={availableTemplates}
-              selectedTemplate={selectedTemplate}
-              onTemplateSelect={handleTemplateSelect}
+              {...toolbarPromptProps}
               hasTranscripts={transcripts.length > 0}
               hasSummary={false}
               isModelConfigLoading={isModelConfigLoading}
@@ -254,7 +263,7 @@ export function SummaryPanel({
           </div>
           {/* Empty state message */}
           <EmptyStateSummary
-            onGenerate={() => onGenerateSummary('')}
+            onGenerate={() => onGenerateSummary()}
             hasModel={modelConfig.provider !== null && modelConfig.model !== null}
             isGenerating={isSummaryLoading}
           />
@@ -328,29 +337,40 @@ export function SummaryPanel({
           pattern as DeleteMeetingDialog: Cancel discards the pending pick (nothing
           was persisted), the primary action persists it and regenerates. */}
       <Dialog
-        open={!!pendingTemplate}
+        open={!!pendingPrompt}
         onOpenChange={(next) => {
-          if (!next) setPendingTemplate(null);
+          if (!next) dismissPending();
         }}
       >
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Regenerate summary?</DialogTitle>
             <DialogDescription>
-              Regenerate the summary with &ldquo;{pendingTemplate?.name}&rdquo;? This replaces
+              Regenerate the summary with the prompt &ldquo;{lastPendingNameRef.current}&rdquo;? This replaces
               the current summary.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setPendingTemplate(null)}>
+            <Button variant="outline" onClick={dismissPending}>
               Cancel
             </Button>
-            <Button variant="brand" onClick={handleConfirmRegenerate} disabled={!pendingTemplate}>
+            <Button variant="brand" onClick={() => void handleConfirmRegenerate()} disabled={!pendingPrompt}>
               Regenerate
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* One-off prompt + "keep this?" offer. A new instruction on an existing summary
+          must take effect, so finishing the flow regenerates (never without a summary). */}
+      <CustomPromptFlow
+        open={customFlowOpen}
+        onClose={() => setCustomFlowOpen(false)}
+        promptsApi={promptsApi}
+        onFinished={() => {
+          if (hasExistingSummary) void onRegenerateSummary();
+        }}
+      />
 
       {/* One instance for the whole panel: the toolbar renders in three different states
           (summary present, generating, none yet) and its "…" flyout can open the language

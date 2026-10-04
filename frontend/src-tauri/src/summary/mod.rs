@@ -4,7 +4,7 @@
 // - LLM client for communicating with various AI providers (OpenAI, Claude, Groq, Ollama, OpenRouter, CustomOpenAI)
 // - Processor for chunking transcripts and generating summaries
 // - Service layer for orchestrating summary generation
-// - Templates for structured meeting summary generation
+// - Saved prompts (prompts, prompts_resolve) and the one-time template conversion
 // - Tauri commands for frontend integration
 
 use serde::{Deserialize, Serialize};
@@ -35,20 +35,22 @@ pub mod cache_key;
 pub mod commands;
 pub mod context_budget;
 pub(crate) mod language_detection;
+pub(crate) mod legacy_templates;
 pub mod length;
 pub mod llm_client;
 pub mod llm_gate;
 pub mod llm_wire;
 pub(crate) mod metadata;
-pub mod outline;
 pub mod processor;
+pub mod prompt_migration;
+pub mod prompt_commands;
+pub mod prompt_sanitize;
+pub mod prompts_resolve;
 pub mod prompts;
 pub mod provider_config;
 pub mod refresh;
 pub mod service;
 pub mod summary_engine;
-pub mod template_commands;
-pub mod templates;
 
 // Re-export Tauri commands (with their generated __cmd__ variants)
 pub use commands::{
@@ -68,14 +70,6 @@ pub use commands::{
     api_get_meeting_summary_language, api_get_summary, api_process_transcript,
     api_save_meeting_detected_summary_language, api_save_meeting_summary,
     api_save_meeting_summary_language,
-};
-
-// Re-export template commands
-pub use template_commands::{
-    __cmd__api_get_template_details, __cmd__api_list_templates, __cmd__api_validate_template,
-    __tauri_command_name_api_get_template_details, __tauri_command_name_api_list_templates,
-    __tauri_command_name_api_validate_template, api_get_template_details, api_list_templates,
-    api_validate_template,
 };
 
 // Re-export commonly used items

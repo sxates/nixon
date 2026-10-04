@@ -25,7 +25,7 @@ export function useSummaryGenerationGuards({
   onNeedsModelSettings,
 }: {
   modelConfig: ModelConfig;
-  onGenerateSummary: (customPrompt: string) => Promise<void>;
+  onGenerateSummary: () => Promise<void>;
   /** Open the model-settings dialog — every failure path below ends here. */
   onNeedsModelSettings: () => void;
 }): { isCheckingModels: boolean; generate: () => Promise<void> } {
@@ -54,7 +54,7 @@ export function useSummaryGenerationGuards({
 
       if (isReady) {
         // Model is available, proceed with generation
-        onGenerateSummary('');
+        onGenerateSummary();
         return;
       }
 
@@ -136,7 +136,7 @@ export function useSummaryGenerationGuards({
 
     // Only check for Ollama provider
     if (modelConfig.provider !== 'ollama') {
-      onGenerateSummary('');
+      onGenerateSummary();
       return;
     }
 
@@ -156,7 +156,7 @@ export function useSummaryGenerationGuards({
       }
 
       // Models are available, proceed with generation
-      onGenerateSummary('');
+      onGenerateSummary();
     } catch (error) {
       console.error('Error checking Ollama models:', error);
       const errorMessage = error instanceof Error ? error.message : String(error);

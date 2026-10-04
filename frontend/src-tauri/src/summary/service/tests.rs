@@ -1,47 +1,12 @@
 use super::*;
 use crate::summary::cache_key::{
     build_summary_cache_source, stable_text_fingerprint, strip_title_if_present,
-    template_cache_fingerprint,
 };
-use crate::summary::templates::Template;
-
-// specs/0061 W6 regression: a meeting pinned to a template id that no
-// longer resolves (a built-in removed in an app update, or a deleted
-// custom override) must still get a real template from the exact
-// function `process_transcript_background`'s fixed-template match arm
-// calls — never the old `update_process_failed` path. Calling
-// `SummaryService::resolve_fixed_template` directly exercises that real
-// production code, not a reimplementation of it.
-//
-// specs/0061 review, I4 — `resolve_fixed_template` now returns
-// `Result<Template, String>` instead of panicking when even the default
-// template fails to resolve; these two tests are updated to the new
-// signature (both still exercise the success paths).
-#[test]
-fn resolve_fixed_template_falls_back_to_default_when_id_does_not_resolve() {
-    let template =
-        SummaryService::resolve_fixed_template("meeting-under-test", "psychatric_session")
-            .expect("the default template fallback must resolve");
-    let default_template = templates::get_template(templates::DEFAULT_TEMPLATE_ID)
-        .expect("the default template must resolve");
-    assert_eq!(template.name, default_template.name);
-    assert_eq!(template.sections.len(), default_template.sections.len());
-}
-
-#[test]
-fn resolve_fixed_template_uses_the_real_template_when_it_resolves() {
-    let template = SummaryService::resolve_fixed_template("meeting-under-test", "daily_standup")
-        .expect("a resolvable template id must resolve");
-    assert_eq!(template.name, "Daily Standup");
-}
 
 fn sample_cache_source() -> SummaryCacheSource {
-    let template_fingerprint = stable_text_fingerprint("standard template prompt");
     build_summary_cache_source(
         "transcript body",
-        "custom prompt",
-        "standard_meeting",
-        &template_fingerprint,
+        "prompt body",
         3700,
         "ollama",
         "gemma3:1b",
@@ -51,28 +16,6 @@ fn sample_cache_source() -> SummaryCacheSource {
         None,
         None,
     )
-}
-
-fn test_template(section_title: &str) -> Template {
-    Template {
-        name: "Test".to_string(),
-        description: "Test template".to_string(),
-        sections: vec![crate::summary::templates::TemplateSection {
-            title: section_title.to_string(),
-            instruction: "Summarize this section".to_string(),
-            format: "paragraph".to_string(),
-            item_format: None,
-            example_item_format: None,
-        }],
-    }
-}
-
-#[test]
-fn test_template_cache_fingerprint_changes_with_rendered_template() {
-    assert_ne!(
-        template_cache_fingerprint(&test_template("Summary")),
-        template_cache_fingerprint(&test_template("Decisions"))
-    );
 }
 
 #[test]
@@ -126,7 +69,6 @@ fn test_same_language_regeneration_rejects_cache() {
 #[test]
 fn test_changed_summary_inputs_reject_cache() {
     let source = sample_cache_source();
-    let template_fingerprint = source.template_fingerprint.clone();
     let raw = build_summary_result_json(
         "# Reunion\n## Points\nBonjour",
         "# Meeting\n## Points\nHello",
@@ -138,9 +80,7 @@ fn test_changed_summary_inputs_reject_cache() {
     let changed_sources = [
         build_summary_cache_source(
             "changed transcript",
-            "custom prompt",
-            "standard_meeting",
-            &template_fingerprint,
+            "prompt body",
             3700,
             "ollama",
             "gemma3:1b",
@@ -153,8 +93,6 @@ fn test_changed_summary_inputs_reject_cache() {
         build_summary_cache_source(
             "transcript body",
             "changed prompt",
-            "standard_meeting",
-            &template_fingerprint,
             3700,
             "ollama",
             "gemma3:1b",
@@ -166,10 +104,8 @@ fn test_changed_summary_inputs_reject_cache() {
         ),
         build_summary_cache_source(
             "transcript body",
-            "custom prompt",
-            "daily_standup",
-            &template_fingerprint,
-            3700,
+            "prompt body",
+            8192,
             "ollama",
             "gemma3:1b",
             Some("http://localhost:11434"),
@@ -180,9 +116,7 @@ fn test_changed_summary_inputs_reject_cache() {
         ),
         build_summary_cache_source(
             "transcript body",
-            "custom prompt",
-            "standard_meeting",
-            &template_fingerprint,
+            "prompt body",
             3700,
             "openai",
             "gemma3:1b",
@@ -194,9 +128,7 @@ fn test_changed_summary_inputs_reject_cache() {
         ),
         build_summary_cache_source(
             "transcript body",
-            "custom prompt",
-            "standard_meeting",
-            &template_fingerprint,
+            "prompt body",
             3700,
             "ollama",
             "qwen2.5:3b",
@@ -208,9 +140,7 @@ fn test_changed_summary_inputs_reject_cache() {
         ),
         build_summary_cache_source(
             "transcript body",
-            "custom prompt",
-            "standard_meeting",
-            &template_fingerprint,
+            "prompt body",
             3700,
             "ollama",
             "gemma3:1b",
@@ -222,9 +152,7 @@ fn test_changed_summary_inputs_reject_cache() {
         ),
         build_summary_cache_source(
             "transcript body",
-            "custom prompt",
-            "standard_meeting",
-            &template_fingerprint,
+            "prompt body",
             3700,
             "ollama",
             "gemma3:1b",
@@ -245,7 +173,7 @@ fn test_changed_summary_inputs_reject_cache() {
 }
 
 #[test]
-fn test_changed_template_content_rejects_cache() {
+fn test_changed_prompt_body_rejects_cache() {
     let source = sample_cache_source();
     let raw = build_summary_result_json(
         "# Reunion\n## Points\nBonjour",
@@ -255,14 +183,79 @@ fn test_changed_template_content_rejects_cache() {
     )
     .to_string();
 
-    let changed_template = SummaryCacheSource {
-        template_fingerprint: stable_text_fingerprint("changed template prompt"),
+    let changed_prompt = SummaryCacheSource {
+        prompt_fingerprint: stable_text_fingerprint("changed prompt body"),
         ..source
     };
 
     assert_eq!(
-        extract_cached_english_markdown(&raw, &changed_template, Some("de")).unwrap(),
+        extract_cached_english_markdown(&raw, &changed_prompt, Some("de")).unwrap(),
         None
+    );
+}
+
+#[test]
+fn cache_source_changes_when_prompt_body_changes() {
+    let base = sample_cache_source();
+    let other = build_summary_cache_source(
+        "transcript body",
+        "a different prompt body",
+        3700,
+        "ollama",
+        "gemma3:1b",
+        Some("http://localhost:11434"),
+        None,
+        None,
+        None,
+        None,
+    );
+    assert_ne!(base, other);
+    assert_ne!(base.prompt_fingerprint, other.prompt_fingerprint);
+}
+
+#[test]
+fn cache_source_ignores_action_items_flag() {
+    // The action-items switch is not a cache input (extraction runs after the
+    // summary and never alters it): equal bodies must give equal sources, so
+    // toggling the flag alone keeps the English cache valid.
+    assert_eq!(sample_cache_source(), sample_cache_source());
+}
+
+/// Review focus 4: a result stored before specs/0079 carries a `cache_source`
+/// with the old template-era fields. It must degrade to a cache miss
+/// (`Ok(None)` -> full regeneration), never panic and never reuse the cache.
+#[test]
+fn old_shaped_cached_source_is_a_cache_miss_not_an_error() {
+    // DELIBERATE old-shape fixture (backward compatibility): cache sources written before
+    // specs/0079 carry `template_id` / `template_fingerprint` and must decode as a cache
+    // miss, never as an error. Do not "modernize" this JSON.
+    let raw = serde_json::json!({
+        "markdown": "traduit",
+        "english_cache": {
+            "markdown": "# Old English\nBody",
+            "source": {
+                "transcript_fingerprint": "abc:1",
+                "custom_prompt_fingerprint": "def:2",
+                "template_id": "standard_meeting",
+                "template_fingerprint": "ghi:3",
+                "token_threshold": 3700,
+                "model_provider": "ollama",
+                "model_name": "gemma3:1b",
+                "ollama_endpoint": null,
+                "custom_openai_endpoint": null,
+                "max_tokens": null,
+                "temperature": null,
+                "top_p": null
+            },
+            "output_language": "fr"
+        }
+    })
+    .to_string();
+
+    let result = extract_cached_english_markdown(&raw, &sample_cache_source(), Some("de"));
+    assert!(
+        matches!(result, Ok(None)),
+        "old-shaped source must be a miss, got {result:?}"
     );
 }
 

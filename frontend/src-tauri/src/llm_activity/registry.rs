@@ -61,8 +61,8 @@ pub enum TaskOutcome {
     Failed {
         error: String,
     },
-    /// specs/0053 W3: work deliberately not done, with the reason — e.g. the Auto
-    /// outline found no commitments, so action-item extraction was skipped.
+    /// specs/0053 W3: work deliberately not done, with the reason — e.g. the
+    /// prompt turns action-item extraction off, so it was skipped.
     Skipped {
         reason: String,
     },

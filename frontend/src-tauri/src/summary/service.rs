@@ -7,8 +7,6 @@ use crate::summary::language_detection::detect_summary_language;
 use crate::summary::llm_client::LLMProvider;
 use crate::summary::metadata::read_detected_summary_language_from_metadata;
 use crate::summary::processor::language_name_from_code;
-use crate::summary::templates;
-use crate::summary::templates::Template;
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
@@ -290,45 +288,6 @@ impl SummaryService {
             }
         }
         detection.language
-    }
-
-    /// Resolves a **fixed** (non-Auto) template id for summary generation —
-    /// the `(None, id)` arm of [`SummaryService::process_transcript_background`]'s
-    /// template match. Falls back to the default fixed template
-    /// ([`templates::DEFAULT_TEMPLATE_ID`]) when `id` no longer resolves
-    /// (specs/0061 W6): a built-in removed in an app update (e.g. the retired
-    /// Psychiatric Session template) or a deleted custom override must not
-    /// fail generation for a meeting that persisted that choice — it should
-    /// degrade the same way a NULL `template_id` already does, not end the
-    /// run in `update_process_failed`.
-    ///
-    /// The returned [`Template`]'s own content, not `id`, is what downstream
-    /// fingerprinting ([`template_cache_fingerprint`]) and generation see, so
-    /// a substituted template is cached and generated under a fingerprint
-    /// that matches what was actually produced — never a mismatched one.
-    ///
-    /// Returns `Err` rather than panicking (specs/0061 review, I4) when even the
-    /// DEFAULT template fails to resolve — reachable, not theoretical: `get_template`
-    /// prefers a custom-directory override, so a corrupt or invalid user override of
-    /// `standard_meeting` hits exactly this path. The caller must route `Err` through
-    /// `update_process_failed`, same as before this fallback existed, rather than
-    /// leaving the meeting stuck in "processing" forever behind a panicked task.
-    pub fn resolve_fixed_template(meeting_id: &str, id: &str) -> Result<Template, String> {
-        match templates::get_template(id) {
-            Ok(template) => Ok(template),
-            Err(e) => {
-                warn!(
-                    "Meeting {}: template '{}' no longer resolves ({}); falling back to the default template '{}'",
-                    meeting_id, id, e, templates::DEFAULT_TEMPLATE_ID
-                );
-                templates::get_template(templates::DEFAULT_TEMPLATE_ID).map_err(|default_err| {
-                    format!(
-                        "template '{}' failed to resolve ({}), and the default template '{}' also failed to resolve ({})",
-                        id, e, templates::DEFAULT_TEMPLATE_ID, default_err
-                    )
-                })
-            }
-        }
     }
 
     /// Updates the summary process status to failed with error message

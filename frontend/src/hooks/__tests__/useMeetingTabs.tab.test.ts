@@ -36,4 +36,15 @@ describe('useMeetingTabs requestedTab (specs/0060)', () => {
     );
     expect(result.current.activeTab).toBe('transcript');
   });
+
+  // The pre-meeting tab is "Agenda" and the notes tab is "My Notes" everywhere, so a summary
+  // prompt can refer to "my notes" and "my agenda" and match what the user sees.
+  it.each([
+    ['recorded', { ...base }, ['Summary', 'Transcript', 'My Notes', 'Agenda']],
+    ['notes-only', { ...base, isNotesOnly: true }, ['Summary', 'My Notes', 'Agenda']],
+    ['scheduled', { ...base, isScheduled: true }, ['Agenda', 'My Notes']],
+  ])('labels the tabs "My Notes" and "Agenda" for a %s meeting', (_name, args, labels) => {
+    const { result } = renderHook(() => useMeetingTabs(args as any));
+    expect(result.current.tabs.map((t) => t.label)).toEqual(labels);
+  });
 });

@@ -17,7 +17,6 @@ pub mod diff;
 pub mod extractor;
 pub mod grammar;
 mod reply_parse;
-pub mod skip_gate;
 
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex, OnceLock};
@@ -213,53 +212,29 @@ pub async fn record_extraction_skipped<R: Runtime>(
     task.finish_skipped(reason);
 }
 
-/// specs/0053 W3: the skip gate for the BACKGROUND spawn only, reading the
-/// stored Auto outline and recording the skip (never silently — specs/0052)
-/// when it fires. Returns `true` when the caller must not run extraction.
-async fn maybe_skip_background_extraction<R: Runtime>(
-    app: &AppHandle<R>,
-    pool: &SqlitePool,
-    meeting_id: &str,
-    template_id: &str,
-    user_notes: Option<&str>,
-) -> bool {
-    let stored = crate::database::repositories::summary_outline::SummaryOutlineRepository::get(
-        pool, meeting_id,
-    )
-    .await
-    .unwrap_or(None);
-    let has_user_notes = user_notes.is_some_and(|n| !n.trim().is_empty());
-    if !skip_gate::should_skip_background_extraction(template_id, stored.as_ref(), has_user_notes) {
-        return false;
-    }
-    info!(
-        "Action-item extraction skipped for meeting_id {}: the outline found no commitments",
-        meeting_id
-    );
-    record_extraction_skipped(
-        app,
-        pool,
-        meeting_id,
-        "No commitments found in this meeting",
-    )
-    .await;
-    true
-}
-
-/// The whole background post-summary sequence (specs/0034 trigger + specs/0053
-/// W3 skip gate): skip when the Auto outline found nothing to extract,
-/// otherwise run extraction and log — never propagate — any failure, so the
-/// (already persisted) summary is never affected by an extraction problem.
+/// The whole background post-summary sequence (specs/0034 trigger + specs/0079
+/// per-prompt switch): skip, and record the skip, when the summary prompt that
+/// produced this summary has action-item extraction turned off; otherwise run
+/// extraction and log — never propagate — any failure, so the (already persisted)
+/// summary is never affected by an extraction problem.
 pub async fn run_background_extraction<R: Runtime>(
     app: &AppHandle<R>,
     pool: &SqlitePool,
     meeting_id: &str,
-    template_id: &str,
+    extract_enabled: bool,
     summary_markdown: &str,
     user_notes: Option<&str>,
     provider_config: &ProviderConfig,
 ) {
-    if maybe_skip_background_extraction(app, pool, meeting_id, template_id, user_notes).await {
+    if !extract_enabled {
+        info!("Action-item extraction is turned off for meeting_id {meeting_id}'s summary prompt");
+        record_extraction_skipped(
+            app,
+            pool,
+            meeting_id,
+            "Action items are turned off for this summary prompt",
+        )
+        .await;
         return;
     }
     if let Err(e) = run_extraction(

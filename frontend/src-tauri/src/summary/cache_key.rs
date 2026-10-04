@@ -3,15 +3,12 @@
 //! Extracted verbatim from `service.rs` (specs/0053) — ratchet-allowlisted at
 //! 1299 lines, may only shrink, and W3 adds to it. No behaviour change.
 
-use crate::summary::templates::Template;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub(crate) struct SummaryCacheSource {
     pub(crate) transcript_fingerprint: String,
-    pub(crate) custom_prompt_fingerprint: String,
-    pub(crate) template_id: String,
-    pub(crate) template_fingerprint: String,
+    pub(crate) prompt_fingerprint: String,
     pub(crate) token_threshold: usize,
     pub(crate) model_provider: String,
     pub(crate) model_name: String,
@@ -42,9 +39,7 @@ pub(crate) fn stable_text_fingerprint(text: &str) -> String {
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn build_summary_cache_source(
     text: &str,
-    custom_prompt: &str,
-    template_id: &str,
-    template_fingerprint: &str,
+    prompt_body: &str,
     token_threshold: usize,
     model_provider: &str,
     model_name: &str,
@@ -56,9 +51,7 @@ pub(crate) fn build_summary_cache_source(
 ) -> SummaryCacheSource {
     SummaryCacheSource {
         transcript_fingerprint: stable_text_fingerprint(text),
-        custom_prompt_fingerprint: stable_text_fingerprint(custom_prompt),
-        template_id: template_id.to_string(),
-        template_fingerprint: template_fingerprint.to_string(),
+        prompt_fingerprint: stable_text_fingerprint(prompt_body),
         token_threshold,
         model_provider: model_provider.to_string(),
         model_name: model_name.to_string(),
@@ -68,15 +61,6 @@ pub(crate) fn build_summary_cache_source(
         temperature,
         top_p,
     }
-}
-
-pub fn template_cache_fingerprint(template: &Template) -> String {
-    let rendered_template = format!(
-        "{}\n---SECTION-INSTRUCTIONS---\n{}",
-        template.to_markdown_structure(),
-        template.to_section_instructions()
-    );
-    stable_text_fingerprint(&rendered_template)
 }
 
 /// Strips a leading `# Title` line (and any blank line after it) from `markdown`,
