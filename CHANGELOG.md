@@ -19,6 +19,10 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 ## [Unreleased]
 
+_(nothing yet)_
+
+## [0.13.0] - 2026-10-03
+
 ### Changed
 
 - Summary templates are replaced by prompts. Write how you want your notes to look in plain language, keep a few favorites in Settings → Summary, or write a one-off prompt for a single meeting. Your existing templates were converted to prompts automatically, and a prompt you pick for a recurring meeting is reused for the next one. Each prompt can turn action-item extraction on or off.
