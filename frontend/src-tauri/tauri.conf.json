@@ -107,7 +107,7 @@
         "updater": {
             "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDI3QzY3QTcwQzJGMzU4QTkKUldTcFdQUENjSHJHSnowMkxjMGZKS1RaK0Jvb254Z3RPMVRod3hIMGNBLy95WFI3aGxQQ2wrdjYK",
             "endpoints": [
-                "https://github.com/sxates/nixon/releases/latest/download/latest.json"
+                "https://nixonapp.com/updates/latest.json?current_version={{current_version}}&target={{target}}"
             ]
         }
     }
