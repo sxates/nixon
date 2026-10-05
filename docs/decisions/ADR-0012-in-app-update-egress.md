@@ -47,8 +47,8 @@ can eventually go private without breaking updates.
 - **What is sent:** the manifest request now carries the running app version and operating system (`darwin`)
   in the URL query (`?current_version=…&target=…`). It is still a GET with no body and no
   identifiers: no account, device or meeting information.
-- **What is recorded:** the Worker records only the event type, version, platform and day,
-  in aggregate (Workers Analytics Engine). No per-user record is kept.
+- **What is recorded:** the Worker records only the event type, app version and platform with a
+  timestamp (Workers Analytics Engine), counted per those fields and aggregated when read. No per-user record is kept.
 - **Legacy installs:** the GitHub endpoint remains only for installs that predate the
   cutover; they hop to the new feed on their next update. Release publishing continues to
   mirror to GitHub until those have drained.
