@@ -132,6 +132,11 @@ if [ "$NO_RELEASE" -eq 0 ]; then
   export CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID
   [ -d "$NIXON_SITE_DIR" ] || die "NIXON_SITE_DIR ($NIXON_SITE_DIR) does not exist"
   command -v pnpm >/dev/null 2>&1 || die "pnpm not found (needed to run wrangler from the site repo)"
+  if [ "$SKIP_BUILD" -eq 0 ]; then
+    # fail before the build/tag, not after the tag is pushed
+    [ -d "$NIXON_SITE_DIR/public" ] || die "$NIXON_SITE_DIR/public does not exist (is NIXON_SITE_DIR the site repo?)"
+    pnpm --dir "$NIXON_SITE_DIR" exec wrangler --version >/dev/null 2>&1 || die "wrangler not runnable via 'pnpm --dir $NIXON_SITE_DIR exec wrangler' (run pnpm install in the site repo)."
+  fi
 fi
 
 # ---- Google Calendar OAuth client (optional, specs/0032) -------------------
@@ -498,46 +503,83 @@ PY
     # updates/current.json (download page pointer); updates/latest.json goes LAST,
     # because that is the only object installed apps poll. Any failure before it
     # leaves nothing advertised.
+    # wrangler runs with cwd = the site repo (pnpm --dir), so every --file must be absolute.
+    abs_path() { case "$1" in /*) printf '%s' "$1" ;; *) printf '%s/%s' "$REPO_ROOT" "$1" ;; esac; }
+    DMG_NAME="Nixon_${NEW}_aarch64.dmg"
+    CURRENT_JSON="${MANIFEST_DIR}/current.json"
+    printf '{"version":"%s","dmg":"releases/%s/%s"}\n' "$NEW" "$NEW" "$DMG_NAME" > "$CURRENT_JSON"
+    # key|file|content-type — in upload order; latest.json LAST: it is what installed apps see.
+    R2_PLAN=(
+      "releases/${NEW}/${DMG_NAME}|$(abs_path "$DMG")|application/x-apple-diskimage"
+      "releases/${NEW}/Nixon.app.tar.gz|$(abs_path "$UPD_TGZ")|application/gzip"
+      "releases/${NEW}/Nixon.app.tar.gz.sig|$(abs_path "$UPD_SIG")|text/plain"
+      "updates/current.json|${CURRENT_JSON}|application/json"
+      "updates/latest.json|${MANIFEST_R2}|application/json"
+    )
+    GH_RETRY="gh release create '$TAG' '$(abs_path "$DMG")' '$(abs_path "$UPD_TGZ")' '$(abs_path "$UPD_SIG")' '$MANIFEST_GH' --title 'Nixon v${NEW}' --notes-file '$NOTES_FILE'"
+    r2_manual_steps() {
+      local e k f t
+      for e in "${R2_PLAN[@]}"; do
+        IFS='|' read -r k f t <<<"$e"
+        echo "     pnpm --dir '$NIXON_SITE_DIR' exec wrangler r2 object put '$R2_BUCKET/$k' --file '$f' --content-type '$t' --remote"
+      done
+    }
     r2_put() { # key file content-type
-      if [ "$DRY_RUN" -eq 1 ]; then echo "  [dry-run] r2 put $R2_BUCKET/$1 <- $2 ($3)"; return 0; fi
+      local f; f="$(abs_path "$2")"
+      if [ "$DRY_RUN" -eq 1 ]; then echo "  [dry-run] r2 put $R2_BUCKET/$1 <- $f ($3)"; return 0; fi
       pnpm --dir "$NIXON_SITE_DIR" exec wrangler r2 object put "$R2_BUCKET/$1" \
-        --file "$2" --content-type "$3" --remote >/dev/null \
-        || die "R2 upload failed for $1. Nothing is advertised yet — fix and re-run the release publish."
+        --file "$f" --content-type "$3" --remote >/dev/null \
+        || die "R2 upload failed for $1.
+   State: tag ${TAG} and main are ALREADY pushed; the GitHub release has NOT been created; nothing new is advertised on the R2 feed unless updates/latest.json was already uploaded.
+   Recovery — run these in order (latest.json last), then the GitHub step:
+$(r2_manual_steps)
+     ${GH_RETRY}"
     }
 
     c_blue "☁️  Uploading to R2 (${R2_BUCKET})…"
-    DMG_NAME="Nixon_${NEW}_aarch64.dmg"
-    r2_put "releases/${NEW}/${DMG_NAME}"          "$DMG"     "application/x-apple-diskimage"
-    r2_put "releases/${NEW}/Nixon.app.tar.gz"     "$UPD_TGZ" "application/gzip"
-    r2_put "releases/${NEW}/Nixon.app.tar.gz.sig" "$UPD_SIG" "text/plain"
-
-    CURRENT_JSON="${MANIFEST_DIR}/current.json"
-    printf '{"version":"%s","dmg":"releases/%s/%s"}\n' "$NEW" "$NEW" "$DMG_NAME" > "$CURRENT_JSON"
-    r2_put "updates/current.json" "$CURRENT_JSON" "application/json"
-    r2_put "updates/latest.json"  "$MANIFEST_R2"  "application/json"   # LAST: this is what installed apps see
+    for e in "${R2_PLAN[@]}"; do
+      IFS='|' read -r k f t <<<"$e"
+      r2_put "$k" "$f" "$t"
+    done
 
     if [ "$DRY_RUN" -eq 0 ]; then
       c_blue "🔎 Verifying the live feed at ${SITE_BASE}…"
-      live="$(curl -fsS "${SITE_BASE}/updates/latest.json?current_version=0.0.0&target=verify" | python3 -c 'import json,sys;print(json.load(sys.stdin)["version"])')" \
-        || die "Uploaded, but ${SITE_BASE}/updates/latest.json did not respond. Investigate before announcing."
-      [ "$live" = "$NEW" ] || die "Feed serves $live, expected $NEW."
+      CURL_RETRY=( --retry 3 --retry-delay 2 --retry-connrefused --max-time 30 )
+      verify_die() {
+        die "$1
+   Skipped because of this: the GitHub release and the site release.json push. Artifacts and the feed are already uploaded.
+   To finish: re-check ${SITE_BASE}/updates/latest.json, then run:
+     ${GH_RETRY}
+   and update ${NIXON_SITE_DIR}/public/release.json by hand."
+      }
+      live="$(curl -fsS "${CURL_RETRY[@]}" "${SITE_BASE}/updates/latest.json?current_version=0.0.0&target=verify" | python3 -c 'import json,sys;print(json.load(sys.stdin)["version"])')" \
+        || verify_die "Uploaded, but ${SITE_BASE}/updates/latest.json did not respond. Investigate before announcing."
+      [ "$live" = "$NEW" ] || verify_die "Feed serves $live, expected $NEW."
       want="$(stat -f%z "$DMG")"
-      got="$(curl -fsSI "${SITE_BASE}/releases/${NEW}/${DMG_NAME}" | awk 'tolower($1)=="content-length:"{print $2+0}')" \
-        || die "Could not HEAD ${SITE_BASE}/releases/${NEW}/${DMG_NAME}."
-      [ "$want" = "$got" ] || die "DMG size mismatch on ${SITE_BASE}: local $want, served ${got:-none}."
-      c_green "   ✅ Feed serves ${NEW}; DMG size matches (${want} bytes)."
+      got="$(curl -fsSI "${CURL_RETRY[@]}" "${SITE_BASE}/releases/${NEW}/${DMG_NAME}" | awk 'tolower($1)=="content-length:"{print $2+0}')" \
+        || verify_die "Could not HEAD ${SITE_BASE}/releases/${NEW}/${DMG_NAME}."
+      [ "$want" = "$got" ] || verify_die "DMG size mismatch on ${SITE_BASE}: local $want, served ${got:-none}."
+      want_t="$(stat -f%z "$UPD_TGZ")"
+      got_t="$(curl -fsSI "${CURL_RETRY[@]}" "${SITE_BASE}/releases/${NEW}/Nixon.app.tar.gz" | awk 'tolower($1)=="content-length:"{print $2+0}')" \
+        || verify_die "Could not HEAD ${SITE_BASE}/releases/${NEW}/Nixon.app.tar.gz."
+      [ "$want_t" = "$got_t" ] || verify_die "Updater tarball size mismatch on ${SITE_BASE}: local $want_t, served ${got_t:-none}."
+      c_green "   ✅ Feed serves ${NEW}; DMG and updater tarball sizes match."
     fi
 
     # ---- site release.json (page shows the current version; warn, never fail) ----
     if [ "$DRY_RUN" -eq 1 ]; then
       echo "  [dry-run] write ${NIXON_SITE_DIR}/public/release.json and push"
     else
-      size="$(stat -f%z "$DMG")"
-      printf '{"version":"%s","size":%s,"date":"%s"}\n' "$NEW" "$size" "$(date -u +%F)" > "${NIXON_SITE_DIR}/public/release.json"
-      ( git -C "$NIXON_SITE_DIR" add public/release.json \
-        && git -C "$NIXON_SITE_DIR" commit -qm "release: v${NEW}" \
-        && git -C "$NIXON_SITE_DIR" push -q origin main ) \
-        || c_yellow "⚠️  Could not push release.json to the site repo; the page will show the old version until you do."
+      (
+        set -e
+        size="$(stat -f%z "$DMG")"
+        printf '{"version":"%s","size":%s,"date":"%s"}\n' "$NEW" "$size" "$(date -u +%F)" > "${NIXON_SITE_DIR}/public/release.json"
+        git -C "$NIXON_SITE_DIR" add public/release.json
+        if ! git -C "$NIXON_SITE_DIR" diff --cached --quiet -- public/release.json; then
+          git -C "$NIXON_SITE_DIR" commit -qm "release: v${NEW}"
+        fi
+        git -C "$NIXON_SITE_DIR" push -q origin main
+      ) || c_yellow "⚠️  Could not push release.json to the site repo; the page will show the old version until you do."
     fi
   else
     c_yellow "   (--skip-build: no build artefacts — nothing uploaded to R2; installed apps will NOT see this release)"
