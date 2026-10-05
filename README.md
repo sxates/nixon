@@ -79,7 +79,7 @@ can, and that is the only case where any part of a meeting leaves your Mac. It i
 choice and it is off unless you make it.
 
 The one other thing Nixon talks to is nixonapp.com, to check whether a new version exists. No
-personal data is sent (just the app version and platform), and you can turn it off in Settings.
+personal data is sent (just the app version and operating system), and you can turn it off in Settings.
 
 Full detail in [`PRIVACY_POLICY.md`](PRIVACY_POLICY.md).
 

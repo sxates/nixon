@@ -30,13 +30,15 @@ If you choose to use external LLM providers for summarization:
 ### Update checks (on by default, optional)
 - **nixonapp.com**: Nixon asks nixonapp.com (hosted on Cloudflare) for its latest release
   about every six hours and downloads new versions in the background. The request is a plain
-  GET that carries the app version and platform you are running (for example `0.13.0` and
-  `darwin-aarch64`), plus what any download sends (your IP address and a generic user agent).
-  It carries no account, device, or meeting information. The server counts update checks and
-  downloads in aggregate by event type, version, platform and day; it does not keep a
-  per-user record. Turn it off under Settings > General > "Download updates automatically";
-  "Check for updates" in About then works on demand. Installing is always your click.
-- Copies of Nixon installed before the move to nixonapp.com still check github.com until they update.
+  GET that carries the operating system (`darwin`) and app version you are running (for
+  example `0.13.0`), plus what any download sends (your IP address and a generic user
+  agent). It carries no account, device, or meeting information. The server counts update
+  checks and downloads in aggregate by event type, version, platform and day; Nixon's own
+  systems store no IP address or user identifier. Cloudflare, as the host, processes request
+  metadata under its own privacy policy. Copies of Nixon installed before the move to
+  nixonapp.com still check github.com until they update. Turn update checks off under
+  Settings > General > "Download updates automatically"; "Check for updates" in About then
+  works on demand. Installing is always your click.
 
 ## Your Privacy Rights
 

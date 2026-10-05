@@ -44,7 +44,7 @@ can eventually go private without breaking updates.
 
 - **Destination:** `nixonapp.com` instead of `github.com`. The manifest
   (`/updates/latest.json`) and the signed `Nixon.app.tar.gz` are served from there.
-- **What is sent:** the manifest request now carries the running app version and platform
+- **What is sent:** the manifest request now carries the running app version and operating system (`darwin`)
   in the URL query (`?current_version=…&target=…`). It is still a GET with no body and no
   identifiers: no account, device or meeting information.
 - **What is recorded:** the Worker records only the event type, version, platform and day,
