@@ -25,7 +25,7 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 ### Internal
 
-- `release.sh` publishes to Cloudflare R2 (artifacts, then `updates/current.json`, then `updates/latest.json` last), verifies the live feed, and updates the site's `release.json`; `--no-github` skips the GitHub release. A Cloudflare Worker serves the feed and counts update checks in aggregate (specs/0080). ADR-0012 amended.
+- `release.sh` publishes to Cloudflare R2 (artifacts, then `updates/current.json`, then `updates/latest.json` last), verifies the live feed, and updates the site's `release.json`; `--no-github` skips the GitHub release. A Cloudflare Worker serves the feed (specs/0080); aggregate counting of downloads and update checks is built in but stays off until Analytics Engine is enabled on the Cloudflare account. ADR-0012 amended.
 
 ## [0.13.0] - 2026-10-03
 
