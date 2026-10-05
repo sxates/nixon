@@ -136,6 +136,17 @@ if [ "$NO_RELEASE" -eq 0 ]; then
     # fail before the build/tag, not after the tag is pushed
     [ -d "$NIXON_SITE_DIR/public" ] || die "$NIXON_SITE_DIR/public does not exist (is NIXON_SITE_DIR the site repo?)"
     pnpm --dir "$NIXON_SITE_DIR" exec wrangler --version >/dev/null 2>&1 || die "wrangler not runnable via 'pnpm --dir $NIXON_SITE_DIR exec wrangler' (run pnpm install in the site repo)."
+    # Token preflight: before the build/tag, prove the token can reach the bucket. A missing
+    # updates/latest.json (brand-new empty bucket) is fine; only auth/permission errors fail.
+    if [ "$DRY_RUN" -eq 1 ]; then
+      echo "  [dry-run] would verify the Cloudflare token"
+    else
+      cf_err="$(pnpm --dir "$NIXON_SITE_DIR" exec wrangler r2 object get "$R2_BUCKET/updates/latest.json" --remote --pipe 2>&1 >/dev/null)" || {
+        if printf '%s' "$cf_err" | grep -Eiq '401|403|authentication|unauthori[sz]ed|permission|forbidden|invalid.*token|10000|10042'; then
+          die "Cloudflare token cannot read $R2_BUCKET (check CLOUDFLARE_API_TOKEN / account id; the token needs R2 Object Read & Write)"
+        fi
+      }
+    fi
   fi
 fi
 
@@ -575,6 +586,7 @@ $(r2_manual_steps)
       #RELEASE_JSON_FN_BEGIN
       publish_release_json() {
         local size tmp rj="${NIXON_SITE_DIR}/public/release.json"
+        [ "$(git -C "$NIXON_SITE_DIR" rev-parse --abbrev-ref HEAD)" = main ] || return 1
         size="$(stat -f%z "$DMG")" || return 1
         [[ "$size" =~ ^[0-9]+$ ]] || return 1
         tmp="${rj}.tmp.$$"
@@ -587,7 +599,7 @@ $(r2_manual_steps)
         git -C "$NIXON_SITE_DIR" push -q origin main
       }
       #RELEASE_JSON_FN_END
-      publish_release_json || c_yellow "⚠️  Could not push release.json to the site repo; the page will show the old version until you do."
+      publish_release_json || c_yellow "⚠️  Could not push release.json to the site repo (it must be checked out on branch main); the page will show the old version until you do."
     fi
   else
     c_yellow "   (--skip-build: no build artefacts — nothing uploaded to R2; installed apps will NOT see this release)"
