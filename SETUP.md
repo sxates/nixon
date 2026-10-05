@@ -161,13 +161,25 @@ xattr -dr com.apple.quarantine /Applications/Nixon.app
 ### Cutting a release (on the build Mac)
 
 ```bash
-./release.sh patch          # bump + changelog + build DMG + tag + GitHub release
-./release.sh minor --no-release   # everything except publishing to GitHub
+./release.sh patch          # bump + changelog + build DMG + tag + R2 (nixonapp.com) + GitHub release
+./release.sh patch --no-github    # publish to R2 only, skip the GitHub release
+./release.sh minor --no-release   # everything except publishing (R2 and GitHub)
 ./release.sh 1.0.0 --dry-run      # preview, no changes
 ```
 
-`release.sh` needs `gh` authenticated on the build machine too; it fails fast in pre-flight
-if it isn't (or pass `--no-release` to skip publishing).
+`release.sh` publishes to **Cloudflare R2** (served at `https://nixonapp.com`, specs/0080)
+and, unless `--no-github`, also to GitHub (for installs still on the GitHub updater
+endpoint). It needs these in `.env.signing` (see `.env.signing.example`; fails fast in
+pre-flight if missing, unless `--no-release`):
+
+    CLOUDFLARE_API_TOKEN="…"      # R2 Object Read & Write on the nixon-releases bucket
+    CLOUDFLARE_ACCOUNT_ID="…"
+    NIXON_SITE_DIR="/path/to/nixonapp"   # site repo checkout; wrangler is run from its pinned install
+
+Upload order is artifacts, then `updates/current.json`, then `updates/latest.json` last, so an
+interrupted release never advertises a version whose files are missing. It then verifies the
+live feed, and commits + pushes `public/release.json` to the site repo. `gh` must be
+authenticated on the build machine unless you pass `--no-github` or `--no-release`.
 
 ## Google Calendar OAuth client (per build machine)
 
@@ -228,8 +240,8 @@ downloads and opens from the release page directly.
 
 ### In-app updates (specs/0058)
 
-Installed apps poll the latest GitHub release for `latest.json` and install the signed
-`Nixon.app.tar.gz` it points to. `release.sh` produces and uploads both; it refuses to
+Installed apps poll `https://nixonapp.com/updates/latest.json` (R2; older installs poll the
+latest GitHub release's `latest.json`) and install the signed `Nixon.app.tar.gz` it points to. `release.sh` produces and uploads both; it refuses to
 publish without the update signing key.
 
 **One-time:** `cd frontend && pnpm tauri signer generate -w ~/.tauri/nixon-updater.key`,

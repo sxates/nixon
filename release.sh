@@ -12,17 +12,23 @@
 #   4. Build the production DMG (frontend/build-gpu.sh, Metal).
 #   5. Merge the current branch into main, tag it vX.Y.Z, and push both
 #      (main + tag) to origin.
-#   6. Publish a GitHub Release on the tag, with notes from the changelog and
-#      the DMG attached (needs the `gh` CLI, authenticated). Skipped with
-#      --no-release; download builds elsewhere via `gh release download`.
-#      Publishes DMG + updater tarball + latest.json; needs
+#   6. Publish to Cloudflare R2 (nixonapp.com, specs/0080): DMG + updater tarball +
+#      signature, then updates/current.json, then updates/latest.json LAST (the
+#      only object installed apps poll), then verify the live feed and push
+#      public/release.json to the site repo. Needs CLOUDFLARE_API_TOKEN,
+#      CLOUDFLARE_ACCOUNT_ID, NIXON_SITE_DIR (see SETUP.md) and
 #      TAURI_SIGNING_PRIVATE_KEY (specs/0058).
+#   7. Also publish a GitHub Release on the tag (notes from the changelog, DMG +
+#      updater artefacts attached; needs the `gh` CLI, authenticated) for installs
+#      still on the GitHub updater endpoint. Skip with --no-github.
+#      --no-release skips both 6 and 7.
 #
 # Usage:
-#   ./release.sh <major|minor|patch|X.Y.Z> [--skip-build] [--no-release] [--yes] [--dry-run] [--allow-degraded]
+#   ./release.sh <major|minor|patch|X.Y.Z> [--skip-build] [--no-release] [--no-github] [--yes] [--dry-run] [--allow-degraded]
 #
 #   --skip-build      bump + changelog + merge/push, but don't build the DMG
-#   --no-release      do everything except publish the GitHub release
+#   --no-release      do everything except publish (R2 and GitHub)
+#   --no-github       publish to R2 but skip the GitHub release
 #   --yes             don't prompt before the merge/tag/push (remote) step
 #   --dry-run         print what would happen; make no changes
 #   --allow-degraded  override the safety preflight: build even without the
@@ -43,6 +49,7 @@ die() { printf '\033[0;31m❌ %s\033[0m\n' "$*" >&2; exit 1; }
 DRY_RUN=0
 SKIP_BUILD=0
 NO_RELEASE=0
+ALSO_GITHUB=1
 ASSUME_YES=0
 ALLOW_DEGRADED=0
 BUMP=""
@@ -52,12 +59,13 @@ for arg in "$@"; do
     --dry-run) DRY_RUN=1 ;;
     --skip-build) SKIP_BUILD=1 ;;
     --no-release) NO_RELEASE=1 ;;
+    --no-github) ALSO_GITHUB=0 ;;
     --yes|-y) ASSUME_YES=1 ;;
     --allow-degraded) ALLOW_DEGRADED=1 ;;
     major|minor|patch) BUMP="$arg" ;;
     [0-9]*.[0-9]*.[0-9]*) BUMP="$arg" ;;
     -h|--help)
-      sed -n '3,33p' "$0"; exit 0 ;;
+      sed -n '3,40p' "$0"; exit 0 ;;
     *) die "Unknown argument: $arg (expected major|minor|patch|X.Y.Z and optional flags)" ;;
   esac
 done
@@ -93,7 +101,7 @@ c_blue "🔄 Fetching origin…"
 run "git fetch --quiet origin"
 
 # gh is needed for the GitHub release step — check now so we fail fast (before build)
-if [ "$NO_RELEASE" -eq 0 ]; then
+if [ "$NO_RELEASE" -eq 0 ] && [ "$ALSO_GITHUB" -eq 1 ]; then
   command -v gh >/dev/null 2>&1 || die "gh CLI not found (needed to publish the release). Install it ('brew install gh') and 'gh auth login', or pass --no-release."
   if [ "$DRY_RUN" -eq 0 ]; then
     gh auth status >/dev/null 2>&1 || die "gh is not authenticated. Run 'gh auth login', or pass --no-release."
@@ -110,6 +118,20 @@ if [ -f "$SIGNING_ENV" ]; then
   c_blue "🔏 Loading signing credentials from ${SIGNING_ENV}…"
   set -a; # shellcheck disable=SC1090
   . "$SIGNING_ENV"; set +a
+fi
+
+# ---- R2 / nixonapp.com publishing (specs/0080) ----------------------------
+# wrangler runs from the site repo's pinned install (pnpm --dir "$NIXON_SITE_DIR" exec).
+# Credentials come from .env.signing (or the environment); export them so wrangler sees them.
+R2_BUCKET="nixon-releases"
+SITE_BASE="https://nixonapp.com"
+if [ "$NO_RELEASE" -eq 0 ]; then
+  : "${CLOUDFLARE_API_TOKEN:?set CLOUDFLARE_API_TOKEN in ${SIGNING_ENV} (see SETUP.md)}"
+  : "${CLOUDFLARE_ACCOUNT_ID:?set CLOUDFLARE_ACCOUNT_ID in ${SIGNING_ENV} (see SETUP.md)}"
+  : "${NIXON_SITE_DIR:?set NIXON_SITE_DIR in ${SIGNING_ENV} (see SETUP.md)}"
+  export CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID
+  [ -d "$NIXON_SITE_DIR" ] || die "NIXON_SITE_DIR ($NIXON_SITE_DIR) does not exist"
+  command -v pnpm >/dev/null 2>&1 || die "pnpm not found (needed to run wrangler from the site repo)"
 fi
 
 # ---- Google Calendar OAuth client (optional, specs/0032) -------------------
@@ -420,17 +442,16 @@ if [ "$BRANCH" != "main" ]; then
   run "git checkout '$BRANCH'"
 fi
 
-# ---- publish the GitHub release -------------------------------------------
+# ---- publish: R2 (nixonapp.com) + GitHub ------------------------------------
 if [ "$NO_RELEASE" -eq 1 ]; then
-  c_yellow "⏭️  --no-release: not publishing a GitHub release. Installed apps won't see this update until it's published. Publish later with:"
-  echo "     gh release create '$TAG' '$DMG' '$UPD_TGZ' '$UPD_SIG' --title 'Nixon v${NEW}' --generate-notes  # then build+attach latest.json (see release.sh's publish step)"
+  c_yellow "⏭️  --no-release: not publishing. Installed apps won't see this update until it's published (R2 uploads + updates/latest.json, and optionally a GitHub release; see release.sh's publish step)."
+  echo "     GitHub-only fallback: gh release create '$TAG' '$DMG' '$UPD_TGZ' '$UPD_SIG' --title 'Nixon v${NEW}' --generate-notes"
 else
-  c_blue "🚀 Publishing GitHub release ${TAG}…"
   # release notes = this version's changelog section (anchored heading match,
   # so no regex escaping of the [brackets]), MINUS its "### Internal" section.
   #
-  # This text is read by users twice: as the GitHub release body and as the `notes` the
-  # in-app updater renders in its update dialog (see the manifest built just below). CI
+  # This text is read by users twice: as the release body and as the `notes` the
+  # in-app updater renders in its update dialog (see the manifests built just below). CI
   # gates, build tooling and refactors do not belong in either, so the changelog parks
   # them under "### Internal" and they are dropped here. Dropping at publish time rather
   # than asking the author to remember keeps the changelog complete while keeping the
@@ -445,14 +466,17 @@ else
   ' "$CHANGELOG" > "$NOTES_FILE"
   [ -s "$NOTES_FILE" ] || printf 'Nixon v%s\n' "$NEW" > "$NOTES_FILE"
 
-  rel_args=( "$TAG" --title "Nixon v${NEW}" --notes-file "$NOTES_FILE" )
-  MANIFEST="$(mktemp -d)/latest.json"
+  MANIFEST_DIR="$(mktemp -d)"
+  MANIFEST_GH="${MANIFEST_DIR}/latest.json"        # the GitHub-hosted feed (legacy installs)
+  MANIFEST_R2="${MANIFEST_DIR}/latest.r2.json"     # the nixonapp.com feed
   if [ "$SKIP_BUILD" -eq 0 ]; then
     # specs/0058: the manifest the installed app polls. Versioned asset URL so an
-    # older manifest can never point at a newer tarball.
-    python3 - "$NEW" "$NOTES_FILE" "$UPD_SIG" "$TAG" "$MANIFEST" "$DRY_RUN" <<'PY'
+    # older manifest can never point at a newer tarball. Emitted twice (specs/0080):
+    # once pointing at GitHub, once at nixonapp.com/R2.
+    build_manifest() { # out url
+      python3 - "$NEW" "$NOTES_FILE" "$UPD_SIG" "$TAG" "$1" "$DRY_RUN" "$2" <<'PY'
 import json, sys, datetime, os
-ver, notes_file, sig_file, tag, out, dry = sys.argv[1:7]
+ver, notes_file, sig_file, tag, out, dry, url = sys.argv[1:8]
 sig = open(sig_file).read().strip() if os.path.exists(sig_file) else ("<signature>" if dry == "1" else "")
 if not sig: sys.exit("missing updater signature")
 manifest = {
@@ -461,28 +485,95 @@ manifest = {
   "pub_date": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
   "platforms": {"darwin-aarch64": {
     "signature": sig,
-    "url": f"https://github.com/sxates/nixon/releases/download/{tag}/Nixon.app.tar.gz"}},
+    "url": url}},
 }
 json.dump(manifest, open(out, "w"), indent=2)
 PY
-    rel_args+=( "$DMG" "$UPD_TGZ" "$UPD_SIG" "$MANIFEST" )
-  else
-    # Only --skip-build reaches this now: on a real publish a missing DMG, updater
-    # tarball or signature already died above, so an asset-less release can no longer
-    # happen by accident.
-    c_yellow "   (--skip-build: no build artefacts to attach — this release will have no assets and installed apps will NOT see it)"
-  fi
+    }
+    build_manifest "$MANIFEST_GH" "https://github.com/sxates/nixon/releases/download/${TAG}/Nixon.app.tar.gz"
+    build_manifest "$MANIFEST_R2" "${SITE_BASE}/releases/${NEW}/Nixon.app.tar.gz"
 
-  if [ "$DRY_RUN" -eq 1 ]; then
-    echo "  [dry-run] gh release create ${rel_args[*]}"
-    if [ -f "$MANIFEST" ]; then
-      echo "  [dry-run] latest.json:"
-      sed 's/^/    /' "$MANIFEST"
-      echo
+    # ---- R2 (specs/0080) -----------------------------------------------------
+    # Interrupted-release safety: immutable, versioned artifacts go up FIRST; then
+    # updates/current.json (download page pointer); updates/latest.json goes LAST,
+    # because that is the only object installed apps poll. Any failure before it
+    # leaves nothing advertised.
+    r2_put() { # key file content-type
+      if [ "$DRY_RUN" -eq 1 ]; then echo "  [dry-run] r2 put $R2_BUCKET/$1 <- $2 ($3)"; return 0; fi
+      pnpm --dir "$NIXON_SITE_DIR" exec wrangler r2 object put "$R2_BUCKET/$1" \
+        --file "$2" --content-type "$3" --remote >/dev/null \
+        || die "R2 upload failed for $1. Nothing is advertised yet — fix and re-run the release publish."
+    }
+
+    c_blue "☁️  Uploading to R2 (${R2_BUCKET})…"
+    DMG_NAME="Nixon_${NEW}_aarch64.dmg"
+    r2_put "releases/${NEW}/${DMG_NAME}"          "$DMG"     "application/x-apple-diskimage"
+    r2_put "releases/${NEW}/Nixon.app.tar.gz"     "$UPD_TGZ" "application/gzip"
+    r2_put "releases/${NEW}/Nixon.app.tar.gz.sig" "$UPD_SIG" "text/plain"
+
+    CURRENT_JSON="${MANIFEST_DIR}/current.json"
+    printf '{"version":"%s","dmg":"releases/%s/%s"}\n' "$NEW" "$NEW" "$DMG_NAME" > "$CURRENT_JSON"
+    r2_put "updates/current.json" "$CURRENT_JSON" "application/json"
+    r2_put "updates/latest.json"  "$MANIFEST_R2"  "application/json"   # LAST: this is what installed apps see
+
+    if [ "$DRY_RUN" -eq 0 ]; then
+      c_blue "🔎 Verifying the live feed at ${SITE_BASE}…"
+      live="$(curl -fsS "${SITE_BASE}/updates/latest.json?current_version=0.0.0&target=verify" | python3 -c 'import json,sys;print(json.load(sys.stdin)["version"])')" \
+        || die "Uploaded, but ${SITE_BASE}/updates/latest.json did not respond. Investigate before announcing."
+      [ "$live" = "$NEW" ] || die "Feed serves $live, expected $NEW."
+      want="$(stat -f%z "$DMG")"
+      got="$(curl -fsSI "${SITE_BASE}/releases/${NEW}/${DMG_NAME}" | awk 'tolower($1)=="content-length:"{print $2+0}')" \
+        || die "Could not HEAD ${SITE_BASE}/releases/${NEW}/${DMG_NAME}."
+      [ "$want" = "$got" ] || die "DMG size mismatch on ${SITE_BASE}: local $want, served ${got:-none}."
+      c_green "   ✅ Feed serves ${NEW}; DMG size matches (${want} bytes)."
+    fi
+
+    # ---- site release.json (page shows the current version; warn, never fail) ----
+    if [ "$DRY_RUN" -eq 1 ]; then
+      echo "  [dry-run] write ${NIXON_SITE_DIR}/public/release.json and push"
+    else
+      size="$(stat -f%z "$DMG")"
+      printf '{"version":"%s","size":%s,"date":"%s"}\n' "$NEW" "$size" "$(date -u +%F)" > "${NIXON_SITE_DIR}/public/release.json"
+      ( git -C "$NIXON_SITE_DIR" add public/release.json \
+        && git -C "$NIXON_SITE_DIR" commit -qm "release: v${NEW}" \
+        && git -C "$NIXON_SITE_DIR" push -q origin main ) \
+        || c_yellow "⚠️  Could not push release.json to the site repo; the page will show the old version until you do."
     fi
   else
-    gh release create "${rel_args[@]}" \
-      || { rm -f "$NOTES_FILE"; die "gh release create failed. Tag ${TAG} is already pushed — retry with: gh release create '$TAG' '$DMG' '$UPD_TGZ' '$UPD_SIG' '$MANIFEST' --title 'Nixon v${NEW}' --generate-notes"; }
+    c_yellow "   (--skip-build: no build artefacts — nothing uploaded to R2; installed apps will NOT see this release)"
+  fi
+
+  # ---- GitHub release (optional; --no-github skips) ---------------------------
+  if [ "$ALSO_GITHUB" -eq 1 ]; then
+    c_blue "🚀 Publishing GitHub release ${TAG}…"
+    rel_args=( "$TAG" --title "Nixon v${NEW}" --notes-file "$NOTES_FILE" )
+    if [ "$SKIP_BUILD" -eq 0 ]; then
+      rel_args+=( "$DMG" "$UPD_TGZ" "$UPD_SIG" "$MANIFEST_GH" )
+    else
+      # Only --skip-build reaches this now: on a real publish a missing DMG, updater
+      # tarball or signature already died above, so an asset-less release can no longer
+      # happen by accident.
+      c_yellow "   (--skip-build: no build artefacts to attach — this release will have no assets and installed apps will NOT see it)"
+    fi
+
+    if [ "$DRY_RUN" -eq 1 ]; then
+      echo "  [dry-run] gh release create ${rel_args[*]}"
+      if [ -f "$MANIFEST_GH" ]; then
+        echo "  [dry-run] latest.json (GitHub):"
+        sed 's/^/    /' "$MANIFEST_GH"
+        echo
+      fi
+    else
+      gh release create "${rel_args[@]}" \
+        || { rm -f "$NOTES_FILE"; die "gh release create failed. Tag ${TAG} is already pushed — retry with: gh release create '$TAG' '$DMG' '$UPD_TGZ' '$UPD_SIG' '$MANIFEST_GH' --title 'Nixon v${NEW}' --generate-notes"; }
+    fi
+  else
+    c_yellow "⏭️  --no-github: skipping the GitHub release. Installs still on the GitHub endpoint will not see this release."
+  fi
+  if [ "$DRY_RUN" -eq 1 ] && [ -f "$MANIFEST_R2" ]; then
+    echo "  [dry-run] updates/latest.json (R2):"
+    sed 's/^/    /' "$MANIFEST_R2"
+    echo
   fi
   rm -f "$NOTES_FILE"
 fi
@@ -494,6 +585,8 @@ fi
 echo "   Tag: ${TAG} (pushed to origin)"
 if [ "$NO_RELEASE" -eq 0 ] && [ "$DRY_RUN" -eq 0 ]; then
   echo "   Installed apps will pick this update up on their own (in-app updater, specs/0058)."
-  echo "   Install on another Mac (avoids Gatekeeper quarantine):"
-  echo "     gh release download '$TAG' -R sxates/nixon && open Nixon_${NEW}_aarch64.dmg"
+  echo "   Download page / install on another Mac: ${SITE_BASE}/download/"
+  if [ "$ALSO_GITHUB" -eq 1 ]; then
+    echo "   GitHub: gh release download '$TAG' -R sxates/nixon && open Nixon_${NEW}_aarch64.dmg"
+  fi
 fi
