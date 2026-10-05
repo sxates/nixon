@@ -19,6 +19,10 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 ## [Unreleased]
 
+_(nothing yet)_
+
+## [0.13.1] - 2026-10-04
+
 ### Changed
 
 - Nixon now updates from nixonapp.com. If a copy ever stops updating, download the latest from nixonapp.com/download.
