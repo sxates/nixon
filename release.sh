@@ -570,16 +570,24 @@ $(r2_manual_steps)
     if [ "$DRY_RUN" -eq 1 ]; then
       echo "  [dry-run] write ${NIXON_SITE_DIR}/public/release.json and push"
     else
-      (
-        set -e
-        size="$(stat -f%z "$DMG")"
-        printf '{"version":"%s","size":%s,"date":"%s"}\n' "$NEW" "$size" "$(date -u +%F)" > "${NIXON_SITE_DIR}/public/release.json"
-        git -C "$NIXON_SITE_DIR" add public/release.json
+      # NOTE: called as `f || warn`, where errexit is ignored — so every step is chained
+      # explicitly and the first failure returns non-zero (no invalid JSON, no partial push).
+      #RELEASE_JSON_FN_BEGIN
+      publish_release_json() {
+        local size tmp rj="${NIXON_SITE_DIR}/public/release.json"
+        size="$(stat -f%z "$DMG")" || return 1
+        [[ "$size" =~ ^[0-9]+$ ]] || return 1
+        tmp="${rj}.tmp.$$"
+        printf '{"version":"%s","size":%s,"date":"%s"}\n' "$NEW" "$size" "$(date -u +%F)" > "$tmp" \
+          && mv -f "$tmp" "$rj" || { rm -f "$tmp"; return 1; }
+        git -C "$NIXON_SITE_DIR" add -- public/release.json || return 1
         if ! git -C "$NIXON_SITE_DIR" diff --cached --quiet -- public/release.json; then
-          git -C "$NIXON_SITE_DIR" commit -qm "release: v${NEW}"
+          git -C "$NIXON_SITE_DIR" commit -qm "release: v${NEW}" -- public/release.json || return 1
         fi
         git -C "$NIXON_SITE_DIR" push -q origin main
-      ) || c_yellow "⚠️  Could not push release.json to the site repo; the page will show the old version until you do."
+      }
+      #RELEASE_JSON_FN_END
+      publish_release_json || c_yellow "⚠️  Could not push release.json to the site repo; the page will show the old version until you do."
     fi
   else
     c_yellow "   (--skip-build: no build artefacts — nothing uploaded to R2; installed apps will NOT see this release)"
