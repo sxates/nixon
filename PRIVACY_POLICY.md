@@ -1,6 +1,6 @@
 # Nixon Privacy Policy
 
-*Last updated: 2026-09-13*
+*Last updated: 2026-10-04*
 
 ## Our Privacy-First Commitment
 
@@ -20,39 +20,6 @@ Nixon is built on the principle that your meeting data should remain private and
 - No vendor lock-in — export your data anytime
 - Complete control over data retention and deletion
 
-## Usage Analytics
-
-### What We Collect
-Usage analytics is optional and off by default. When you choose to enable it, Nixon collects minimal, anonymized usage data:
-
-**Application Usage:**
-- Feature usage patterns (which tools you use most)
-- Session duration and frequency
-- Performance metrics (transcription success rates, error frequencies)
-- UI interaction patterns (button clicks, navigation flows)
-
-**Technical Metrics:**
-- Application version and platform information
-- Error logs and crash reports (anonymized)
-- Performance benchmarks (processing times, resource usage)
-
-### What We DON'T Collect
-We never collect:
-- ❌ Meeting content, transcripts, or recordings
-- ❌ Personal information or identifiable data
-- ❌ File names, meeting titles, or metadata
-- ❌ Audio data or voice patterns
-- ❌ Participant names or contact information
-- ❌ LLM conversations or AI-generated content
-
-### Analytics Implementation
-- **Provider**: PostHog (privacy-focused analytics platform)
-- **Default**: Off by default; analytics starts only after you enable it in settings
-- **Anonymization**: All data linked to generated user IDs only — no personal identification
-- **Data retention**: 12 months maximum, then automatically deleted
-- **Encryption**: All data encrypted in transit using industry-standard protocols
-- **Location**: Data processed in accordance with PostHog's privacy policy
-
 ## Third-Party Services
 
 ### LLM Providers (Optional)
@@ -60,17 +27,16 @@ If you choose to use external LLM providers for summarization:
 - **Local Ollama**: Processed entirely on your device (the default)
 - **Anthropic Claude / OpenAI / Groq / OpenRouter / custom OpenAI-compatible endpoints**: Subject to that provider's privacy policy
 
-### Analytics Service (Optional)
-- **PostHog**: Used for usage analytics when enabled
-- **Data**: Only anonymized usage patterns, no meeting content
-- **Control**: Completely optional, off by default, and user-controlled
-
 ### Update checks (on by default, optional)
-- **GitHub**: Nixon asks github.com for its latest release about every six hours and
-  downloads new versions in the background. The request carries no account, device, or
-  meeting information — only what any download sends (your IP address and a generic
-  user agent). Turn it off under Settings > General > "Download updates automatically";
+- **nixonapp.com**: Nixon asks nixonapp.com (hosted on Cloudflare) for its latest release
+  about every six hours and downloads new versions in the background. The request is a plain
+  GET that carries the app version and platform you are running (for example `0.13.0` and
+  `darwin-aarch64`), plus what any download sends (your IP address and a generic user agent).
+  It carries no account, device, or meeting information. The server counts update checks and
+  downloads in aggregate by event type, version, platform and day; it does not keep a
+  per-user record. Turn it off under Settings > General > "Download updates automatically";
   "Check for updates" in About then works on demand. Installing is always your click.
+- Copies of Nixon installed before the move to nixonapp.com still check github.com until they update.
 
 ## Your Privacy Rights
 
@@ -78,10 +44,6 @@ If you choose to use external LLM providers for summarization:
 - **Access**: View all data stored locally on your device
 - **Export**: Export your data in standard formats
 - **Delete**: Remove all data from your device
-
-### Analytics Transparency
-- **Open source**: Full analytics implementation available for review in the source code
-- **Opt-in**: New and existing installs have analytics disabled until you turn it on
 
 ## Data Security
 

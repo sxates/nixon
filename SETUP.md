@@ -123,7 +123,9 @@ Machine-local Claude state does NOT come with the repo and must be re-establishe
 ## Installing a release build
 
 For running Nixon on another Mac without setting up the whole dev toolchain. Releases are
-published to GitHub by `./release.sh` (the DMG is attached as a release asset).
+published by `./release.sh` to Cloudflare R2 (the download page at https://nixonapp.com/download/)
+and, by default, to GitHub (the DMG is attached as a release asset). The easiest way to install is the
+download page; the `gh` route below needs GitHub access to the repo.
 
 **Prereqs on the target Mac:** [`gh`](https://cli.github.com) installed and authenticated
 (`brew install gh && gh auth login`). The repo is **private**, so download requires auth.

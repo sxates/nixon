@@ -6,9 +6,9 @@ Nixon sits quietly beside your calls — Zoom, Meet, Teams, or anything else tha
 sound — and writes down what was said, who said it, and what you agreed to. No bot joins
 your meeting. No recording is uploaded. Nothing leaves your machine.
 
-### [Download for macOS →](https://github.com/sxates/nixon/releases/latest)
+### [Download for macOS →](https://nixonapp.com/download/)
 
-Apple Silicon, macOS 14 Sonoma or later. Open the `.dmg` and drag Nixon to Applications.
+Apple Silicon, macOS 14.4 or later. Open the `.dmg` and drag Nixon to Applications.
 
 > **Nixon is pre-release software.** Expect bugs, and expect features to change,
 > sometimes substantially, between versions.
@@ -78,8 +78,8 @@ machine and uses that. If you would rather use Claude, OpenAI or another provide
 can, and that is the only case where any part of a meeting leaves your Mac. It is your
 choice and it is off unless you make it.
 
-The one other thing Nixon talks to is GitHub, to check whether a new version exists. No
-personal data is sent, and you can turn it off in Settings.
+The one other thing Nixon talks to is nixonapp.com, to check whether a new version exists. No
+personal data is sent (just the app version and platform), and you can turn it off in Settings.
 
 Full detail in [`PRIVACY_POLICY.md`](PRIVACY_POLICY.md).
 
@@ -87,7 +87,7 @@ Full detail in [`PRIVACY_POLICY.md`](PRIVACY_POLICY.md).
 
 ## What you need
 
-**Any Apple Silicon Mac running macOS 14 Sonoma or later** — including the original M1. Nixon
+**Any Apple Silicon Mac running macOS 14.4 or later** — including the original M1. Nixon
 sizes its work to your machine rather than demanding a recent one. Intel Macs are not
 supported.
 
