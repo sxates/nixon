@@ -19,7 +19,13 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 ## [Unreleased]
 
-_(nothing yet)_
+### Changed
+
+- Nixon now updates from nixonapp.com. If a copy ever stops updating, download the latest from nixonapp.com/download.
+
+### Internal
+
+- `release.sh` publishes to Cloudflare R2 (artifacts, then `updates/current.json`, then `updates/latest.json` last), verifies the live feed, and updates the site's `release.json`; `--no-github` skips the GitHub release. A Cloudflare Worker serves the feed and counts update checks in aggregate (specs/0080). ADR-0012 amended.
 
 ## [0.13.0] - 2026-10-03
 
