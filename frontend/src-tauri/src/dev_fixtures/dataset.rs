@@ -211,10 +211,15 @@ pub fn validate(ds: &Dataset) -> Result<(), Vec<String>> {
     }
     // specs/0082 — series / brief / status rules. Earlier = more days ago, or the same day
     // with a lexically smaller "HH:MM" time_of_day.
-    let starts: std::collections::HashMap<&str, (u32, &str)> = ds
+    // A source also needs a summary: briefs are written from prior summaries, and a source
+    // without one would be a citation chip pointing at an empty meeting.
+    let starts: std::collections::HashMap<&str, (u32, &str, bool)> = ds
         .meetings
         .iter()
-        .map(|m| (m.id.as_str(), (m.days_ago, m.time_of_day.as_str())))
+        .map(|m| {
+            let has_summary = m.summary_markdown.as_deref().is_some_and(|s| !s.trim().is_empty());
+            (m.id.as_str(), (m.days_ago, m.time_of_day.as_str(), has_summary))
+        })
         .collect();
     for m in &ds.meetings {
         for ai in &m.action_items {
@@ -236,11 +241,17 @@ pub fn validate(ds: &Dataset) -> Result<(), Vec<String>> {
                     "{}: brief source {src} is not a meeting in the dataset",
                     m.id
                 )),
-                Some(&(d, t)) => {
+                Some(&(d, t, has_summary)) => {
                     let earlier = d > m.days_ago || (d == m.days_ago && t < m.time_of_day.as_str());
                     if !earlier {
                         errs.push(format!(
                             "{}: brief source {src} must start earlier than the citing meeting",
+                            m.id
+                        ));
+                    }
+                    if !has_summary {
+                        errs.push(format!(
+                            "{}: brief source {src} has no summary_markdown to brief from",
                             m.id
                         ));
                     }
@@ -249,11 +260,13 @@ pub fn validate(ds: &Dataset) -> Result<(), Vec<String>> {
         }
         if let Some(md) = &m.brief_markdown {
             for cap in MARKER_RE.captures_iter(md) {
+                // An unparseable (overflowing) number is out of range like 0; the message
+                // quotes the marker verbatim either way.
                 let n: usize = cap[1].parse().unwrap_or(0);
                 if n == 0 || n > m.brief_sources.len() {
                     errs.push(format!(
-                        "{}: brief marker [M{n}] has no brief_sources entry",
-                        m.id
+                        "{}: brief marker {} has no brief_sources entry",
+                        m.id, &cap[0]
                     ));
                 }
             }
@@ -418,6 +431,7 @@ mod tests {
         let mut earlier = ds.meetings[0].clone();
         earlier.id = "demo-00".into();
         earlier.days_ago = 7;
+        earlier.summary_markdown = Some("Summary.".into());
         ds.meetings.insert(0, earlier);
         ds
     }
@@ -487,5 +501,39 @@ mod tests {
             status: Some("completed".into()),
         });
         validate(&ds).expect("well-formed series validates");
+    }
+
+    #[test]
+    fn validate_rejects_m0_and_an_overflowing_marker_verbatim() {
+        let mut ds = with_earlier_meeting();
+        ds.meetings[1].series = Some("s".into());
+        ds.meetings[1].brief_sources = vec!["demo-00".into()];
+        ds.meetings[1].brief_markdown = Some("A [M0]. B [M99999999999999999999999].".into());
+        let errs = validate(&ds).unwrap_err();
+        assert!(errs.iter().any(|e| e.contains("[M0]")), "{errs:?}");
+        assert!(errs.iter().any(|e| e.contains("[M99999999999999999999999]")), "{errs:?}");
+    }
+
+    #[test]
+    fn validate_orders_same_day_sources_by_time_of_day() {
+        let mut ds = with_earlier_meeting();
+        ds.meetings[0].days_ago = 0;
+        ds.meetings[0].time_of_day = "09:00".into();
+        ds.meetings[1].series = Some("s".into());
+        ds.meetings[1].brief_sources = vec!["demo-00".into()];
+        validate(&ds).expect("09:00 is earlier than 14:00 the same day");
+        ds.meetings[0].time_of_day = "15:00".into();
+        let errs = validate(&ds).unwrap_err();
+        assert!(errs.iter().any(|e| e.contains("earlier")), "{errs:?}");
+    }
+
+    #[test]
+    fn validate_rejects_a_brief_source_without_a_summary() {
+        let mut ds = with_earlier_meeting();
+        ds.meetings[0].summary_markdown = None;
+        ds.meetings[1].series = Some("s".into());
+        ds.meetings[1].brief_sources = vec!["demo-00".into()];
+        let errs = validate(&ds).unwrap_err();
+        assert!(errs.iter().any(|e| e.contains("summary")), "{errs:?}");
     }
 }

@@ -373,9 +373,18 @@ async fn seed_series_and_briefs(
         let Some(md) = m.brief_markdown.as_deref() else {
             continue;
         };
-        seed_brief(pool, m, md)
-            .await
-            .with_context(|| format!("seed brief for {}", m.id))?;
+        // A brief citing a meeting that failed to seed would point its chips at nothing;
+        // skip it like the failed meeting itself rather than abort the whole seed.
+        if let Some(missing) = m.brief_sources.iter().find(|id| !seeded.contains(id.as_str())) {
+            log::error!(
+                "[dev] skipping brief for {}: its source {missing} failed to seed",
+                m.id
+            );
+            continue;
+        }
+        if let Err(e) = seed_brief(pool, m, md).await {
+            log::error!("[dev] seed brief for {} failed: {e:#}", m.id);
+        }
     }
     Ok(())
 }
@@ -756,5 +765,21 @@ mod series_tests {
             .unwrap();
         // link_meeting_to_series also pins the target itself, so 3 rows for 3 occurrences.
         assert_eq!(n, 3);
+    }
+
+    #[tokio::test]
+    async fn a_brief_whose_source_failed_to_seed_is_skipped_not_fatal() {
+        let pool = memory_db().await;
+        // Fail p1's summary write, after its meetings row went in, so p1 is rolled back.
+        sqlx::query(
+            "CREATE TRIGGER fail_p1 BEFORE INSERT ON summary_processes WHEN NEW.meeting_id = 'p1' \
+             BEGIN SELECT RAISE(ABORT, 'boom'); END",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        let report = seed_all(&pool, &dataset(), &FolderMap::new(), Utc::now()).await.unwrap();
+        assert_eq!((report.meetings, report.failed), (2, 1));
+        assert!(MeetingBriefsRepository::get(&pool, "t").await.unwrap().is_none());
     }
 }

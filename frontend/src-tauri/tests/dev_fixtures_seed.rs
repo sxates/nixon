@@ -162,7 +162,8 @@ async fn seeds_embedded_dataset_and_is_idempotent() {
     .await
     .unwrap();
     assert_eq!(two, ["demo-13", "demo-12"]);
-    let open = ActionItemsRepository::get_open_for_meetings(db.pool(), &prior)
+    // api_get_prep reads open items from the MAX_PRIOR (2) most recent priors.
+    let open = ActionItemsRepository::get_open_for_meetings(db.pool(), &two)
         .await
         .unwrap();
     assert_eq!(open.len(), 4, "open carried-over items (BLE timeline, ship-or-slip, rev C characterisation, wake-during-update plan): {open:?}");
