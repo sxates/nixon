@@ -35,11 +35,10 @@ async fn seeds_embedded_dataset_and_is_idempotent() {
         .await
         .unwrap();
     assert_eq!(n_meet, 9);
-    let (id,): (String,) =
-        sqlx::query_as("SELECT id FROM meetings WHERE id = 'demo-01'")
-            .fetch_one(db.pool())
-            .await
-            .unwrap();
+    let (id,): (String,) = sqlx::query_as("SELECT id FROM meetings WHERE id = 'demo-01'")
+        .fetch_one(db.pool())
+        .await
+        .unwrap();
     assert_eq!(id, "demo-01");
 
     // speakers for the steerco incl. the local row, linked to people where the fixture says so

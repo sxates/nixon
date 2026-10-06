@@ -217,8 +217,14 @@ pub fn validate(ds: &Dataset) -> Result<(), Vec<String>> {
         .meetings
         .iter()
         .map(|m| {
-            let has_summary = m.summary_markdown.as_deref().is_some_and(|s| !s.trim().is_empty());
-            (m.id.as_str(), (m.days_ago, m.time_of_day.as_str(), has_summary))
+            let has_summary = m
+                .summary_markdown
+                .as_deref()
+                .is_some_and(|s| !s.trim().is_empty());
+            (
+                m.id.as_str(),
+                (m.days_ago, m.time_of_day.as_str(), has_summary),
+            )
         })
         .collect();
     for m in &ds.meetings {
@@ -280,10 +286,7 @@ pub fn validate(ds: &Dataset) -> Result<(), Vec<String>> {
             errs.push(format!("{}: duplicate meeting id", m.id));
         }
         if chrono::NaiveTime::parse_from_str(&m.time_of_day, "%H:%M").is_err() {
-            errs.push(format!(
-                "{}: bad time_of_day {}",
-                m.id, m.time_of_day
-            ));
+            errs.push(format!("{}: bad time_of_day {}", m.id, m.time_of_day));
         }
         if m.duration_minutes == 0 {
             errs.push(format!("{}: duration_minutes must be nonzero", m.id));
@@ -363,7 +366,10 @@ mod tests {
             join_url: None,
         });
         let errs = validate(&ds).unwrap_err();
-        assert!(errs.iter().any(|e| e.contains("duplicate meeting id")), "{errs:?}");
+        assert!(
+            errs.iter().any(|e| e.contains("duplicate meeting id")),
+            "{errs:?}"
+        );
     }
 
     #[test]
@@ -378,7 +384,10 @@ mod tests {
             join_url: None,
         });
         let errs = validate(&ds).unwrap_err();
-        assert!(errs.iter().any(|e| e.contains("bad time_of_day")), "{errs:?}");
+        assert!(
+            errs.iter().any(|e| e.contains("bad time_of_day")),
+            "{errs:?}"
+        );
     }
 
     #[test]
@@ -511,7 +520,11 @@ mod tests {
         ds.meetings[1].brief_markdown = Some("A [M0]. B [M99999999999999999999999].".into());
         let errs = validate(&ds).unwrap_err();
         assert!(errs.iter().any(|e| e.contains("[M0]")), "{errs:?}");
-        assert!(errs.iter().any(|e| e.contains("[M99999999999999999999999]")), "{errs:?}");
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("[M99999999999999999999999]")),
+            "{errs:?}"
+        );
     }
 
     #[test]
