@@ -1,0 +1,119 @@
+{
+  "id": "demo-13",
+  "title": "Product sync — pre-freeze",
+  "days_ago": 7,
+  "time_of_day": "14:00",
+  "duration_seconds": 2100,
+  "audio_state": "processed",
+  "participants": [
+    "person-maya",
+    "person-tomas",
+    "person-ines",
+    "person-dele"
+  ],
+  "speakers": [
+    {
+      "key": "local",
+      "display_name": "You",
+      "is_local": true
+    },
+    {
+      "key": "spk_0",
+      "display_name": "Maya Okafor",
+      "person_id": "person-maya"
+    },
+    {
+      "key": "spk_1",
+      "display_name": "Tomas Lindqvist",
+      "person_id": "person-tomas"
+    },
+    {
+      "key": "spk_2",
+      "display_name": "Inès Marchetti",
+      "person_id": "person-ines"
+    },
+    {
+      "key": "spk_3",
+      "display_name": "Dele Adeyemi",
+      "person_id": "person-dele"
+    }
+  ],
+  "segments": [
+    {"id": "seg_1", "speaker": "local", "channel": "microphone", "start": 0.0, "end": 2.8, "text": "Okay, everyone here? Dele's joining us today for the QA side."},
+    {"id": "seg_2", "speaker": "spk_3", "channel": "system", "start": 3.7, "end": 5.1, "text": "Hi all. Happy to be here."},
+    {"id": "seg_3", "speaker": "local", "channel": "microphone", "start": 5.5, "end": 9.0, "text": "Agenda's short. Calibration, sleep mode, rev C, flash, and the Northfield ask."},
+    {"id": "seg_4", "speaker": "local", "channel": "microphone", "start": 10.1, "end": 11.2, "text": "Maya, calibration."},
+    {"id": "seg_5", "speaker": "spk_0", "channel": "system", "start": 11.9, "end": 15.1, "text": "So the corrected table is in a seventy-two hour soak, three setpoints."},
+    {"id": "seg_6", "speaker": "spk_0", "channel": "system", "start": 15.4, "end": 18.0, "text": "Day one looks clean. Error's under a point at all three."},
+    {"id": "seg_7", "speaker": "local", "channel": "microphone", "start": 18.8, "end": 19.7, "text": "And Solenne?"},
+    {"id": "seg_8", "speaker": "spk_0", "channel": "system", "start": 20.7, "end": 23.9, "text": "They get it as a beta once the soak passes. Three days on their side."},
+    {"id": "seg_9", "speaker": "local", "channel": "microphone", "start": 24.5, "end": 25.4, "text": "Good. Tomas."},
+    {"id": "seg_10", "speaker": "spk_1", "channel": "system", "start": 25.9, "end": 27.9, "text": "Sleep mode. I got a real number on rev B."},
+    {"id": "seg_11", "speaker": "spk_1", "channel": "system", "start": 28.8, "end": 31.0, "text": "Forty microamps on rev B, so call it seven x."},
+    {"id": "seg_12", "speaker": "local", "channel": "microphone", "start": 31.4, "end": 32.6, "text": "From three hundred."},
+    {"id": "seg_13", "speaker": "spk_1", "channel": "system", "start": 33.7, "end": 35.5, "text": "From three hundred, yeah. Roughly."},
+    {"id": "seg_14", "speaker": "spk_0", "channel": "system", "start": 36.2, "end": 37.3, "text": "That's a big jump."},
+    {"id": "seg_15", "speaker": "spk_1", "channel": "system", "start": 37.6, "end": 41.1, "text": "It's the rail gating. Plus the wake timer. I still have to check it on rev C."},
+    {"id": "seg_16", "speaker": "local", "channel": "microphone", "start": 41.9, "end": 42.5, "text": "Inès?"},
+    {"id": "seg_17", "speaker": "spk_2", "channel": "system", "start": 43.5, "end": 46.0, "text": "Rev C is through fab. Five units to Tomas by Friday."},
+    {"id": "seg_18", "speaker": "local", "channel": "microphone", "start": 46.6, "end": 48.2, "text": "Inspection done on your side?"},
+    {"id": "seg_19", "speaker": "spk_2", "channel": "system", "start": 48.7, "end": 51.4, "text": "I did the incoming inspection on the first boards. Clean."},
+    {"id": "seg_20", "speaker": "spk_2", "channel": "system", "start": 52.3, "end": 55.2, "text": "Antenna matches the new tuning, thermistor's the tighter part."},
+    {"id": "seg_21", "speaker": "spk_1", "channel": "system", "start": 55.6, "end": 57.5, "text": "I'll be waiting at the door on Friday."},
+    {"id": "seg_22", "speaker": "local", "channel": "microphone", "start": 58.6, "end": 60.2, "text": "Okay. Dele, what do you have?"},
+    {"id": "seg_23", "speaker": "spk_3", "channel": "system", "start": 60.9, "end": 63.1, "text": "So I've been reading the diagnostic mode spec."},
+    {"id": "seg_24", "speaker": "spk_3", "channel": "system", "start": 63.4, "end": 67.4, "text": "My worry is the wake-during-update case. Device wakes while a firmware update is landing."},
+    {"id": "seg_25", "speaker": "spk_1", "channel": "system", "start": 68.2, "end": 71.6, "text": "That's a fair one. The bootloader should hold it, but I haven't tested it."},
+    {"id": "seg_26", "speaker": "spk_3", "channel": "system", "start": 72.6, "end": 74.6, "text": "Right. We have no manual coverage for it."},
+    {"id": "seg_27", "speaker": "local", "channel": "microphone", "start": 75.2, "end": 76.6, "text": "Can you write up a plan?"},
+    {"id": "seg_28", "speaker": "spk_3", "channel": "system", "start": 77.1, "end": 80.0, "text": "Yeah. I'll write a manual coverage plan for wake-during-update."},
+    {"id": "seg_29", "speaker": "spk_0", "channel": "system", "start": 80.9, "end": 82.5, "text": "Include a power cut mid-update."},
+    {"id": "seg_30", "speaker": "spk_3", "channel": "system", "start": 82.9, "end": 84.1, "text": "Yep, that's in there."},
+    {"id": "seg_31", "speaker": "local", "channel": "microphone", "start": 85.2, "end": 86.1, "text": "Okay. Flash."},
+    {"id": "seg_32", "speaker": "local", "channel": "microphone", "start": 86.8, "end": 90.0, "text": "I looked at the C-series build last night. We're at ninety-one percent."},
+    {"id": "seg_33", "speaker": "spk_1", "channel": "system", "start": 90.3, "end": 92.4, "text": "Ninety-one? That's with the debug strings."},
+    {"id": "seg_34", "speaker": "local", "channel": "microphone", "start": 93.2, "end": 95.8, "text": "Right. It's tight, and BLE diagnostic mode isn't in yet."},
+    {"id": "seg_35", "speaker": "spk_1", "channel": "system", "start": 96.8, "end": 99.3, "text": "I can trim strings. That's maybe four, five percent."},
+    {"id": "seg_36", "speaker": "local", "channel": "microphone", "start": 99.9, "end": 102.5, "text": "Let's keep an eye on it. I'll bring it back next week."},
+    {"id": "seg_37", "speaker": "spk_0", "channel": "system", "start": 103.0, "end": 105.2, "text": "Okay. One more thing. Northfield wrote back."},
+    {"id": "seg_38", "speaker": "local", "channel": "microphone", "start": 106.1, "end": 107.1, "text": "The buffer ask?"},
+    {"id": "seg_39", "speaker": "spk_0", "channel": "system", "start": 107.5, "end": 109.8, "text": "Yeah. They want a twenty-four hour local buffer."},
+    {"id": "seg_40", "speaker": "spk_0", "channel": "system", "start": 110.9, "end": 113.6, "text": "Twenty-four hours of readings on-device if the link drops."},
+    {"id": "seg_41", "speaker": "spk_1", "channel": "system", "start": 114.3, "end": 115.7, "text": "That's a lot more flash."},
+    {"id": "seg_42", "speaker": "local", "channel": "microphone", "start": 116.0, "end": 118.2, "text": "And it touches the same code as cloud retry."},
+    {"id": "seg_43", "speaker": "spk_0", "channel": "system", "start": 119.0, "end": 120.2, "text": "That's what I said."},
+    {"id": "seg_44", "speaker": "local", "channel": "microphone", "start": 121.2, "end": 123.7, "text": "Okay. So that's tied up in the cloud retry question."},
+    {"id": "seg_45", "speaker": "local", "channel": "microphone", "start": 124.3, "end": 127.4, "text": "Which, I'm going to defer ship-or-slip on cloud retry to next week."},
+    {"id": "seg_46", "speaker": "local", "channel": "microphone", "start": 127.9, "end": 129.8, "text": "I want to see the flash number first."},
+    {"id": "seg_47", "speaker": "spk_1", "channel": "system", "start": 130.7, "end": 131.8, "text": "That makes sense."},
+    {"id": "seg_48", "speaker": "spk_0", "channel": "system", "start": 132.2, "end": 133.0, "text": "Fine by me."},
+    {"id": "seg_49", "speaker": "local", "channel": "microphone", "start": 134.1, "end": 136.4, "text": "Okay, items. Inès, inspection on rev C is done."},
+    {"id": "seg_50", "speaker": "spk_2", "channel": "system", "start": 137.1, "end": 137.7, "text": "Done."},
+    {"id": "seg_51", "speaker": "local", "channel": "microphone", "start": 138.0, "end": 141.4, "text": "Dele writes the wake-during-update plan. Mine is the cloud retry decision."},
+    {"id": "seg_52", "speaker": "spk_3", "channel": "system", "start": 142.2, "end": 142.9, "text": "Got it."},
+    {"id": "seg_53", "speaker": "local", "channel": "microphone", "start": 143.9, "end": 144.7, "text": "Thanks all."}
+  ],
+  "summary_markdown": "## Key decisions\n\n- The cloud-retry ship-or-slip decision is deferred to next week, once the flash number is clearer.\n- The corrected calibration table stays in its soak; it goes to Solenne Biolabs as a three-day beta once the soak passes.\n- QA will write a manual coverage plan for the wake-during-update case, including a power cut mid-update.\n\n## Discussion\n\nMaya reported the corrected calibration table is in a 72-hour soak at three setpoints; day one shows error under a point at all three. Tomas measured sleep mode at about 40µA on rev B, down from roughly 300µA, about a seven-times improvement, with rev C still to be checked. Inès confirmed rev C is through fab, with incoming inspection on the first boards clean and five units due to Tomas by Friday. Dele, joining for QA, raised the wake-during-update scenario as a gap; Tomas said the bootloader should hold the device but it has not been tested. Flash on the C-series build is at 91%, and BLE diagnostic mode is not in yet. Maya relayed Northfield Analytical's request for a 24-hour local data buffer, which would consume more flash and touches the same code as cloud retry.\n\n## Action items\n\nThree items: Inès completes incoming inspection on rev C, Dele writes the manual coverage plan for wake-during-update, and the owner decides ship-or-slip on cloud retry.\n\n## Open questions\n\n- Whether cloud retry ships in Q4 or slips to the point release.\n- Whether the flash budget survives BLE diagnostic mode and a larger buffer.\n- How to answer Northfield's 24-hour buffer request.",
+  "notes_markdown": "- Cal table in 72h soak, 3 setpoints. Day one under a point\n- Sleep mode ~40µA on rev B, ~7x. Rev C still to check\n- Rev C through fab, 5 units to Tomas by Friday\n- Flash 91% on the C-series. BLE diag not in yet\n- Northfield wants 24h buffer. Tied up with cloud retry. Decide next week",
+  "action_items": [
+    {
+      "description": "Run incoming inspection on the first rev C boards.",
+      "assignee": "person-ines",
+      "due_hint": "by Friday",
+      "status": "completed"
+    },
+    {
+      "description": "Write a manual coverage plan for wake-during-update, including a power cut mid-update.",
+      "assignee": "person-dele",
+      "due_hint": "before the freeze",
+      "status": "open"
+    },
+    {
+      "description": "Decide ship-or-slip on cloud retry.",
+      "assignee": "self",
+      "due_hint": "next week",
+      "status": "completed"
+    }
+  ],
+  "series": "product-sync"
+}

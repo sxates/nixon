@@ -116,13 +116,16 @@ pub struct Dataset {
 
 const PEOPLE: &str = include_str!("../../fixtures/demo/people.json");
 const MANUAL_MEETINGS: &str = include_str!("../../fixtures/demo/manual_meetings.json");
-const MEETINGS: [&str; 6] = [
+const MEETINGS: [&str; 9] = [
     include_str!("../../fixtures/demo/meetings/01-product-sync.json"),
     include_str!("../../fixtures/demo/meetings/02-one-on-one.json"),
     include_str!("../../fixtures/demo/meetings/03-steerco.json"),
     include_str!("../../fixtures/demo/meetings/04-standup.json"),
     include_str!("../../fixtures/demo/meetings/05-unprocessed.json"),
     include_str!("../../fixtures/demo/meetings/06-design-review.json"),
+    include_str!("../../fixtures/demo/meetings/07-product-sync-w1.json"),
+    include_str!("../../fixtures/demo/meetings/08-product-sync-w2.json"),
+    include_str!("../../fixtures/demo/meetings/09-product-sync-w3.json"),
 ];
 
 pub fn load_embedded() -> Result<Dataset, String> {
@@ -329,7 +332,7 @@ mod tests {
     #[test]
     fn embedded_dataset_loads_and_validates() {
         let ds = load_embedded().expect("embedded fixtures parse");
-        assert_eq!(ds.meetings.len(), 6);
+        assert_eq!(ds.meetings.len(), 9);
         assert_eq!(ds.people.len(), 7);
         assert_eq!(ds.manual_meetings.len(), 3);
         validate(&ds).expect("embedded fixtures valid");

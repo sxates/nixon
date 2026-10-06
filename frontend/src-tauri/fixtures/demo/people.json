@@ -1,9 +1,9 @@
 [
-  { "id": "person-maya", "display_name": "Maya Okafor", "email": "maya@halden.example", "role": null },
-  { "id": "person-tomas", "display_name": "Tomas Lindqvist", "email": "tomas@halden.example", "role": null },
-  { "id": "person-ines", "display_name": "Inès Marchetti", "email": "ines@halden.example", "role": null },
-  { "id": "person-rafael", "display_name": "Rafael Duarte", "email": "rafael@halden.example", "role": null },
-  { "id": "person-sun", "display_name": "Sun Ji-woo", "email": "sun@halden.example", "role": null },
-  { "id": "person-dele", "display_name": "Dele Adeyemi", "email": "dele@halden.example", "role": null },
-  { "id": "person-greta", "display_name": "Greta Voss", "email": "greta@halden.example", "role": null }
+  { "id": "person-maya", "display_name": "Maya Okafor", "email": "maya@halden.example", "role": "Firmware lead" },
+  { "id": "person-tomas", "display_name": "Tomas Lindqvist", "email": "tomas@halden.example", "role": "Embedded engineer" },
+  { "id": "person-ines", "display_name": "Inès Marchetti", "email": "ines@halden.example", "role": "Hardware engineer" },
+  { "id": "person-rafael", "display_name": "Rafael Duarte", "email": "rafael@halden.example", "role": "Industrial designer" },
+  { "id": "person-sun", "display_name": "Sun Ji-woo", "email": "sun@halden.example", "role": "Mechanical engineer" },
+  { "id": "person-dele", "display_name": "Dele Adeyemi", "email": "dele@halden.example", "role": "QA lead" },
+  { "id": "person-greta", "display_name": "Greta Voss", "email": "greta@halden.example", "role": "VP Product" }
 ]

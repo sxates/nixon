@@ -2134,5 +2134,9 @@
       "assignee": "self",
       "due_hint": "next Tuesday"
     }
-  ]
+  ],
+  "series": "product-sync",
+  "prep_markdown": "- Rev C status — five units in? first current-draw numbers\n- Calibration patch: soak results, Solenne beta timing\n- Cloud retry: ship in Q4 or slip to the point release\n- Flash budget on the C-series (91% last week)\n- Northfield's 24h buffer ask — Q1?",
+  "brief_markdown": "**Where you left off.** Last week the corrected calibration table went into a 72-hour soak and sleep mode measured about 40 µA on rev B, down from roughly 300 µA [M1]. Rev C is through fab; Inès promised five units to Tomas, and flash on the C-series sat at 91% [M1].\n\n**Decisions so far.** Q4 scope is sleep mode, the calibration patch, BLE diagnostic mode and cloud retry, with cloud retry still unassigned [M2]. A September 25 freeze was proposed and nobody objected [M2]. The drift Solenne reported traced to a stale thermistor reference curve, not the sensor [M2].\n\n**Open threads.** Ship-or-slip on cloud retry was deferred to this meeting [M1]. Northfield's request for a 24-hour local buffer has not been answered [M1]. The BLE companion-app timeline from mobile is still outstanding [M2].",
+  "brief_sources": ["demo-13", "demo-12"]
 }
