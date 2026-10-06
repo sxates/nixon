@@ -165,7 +165,7 @@ async fn seeds_embedded_dataset_and_is_idempotent() {
     let open = ActionItemsRepository::get_open_for_meetings(db.pool(), &prior)
         .await
         .unwrap();
-    assert_eq!(open.len(), 3, "open carried-over items: {open:?}");
+    assert_eq!(open.len(), 4, "open carried-over items (BLE timeline, ship-or-slip, rev C characterisation, wake-during-update plan): {open:?}");
 
     // idempotent
     let r2 = seed::seed_all(db.pool(), &ds, &HashMap::new(), now)

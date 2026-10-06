@@ -96,24 +96,24 @@
   "summary_markdown": "## Key decisions\n\n- The cloud-retry ship-or-slip decision is deferred to next week, once the flash number is clearer.\n- The corrected calibration table stays in its soak; it goes to Solenne Biolabs as a three-day beta once the soak passes.\n- QA will write a manual coverage plan for the wake-during-update case, including a power cut mid-update.\n\n## Discussion\n\nMaya reported the corrected calibration table is in a 72-hour soak at three setpoints; day one shows error under a point at all three. Tomas measured sleep mode at about 40µA on rev B, down from roughly 300µA, about a seven-times improvement, with rev C still to be checked. Inès confirmed rev C is through fab, with incoming inspection on the first boards clean and five units due to Tomas by Friday. Dele, joining for QA, raised the wake-during-update scenario as a gap; Tomas said the bootloader should hold the device but it has not been tested. Flash on the C-series build is at 91%, and BLE diagnostic mode is not in yet. Maya relayed Northfield Analytical's request for a 24-hour local data buffer, which would consume more flash and touches the same code as cloud retry.\n\n## Action items\n\nThree items: Inès completes incoming inspection on rev C, Dele writes the manual coverage plan for wake-during-update, and the owner decides ship-or-slip on cloud retry.\n\n## Open questions\n\n- Whether cloud retry ships in Q4 or slips to the point release.\n- Whether the flash budget survives BLE diagnostic mode and a larger buffer.\n- How to answer Northfield's 24-hour buffer request.",
   "notes_markdown": "- Cal table in 72h soak, 3 setpoints. Day one under a point\n- Sleep mode ~40µA on rev B, ~7x. Rev C still to check\n- Rev C through fab, 5 units to Tomas by Friday\n- Flash 91% on the C-series. BLE diag not in yet\n- Northfield wants 24h buffer. Tied up with cloud retry. Decide next week",
   "action_items": [
-    {
-      "description": "Run incoming inspection on the first rev C boards.",
-      "assignee": "person-ines",
-      "due_hint": "by Friday",
-      "status": "completed"
-    },
-    {
-      "description": "Write a manual coverage plan for wake-during-update, including a power cut mid-update.",
-      "assignee": "person-dele",
-      "due_hint": "before the freeze",
-      "status": "open"
-    },
-    {
-      "description": "Decide ship-or-slip on cloud retry.",
-      "assignee": "self",
-      "due_hint": "next week",
-      "status": "completed"
-    }
+      {
+          "description": "Run incoming inspection on the first rev C boards.",
+          "assignee": "person-ines",
+          "due_hint": "by Friday",
+          "status": "completed"
+      },
+      {
+          "description": "Write a manual coverage plan for wake-during-update, including a power cut mid-update.",
+          "assignee": "person-dele",
+          "due_hint": "before the freeze",
+          "status": "open"
+      },
+      {
+          "description": "Decide ship-or-slip on cloud retry.",
+          "assignee": "self",
+          "due_hint": "next Product sync",
+          "status": "open"
+      }
   ],
   "series": "product-sync"
 }
