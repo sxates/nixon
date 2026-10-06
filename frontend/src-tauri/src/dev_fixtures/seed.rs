@@ -14,6 +14,8 @@ use crate::aggregation::engine::SourceMeeting;
 use crate::aggregation::scope::AggregationScope;
 use crate::database::repositories::action_item::ActionItemsRepository;
 use crate::database::repositories::ask_ai_history::AskAiHistoryRepository;
+use crate::database::repositories::meeting::MeetingsRepository;
+use crate::database::repositories::meeting_brief::MeetingBriefsRepository;
 use crate::database::repositories::meeting_note::MeetingNotesRepository;
 use crate::database::repositories::meeting_participant::MeetingParticipantsRepository;
 use crate::database::repositories::speaker::SpeakersRepository;
@@ -44,6 +46,7 @@ const WIPE_TABLES: &[&str] = &[
     "transcript_speaker_overrides",
     "speakers",
     "transcripts",
+    "meeting_series_links",
     "meetings",
     "people",
 ];
@@ -64,6 +67,7 @@ const MEETING_SCOPED_TABLES: &[&str] = &[
     "transcript_speaker_overrides",
     "speakers",
     "transcripts",
+    "meeting_series_links",
 ];
 
 /// Caches of the developer's *real* data, cleared alongside the seeder's own tables
@@ -289,6 +293,7 @@ pub async fn seed_all(
     wipe(pool).await?;
     let mut report = SeedReport::default();
     let mut failures: Vec<String> = Vec::new();
+    let mut seeded: std::collections::HashSet<&str> = std::collections::HashSet::new();
     let ts = now.to_rfc3339();
     for p in &ds.people {
         sqlx::query("INSERT INTO people (id, email, display_name, role, notes, voiceprint_opt_out, created_at, updated_at) VALUES (?, ?, ?, ?, NULL, 0, ?, ?)")
@@ -314,6 +319,7 @@ pub async fn seed_all(
 
         match seed_meeting_rest(pool, m, folder_path, start).await {
             Ok(n) => {
+                seeded.insert(m.id.as_str());
                 report.meetings += 1;
                 report.segments += n;
             }
@@ -330,7 +336,99 @@ pub async fn seed_all(
     if report.meetings == 0 {
         anyhow::bail!("every meeting failed to seed: {}", failures.join("; "));
     }
+    // Every recorded meeting is in, so series link targets and brief sources exist.
+    seed_series_and_briefs(pool, ds, &seeded).await?;
     Ok(report)
+}
+
+/// Link recurring occurrences into manual series and write ready pre-call briefs
+/// (specs/0082). Runs after every meeting is seeded. Meetings that failed to seed are
+/// skipped; any other failure carries the meeting id.
+async fn seed_series_and_briefs(
+    pool: &SqlitePool,
+    ds: &Dataset,
+    seeded: &std::collections::HashSet<&str>,
+) -> Result<()> {
+    // Group recorded occurrences by series; the latest occurrence is the link target.
+    let mut by_series: HashMap<&str, Vec<&FixtureMeeting>> = HashMap::new();
+    for m in ds.meetings.iter().filter(|m| seeded.contains(m.id.as_str())) {
+        if let Some(s) = &m.series {
+            by_series.entry(s).or_default().push(m);
+        }
+    }
+    for (series, mut occ) in by_series {
+        // Oldest first: the latest occurrence (smallest days_ago, then latest time) is last.
+        occ.sort_by_key(|m| (std::cmp::Reverse(m.days_ago), m.time_of_day.clone()));
+        let Some(target) = occ.last().copied() else {
+            continue;
+        };
+        for m in occ.iter().filter(|m| m.id != target.id) {
+            MeetingsRepository::link_meeting_to_series(pool, &m.id, &target.id)
+                .await
+                .with_context(|| format!("link {} into series {series}", m.id))?;
+        }
+    }
+
+    for m in ds.meetings.iter().filter(|m| seeded.contains(m.id.as_str())) {
+        let Some(md) = m.brief_markdown.as_deref() else {
+            continue;
+        };
+        seed_brief(pool, m, md)
+            .await
+            .with_context(|| format!("seed brief for {}", m.id))?;
+    }
+    Ok(())
+}
+
+async fn seed_brief(pool: &SqlitePool, m: &FixtureMeeting, md: &str) -> Result<()> {
+    let meta = MeetingsRepository::get_meeting_metadata(pool, &m.id)
+        .await?
+        .context("seeded meeting missing")?;
+    let key = MeetingsRepository::resolve_effective_series_key(pool, &m.id).await?;
+    let prior = MeetingsRepository::find_prior_series_occurrences(
+        pool,
+        key.as_deref(),
+        &meta.title,
+        meta.created_at.0,
+        crate::aggregation::prep_jobs::MAX_PRIOR,
+    )
+    .await?;
+    if prior != m.brief_sources {
+        log::warn!(
+            "[dev] fixture {}: brief_sources {:?} differ from the app's prior set {:?}",
+            m.id,
+            m.brief_sources,
+            prior
+        );
+    }
+    // Fingerprint the app's own prior set so the seeded brief is `UpToDate` to `plan_brief`.
+    let fingerprint = crate::aggregation::prep_jobs::source_fingerprint(pool, &prior).await;
+    // Same shape the generator stores (`answer.sources`): `[M{i+1}]` <-> sources[i]. The
+    // generator stores the markdown with raw `[M#]` markers (postprocess_citations only
+    // normalizes them), so the fixture text is stored as is.
+    let mut sources = Vec::with_capacity(m.brief_sources.len());
+    for (i, id) in m.brief_sources.iter().enumerate() {
+        let sm = MeetingsRepository::get_meeting_metadata(pool, id)
+            .await?
+            .with_context(|| format!("brief source {id} missing"))?;
+        sources.push(SourceMeeting {
+            meeting_id: id.clone(),
+            title: sm.title,
+            created_at: sm.created_at.0.to_rfc3339(),
+            cited: md.contains(&format!("[M{}]", i + 1)),
+        });
+    }
+    MeetingBriefsRepository::upsert_ready(
+        pool,
+        &m.id,
+        md,
+        &serde_json::to_string(&sources)?,
+        &fingerprint,
+        "fixture",
+        "demo",
+    )
+    .await?;
+    Ok(())
 }
 
 async fn insert_meeting_row(
@@ -413,6 +511,9 @@ async fn seed_meeting_rest(
     if let Some(md) = &m.notes_markdown {
         MeetingNotesRepository::upsert_notes(pool, &m.id, Some(md), None).await?;
     }
+    if let Some(md) = &m.prep_markdown {
+        MeetingNotesRepository::upsert_prep_notes(pool, &m.id, Some(md), None).await?;
+    }
     if let Some(md) = &m.summary_markdown {
         SummaryProcessesRepository::create_or_reset_process(pool, &m.id).await?;
         let result = serde_json::json!({
@@ -444,7 +545,7 @@ async fn seed_meeting_rest(
             due_hint: ai.due_hint.clone(),
             due_date: None,
         };
-        ActionItemsRepository::create(
+        let item = ActionItemsRepository::create(
             pool,
             Some(&m.id),
             &cand,
@@ -452,6 +553,9 @@ async fn seed_meeting_rest(
             &content_key(&ai.description),
         )
         .await?;
+        if ai.status.as_deref() == Some("completed") {
+            ActionItemsRepository::set_status(pool, &item.id, "completed").await?;
+        }
     }
     Ok(m.segments.len() as u32)
 }
@@ -536,5 +640,121 @@ mod manual_tests {
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].id, "demo-08");
         assert!(rows[0].scheduled_end_at.is_some());
+    }
+}
+
+#[cfg(test)]
+mod series_tests {
+    use super::*;
+    use crate::aggregation::prep_jobs::{self, BriefPlan};
+    use crate::database::models::MeetingNote;
+    use crate::database::repositories::meeting::test_support::memory_db;
+
+    fn meeting(id: &str, days_ago: u32) -> FixtureMeeting {
+        FixtureMeeting {
+            id: id.into(),
+            title: "Product sync".into(),
+            days_ago,
+            time_of_day: "10:00".into(),
+            duration_seconds: 1800,
+            audio_state: None,
+            participants: vec![],
+            speakers: vec![],
+            segments: vec![],
+            summary_markdown: Some(format!("Summary of {id}")),
+            notes_markdown: None,
+            action_items: vec![],
+            series: Some("product-sync".into()),
+            prep_markdown: None,
+            brief_markdown: None,
+            brief_sources: vec![],
+        }
+    }
+
+    fn item(description: &str, status: Option<&str>) -> crate::dev_fixtures::dataset::FixtureActionItem {
+        crate::dev_fixtures::dataset::FixtureActionItem {
+            description: description.into(),
+            assignee: Some("self".into()),
+            due_hint: None,
+            status: status.map(str::to_string),
+        }
+    }
+
+    fn dataset() -> Dataset {
+        let mut prior1 = meeting("p1", 14);
+        prior1.action_items = vec![item("Send the deck", Some("completed")), item("Book the room", None)];
+        let prior2 = meeting("p2", 7);
+        let mut target = meeting("t", 0);
+        target.prep_markdown = Some("- Cover the launch date".into());
+        target.brief_markdown = Some("Last time [M1] and before that [M2].".into());
+        target.brief_sources = vec!["p2".into(), "p1".into()];
+        Dataset {
+            people: vec![],
+            meetings: vec![prior1, prior2, target],
+            manual_meetings: vec![],
+        }
+    }
+
+    async fn seeded() -> (SqlitePool, DateTime<Utc>) {
+        let pool = memory_db().await;
+        let now = Utc::now();
+        seed_all(&pool, &dataset(), &FolderMap::new(), now).await.unwrap();
+        (pool, now)
+    }
+
+    async fn priors(pool: &SqlitePool) -> Vec<String> {
+        let meta = MeetingsRepository::get_meeting_metadata(pool, "t").await.unwrap().unwrap();
+        let key = MeetingsRepository::resolve_effective_series_key(pool, "t").await.unwrap();
+        MeetingsRepository::find_prior_series_occurrences(pool, key.as_deref(), &meta.title, meta.created_at.0, 10)
+            .await
+            .unwrap()
+    }
+
+    #[tokio::test]
+    async fn links_group_occurrences_into_one_series_newest_first() {
+        let (pool, _) = seeded().await;
+        assert_eq!(priors(&pool).await, vec!["p2".to_string(), "p1".to_string()]);
+    }
+
+    #[tokio::test]
+    async fn seeds_a_ready_brief_with_cited_sources() {
+        let (pool, _) = seeded().await;
+        let b = MeetingBriefsRepository::get(&pool, "t").await.unwrap().unwrap();
+        assert_eq!(b.status, "ready");
+        assert_eq!(b.brief_markdown.as_deref(), Some("Last time [M1] and before that [M2]."));
+        let sources: Vec<SourceMeeting> = serde_json::from_str(b.sources_json.as_deref().unwrap()).unwrap();
+        assert_eq!(sources.iter().map(|s| s.meeting_id.as_str()).collect::<Vec<_>>(), ["p2", "p1"]);
+        assert!(sources.iter().all(|s| s.cited));
+    }
+
+    #[tokio::test]
+    async fn the_seeded_brief_is_up_to_date_for_the_app_planner() {
+        let (pool, _) = seeded().await;
+        let plan = prep_jobs::plan_brief(&pool, "t", false).await.unwrap();
+        assert_eq!(plan, BriefPlan::UpToDate);
+    }
+
+    #[tokio::test]
+    async fn prep_notes_and_item_status_are_seeded() {
+        let (pool, _) = seeded().await;
+        let notes: MeetingNote = MeetingNotesRepository::get_notes(&pool, "t").await.unwrap().unwrap();
+        assert_eq!(notes.prep_markdown.as_deref(), Some("- Cover the launch date"));
+        let open = ActionItemsRepository::get_open_for_meetings(&pool, &priors(&pool).await)
+            .await
+            .unwrap();
+        assert_eq!(open.len(), 1);
+        assert_eq!(open[0].description, "Book the room");
+    }
+
+    #[tokio::test]
+    async fn re_seeding_leaves_one_link_row_per_occurrence() {
+        let (pool, now) = seeded().await;
+        seed_all(&pool, &dataset(), &FolderMap::new(), now).await.unwrap();
+        let (n,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM meeting_series_links")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        // link_meeting_to_series also pins the target itself, so 3 rows for 3 occurrences.
+        assert_eq!(n, 3);
     }
 }
