@@ -1,0 +1,109 @@
+{
+  "id": "demo-11",
+  "title": "Product sync — rev B drift",
+  "days_ago": 21,
+  "time_of_day": "14:00",
+  "duration_seconds": 156,
+  "audio_state": "processed",
+  "participants": [
+    "person-maya",
+    "person-tomas",
+    "person-ines"
+  ],
+  "speakers": [
+    {
+      "key": "local",
+      "display_name": "You",
+      "is_local": true
+    },
+    {
+      "key": "spk_0",
+      "display_name": "Maya Okafor",
+      "person_id": "person-maya"
+    },
+    {
+      "key": "spk_1",
+      "display_name": "Tomas Lindqvist",
+      "person_id": "person-tomas"
+    },
+    {
+      "key": "spk_2",
+      "display_name": "Inès Marchetti",
+      "person_id": "person-ines"
+    }
+  ],
+  "segments": [
+    {"id": "seg_1", "speaker": "local", "channel": "microphone", "start": 0.0, "end": 1.4, "text": "Okay, let's get started."},
+    {"id": "seg_2", "speaker": "local", "channel": "microphone", "start": 2.3, "end": 6.2, "text": "Short one today. Three things: the Solenne drift ticket, sleep mode, and where rev C is."},
+    {"id": "seg_3", "speaker": "spk_0", "channel": "system", "start": 6.6, "end": 8.3, "text": "Want me to take the drift first?"},
+    {"id": "seg_4", "speaker": "local", "channel": "microphone", "start": 9.4, "end": 10.2, "text": "Yeah, go."},
+    {"id": "seg_5", "speaker": "spk_0", "channel": "system", "start": 10.9, "end": 14.0, "text": "So Solenne sent a ticket in on Monday. Two units, humidity channel."},
+    {"id": "seg_6", "speaker": "spk_0", "channel": "system", "start": 14.3, "end": 17.0, "text": "Reading about four percent high after a week in the field."},
+    {"id": "seg_7", "speaker": "spk_1", "channel": "system", "start": 17.8, "end": 20.0, "text": "Four percent of reading, or four points of RH?"},
+    {"id": "seg_8", "speaker": "spk_0", "channel": "system", "start": 21.0, "end": 23.5, "text": "Points. They caught it against their reference probe."},
+    {"id": "seg_9", "speaker": "spk_1", "channel": "system", "start": 24.1, "end": 26.3, "text": "That's not nothing for a cold-chain customer."},
+    {"id": "seg_10", "speaker": "spk_0", "channel": "system", "start": 26.8, "end": 29.8, "text": "No. They're logging vaccine storage. They noticed it right away."},
+    {"id": "seg_11", "speaker": "local", "channel": "microphone", "start": 30.7, "end": 31.8, "text": "Is it the sensor?"},
+    {"id": "seg_12", "speaker": "spk_0", "channel": "system", "start": 32.2, "end": 35.0, "text": "Don't know yet. My guess is the thermistor reference curve."},
+    {"id": "seg_13", "speaker": "spk_0", "channel": "system", "start": 36.1, "end": 40.0, "text": "The humidity compensation leans on it. If the curve's stale, you drift with temperature."},
+    {"id": "seg_14", "speaker": "spk_1", "channel": "system", "start": 40.7, "end": 43.8, "text": "That would explain why it grows over the week. Temperature cycling."},
+    {"id": "seg_15", "speaker": "spk_0", "channel": "system", "start": 44.1, "end": 47.3, "text": "Right. That's the theory. I need to reproduce it on a rev B unit first."},
+    {"id": "seg_16", "speaker": "local", "channel": "microphone", "start": 48.1, "end": 49.5, "text": "Can you do that this week?"},
+    {"id": "seg_17", "speaker": "spk_0", "channel": "system", "start": 50.5, "end": 53.4, "text": "Yeah. I've got a bench unit, and the chamber's free Wednesday."},
+    {"id": "seg_18", "speaker": "local", "channel": "microphone", "start": 54.0, "end": 56.6, "text": "Good. And I'll ask Solenne for the two serial numbers."},
+    {"id": "seg_19", "speaker": "spk_0", "channel": "system", "start": 57.1, "end": 59.6, "text": "Please. I want to know if they're from the same lot."},
+    {"id": "seg_20", "speaker": "local", "channel": "microphone", "start": 60.5, "end": 61.6, "text": "I'll do it today."},
+    {"id": "seg_21", "speaker": "local", "channel": "microphone", "start": 62.0, "end": 63.4, "text": "Okay. Tomas, sleep mode."},
+    {"id": "seg_22", "speaker": "spk_1", "channel": "system", "start": 64.5, "end": 67.2, "text": "So I started the rewrite on Friday. Not a lot to show yet."},
+    {"id": "seg_23", "speaker": "spk_1", "channel": "system", "start": 67.9, "end": 72.6, "text": "Right now it's sitting around three hundred microamps, which is why the field units are dying in nine days."},
+    {"id": "seg_24", "speaker": "local", "channel": "microphone", "start": 72.9, "end": 74.5, "text": "Nine days. We promised thirty."},
+    {"id": "seg_25", "speaker": "spk_1", "channel": "system", "start": 75.3, "end": 77.1, "text": "Yeah. Spec is thirty. We're at nine."},
+    {"id": "seg_26", "speaker": "local", "channel": "microphone", "start": 78.1, "end": 79.9, "text": "Where's the current actually going?"},
+    {"id": "seg_27", "speaker": "spk_1", "channel": "system", "start": 80.5, "end": 84.2, "text": "Mostly the radio wake timer. And the sensor rail never powers down between samples."},
+    {"id": "seg_28", "speaker": "spk_1", "channel": "system", "start": 84.7, "end": 87.5, "text": "The rewrite gates the rail. And stretches the wake interval."},
+    {"id": "seg_29", "speaker": "spk_0", "channel": "system", "start": 88.4, "end": 90.2, "text": "Does that touch calibration timing?"},
+    {"id": "seg_30", "speaker": "spk_1", "channel": "system", "start": 90.6, "end": 93.4, "text": "Shouldn't. Sample cadence stays the same. I'll double check."},
+    {"id": "seg_31", "speaker": "local", "channel": "microphone", "start": 94.5, "end": 97.7, "text": "Can you put a meter on a rev B unit first? So we have a real baseline."},
+    {"id": "seg_32", "speaker": "spk_1", "channel": "system", "start": 98.4, "end": 100.9, "text": "Yeah. Tomorrow. Real number, not the datasheet guess."},
+    {"id": "seg_33", "speaker": "local", "channel": "microphone", "start": 101.2, "end": 102.4, "text": "Great. Inès, rev C."},
+    {"id": "seg_34", "speaker": "spk_2", "channel": "system", "start": 103.2, "end": 105.7, "text": "So rev C is at the fab. Boards went in last Thursday."},
+    {"id": "seg_35", "speaker": "spk_2", "channel": "system", "start": 106.7, "end": 107.9, "text": "I'd say three weeks."},
+    {"id": "seg_36", "speaker": "local", "channel": "microphone", "start": 108.5, "end": 110.5, "text": "Three weeks until we have boards in hand?"},
+    {"id": "seg_37", "speaker": "spk_2", "channel": "system", "start": 111.0, "end": 113.7, "text": "Boards back, yeah. Then a few days of incoming inspection."},
+    {"id": "seg_38", "speaker": "spk_1", "channel": "system", "start": 114.6, "end": 116.3, "text": "Does rev C change the thermistor?"},
+    {"id": "seg_39", "speaker": "spk_2", "channel": "system", "start": 116.7, "end": 119.9, "text": "New part, tighter tolerance. So it should help with drift in hardware."},
+    {"id": "seg_40", "speaker": "spk_0", "channel": "system", "start": 121.0, "end": 123.7, "text": "Can't count on that, though. Rev B is what's in the field."},
+    {"id": "seg_41", "speaker": "spk_2", "channel": "system", "start": 124.4, "end": 126.5, "text": "Agreed. Those units need the firmware fix."},
+    {"id": "seg_42", "speaker": "local", "channel": "microphone", "start": 126.8, "end": 129.8, "text": "Right. So the patch is the real answer for anyone already shipped."},
+    {"id": "seg_43", "speaker": "spk_0", "channel": "system", "start": 130.6, "end": 131.2, "text": "Yep."},
+    {"id": "seg_44", "speaker": "local", "channel": "microphone", "start": 132.2, "end": 134.1, "text": "Okay, let me read back what I've got."},
+    {"id": "seg_45", "speaker": "local", "channel": "microphone", "start": 134.7, "end": 139.6, "text": "Maya reproduces the drift on a rev B unit. Tomas measures sleep current on rev B. I ask Solenne for the serials."},
+    {"id": "seg_46", "speaker": "spk_1", "channel": "system", "start": 140.1, "end": 141.0, "text": "Sounds right."},
+    {"id": "seg_47", "speaker": "spk_0", "channel": "system", "start": 141.9, "end": 142.9, "text": "Yeah, that's it."},
+    {"id": "seg_48", "speaker": "spk_2", "channel": "system", "start": 143.3, "end": 145.2, "text": "Nothing from me until the boards land."},
+    {"id": "seg_49", "speaker": "local", "channel": "microphone", "start": 146.3, "end": 148.0, "text": "Good. Thanks everyone, that's us."}
+  ],
+  "summary_markdown": "## Key decisions\n\n- The Solenne humidity-channel drift is treated as a firmware problem first: reproduce it on a rev B unit before blaming the sensor.\n- Sleep-mode current gets a proper baseline measurement on rev B before the rewrite goes any further.\n- Rev C is expected back from the fab in about three weeks, but rev B units already in the field will need the firmware fix regardless.\n\n## Discussion\n\nMaya reported a ticket from Solenne Biolabs: two units showing the humidity channel reading roughly four points high after a week in the field. Solenne logs vaccine storage and caught it against their own reference probe. Maya suspects the thermistor reference curve used by the humidity compensation is stale, which would make the error grow with temperature cycling. Tomas reported that the sleep-mode rewrite has just started; deep-sleep current is around 300µA today, which is why field units last about nine days against a thirty-day spec. The current goes mostly to the radio wake timer and a sensor rail that never powers down between samples. Inès confirmed rev C boards are at the fab, about three weeks out, with a new, tighter-tolerance thermistor that should help at the hardware level but does nothing for rev B in the field.\n\n## Action items\n\nThree items were assigned: Maya reproduces the drift on a rev B unit, Tomas measures sleep-mode current on rev B, and the owner asks Solenne for the serial numbers of the two affected units.\n\n## Open questions\n\n- Whether the two affected Solenne units come from the same lot.\n- Whether gating the sensor rail has any effect on calibration timing.",
+  "notes_markdown": "- Solenne: 2 units, humidity ~4 pts high after a week. Cold-chain customer, so it matters\n- Maya thinks stale thermistor curve, not the sensor. Needs a rev B repro first\n- Sleep mode ~300µA today = 9 day battery life vs 30 promised\n- Rev C at fab, ~3 weeks. Won't help rev B units already out there",
+  "action_items": [
+    {
+      "description": "Reproduce the humidity drift on a rev B unit in the chamber.",
+      "assignee": "person-maya",
+      "due_hint": "Wednesday",
+      "status": "completed"
+    },
+    {
+      "description": "Measure sleep-mode current on a rev B unit to get a real baseline.",
+      "assignee": "person-tomas",
+      "due_hint": "tomorrow",
+      "status": "completed"
+    },
+    {
+      "description": "Ask Solenne Biolabs for the serial numbers of the two affected units.",
+      "assignee": "self",
+      "due_hint": "today",
+      "status": "completed"
+    }
+  ],
+  "series": "product-sync"
+}

@@ -1,6 +1,10 @@
 //! Fixture dataset types (specs/0059). Content lives in `fixtures/demo/` and is embedded
 //! at compile time so the seeder never depends on the working directory.
 use serde::Deserialize;
+use std::sync::LazyLock;
+
+static MARKER_RE: LazyLock<regex::Regex> =
+    LazyLock::new(|| regex::Regex::new(r"\[M(\d+)\]").expect("valid marker regex"));
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct FixturePerson {
@@ -42,6 +46,9 @@ pub struct FixtureActionItem {
     pub assignee: Option<String>,
     #[serde(default)]
     pub due_hint: Option<String>,
+    /// "open" (default) or "completed" — a prior occurrence can carry items later closed.
+    #[serde(default)]
+    pub status: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -67,6 +74,19 @@ pub struct FixtureMeeting {
     pub notes_markdown: Option<String>,
     #[serde(default)]
     pub action_items: Vec<FixtureActionItem>,
+    /// Opaque series id shared by recurring occurrences (specs/0082); seeded as a manual
+    /// series link, never as `calendar_series_key`.
+    #[serde(default)]
+    pub series: Option<String>,
+    /// The agenda shown in the Prep tab (meeting_notes.prep_markdown).
+    #[serde(default)]
+    pub prep_markdown: Option<String>,
+    /// A ready pre-call brief; `[M#]` markers index `brief_sources`.
+    #[serde(default)]
+    pub brief_markdown: Option<String>,
+    /// Meeting ids the `[M#]` markers refer to, `[M1]` first.
+    #[serde(default)]
+    pub brief_sources: Vec<String>,
 }
 
 /// A meeting the user added inside Nixon rather than one a recording produced — a
@@ -96,13 +116,16 @@ pub struct Dataset {
 
 const PEOPLE: &str = include_str!("../../fixtures/demo/people.json");
 const MANUAL_MEETINGS: &str = include_str!("../../fixtures/demo/manual_meetings.json");
-const MEETINGS: [&str; 6] = [
+const MEETINGS: [&str; 9] = [
     include_str!("../../fixtures/demo/meetings/01-product-sync.json"),
     include_str!("../../fixtures/demo/meetings/02-one-on-one.json"),
     include_str!("../../fixtures/demo/meetings/03-steerco.json"),
     include_str!("../../fixtures/demo/meetings/04-standup.json"),
     include_str!("../../fixtures/demo/meetings/05-unprocessed.json"),
     include_str!("../../fixtures/demo/meetings/06-design-review.json"),
+    include_str!("../../fixtures/demo/meetings/07-product-sync-w1.json"),
+    include_str!("../../fixtures/demo/meetings/08-product-sync-w2.json"),
+    include_str!("../../fixtures/demo/meetings/09-product-sync-w3.json"),
 ];
 
 pub fn load_embedded() -> Result<Dataset, String> {
@@ -186,6 +209,75 @@ pub fn validate(ds: &Dataset) -> Result<(), Vec<String>> {
             }
         }
     }
+    // specs/0082 — series / brief / status rules. Earlier = more days ago, or the same day
+    // with a lexically smaller "HH:MM" time_of_day.
+    // A source also needs a summary: briefs are written from prior summaries, and a source
+    // without one would be a citation chip pointing at an empty meeting.
+    let starts: std::collections::HashMap<&str, (u32, &str, bool)> = ds
+        .meetings
+        .iter()
+        .map(|m| {
+            let has_summary = m
+                .summary_markdown
+                .as_deref()
+                .is_some_and(|s| !s.trim().is_empty());
+            (
+                m.id.as_str(),
+                (m.days_ago, m.time_of_day.as_str(), has_summary),
+            )
+        })
+        .collect();
+    for m in &ds.meetings {
+        for ai in &m.action_items {
+            if let Some(st) = ai.status.as_deref() {
+                if st != "open" && st != "completed" {
+                    errs.push(format!(
+                        "{}: action item status {st} must be open or completed",
+                        m.id
+                    ));
+                }
+            }
+        }
+        if m.brief_markdown.is_some() && m.series.is_none() {
+            errs.push(format!("{}: brief_markdown requires series", m.id));
+        }
+        for src in &m.brief_sources {
+            match starts.get(src.as_str()) {
+                None => errs.push(format!(
+                    "{}: brief source {src} is not a meeting in the dataset",
+                    m.id
+                )),
+                Some(&(d, t, has_summary)) => {
+                    let earlier = d > m.days_ago || (d == m.days_ago && t < m.time_of_day.as_str());
+                    if !earlier {
+                        errs.push(format!(
+                            "{}: brief source {src} must start earlier than the citing meeting",
+                            m.id
+                        ));
+                    }
+                    if !has_summary {
+                        errs.push(format!(
+                            "{}: brief source {src} has no summary_markdown to brief from",
+                            m.id
+                        ));
+                    }
+                }
+            }
+        }
+        if let Some(md) = &m.brief_markdown {
+            for cap in MARKER_RE.captures_iter(md) {
+                // An unparseable (overflowing) number is out of range like 0; the message
+                // quotes the marker verbatim either way.
+                let n: usize = cap[1].parse().unwrap_or(0);
+                if n == 0 || n > m.brief_sources.len() {
+                    errs.push(format!(
+                        "{}: brief marker {} has no brief_sources entry",
+                        m.id, &cap[0]
+                    ));
+                }
+            }
+        }
+    }
     // Manual entries land in the same `meetings` table (specs/0069 W3), so an id collision
     // with a recorded meeting — or between two manual entries — would silently overwrite one
     // insert with the other at seed time instead of failing loudly here.
@@ -194,10 +286,7 @@ pub fn validate(ds: &Dataset) -> Result<(), Vec<String>> {
             errs.push(format!("{}: duplicate meeting id", m.id));
         }
         if chrono::NaiveTime::parse_from_str(&m.time_of_day, "%H:%M").is_err() {
-            errs.push(format!(
-                "{}: bad time_of_day {}",
-                m.id, m.time_of_day
-            ));
+            errs.push(format!("{}: bad time_of_day {}", m.id, m.time_of_day));
         }
         if m.duration_minutes == 0 {
             errs.push(format!("{}: duration_minutes must be nonzero", m.id));
@@ -247,6 +336,10 @@ mod tests {
                 summary_markdown: None,
                 notes_markdown: None,
                 action_items: vec![],
+                series: None,
+                prep_markdown: None,
+                brief_markdown: None,
+                brief_sources: vec![],
             }],
             manual_meetings: vec![],
         }
@@ -255,7 +348,7 @@ mod tests {
     #[test]
     fn embedded_dataset_loads_and_validates() {
         let ds = load_embedded().expect("embedded fixtures parse");
-        assert_eq!(ds.meetings.len(), 6);
+        assert_eq!(ds.meetings.len(), 9);
         assert_eq!(ds.people.len(), 7);
         assert_eq!(ds.manual_meetings.len(), 3);
         validate(&ds).expect("embedded fixtures valid");
@@ -273,7 +366,10 @@ mod tests {
             join_url: None,
         });
         let errs = validate(&ds).unwrap_err();
-        assert!(errs.iter().any(|e| e.contains("duplicate meeting id")), "{errs:?}");
+        assert!(
+            errs.iter().any(|e| e.contains("duplicate meeting id")),
+            "{errs:?}"
+        );
     }
 
     #[test]
@@ -288,7 +384,10 @@ mod tests {
             join_url: None,
         });
         let errs = validate(&ds).unwrap_err();
-        assert!(errs.iter().any(|e| e.contains("bad time_of_day")), "{errs:?}");
+        assert!(
+            errs.iter().any(|e| e.contains("bad time_of_day")),
+            "{errs:?}"
+        );
     }
 
     #[test]
@@ -333,5 +432,121 @@ mod tests {
         let errs = validate(&ds).unwrap_err();
         assert!(errs.iter().any(|e| e.contains("person-zzz")));
         assert!(errs.iter().any(|e| e.contains("duration")));
+    }
+
+    /// Two meetings: `demo-00` (7 days ago, the earlier one) and the minimal `demo-01` (today).
+    fn with_earlier_meeting() -> Dataset {
+        let mut ds = minimal();
+        let mut earlier = ds.meetings[0].clone();
+        earlier.id = "demo-00".into();
+        earlier.days_ago = 7;
+        earlier.summary_markdown = Some("Summary.".into());
+        ds.meetings.insert(0, earlier);
+        ds
+    }
+
+    #[test]
+    fn validate_rejects_a_marker_beyond_brief_sources() {
+        let mut ds = with_earlier_meeting();
+        ds.meetings[1].series = Some("s".into());
+        ds.meetings[1].brief_sources = vec!["demo-00".into()];
+        ds.meetings[1].brief_markdown = Some("Claim [M2].".into());
+        let errs = validate(&ds).unwrap_err();
+        assert!(errs.iter().any(|e| e.contains("M2")), "{errs:?}");
+    }
+
+    #[test]
+    fn validate_rejects_an_unknown_brief_source() {
+        let mut ds = with_earlier_meeting();
+        ds.meetings[1].series = Some("s".into());
+        ds.meetings[1].brief_sources = vec!["nope".into()];
+        let errs = validate(&ds).unwrap_err();
+        assert!(errs.iter().any(|e| e.contains("nope")), "{errs:?}");
+    }
+
+    #[test]
+    fn validate_rejects_a_brief_source_that_is_not_earlier() {
+        let mut ds = with_earlier_meeting();
+        // demo-00 (7 days ago) cites demo-01 (today): the source is later.
+        ds.meetings[0].series = Some("s".into());
+        ds.meetings[0].brief_sources = vec!["demo-01".into()];
+        let errs = validate(&ds).unwrap_err();
+        assert!(errs.iter().any(|e| e.contains("earlier")), "{errs:?}");
+    }
+
+    #[test]
+    fn validate_rejects_a_brief_without_a_series() {
+        let mut ds = with_earlier_meeting();
+        ds.meetings[1].brief_sources = vec!["demo-00".into()];
+        ds.meetings[1].brief_markdown = Some("Claim [M1].".into());
+        let errs = validate(&ds).unwrap_err();
+        assert!(errs.iter().any(|e| e.contains("series")), "{errs:?}");
+    }
+
+    #[test]
+    fn validate_rejects_a_bad_action_item_status() {
+        let mut ds = minimal();
+        ds.meetings[0].action_items.push(FixtureActionItem {
+            description: "d".into(),
+            assignee: None,
+            due_hint: None,
+            status: Some("done".into()),
+        });
+        let errs = validate(&ds).unwrap_err();
+        assert!(errs.iter().any(|e| e.contains("status")), "{errs:?}");
+    }
+
+    #[test]
+    fn validate_accepts_a_well_formed_series_with_a_brief() {
+        let mut ds = with_earlier_meeting();
+        ds.meetings[0].series = Some("s".into());
+        ds.meetings[1].series = Some("s".into());
+        ds.meetings[1].brief_sources = vec!["demo-00".into()];
+        ds.meetings[1].brief_markdown = Some("Claim [M1].".into());
+        ds.meetings[0].action_items.push(FixtureActionItem {
+            description: "d".into(),
+            assignee: None,
+            due_hint: None,
+            status: Some("completed".into()),
+        });
+        validate(&ds).expect("well-formed series validates");
+    }
+
+    #[test]
+    fn validate_rejects_m0_and_an_overflowing_marker_verbatim() {
+        let mut ds = with_earlier_meeting();
+        ds.meetings[1].series = Some("s".into());
+        ds.meetings[1].brief_sources = vec!["demo-00".into()];
+        ds.meetings[1].brief_markdown = Some("A [M0]. B [M99999999999999999999999].".into());
+        let errs = validate(&ds).unwrap_err();
+        assert!(errs.iter().any(|e| e.contains("[M0]")), "{errs:?}");
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("[M99999999999999999999999]")),
+            "{errs:?}"
+        );
+    }
+
+    #[test]
+    fn validate_orders_same_day_sources_by_time_of_day() {
+        let mut ds = with_earlier_meeting();
+        ds.meetings[0].days_ago = 0;
+        ds.meetings[0].time_of_day = "09:00".into();
+        ds.meetings[1].series = Some("s".into());
+        ds.meetings[1].brief_sources = vec!["demo-00".into()];
+        validate(&ds).expect("09:00 is earlier than 14:00 the same day");
+        ds.meetings[0].time_of_day = "15:00".into();
+        let errs = validate(&ds).unwrap_err();
+        assert!(errs.iter().any(|e| e.contains("earlier")), "{errs:?}");
+    }
+
+    #[test]
+    fn validate_rejects_a_brief_source_without_a_summary() {
+        let mut ds = with_earlier_meeting();
+        ds.meetings[0].summary_markdown = None;
+        ds.meetings[1].series = Some("s".into());
+        ds.meetings[1].brief_sources = vec!["demo-00".into()];
+        let errs = validate(&ds).unwrap_err();
+        assert!(errs.iter().any(|e| e.contains("summary")), "{errs:?}");
     }
 }

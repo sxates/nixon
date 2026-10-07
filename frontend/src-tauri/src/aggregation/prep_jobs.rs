@@ -40,7 +40,8 @@ const REFRESH_INTERVAL: Duration = Duration::from_secs(30 * 60);
 /// "today + tomorrow" — enough for morning prep and next-day lookahead.
 const HORIZON_HOURS: u32 = 48;
 /// At most this many prior occurrences feed a brief (spec: "previous 2").
-const MAX_PRIOR: i64 = 2;
+// pub(crate): the dev fixture seeder shares this so a seeded brief matches the app's prior set.
+pub(crate) const MAX_PRIOR: i64 = 2;
 
 /// Consecutive failed passes before the background generator stops retrying a brief
 /// (specs/0052). Bounds a permanently-broken brief at ~45 min of GPU instead of forever,
@@ -566,7 +567,8 @@ async fn generate_brief_inner<R: Runtime, P: Fn(Stage)>(
 /// Fingerprint of the generation INPUT: the ordered prior occurrence ids plus each one's
 /// summary version stamp. Changes when a prior summary is regenerated or a newer occurrence
 /// enters the set, invalidating the cached brief.
-async fn source_fingerprint(pool: &SqlitePool, prior_ids: &[String]) -> String {
+// pub(crate): shared with the dev fixture seeder so a seeded brief fingerprints identically.
+pub(crate) async fn source_fingerprint(pool: &SqlitePool, prior_ids: &[String]) -> String {
     let mut parts = Vec::with_capacity(prior_ids.len());
     for id in prior_ids {
         let stamp: Option<String> =

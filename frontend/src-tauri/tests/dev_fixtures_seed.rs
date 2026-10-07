@@ -2,6 +2,10 @@
 #![cfg(debug_assertions)]
 mod common;
 
+use app_lib::aggregation::engine::SourceMeeting;
+use app_lib::database::repositories::action_item::ActionItemsRepository;
+use app_lib::database::repositories::meeting::MeetingsRepository;
+use app_lib::database::repositories::meeting_brief::MeetingBriefsRepository;
 use app_lib::dev_fixtures::{dataset, seed};
 use std::collections::HashMap;
 
@@ -14,13 +18,15 @@ async fn seeds_embedded_dataset_and_is_idempotent() {
     let r1 = seed::seed_all(db.pool(), &ds, &HashMap::new(), now)
         .await
         .unwrap();
-    // specs/0069c demo-day polish: a 6th recorded fixture (demo-06) joined the original 5.
-    assert_eq!(r1.meetings, 6);
+    // specs/0069c demo-day polish: a 6th recorded fixture (demo-06) joined the original 5;
+    // specs/0082 added three prior Product syncs (demo-11..13).
+    assert_eq!(r1.meetings, 9);
     assert_eq!(r1.people, 7);
-    // specs/0059 Ruling 1: the embedded dataset had 846 segments; demo-06 added ~46 more.
+    // specs/0059 Ruling 1: the embedded dataset had 846 segments; demo-06 added ~46 more and
+    // the three prior Product syncs ~150 (specs/0082).
     assert!(
-        r1.segments > 700,
-        "expected ~890 segments, got {}",
+        r1.segments > 1000,
+        "expected ~1040 segments, got {}",
         r1.segments
     );
 
@@ -28,12 +34,11 @@ async fn seeds_embedded_dataset_and_is_idempotent() {
         .fetch_one(db.pool())
         .await
         .unwrap();
-    assert_eq!(n_meet, 6);
-    let (id,): (String,) =
-        sqlx::query_as("SELECT id FROM meetings WHERE title LIKE 'Product sync%'")
-            .fetch_one(db.pool())
-            .await
-            .unwrap();
+    assert_eq!(n_meet, 9);
+    let (id,): (String,) = sqlx::query_as("SELECT id FROM meetings WHERE id = 'demo-01'")
+        .fetch_one(db.pool())
+        .await
+        .unwrap();
     assert_eq!(id, "demo-01");
 
     // speakers for the steerco incl. the local row, linked to people where the fixture says so
@@ -119,16 +124,59 @@ async fn seeds_embedded_dataset_and_is_idempotent() {
         "failed ⇒ identification didn't finish"
     );
 
+    // specs/0082: demo-01 sits in a four-meeting Product sync series with a ready brief.
+    let key = MeetingsRepository::resolve_effective_series_key(db.pool(), "demo-01")
+        .await
+        .unwrap();
+    let meta = MeetingsRepository::get_meeting_metadata(db.pool(), "demo-01")
+        .await
+        .unwrap()
+        .unwrap();
+    let prior = MeetingsRepository::find_prior_series_occurrences(
+        db.pool(),
+        key.as_deref(),
+        &meta.title,
+        meta.created_at.0,
+        10,
+    )
+    .await
+    .unwrap();
+    assert_eq!(prior, ["demo-13", "demo-12", "demo-11"]);
+    let brief = MeetingBriefsRepository::get(db.pool(), "demo-01")
+        .await
+        .unwrap()
+        .expect("demo-01 brief");
+    assert_eq!(brief.status, "ready");
+    let sources: Vec<SourceMeeting> =
+        serde_json::from_str(brief.sources_json.as_deref().unwrap()).unwrap();
+    assert_eq!(sources.len(), 2);
+    assert!(sources.iter().all(|s| s.cited));
+    let two = MeetingsRepository::find_prior_series_occurrences(
+        db.pool(),
+        key.as_deref(),
+        &meta.title,
+        meta.created_at.0,
+        2,
+    )
+    .await
+    .unwrap();
+    assert_eq!(two, ["demo-13", "demo-12"]);
+    // api_get_prep reads open items from the MAX_PRIOR (2) most recent priors.
+    let open = ActionItemsRepository::get_open_for_meetings(db.pool(), &two)
+        .await
+        .unwrap();
+    assert_eq!(open.len(), 4, "open carried-over items (BLE timeline, ship-or-slip, rev C characterisation, wake-during-update plan): {open:?}");
+
     // idempotent
     let r2 = seed::seed_all(db.pool(), &ds, &HashMap::new(), now)
         .await
         .unwrap();
-    assert_eq!(r2.meetings, 6);
+    assert_eq!(r2.meetings, 9);
     let (n_meet2,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM meetings")
         .fetch_one(db.pool())
         .await
         .unwrap();
-    assert_eq!(n_meet2, 6);
+    assert_eq!(n_meet2, 9);
     let (n_people,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM people")
         .fetch_one(db.pool())
         .await
@@ -207,7 +255,7 @@ async fn seed_all_continues_past_a_failing_meeting() {
         .await
         .unwrap();
     assert_eq!(report.failed, 1);
-    assert_eq!(report.meetings, 6);
+    assert_eq!(report.meetings, 9);
 
     // the ORIGINAL demo-02 rows must survive untouched.
     let (n_meet,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM meetings WHERE id='demo-02'")
