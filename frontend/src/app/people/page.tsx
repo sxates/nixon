@@ -23,6 +23,7 @@ import type { Person } from '@/types';
 import { filterPeople } from '@/lib/people-filter';
 import { avatarColorClass } from '@/lib/avatar-colors';
 import { PageHeader } from '@/components/ui/page-header';
+import { PAGE_CONTENT_WIDTH } from '@/lib/page-width';
 
 /**
  * A single person row: avatar, name + role/email, the voiceprint opt-out switch,
@@ -318,7 +319,7 @@ export default function PeoplePage() {
 
       {hasPeople && (
         <div className="flex-shrink-0 px-4 min-[900px]:px-7 pb-3">
-          <div className="relative mx-auto max-w-[840px]">
+          <div className={`relative mx-auto ${PAGE_CONTENT_WIDTH}`}>
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={query}
@@ -342,7 +343,7 @@ export default function PeoplePage() {
             <p className="text-sm text-muted-foreground">{error}</p>
           </div>
         ) : (
-          <div className="mx-auto max-w-[840px]">
+          <div className={`mx-auto ${PAGE_CONTENT_WIDTH}`}>
             {hasPeople ? (
               noMatches ? (
                 <div className="flex h-40 flex-col items-center justify-center text-center">

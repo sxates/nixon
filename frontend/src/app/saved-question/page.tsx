@@ -37,6 +37,7 @@ import {
 import { formatMeetingDate } from '@/lib/format-date';
 import { safeListen } from '@/lib/safe-listen';
 import { PageHeader } from '@/components/ui/page-header';
+import { PAGE_CONTENT_WIDTH } from '@/lib/page-width';
 
 type Phase = 'idle' | 'running' | 'error';
 
@@ -301,7 +302,7 @@ function SavedQuestionContent() {
       />
 
       <div className="flex-1 overflow-y-auto px-4 min-[900px]:px-7 pb-12">
-        <div className="mx-auto max-w-[840px]">
+        <div className={`mx-auto ${PAGE_CONTENT_WIDTH}`}>
           {/* Run progress */}
           {running && (
             <div className="mb-4 flex items-center justify-between gap-3 rounded-[3px] border border-border bg-card px-4 py-3 shadow-sm">
