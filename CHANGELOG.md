@@ -19,7 +19,13 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 ## [Unreleased]
 
-_(nothing yet)_
+### Added
+
+- Nixon keeps your Mac awake while it's recording, so a meeting on battery isn't cut short by sleep. The display can still turn off, and your Mac sleeps normally again as soon as you stop.
+
+### Fixed
+
+- If identifying speakers ever stops Nixon unexpectedly, Nixon no longer starts it again on its own the next time it opens. The meeting shows what happened, your transcript is kept, and you can retry speaker identification whenever you choose, in a slower, more careful mode.
 
 ## [0.13.1] - 2026-10-04
 

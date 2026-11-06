@@ -20,6 +20,9 @@ pub struct MeetingAudioStatus {
     /// The channels are stored compressed (Opus).
     pub compressed: bool,
     pub state: AudioState,
+    /// specs/0084: why speaker identification last failed (`interrupted` | `crashed` |
+    /// `cancelled` | `error`), or `None`. The meeting page picks its note from it.
+    pub speaker_id_failure: Option<String>,
 }
 
 /// Replaces the stop path's inline auto-diarize: diarize if that applies and hasn't run
@@ -73,6 +76,7 @@ pub async fn api_meeting_audio_status<R: Runtime>(
         .await
         .map_err(|e| format!("{e:#}"))?;
     let state = row.as_ref().map_or(AudioState::Pending, |r| r.state());
+    let speaker_id_failure = row.as_ref().and_then(|r| r.speaker_id_failure.clone());
     let audio = row
         .and_then(|r| r.folder())
         .and_then(|folder| scan_folder(&folder))
@@ -82,6 +86,7 @@ pub async fn api_meeting_audio_status<R: Runtime>(
         channels: audio.system_channel,
         compressed: audio.opus_channels,
         state,
+        speaker_id_failure,
     })
 }
 

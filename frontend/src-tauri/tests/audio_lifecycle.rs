@@ -360,15 +360,21 @@ async fn a_failed_identification_is_failed_only_once_transcription_is_done() {
     let tmp = tempfile::tempdir().unwrap();
     let dir = folder(tmp.path(), "done", "completed", &["system.wav"]);
     meeting(&pool, "done", 0, Some(&dir), None, 5).await;
-    assert!(state::mark_failed_if_pending(&pool, "done").await.unwrap());
+    assert!(
+        state::mark_failed_if_pending(&pool, "done", state::SpeakerIdFailure::Error)
+            .await
+            .unwrap()
+    );
     assert_eq!(audio_state(&pool, "done").await.as_deref(), Some("failed"));
 
     let dir = folder(tmp.path(), "deferred", "completed", &["system.wav"]);
     meeting(&pool, "deferred", 0, Some(&dir), None, 5).await;
     set_mode(&pool, "deferred", Some("defer")).await;
-    assert!(!state::mark_failed_if_pending(&pool, "deferred")
-        .await
-        .unwrap());
+    assert!(
+        !state::mark_failed_if_pending(&pool, "deferred", state::SpeakerIdFailure::Error)
+            .await
+            .unwrap()
+    );
     assert_eq!(
         audio_state(&pool, "deferred").await,
         None,
@@ -879,6 +885,10 @@ async fn a_failed_identification_run_is_recorded_by_the_launch_hook() {
         audio_state(&pool, "launch-hook").await.as_deref(),
         Some("failed")
     );
+    // specs/0084 W1: the launch stamped the marker and the outcome cleared it.
+    let cols = speaker_id_cols(&pool, "launch-hook").await;
+    assert_eq!(cols.speaker_id_started_at, None);
+    assert_eq!(cols.speaker_id_failure.as_deref(), Some("error"));
     let seen = events.lock().unwrap().clone();
     assert!(
         seen.iter().any(
@@ -999,4 +1009,334 @@ async fn clearing_the_marker_needs_a_completed_transcript_pass_for_a_sparse_meet
         audio_state(&pool, "silent").await.as_deref(),
         Some("processed")
     );
+}
+
+// -- specs/0084 W1: the speaker-identification crash-loop breaker -----------------------------
+
+#[derive(Debug, PartialEq, Eq, sqlx::FromRow)]
+struct SpeakerIdCols {
+    audio_state: Option<String>,
+    speaker_id_started_at: Option<String>,
+    speaker_id_failure: Option<String>,
+    speaker_id_crashes: i64,
+}
+
+async fn speaker_id_cols(pool: &SqlitePool, id: &str) -> SpeakerIdCols {
+    sqlx::query_as(
+        "SELECT audio_state, speaker_id_started_at, speaker_id_failure, speaker_id_crashes \
+         FROM meetings WHERE id = ?",
+    )
+    .bind(id)
+    .fetch_one(pool)
+    .await
+    .unwrap()
+}
+
+/// A finalized, transcribed meeting with a system channel: what the reconcile picks up.
+async fn diarizable(pool: &SqlitePool, root: &Path, id: &str, audio_state: Option<&str>) {
+    let dir = folder(root, id, "completed", &["audio.mp4", "system.wav"]);
+    meeting(pool, id, 0, Some(&dir), audio_state, 5).await;
+}
+
+/// The breaker touches only meetings whose marker is set: a pending (or failed) one becomes
+/// failed/interrupted and leaves the reconcile's list; one with no marker is untouched.
+#[tokio::test]
+async fn the_breaker_fails_only_meetings_whose_pass_died_mid_run() {
+    let pool = pool_with_schema().await;
+    let tmp = tempfile::tempdir().unwrap();
+    for (id, st) in [
+        ("died", None),
+        ("quiet", None),
+        ("died-on-retry", Some("failed")),
+        ("rerun-died", Some("processed")),
+    ] {
+        diarizable(&pool, tmp.path(), id, st).await;
+    }
+    for id in ["died", "died-on-retry", "rerun-died"] {
+        assert_eq!(state::mark_speaker_id_started(&pool, id).await.unwrap(), 0);
+    }
+    let before = state::list_unfinished(&pool).await.unwrap();
+    assert!(before.contains(&"died".to_string()), "{before:?}");
+
+    let mut broken = state::fail_interrupted_speaker_id(&pool).await.unwrap();
+    broken.sort_by(|a, b| a.meeting_id.cmp(&b.meeting_id));
+    let summary: Vec<(&str, i64, bool)> = broken
+        .iter()
+        .map(|p| (p.meeting_id.as_str(), p.crashes, p.failed))
+        .collect();
+    assert_eq!(
+        summary,
+        [
+            ("died", 1, true),
+            ("died-on-retry", 1, true),
+            ("rerun-died", 1, false)
+        ]
+    );
+    let failed = |c: i64| SpeakerIdCols {
+        audio_state: Some("failed".into()),
+        speaker_id_started_at: None,
+        speaker_id_failure: Some("interrupted".into()),
+        speaker_id_crashes: c,
+    };
+    assert_eq!(speaker_id_cols(&pool, "died").await, failed(1));
+    assert_eq!(speaker_id_cols(&pool, "died-on-retry").await, failed(1));
+    assert_eq!(
+        speaker_id_cols(&pool, "rerun-died").await,
+        SpeakerIdCols {
+            audio_state: Some("processed".into()),
+            speaker_id_started_at: None,
+            speaker_id_failure: None,
+            speaker_id_crashes: 1,
+        },
+        "an already processed meeting keeps its state"
+    );
+    assert_eq!(
+        speaker_id_cols(&pool, "quiet").await,
+        SpeakerIdCols {
+            audio_state: None,
+            speaker_id_started_at: None,
+            speaker_id_failure: None,
+            speaker_id_crashes: 0,
+        },
+        "no marker, no change"
+    );
+
+    let after = state::list_unfinished(&pool).await.unwrap();
+    assert_eq!(
+        after,
+        ["quiet".to_string()],
+        "the crashed one is not restarted"
+    );
+    assert!(
+        state::fail_interrupted_speaker_id(&pool)
+            .await
+            .unwrap()
+            .is_empty(),
+        "a second launch is quiet"
+    );
+    assert_eq!(
+        state::mark_speaker_id_started(&pool, "died").await.unwrap(),
+        1,
+        "the retry sees the crash (safe mode)"
+    );
+    assert_eq!(
+        speaker_id_cols(&pool, "died").await.speaker_id_failure,
+        None,
+        "a new pass clears the old reason"
+    );
+}
+
+/// Every ending clears the marker: success (which also forgets the crashes), a failure that
+/// marks the meeting failed, and a failure that leaves an untranscribed meeting pending.
+#[tokio::test]
+async fn every_outcome_clears_the_marker() {
+    let (app, pool, db_dir) = app_with_db().await;
+    for id in ["ok", "err", "err-deferred"] {
+        diarizable(&pool, db_dir.path(), id, None).await;
+        sqlx::query("UPDATE meetings SET speaker_id_crashes = 2 WHERE id = ?")
+            .bind(id)
+            .execute(&pool)
+            .await
+            .unwrap();
+        state::mark_speaker_id_started(&pool, id).await.unwrap();
+    }
+    set_mode(&pool, "err-deferred", Some("defer")).await;
+
+    app_lib::audio::lifecycle::on_diarization_outcome(app.handle(), "ok", true).await;
+    app_lib::audio::lifecycle::on_diarization_outcome(app.handle(), "err", false).await;
+    app_lib::audio::lifecycle::on_diarization_outcome(app.handle(), "err-deferred", false).await;
+
+    let ok = speaker_id_cols(&pool, "ok").await;
+    assert_eq!((ok.speaker_id_started_at, ok.speaker_id_crashes), (None, 0));
+    assert_eq!(
+        speaker_id_cols(&pool, "err").await,
+        SpeakerIdCols {
+            audio_state: Some("failed".into()),
+            speaker_id_started_at: None,
+            speaker_id_failure: Some("error".into()),
+            speaker_id_crashes: 2,
+        }
+    );
+    assert_eq!(
+        speaker_id_cols(&pool, "err-deferred").await,
+        SpeakerIdCols {
+            audio_state: None,
+            speaker_id_started_at: None,
+            speaker_id_failure: None,
+            speaker_id_crashes: 2,
+        },
+        "still pending for the backlog, but the pass is over"
+    );
+    assert!(state::fail_interrupted_speaker_id(&pool)
+        .await
+        .unwrap()
+        .is_empty());
+}
+
+/// The launch path stamps the marker before the pass (which clears the last failure reason).
+/// Seen through a deferred meeting, whose failed outcome leaves the reason alone: without the
+/// stamp, the stale `interrupted` would survive the new pass.
+#[tokio::test]
+async fn every_launch_stamps_the_marker_before_the_pass() {
+    let (app, pool, db_dir) = app_with_db().await;
+    diarizable(&pool, db_dir.path(), "stamped", None).await;
+    set_mode(&pool, "stamped", Some("defer")).await;
+    sqlx::query("UPDATE meetings SET speaker_id_failure = 'interrupted' WHERE id = 'stamped'")
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    assert!(app_lib::diarization::launch::diarize_meeting(
+        app.handle().clone(),
+        "stamped".into()
+    ));
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
+    while app_lib::diarization::pipeline::run_status("stamped").is_none_or(|s| s.running)
+        && std::time::Instant::now() < deadline
+    {
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
+    let cols = speaker_id_cols(&pool, "stamped").await;
+    assert_eq!(cols.audio_state, None, "deferred: still pending");
+    assert_eq!(cols.speaker_id_started_at, None, "the pass is over");
+    assert_eq!(
+        cols.speaker_id_failure, None,
+        "the launch cleared the old reason"
+    );
+}
+
+/// A graceful quit mid-pass clears the marker, so the next launch finishes the meeting as a
+/// plain pending one and never reads it as a crash.
+#[tokio::test]
+async fn a_graceful_quit_is_not_an_interruption() {
+    let pool = pool_with_schema().await;
+    let tmp = tempfile::tempdir().unwrap();
+    diarizable(&pool, tmp.path(), "quit", None).await;
+    state::mark_speaker_id_started(&pool, "quit").await.unwrap();
+    state::clear_speaker_id_markers(&pool, &["quit".to_string()])
+        .await
+        .unwrap();
+    assert!(state::fail_interrupted_speaker_id(&pool)
+        .await
+        .unwrap()
+        .is_empty());
+    assert_eq!(audio_state(&pool, "quit").await, None);
+    assert_eq!(
+        state::list_unfinished(&pool).await.unwrap(),
+        ["quit".to_string()]
+    );
+}
+
+/// The launch-time breaker announces the failed meeting and puts a failed, retryable row on
+/// the activity queue with the user-facing reason. A second launch adds nothing.
+#[tokio::test]
+async fn the_startup_breaker_announces_and_queues_the_failure() {
+    use app_lib::llm_activity::registry::TaskOutcome;
+    use app_lib::llm_activity::{LlmActivityState, LlmTaskRegistry, TaskKind};
+
+    let (app, pool, db_dir) = app_with_db().await;
+    let reg = std::sync::Arc::new(LlmTaskRegistry::new());
+    app.handle()
+        .manage(LlmActivityState(std::sync::Arc::clone(&reg)));
+    diarizable(&pool, db_dir.path(), "crashed", None).await;
+    state::mark_speaker_id_started(&pool, "crashed")
+        .await
+        .unwrap();
+    let events = std::sync::Arc::new(std::sync::Mutex::new(Vec::<String>::new()));
+    let sink = events.clone();
+    app.handle().listen(
+        app_lib::audio::lifecycle::EVENT_AUDIO_STATE_CHANGED,
+        move |e| sink.lock().unwrap().push(e.payload().to_string()),
+    );
+
+    let failed = app_lib::audio::lifecycle::breaker::break_interrupted_passes(app.handle()).await;
+    assert_eq!(failed, ["crashed".to_string()]);
+    let seen = events.lock().unwrap().clone();
+    assert!(
+        seen.iter()
+            .any(|p| p.contains(r#""meetingId":"crashed""#) && p.contains(r#""state":"failed""#)),
+        "{seen:?}"
+    );
+    let view = reg.view();
+    let row = view.history.first().expect("a queue row");
+    assert_eq!(row.kind, TaskKind::Diarization);
+    assert_eq!(row.meeting_id.as_deref(), Some("crashed"));
+    assert!(matches!(row.outcome, TaskOutcome::Failed { .. }));
+    assert_eq!(
+        row.error.as_deref(),
+        Some(app_lib::audio::lifecycle::breaker::INTERRUPTED_MESSAGE)
+    );
+    assert!(row.label.contains("Lifecycle crashed"), "{}", row.label);
+
+    assert!(
+        app_lib::audio::lifecycle::breaker::break_interrupted_passes(app.handle())
+            .await
+            .is_empty(),
+        "the second launch is quiet"
+    );
+    assert_eq!(reg.view().history.len(), 1);
+}
+
+/// Review fix: the deferred backlog runs on every launch and used to restart the pass that
+/// crashed the app. An automatic request for a crashed meeting is refused, with a distinct
+/// result, even after the backlog's retranscription; the user's own request runs, in safe mode.
+#[tokio::test]
+async fn an_automatic_pass_never_restarts_a_crashed_meeting_but_a_manual_one_runs_safe() {
+    use app_lib::diarization::commands::api_diarize_meeting;
+    let (app, pool, db_dir) = app_with_db().await;
+    diarizable(&pool, db_dir.path(), "auto-crashed", None).await;
+    set_mode(&pool, "auto-crashed", Some("defer")).await;
+    state::mark_speaker_id_started(&pool, "auto-crashed")
+        .await
+        .unwrap();
+    state::fail_interrupted_speaker_id(&pool).await.unwrap(); // the crash, then a relaunch
+                                                              // The backlog retranscribes first; that must not re-arm the meeting.
+    state::clear_speakers_identified(&pool, "auto-crashed")
+        .await
+        .unwrap();
+    assert_eq!(
+        speaker_id_cols(&pool, "auto-crashed")
+            .await
+            .speaker_id_failure
+            .as_deref(),
+        Some("interrupted"),
+        "a crash is about the audio; a new transcript keeps the reason"
+    );
+
+    let auto = api_diarize_meeting(app.handle().clone(), "auto-crashed".into(), Some(true))
+        .await
+        .unwrap();
+    assert!(auto.skipped_after_crash && !auto.started && !auto.already_running);
+    assert!(
+        app_lib::diarization::pipeline::run_status("auto-crashed").is_none(),
+        "no pass started"
+    );
+    assert_eq!(
+        speaker_id_cols(&pool, "auto-crashed")
+            .await
+            .speaker_id_started_at,
+        None
+    );
+
+    let manual = api_diarize_meeting(app.handle().clone(), "auto-crashed".into(), None)
+        .await
+        .unwrap();
+    assert!(manual.started && !manual.skipped_after_crash);
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
+    while app_lib::diarization::pipeline::run_status("auto-crashed").is_none_or(|s| s.running)
+        && std::time::Instant::now() < deadline
+    {
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
+    assert_eq!(
+        app_lib::diarization::launch::last_pass_safe_mode("auto-crashed"),
+        Some(true),
+        "the retry after a crash runs in safe mode"
+    );
+
+    // A meeting with no crash is unaffected by `automatic`.
+    diarizable(&pool, db_dir.path(), "auto-fine", None).await;
+    assert!(state::automatic_pass_allowed(&pool, "auto-fine")
+        .await
+        .unwrap());
 }

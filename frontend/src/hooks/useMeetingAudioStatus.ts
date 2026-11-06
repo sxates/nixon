@@ -16,7 +16,12 @@ export interface MeetingAudioStatus {
   /** The channels are stored compressed. */
   compressed: boolean;
   state: AudioState;
+  /** Why speaker identification last failed (specs/0084), or null. */
+  speakerIdFailure?: SpeakerIdFailure | null;
 }
+
+/** `meetings.speaker_id_failure` (specs/0084). */
+export type SpeakerIdFailure = 'interrupted' | 'crashed' | 'cancelled' | 'error';
 
 /** Tooltip on disabled audio actions after the retention policy deleted the audio. */
 export const AUDIO_PURGED_TITLE = 'Audio deleted by your retention setting.';
@@ -25,6 +30,23 @@ export const AUDIO_MISSING_TITLE = 'No audio recording is available for this mee
 /** Speaker identification failed; the audio is kept for a retry. */
 export const AUDIO_FAILED_NOTE =
   "Speaker identification didn't finish. Audio is kept so you can retry.";
+/** The pass died with the app (or, from W3, its helper crashed). */
+export const SPEAKER_ID_INTERRUPTED_NOTE = 'Speaker identification stopped unexpectedly.';
+/** The user cancelled the pass. */
+export const SPEAKER_ID_CANCELLED_NOTE = 'Speaker identification was cancelled.';
+
+/** The meeting page's failed note for a failure code (specs/0084). */
+export function speakerIdFailureNote(code: string | null | undefined): string {
+  switch (code) {
+    case 'interrupted':
+    case 'crashed':
+      return SPEAKER_ID_INTERRUPTED_NOTE;
+    case 'cancelled':
+      return SPEAKER_ID_CANCELLED_NOTE;
+    default:
+      return AUDIO_FAILED_NOTE;
+  }
+}
 
 /** Can the meeting be (re)transcribed? A mix, or channels Rust mixes on the fly. */
 export const canTranscribe = (s: MeetingAudioStatus) => s.mix || s.channels;

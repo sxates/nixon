@@ -63,6 +63,27 @@ impl ThreadedDiarizeConfig {
             num_threads: crate::diarization::accel::diarizer_threads() as i32,
         }
     }
+
+    /// [`Self::with_defaults`], with one thread in safe mode (specs/0084 W1).
+    pub fn for_mode(
+        num_clusters: i32,
+        threshold: f32,
+        min_duration_on: f32,
+        min_duration_off: f32,
+        provider: String,
+        safe: bool,
+    ) -> Self {
+        Self {
+            num_threads: crate::diarization::accel::diarizer_threads_for(safe) as i32,
+            ..Self::with_defaults(
+                num_clusters,
+                threshold,
+                min_duration_on,
+                min_duration_off,
+                provider,
+            )
+        }
+    }
 }
 
 /// Owns the C diarizer handle.
@@ -158,7 +179,6 @@ impl ThreadedDiarize {
     ) -> Result<Vec<Segment>> {
         let samples_ptr = samples.as_mut_ptr();
         let samples_len = samples.len() as i32;
-        let mut segments = Vec::new();
 
         // SAFETY: `samples` is alive for the whole call; the callback box (when
         // present) is alive for the whole call and sherpa invokes it inline,
@@ -190,37 +210,54 @@ impl ThreadedDiarize {
                 },
                 callback_ptr,
             );
-
-            let num_segments =
-                sherpa_rs_sys::SherpaOnnxOfflineSpeakerDiarizationResultGetNumSegments(result);
-            let segments_ptr =
-                sherpa_rs_sys::SherpaOnnxOfflineSpeakerDiarizationResultSortByStartTime(result);
-
-            let outcome = if segments_ptr.is_null() || num_segments <= 0 {
-                Err(anyhow!("No segments found or invalid pointer."))
-            } else {
-                let slice = std::slice::from_raw_parts(segments_ptr, num_segments as usize);
-                for s in slice {
-                    segments.push(Segment {
-                        start: s.start,
-                        end: s.end,
-                        speaker: s.speaker,
-                    });
-                }
-                Ok(())
-            };
-
-            // Mirrors upstream's destroy ordering exactly (segment array before
-            // the result it was sorted from), but — unlike upstream — runs on
-            // every exit path, not just the success path.
-            sherpa_rs_sys::SherpaOnnxOfflineSpeakerDiarizationDestroySegment(segments_ptr);
-            sherpa_rs_sys::SherpaOnnxOfflineSpeakerDiarizationDestroyResult(result);
-
-            outcome?;
+            drop(callback_box);
+            collect_segments(result)
         }
-
-        Ok(segments)
     }
+}
+
+/// Read and free a `ProcessWithCallback` result.
+///
+/// specs/0084 W1: a null `result` (sherpa's internal failure) returns `Err` before any
+/// accessor touches it; `GetNumSegments`/`SortByStartTime` on null is a segfault, which
+/// used to take the whole app down. The message deliberately avoids `NO_SEGMENTS_MARKER`,
+/// so a broken engine is an error and never "no speech".
+///
+/// # Safety
+/// `result` is null or a live result from `ProcessWithCallback`, not freed yet. It is freed
+/// here (when non-null) on every path.
+unsafe fn collect_segments(
+    result: *const sherpa_rs_sys::SherpaOnnxOfflineSpeakerDiarizationResult,
+) -> Result<Vec<Segment>> {
+    if result.is_null() {
+        return Err(anyhow!(
+            "The speaker identification engine returned no result (internal failure)"
+        ));
+    }
+    let num_segments =
+        sherpa_rs_sys::SherpaOnnxOfflineSpeakerDiarizationResultGetNumSegments(result);
+    let segments_ptr =
+        sherpa_rs_sys::SherpaOnnxOfflineSpeakerDiarizationResultSortByStartTime(result);
+
+    let outcome = if segments_ptr.is_null() || num_segments <= 0 {
+        Err(anyhow!("No segments found or invalid pointer."))
+    } else {
+        let slice = std::slice::from_raw_parts(segments_ptr, num_segments as usize);
+        Ok(slice
+            .iter()
+            .map(|s| Segment {
+                start: s.start,
+                end: s.end,
+                speaker: s.speaker,
+            })
+            .collect())
+    };
+
+    // Mirrors upstream's destroy ordering exactly (segment array before the result it was
+    // sorted from), but — unlike upstream — runs on every exit path, not just success.
+    sherpa_rs_sys::SherpaOnnxOfflineSpeakerDiarizationDestroySegment(segments_ptr);
+    sherpa_rs_sys::SherpaOnnxOfflineSpeakerDiarizationDestroyResult(result);
+    outcome
 }
 
 impl Drop for ThreadedDiarize {
@@ -247,7 +284,22 @@ unsafe extern "C" fn progress_trampoline(
         return 0;
     }
     let callback = &*(arg as *const ProgressCallback);
-    callback(num_processed_chunks, num_total_chunks)
+    // specs/0084 W1: a panic can't unwind across this C frame; it would abort the whole app.
+    // The closure emits events and takes the run-registry lock, so guard it: a panic here
+    // costs progress reporting, never the process.
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        callback(num_processed_chunks, num_total_chunks)
+    })) {
+        Ok(rc) => rc,
+        Err(_) => {
+            static LOGGED: std::sync::atomic::AtomicBool =
+                std::sync::atomic::AtomicBool::new(false);
+            if !LOGGED.swap(true, std::sync::atomic::Ordering::Relaxed) {
+                log::warn!("diarization: the progress callback panicked; progress is lost");
+            }
+            0
+        }
+    }
 }
 
 /// Bridge a borrowed `FnMut(f32)` fraction sink to sherpa's owned
@@ -312,6 +364,47 @@ mod tests {
             "diarizer must not be pinned to one thread; got {}",
             config.num_threads
         );
+    }
+
+    /// specs/0084 W1: a null result from sherpa is an error, never a segfault. Without the
+    /// guard this test dies in `GetNumSegments(null)`.
+    #[test]
+    fn a_null_result_is_an_error_not_a_segfault() {
+        // SAFETY: null is exactly the case under test; nothing is dereferenced.
+        let err = unsafe { collect_segments(std::ptr::null()) }.expect_err("null must error");
+        let msg = format!("{err:#}");
+        assert!(msg.contains("no result"), "got: {msg}");
+        assert!(
+            !msg.contains("No segments found"),
+            "a broken engine must not read as \"no speech\": {msg}"
+        );
+    }
+
+    /// specs/0084 W1: a panicking progress closure returns 0 instead of aborting the process
+    /// (an unwind out of an `extern "C"` fn aborts).
+    #[test]
+    fn a_panicking_progress_closure_does_not_abort() {
+        let callback: ProgressCallback = Box::new(|_, _| panic!("progress sink exploded"));
+        let arg = &callback as *const ProgressCallback as *mut c_void;
+        // SAFETY: `arg` points at a live `ProgressCallback` for the whole call.
+        let rc = unsafe { progress_trampoline(1, 10, arg) };
+        assert_eq!(rc, 0);
+        let ok: ProgressCallback = Box::new(|done, total| done + total);
+        let arg = &ok as *const ProgressCallback as *mut c_void;
+        // SAFETY: as above.
+        assert_eq!(
+            unsafe { progress_trampoline(2, 3, arg) },
+            5,
+            "the result passes through"
+        );
+    }
+
+    /// specs/0084 W1: safe mode builds the diarizer on one thread.
+    #[test]
+    fn safe_mode_config_has_one_thread() {
+        let config = ThreadedDiarizeConfig::for_mode(0, 0.8, 0.3, 0.5, "cpu".to_string(), true);
+        assert_eq!(config.num_threads, 1);
+        assert_eq!(config.provider, "cpu");
     }
 
     /// A missing model file must be a clean anyhow::Err, never a null-pointer

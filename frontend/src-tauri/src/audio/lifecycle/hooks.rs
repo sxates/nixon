@@ -156,7 +156,12 @@ pub async fn finish_processing<R: Runtime>(
                 let audio = scan_folder(&folder);
                 let finalized = audio.as_ref().is_some_and(|a| !a.recording);
                 let has_system = audio.is_some_and(|a| a.system_channel);
-                if finalized && diarization_gate().await.applies(has_system) {
+                // specs/0084 W1: every caller here is automatic (stop, import, reconcile), so
+                // a meeting whose pass crashed the app is left for the user's Retry.
+                if finalized
+                    && diarization_gate().await.applies(has_system)
+                    && crate::diarization::launch::automatic_pass_allowed(app, meeting_id).await
+                {
                     crate::diarization::launch::diarize_meeting(app.clone(), meeting_id.into());
                     return FinishOutcome::Diarizing;
                 }
@@ -176,7 +181,7 @@ pub async fn on_diarization_outcome<R: Runtime>(app: &AppHandle<R>, meeting_id: 
         reevaluate_and_apply(app, meeting_id, false).await;
         return;
     }
-    match state::mark_failed_if_pending(&pool, meeting_id).await {
+    match state::mark_failed_if_pending(&pool, meeting_id, state::SpeakerIdFailure::Error).await {
         Ok(true) => emit_state(app, meeting_id, AudioState::Failed),
         Ok(false) => {}
         Err(e) => log::warn!("Audio lifecycle: {e:#}"),
@@ -275,9 +280,12 @@ pub async fn sweep_now<R: Runtime>(
     Ok(report)
 }
 
-/// Finish every meeting a quit interrupted mid-processing, one at a time.
+/// Finish every meeting a quit interrupted mid-processing, one at a time. A meeting whose
+/// speaker identification died with the app is failed first and never restarted here
+/// (specs/0084 W1: that is what used to crash the app on every launch).
 async fn startup_reconcile<R: Runtime>(app: &AppHandle<R>) {
     let Some(pool) = pool(app) else { return };
+    super::breaker::break_interrupted_passes(app).await;
     let ids = match state::list_unfinished(&pool).await {
         Ok(ids) => ids,
         Err(e) => return log::warn!("Audio lifecycle reconcile: {e:#}"),

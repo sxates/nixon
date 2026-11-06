@@ -59,6 +59,9 @@ pub struct SpeakerDto {
 pub struct DiarizeStartDto {
     pub started: bool,
     pub already_running: bool,
+    /// specs/0084 W1: an automatic request refused because a pass already died mid-run on
+    /// this meeting. Nothing started and no event follows; the caller skips the step.
+    pub skipped_after_crash: bool,
 }
 
 /// Start an offline diarization pass for a saved meeting. Returns once the
@@ -69,14 +72,25 @@ pub struct DiarizeStartDto {
 pub async fn api_diarize_meeting<R: Runtime>(
     app: AppHandle<R>,
     meeting_id: String,
+    automatic: Option<bool>,
 ) -> Result<DiarizeStartDto, String> {
     if meeting_id.trim().is_empty() {
         return Err("meeting_id cannot be empty".to_string());
+    }
+    // specs/0084 W1: an automatic caller (the deferred backlog) never restarts a pass that
+    // crashed the app; only the user's own click does, in safe mode.
+    if automatic.unwrap_or(false) && !launch::automatic_pass_allowed(&app, &meeting_id).await {
+        return Ok(DiarizeStartDto {
+            started: false,
+            already_running: false,
+            skipped_after_crash: true,
+        });
     }
     let started = launch::diarize_meeting(app, meeting_id);
     Ok(DiarizeStartDto {
         started,
         already_running: !started,
+        skipped_after_crash: false,
     })
 }
 

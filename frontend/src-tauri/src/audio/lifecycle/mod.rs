@@ -7,8 +7,10 @@
 //! - `sweep.rs`: the executor (delete / compress under the folder lease) and the preview.
 //! - `compress.rs`: channel WAV → Opus, verified, both channels or neither.
 //! - `hooks.rs`: the one-line calls processing steps make, the startup reconcile, `spawn`.
+//! - `breaker.rs`: the speaker-identification crash-loop breaker (specs/0084 W1).
 //! - `commands.rs`: the Tauri commands.
 
+pub mod breaker;
 pub mod commands;
 pub mod compress;
 mod hooks;

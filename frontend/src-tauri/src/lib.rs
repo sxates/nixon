@@ -422,6 +422,9 @@ pub fn run() {
                     #[cfg(debug_assertions)]
                     crate::dev_fixtures::control::cleanup_port_file();
                     tauri::async_runtime::block_on(async {
+                        // specs/0084 W1: a quit ends running speaker-ID passes on purpose;
+                        // clear their crash markers before the database closes.
+                        audio::lifecycle::breaker::clear_markers_on_quit(_app_handle).await;
                         // Clean up database connection and checkpoint WAL
                         if let Some(app_state) = _app_handle.try_state::<state::AppState>() {
                             log::info!("Starting database cleanup...");

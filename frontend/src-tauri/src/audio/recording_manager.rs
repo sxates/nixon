@@ -124,6 +124,7 @@ impl RecordingManager {
             Err(e) => {
                 error!("Recording start failed after saver init: {}", e);
                 self.recording_saver.rollback_failed_start().await;
+                crate::power::keep_awake::end_recording(); // specs/0083 W1: never leak a hold
                 Err(e)
             }
         }

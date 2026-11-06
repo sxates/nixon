@@ -9,6 +9,9 @@
 //! Event-driven via `IOPSNotificationCreateRunLoopSource` — no polling. On
 //! non-macOS builds everything degrades to `Unknown` / never-on-battery.
 
+pub mod keep_awake;
+#[cfg(target_os = "macos")]
+mod keep_awake_macos;
 #[cfg(target_os = "macos")]
 mod macos;
 
