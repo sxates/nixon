@@ -100,23 +100,76 @@ pub async fn api_save_transcript<R: Runtime>(
                    first_seg.duration);
     }
 
-    let pool = state.db_manager.pool();
+    let saved = save_session(
+        state.db_manager.pool(),
+        &meeting_title,
+        &transcripts_to_save,
+        folder_path,
+        meeting_id.as_deref(),
+        resumed.unwrap_or(false),
+        audio_offset_seconds.unwrap_or(0.0),
+    )
+    .await
+    .map_err(|e| e.to_string())?;
+    let message = match saved.kind {
+        SaveKind::Appended => "Resumed transcript appended successfully",
+        SaveKind::Attached | SaveKind::Created => "Transcript saved successfully",
+    };
+    Ok(serde_json::json!({
+        "status": "success",
+        "message": message,
+        "meeting_id": saved.meeting_id
+    }))
+}
 
-    // Two paths:
-    // - meeting_id = Some(existing): attach segments to the meeting created at
-    //   recording START (specs/0007), refresh title/updated_at, do NOT create a row.
-    // - meeting_id = None (existing callers): behave exactly as before -> create a
-    //   new meeting with the segments.
-    if let Some(existing_id) = meeting_id.as_deref().filter(|id| !id.trim().is_empty()) {
+/// Which path [`save_session`] took.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SaveKind {
+    /// 0037: a resumed session's segments were appended to `meeting_id`.
+    Appended,
+    /// The segments were attached to the (empty) meeting created at recording start.
+    Attached,
+    /// A new meeting was created (no id, a missing meeting, or the WS6.7 guard refused).
+    Created,
+}
+
+/// Where [`save_session`] put the transcript.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SavedSession {
+    pub meeting_id: String,
+    pub kind: SaveKind,
+}
+
+/// Save one recording session's transcript (specs/0083 W2a: the body of
+/// [`api_save_transcript`], shared with the Rust wrap-up).
+///
+/// - `meeting_id` = Some(existing), `resumed`: append to that meeting with
+///   `audio_offset_seconds` (specs/0037). A missing meeting falls through to create-new.
+/// - `meeting_id` = Some(existing): attach to the meeting created at recording START
+///   (specs/0007) and refresh its title. If it is missing, or already holds another
+///   session's transcripts (the specs/0019 WS6.7 guard), fall through to create-new.
+/// - Otherwise: create a new meeting with the segments.
+///
+/// Errors carry the same user-facing messages the command always returned.
+pub async fn save_session(
+    pool: &SqlitePool,
+    meeting_title: &str,
+    transcripts_to_save: &[TranscriptSegment],
+    folder_path: Option<String>,
+    meeting_id: Option<&str>,
+    resumed: bool,
+    audio_offset_seconds: f64,
+) -> anyhow::Result<SavedSession> {
+    if let Some(existing_id) = meeting_id.filter(|id| !id.trim().is_empty()) {
         // specs/0037: a RESUMED session appends to the SAME meeting (the WS6.7 guard is
         // for the duplicate-row race, not an intentional continue). On success we return;
         // if the meeting is missing we fall through to create-new so nothing is lost.
-        if resumed.unwrap_or(false) {
-            let offset = audio_offset_seconds.unwrap_or(0.0);
+        if resumed {
+            let offset = audio_offset_seconds;
             match TranscriptsRepository::append_transcripts_for_meeting(
                 pool,
                 existing_id,
-                &transcripts_to_save,
+                transcripts_to_save,
                 folder_path.clone(),
                 offset,
             )
@@ -128,11 +181,10 @@ pub async fn api_save_transcript<R: Runtime>(
                         existing_id,
                         offset
                     );
-                    return Ok(serde_json::json!({
-                        "status": "success",
-                        "message": "Resumed transcript appended successfully",
-                        "meeting_id": existing_id
-                    }));
+                    return Ok(SavedSession {
+                        meeting_id: existing_id.to_string(),
+                        kind: SaveKind::Appended,
+                    });
                 }
                 Ok(false) => {
                     log_warn!(
@@ -146,15 +198,15 @@ pub async fn api_save_transcript<R: Runtime>(
                         existing_id,
                         e
                     );
-                    return Err(format!("Failed to append resumed transcript: {}", e));
+                    anyhow::bail!("Failed to append resumed transcript: {}", e);
                 }
             }
         }
         match TranscriptsRepository::save_transcripts_for_meeting(
             pool,
             existing_id,
-            &meeting_title,
-            &transcripts_to_save,
+            meeting_title,
+            transcripts_to_save,
             folder_path.clone(),
         )
         .await
@@ -164,11 +216,10 @@ pub async fn api_save_transcript<R: Runtime>(
                     "Successfully attached transcript to existing meeting {}",
                     existing_id
                 );
-                return Ok(serde_json::json!({
-                    "status": "success",
-                    "message": "Transcript saved successfully",
-                    "meeting_id": existing_id
-                }));
+                return Ok(SavedSession {
+                    meeting_id: existing_id.to_string(),
+                    kind: SaveKind::Attached,
+                });
             }
             Ok(false) => {
                 // The save did NOT attach to the existing row — either the meeting
@@ -188,7 +239,7 @@ pub async fn api_save_transcript<R: Runtime>(
                     existing_id,
                     e
                 );
-                return Err(format!("Failed to save transcript: {}", e));
+                anyhow::bail!("Failed to save transcript: {}", e);
             }
         }
     }
@@ -196,8 +247,8 @@ pub async fn api_save_transcript<R: Runtime>(
     // Default path: create a new meeting with the segments.
     match TranscriptsRepository::save_transcript(
         pool,
-        &meeting_title,
-        &transcripts_to_save,
+        meeting_title,
+        transcripts_to_save,
         folder_path,
     )
     .await
@@ -207,11 +258,10 @@ pub async fn api_save_transcript<R: Runtime>(
                 "Successfully saved transcript and created meeting with id: {}",
                 meeting_id
             );
-            Ok(serde_json::json!({
-                "status": "success",
-                "message": "Transcript saved successfully",
-                "meeting_id": meeting_id
-            }))
+            Ok(SavedSession {
+                meeting_id,
+                kind: SaveKind::Created,
+            })
         }
         Err(e) => {
             log_error!(
@@ -219,7 +269,7 @@ pub async fn api_save_transcript<R: Runtime>(
                 meeting_title,
                 e
             );
-            Err(format!("Failed to save transcript: {}", e))
+            anyhow::bail!("Failed to save transcript: {}", e)
         }
     }
 }

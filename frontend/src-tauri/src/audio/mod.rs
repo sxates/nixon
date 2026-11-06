@@ -58,6 +58,7 @@ pub mod stt_lock; // spec 0045 WS1b: process-wide inference mutex serializing li
 pub mod stt_stage; // low-power-mode spec §3: pipeline VAD/STT gating stage (attach/detach)
 pub mod system_audio_commands;
 pub mod system_detector; // NEW: Playback device detection for BT warnings
+pub mod transcript_sink; // specs/0083 W2a: the saver's segment store for the transcript listener
 pub mod volume_check; // specs/0073: recordings stay on an internal, local drive
 
 // Transcription module (provider abstraction, engine management, worker pool)
