@@ -1,0 +1,72 @@
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen, within, fireEvent } from '@testing-library/react';
+
+vi.mock('@/components/CommandPalette/SearchMeetingsButton', () => ({
+  SearchMeetingsButton: vi.fn(() => null),
+}));
+vi.mock('@/components/DeferredBacklog/ProcessMeetingsButton', () => ({
+  ProcessMeetingsButton: vi.fn(() => null),
+}));
+const openImportDialog = vi.fn();
+vi.mock('@/contexts/ImportDialogContext', () => ({ useImportDialog: () => ({ openImportDialog }) }));
+
+import { MeetingsHeader } from '@/components/Meetings/MeetingsHeader';
+import type { MeetingsView } from '@/lib/meetings-view';
+
+function renderHeader(view: MeetingsView, calendarConnected: boolean) {
+  const onChooseView = vi.fn();
+  const onAddMeeting = vi.fn();
+  render(
+    <MeetingsHeader
+      subtitle="Thursday"
+      view={view}
+      calendarConnected={calendarConnected}
+      onChooseView={onChooseView}
+      onAddMeeting={onAddMeeting}
+    />,
+  );
+  const labels = () =>
+    within(screen.getByRole('group', { name: 'Meeting view' }))
+      .getAllByRole('button')
+      .map((b) => b.textContent?.trim());
+  return { onChooseView, onAddMeeting, labels };
+}
+
+describe('MeetingsHeader', () => {
+  it('is titled Meetings', () => {
+    renderHeader('agenda', true);
+    expect(screen.getByRole('heading', { name: 'Meetings' })).toBeInTheDocument();
+  });
+
+  it('offers Agenda | Week | Month | List with a calendar connected', () => {
+    const { labels } = renderHeader('agenda', true);
+    expect(labels()).toEqual(['Agenda', 'Week', 'Month', 'List']);
+    expect(screen.getByRole('button', { name: 'Agenda' })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('offers only Month | List without one', () => {
+    const { labels } = renderHeader('list', false);
+    expect(labels()).toEqual(['Month', 'List']);
+  });
+
+  it('reports the chosen view', () => {
+    const { onChooseView } = renderHeader('agenda', true);
+    fireEvent.click(screen.getByRole('button', { name: 'Month' }));
+    expect(onChooseView).toHaveBeenCalledWith('month');
+  });
+
+  // specs/0069 W3 — one primary Add meeting; Record and New note stay gone.
+  it('has one Add meeting action with a calendar, and no Record or New note', () => {
+    const { onAddMeeting } = renderHeader('agenda', true);
+    fireEvent.click(screen.getByRole('button', { name: /add meeting/i }));
+    expect(onAddMeeting).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('button', { name: /^record$/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /new note/i })).toBeNull();
+  });
+
+  it('offers Import audio on List and Month, where an import lands', () => {
+    renderHeader('list', false);
+    fireEvent.click(screen.getByRole('button', { name: /import audio/i }));
+    expect(openImportDialog).toHaveBeenCalled();
+  });
+});

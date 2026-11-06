@@ -1,13 +1,18 @@
 'use client';
 
 /**
- * Month calendar for `/meetings` (specs/0054 W3).
+ * The Meetings page's Month view (specs/0054 W3).
  *
  * The flat chronological list stops being findable once a few months of
  * recordings accumulate ("meeting volume has reached hundreds, back a couple of
  * months"), so this offers the other way people remember a meeting: roughly when
- * it happened. Recorded meetings only — the Google event cache is ~50× larger and
- * would bury them.
+ * it happened.
+ *
+ * With a calendar connected (`events`) it also shows the calendar's events — the
+ * ones coming up, and past ones that were never recorded — read and filtered as
+ * the Week view reads them (`useMonthEvents`, `monthEventItems`), drawn in the
+ * agenda's own per-state chrome, and opened the way Week opens them. Without a
+ * calendar it stays recorded-only.
  *
  * Loads one bounded range per displayed month via `api_get_meetings_in_range`
  * rather than the whole table. All date math lives in `@/lib/month-grid`.
@@ -22,6 +27,11 @@ import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import type { DayAgendaItem } from '@/lib/day-agenda';
+import { monthEventItems } from '@/lib/month-events';
+import { itemVisualState, type TimelineContext } from '@/lib/today-timeline';
+import { blockClasses, StateChip } from '@/components/Today/TimelineBlock';
+import { useMonthEvents } from '@/hooks/useMonthEvents';
 import {
   bucketByLocalDay,
   buildMonthGrid,
@@ -48,12 +58,32 @@ export interface MonthMeeting {
  */
 const MAX_CHIPS_PER_DAY = 3;
 
+/** One thing on a day: a recording, or a calendar event that has none. */
+type DayEntry =
+  | { kind: 'recording'; id: string; title: string; start: string; meeting: MonthMeeting }
+  | { kind: 'event'; id: string; title: string; start: string; item: DayAgendaItem };
+
+/** Calendar events in the Month view: what they need from the page (Week's own wiring). */
+export interface MonthCalendarEvents {
+  /** For each event's state (upcoming / now / missed), as the agenda chips read it. */
+  ctx: TimelineContext;
+  /** Clicking an event does what it does in Week view (`useAgendaActions.handleSelect`). */
+  onSelect: (item: DayAgendaItem) => void;
+}
+
+function entryTime(start: string): string {
+  return new Date(start).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+}
+
 export function MonthCalendar({
   onOpenMeeting,
   activeRecordingMeetingId,
+  events,
 }: {
   onOpenMeeting: (id: string) => void;
   activeRecordingMeetingId?: string | null;
+  /** Set with a calendar connected: the month also shows its events. */
+  events?: MonthCalendarEvents;
 }) {
   const today = useMemo(() => new Date(), []);
   const [cursor, setCursor] = useState(() => ({
@@ -89,8 +119,40 @@ export function MonthCalendar({
     };
   }, [year, monthIndex]);
 
+  const agendas = useMonthEvents(year, monthIndex, !!events);
+
   const grid = useMemo(() => buildMonthGrid(year, monthIndex), [year, monthIndex]);
-  const byDay = useMemo(() => bucketByLocalDay(meetings, (m) => m.createdAt), [meetings]);
+  const byDay = useMemo(() => {
+    const recordedIds = new Set(meetings.map((m) => m.id));
+    const entries: DayEntry[] = [
+      ...meetings.map(
+        (m): DayEntry => ({ kind: 'recording', id: m.id, title: m.title, start: m.createdAt, meeting: m }),
+      ),
+      ...monthEventItems(agendas, recordedIds).map(
+        (item): DayEntry => ({
+          kind: 'event',
+          id: `${item.id}|${item.startTime}`,
+          title: item.title?.trim() || 'Untitled meeting',
+          start: item.startTime,
+          item,
+        }),
+      ),
+    ];
+    const buckets = bucketByLocalDay(entries, (e) => e.start);
+    for (const list of buckets.values()) list.sort((a, b) => a.start.localeCompare(b.start));
+    return buckets;
+  }, [meetings, agendas]);
+
+  const openEntry = (e: DayEntry) =>
+    e.kind === 'recording' ? onOpenMeeting(e.id) : events?.onSelect(e.item);
+  /** Recordings keep their summary tint; events wear the agenda's per-state chrome. */
+  const chipClass = (e: DayEntry) => {
+    if (e.kind === 'event') {
+      return events ? cn('border', blockClasses(itemVisualState(e.item, events.ctx))) : '';
+    }
+    if (e.id === activeRecordingMeetingId) return 'bg-destructive/15 text-destructive';
+    return e.meeting.hasSummary ? 'bg-chart-1/15 text-foreground' : 'bg-muted text-muted-foreground';
+  };
   const todayKey = localDayKey(today);
 
   const step = useCallback((delta: number) => {
@@ -218,13 +280,10 @@ export function MonthCalendar({
                       <span
                         key={m.id}
                         title={m.title}
+                        data-entry={m.kind}
                         className={cn(
                           'u-section-label block truncate rounded-[2px] px-1 py-0.5 text-[9px] leading-tight',
-                          m.id === activeRecordingMeetingId
-                            ? 'bg-destructive/15 text-destructive'
-                            : m.hasSummary
-                              ? 'bg-chart-1/15 text-foreground'
-                              : 'bg-muted text-muted-foreground',
+                          chipClass(m),
                         )}
                       >
                         {m.title}
@@ -250,7 +309,7 @@ export function MonthCalendar({
           </h3>
           {selected.length === 0 ? (
             <p className="px-1 py-2 text-[13px] text-muted-foreground">
-              No meetings recorded this day.
+              {events ? 'No meetings this day.' : 'No meetings recorded this day.'}
             </p>
           ) : (
             <div className="space-y-0.5">
@@ -258,17 +317,26 @@ export function MonthCalendar({
                 <button
                   key={m.id}
                   type="button"
-                  onClick={() => onOpenMeeting(m.id)}
+                  onClick={() => openEntry(m)}
                   className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left hover:bg-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
-                  <span className="min-w-0 flex-1 truncate text-[13.5px] font-semibold text-foreground">
+                  <span
+                    className={cn(
+                      'min-w-0 flex-1 truncate text-[13.5px] font-semibold',
+                      m.kind === 'event' &&
+                        events &&
+                        itemVisualState(m.item, events.ctx) === 'past-unrecorded'
+                        ? 'text-muted-foreground'
+                        : 'text-foreground',
+                    )}
+                  >
                     {m.title}
                   </span>
+                  {m.kind === 'event' && events && (
+                    <StateChip state={itemVisualState(m.item, events.ctx)} />
+                  )}
                   <span className="flex-shrink-0 text-xs text-muted-foreground">
-                    {new Date(m.createdAt).toLocaleTimeString(undefined, {
-                      hour: 'numeric',
-                      minute: '2-digit',
-                    })}
+                    {entryTime(m.start)}
                   </span>
                 </button>
               ))}
@@ -277,9 +345,9 @@ export function MonthCalendar({
         </div>
       )}
 
-      {!isLoading && !error && !selected && meetings.length === 0 && (
+      {!isLoading && !error && !selected && byDay.size === 0 && (
         <p className="flex-shrink-0 py-4 text-center text-sm text-muted-foreground">
-          No recordings in {monthLabel(year, monthIndex)}.
+          {events ? 'No meetings' : 'No recordings'} in {monthLabel(year, monthIndex)}.
         </p>
       )}
     </div>

@@ -4,7 +4,6 @@ import React, { useEffect } from 'react';
 import {
   CalendarDays,
   CheckSquare,
-  Home,
   Menu,
   MessageSquare,
   Settings,
@@ -29,27 +28,27 @@ interface NavItem {
   /** The silkscreened glyph for this destination (specs/0057 §2). */
   icon: LucideIcon;
   /** The `data-sidebar-slot` name this destination renders (specs/0069 W1). */
-  slot: 'today' | 'meetings' | 'tasks' | 'people' | 'ask';
+  slot: 'meetings' | 'tasks' | 'people' | 'ask';
   /** Returns true when this item should render as active for the current path. */
   isActive: (pathname: string | null) => boolean;
 }
 
+/** Where the Meetings item is lit: its page, the old `/meetings` route, and every meeting. */
+export function isMeetingsPath(p: string | null): boolean {
+  if (!p) return false;
+  return p === '/' || p.startsWith('/meetings') || p.startsWith('/meeting-details');
+}
+
 const NAV_ITEMS: NavItem[] = [
   {
-    label: 'Today',
+    // Today and All meetings merged into one Meetings page at `/` (`/meetings` redirects
+    // there). The meeting-details view is the destination of every meeting row, so it
+    // belongs to this section for active-state purposes too.
+    label: 'Meetings',
     path: '/',
-    icon: Home,
-    slot: 'today',
-    isActive: (p) => p === '/',
-  },
-  {
-    label: 'All meetings',
-    // The meeting-details view is the destination of every meeting row, so it
-    // belongs to the "All meetings" section for active-state purposes.
-    path: '/meetings',
     icon: CalendarDays,
     slot: 'meetings',
-    isActive: (p) => (p?.startsWith('/meetings') ?? false) || (p?.startsWith('/meeting-details') ?? false),
+    isActive: isMeetingsPath,
   },
   {
     // Cross-meeting task hub (specs/0034).

@@ -1,14 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { act, renderHook, waitFor } from '@testing-library/react';
 
-// specs/0069 W4 — Today defaults to the List view on a machine with no calendar
-// connected, rather than an 8am-6pm hour grid with nothing in it. The default must
-// never fight an explicit choice: precedence is `?view=` -> the persisted
-// `nixon.today.viewMode` preference -> (connected ? 'day' : 'list'). The connection
-// check (`isAnyCalendarConnected`) resolves asynchronously, so a fresh no-calendar
-// profile briefly renders Day before settling to List — that's acceptable. What must
-// never happen is the async check overwriting a preference the user (or the URL)
-// already expressed.
+// The Meetings page's Agenda / Week data. Which view shows (and its persistence) moved to
+// `useMeetingsView` when Today and All meetings merged; see its own suite.
 
 const { searchParamsGetMock } = vi.hoisted(() => ({
   searchParamsGetMock: vi.fn((_key: string) => null as string | null),
@@ -111,38 +105,21 @@ interface DayAgendaItemLike {
   dismissed: boolean;
 }
 
-describe('useDayAgenda view mode default (specs/0069 W4)', () => {
-  it('defaults to List when no calendar is connected', async () => {
-    isAnyCalendarConnectedMock.mockResolvedValue(false);
-    const { result } = renderHook(() => useDayAgenda());
-    await waitFor(() => expect(result.current.viewMode).toBe('list'));
+describe('useDayAgenda mode', () => {
+  it('reads nothing while Month or List shows (mode null)', async () => {
+    renderHook(() => useDayAgenda(null));
+    await act(async () => {});
+    expect(readDayAgendaMock).not.toHaveBeenCalled();
+    expect(getDayAgendaMock).not.toHaveBeenCalled();
   });
 
-  it('defaults to Day when one is', async () => {
-    isAnyCalendarConnectedMock.mockResolvedValue(true);
-    const { result } = renderHook(() => useDayAgenda());
-    await waitFor(() => expect(result.current.calendarConnected).toBe(true));
-    expect(result.current.viewMode).toBe('day');
-  });
-
-  it('an explicit choice wins over the default', async () => {
-    isAnyCalendarConnectedMock.mockResolvedValue(false);
-    window.localStorage.setItem('nixon.today.viewMode', 'day');
-    const { result } = renderHook(() => useDayAgenda());
-    // Let the (losing) async connectivity check resolve fully before asserting, so a
-    // passing test can't be an accident of timing.
-    await waitFor(() => expect(result.current.calendarConnected).toBe(false));
-    expect(result.current.viewMode).toBe('day');
-  });
-
-  it('reads an explicit ?view=list from the URL', async () => {
-    isAnyCalendarConnectedMock.mockResolvedValue(true);
-    searchParamsGetMock.mockImplementation((key: string) => (key === 'view' ? 'list' : null));
-    const { result } = renderHook(() => useDayAgenda());
-    expect(result.current.viewMode).toBe('list');
-    await waitFor(() => expect(result.current.calendarConnected).toBe(true));
-    // Connected resolving true must not flip an explicit ?view=list back to Day.
-    expect(result.current.viewMode).toBe('list');
+  it('reads the day in Agenda and seven days in Week', async () => {
+    const { rerender } = renderHook(({ mode }: { mode: 'day' | 'week' }) => useDayAgenda(mode), {
+      initialProps: { mode: 'day' },
+    });
+    await waitFor(() => expect(readDayAgendaMock).toHaveBeenCalled());
+    rerender({ mode: 'week' });
+    await waitFor(() => expect(getDayAgendaMock).toHaveBeenCalledTimes(1 + 7));
   });
 });
 
@@ -200,7 +177,7 @@ describe('useDayAgenda calendar source + date-keyed cache (specs/0075 W3)', () =
     // …and the cache is forgotten too, so the next mount doesn't bring the row back.
     const { result: remount } = renderHook(() => useDayAgenda());
     expect(remount.current.items).toEqual([]);
-    await waitFor(() => expect(remount.current.calendarConnected).toBe(true));
+    await act(async () => {});
   });
 
   it('keeps the previous calendar rows when an EventKit read comes back with none', async () => {

@@ -9,7 +9,7 @@ describe('shots manifest', () => {
     for (const e of entries) expect(e.route.startsWith('/')).toBe(true);
   });
   it('applies defaults', () => {
-    const today = entries.find((e) => e.name === 'today')!;
+    const today = entries.find((e) => e.name === 'meetings-agenda')!;
     expect(today.viewport).toEqual([1280, 860]);
     expect(today.themes).toEqual(['faceplate', 'deck']);
     expect(today.wait).toBe(1500);

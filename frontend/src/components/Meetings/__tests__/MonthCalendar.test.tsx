@@ -83,3 +83,103 @@ describe('MonthCalendar (specs/0054 W3)', () => {
     await waitFor(() => expect(screen.getByText(/could not load/i)).toBeInTheDocument());
   });
 });
+
+// With a calendar connected the Month view also shows the calendar's events, read through
+// the same per-day `api_get_day_agenda` the Week view uses.
+describe('MonthCalendar with a calendar connected', () => {
+  const localIso = (day: number, hour: number) => new Date(2026, 7, day, hour, 0, 0, 0).toISOString();
+  const event = (over: Record<string, unknown>) => ({
+    id: 'evt',
+    title: 'Event',
+    startTime: localIso(28, 10),
+    endTime: null,
+    source: 'calendar',
+    zoomUrl: null,
+    attendees: [],
+    attendeeCount: 0,
+    meetingId: null,
+    status: { recorded: false, transcribed: false, summarized: false, speakersIdentified: false },
+    dismissed: false,
+    ...over,
+  });
+  const ctx = { now: new Date(2026, 7, 26, 12), isRecording: false, recordingThisId: null };
+  const keyOf = (iso: string) => {
+    const d = new Date(iso);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  };
+
+  /** Answers each day read with the events whose start falls on that local day. */
+  function backend(recordings: unknown[], events: ReturnType<typeof event>[]) {
+    invokeMock.mockImplementation(async (cmd: string, args?: { date?: string }) => {
+      if (cmd === 'api_get_meetings_in_range') return recordings;
+      if (cmd === 'api_get_day_agenda') {
+        const items = events.filter((e) => keyOf(e.startTime as string) === args?.date);
+        return { items, calendarSource: 'google' };
+      }
+      return [];
+    });
+  }
+
+  beforeEach(() => {
+    invokeMock.mockReset();
+    vi.setSystemTime(new Date(2026, 7, 26, 12, 0, 0));
+  });
+
+  it('shows an upcoming event, and opening it does what Week does', async () => {
+    backend([], [event({ id: 'evt-crit', title: 'Design crit' })]);
+    const onSelect = vi.fn();
+    render(<MonthCalendar onOpenMeeting={vi.fn()} events={{ ctx, onSelect }} />);
+
+    await waitFor(() => expect(cellFor(28)).toHaveTextContent('Design crit'));
+    await userEvent.click(cellFor(28));
+    await userEvent.click(screen.getByRole('button', { name: /design crit/i }));
+    expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ id: 'evt-crit' }));
+  });
+
+  it('shows a meeting recorded from an event once, as the recording', async () => {
+    backend(
+      [at(12, 11, { title: 'Roadmap planning' })],
+      [
+        event({
+          id: 'evt-roadmap',
+          title: 'Roadmap planning (invite)',
+          startTime: localIso(12, 11),
+          meetingId: 'm-12-11',
+          status: { recorded: true, transcribed: true, summarized: false, speakersIdentified: false },
+        }),
+      ],
+    );
+    render(<MonthCalendar onOpenMeeting={vi.fn()} events={{ ctx, onSelect: vi.fn() }} />);
+
+    await waitFor(() =>
+      expect(invokeMock).toHaveBeenCalledWith('api_get_day_agenda', { date: '2026-08-12' }),
+    );
+    await waitFor(() => expect(cellFor(12)).toHaveTextContent('Roadmap planning'));
+    expect(cellFor(12)).not.toHaveTextContent('(invite)');
+    expect(cellFor(12)).toHaveAccessibleName(/, 1 meeting$/);
+  });
+
+  it('hides an event you dismissed', async () => {
+    backend(
+      [],
+      [
+        event({ id: 'evt-hidden', title: 'Hidden sync', startTime: localIso(29, 9), dismissed: true }),
+        event({ id: 'evt-kept', title: 'Kept sync', startTime: localIso(29, 14) }),
+      ],
+    );
+    render(<MonthCalendar onOpenMeeting={vi.fn()} events={{ ctx, onSelect: vi.fn() }} />);
+
+    await waitFor(() => expect(cellFor(29)).toHaveTextContent('Kept sync'));
+    expect(cellFor(29)).not.toHaveTextContent('Hidden sync');
+  });
+
+  it('reads no events without a calendar', async () => {
+    backend([], [event({ title: 'Design crit' })]);
+    render(<MonthCalendar onOpenMeeting={vi.fn()} />);
+    await waitFor(() =>
+      expect(invokeMock).toHaveBeenCalledWith('api_get_meetings_in_range', expect.anything()),
+    );
+    expect(invokeMock).not.toHaveBeenCalledWith('api_get_day_agenda', expect.anything());
+  });
+});

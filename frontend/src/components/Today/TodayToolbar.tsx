@@ -2,29 +2,15 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowRight, CalendarDays, ChevronLeft, ChevronRight, ListPlus } from 'lucide-react';
+import { CalendarDays, ChevronLeft, ChevronRight, ListPlus } from 'lucide-react';
 import { toast } from 'sonner';
 import { AddActionItemRow } from '@/components/ActionItems/AddActionItemRow';
 import { useActionItemMutations } from '@/hooks/useActionItemMutations';
 import type { ActionItem } from '@/types';
-import type { AgendaViewMode } from '@/hooks/useDayAgenda';
-import { SegmentedControl } from '@/components/ui/segmented-control';
-
-/**
- * Owner feedback 2026-09-21: "Day" is what the control was called, but an hour-gridded
- * timeline of your day is an *agenda* — and the order should widen as you go right, from
- * one day's shape, to one day's list, to the week. The stored VALUES are untouched
- * (`'day'` is persisted under `nixon.today.viewMode` and appears in `?view=`), so every
- * existing preference and deep link keeps working; only the label and the order move.
- */
-const AGENDA_VIEWS = [
-  { value: 'day', label: 'Agenda' },
-  { value: 'list', label: 'List' },
-  { value: 'week', label: 'Week' },
-];
+import type { AgendaMode } from '@/hooks/useDayAgenda';
 
 interface TodayToolbarProps {
-  viewMode: AgendaViewMode;
+  viewMode: AgendaMode;
   viewDate: string;
   /** Primary date label shown next to the nav arrows. */
   navLabel: string;
@@ -33,14 +19,14 @@ interface TodayToolbarProps {
   onNext: () => void;
   onToday: () => void;
   onGoToDate: (key: string) => void;
-  onSwitchMode: (mode: AgendaViewMode) => void;
 }
 
 /**
- * Home toolbar — date nav + Day/Week toggle + quick actions. A fixed flex sibling of
- * the scroll region (same treatment as the greeting header) so it stays put while
- * the agenda scrolls (specs/0041 WS6). Serves both day and week modes. The inner
- * wrapper mirrors the scroll region's max-w-[840px] centering so nothing shifts.
+ * The Agenda / Week toolbar — date nav + Add to-do. A fixed flex sibling of the scroll
+ * region (same treatment as the page header) so it stays put while the agenda scrolls
+ * (specs/0041 WS6). The view switch itself lives in the Meetings header, the same place
+ * for all four views. The inner wrapper mirrors the scroll region's max-w-[840px]
+ * centering so nothing shifts.
  */
 export function TodayToolbar({
   viewMode,
@@ -51,7 +37,6 @@ export function TodayToolbar({
   onNext,
   onToday,
   onGoToDate,
-  onSwitchMode,
 }: TodayToolbarProps) {
   const router = useRouter();
 
@@ -126,14 +111,6 @@ export function TodayToolbar({
           </div>
 
           <div className="flex items-center gap-3">
-            {/* Day / Week toggle — the shared underlined segmented control. */}
-            <SegmentedControl
-              aria-label="Agenda view"
-              options={AGENDA_VIEWS}
-              value={viewMode}
-              onChange={(next) => onSwitchMode(next as 'day' | 'week' | 'list')}
-            />
-
             <button
               type="button"
               onClick={() => setShowTodo((v) => !v)}
@@ -142,14 +119,6 @@ export function TodayToolbar({
             >
               <ListPlus className="h-3.5 w-3.5" aria-hidden="true" />
               Add to-do
-            </button>
-            <button
-              type="button"
-              onClick={() => router.push('/meetings')}
-              className="inline-flex items-center gap-1 rounded text-[12.5px] font-semibold text-brand hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              All meetings
-              <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
             </button>
           </div>
         </div>

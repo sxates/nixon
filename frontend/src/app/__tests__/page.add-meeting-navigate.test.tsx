@@ -11,11 +11,19 @@ import { render, screen, fireEvent, waitFor, within } from '@testing-library/rea
  */
 
 const { router } = vi.hoisted(() => ({
-  router: { push: vi.fn() },
+  router: { push: vi.fn(), replace: vi.fn() },
 }));
 
 vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn() }));
-vi.mock('next/navigation', () => ({ useRouter: () => router }));
+vi.mock('next/navigation', () => ({
+  useRouter: () => router,
+  useSearchParams: () => ({ get: () => null }),
+}));
+// The Meetings page around the agenda: a connected calendar (so Agenda shows), and the
+// header's import action.
+vi.mock('@/hooks/useCalendarConnected', () => ({ useCalendarConnected: () => true }));
+vi.mock('@/contexts/ImportDialogContext', () => ({ useImportDialog: () => ({ openImportDialog: vi.fn() }) }));
+
 vi.mock('@/contexts/RecordingStateContext', () => ({
   useRecordingState: () => ({ isRecording: false }),
 }));

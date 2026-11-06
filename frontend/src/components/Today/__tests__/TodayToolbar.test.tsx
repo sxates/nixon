@@ -1,14 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent, within } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 
-// specs/0057 Task 2 — the view toggle moved from a hand-rolled pill pair to the shared
-// SegmentedControl. `aria-pressed` (and the "Agenda view" group label) is the contract
-// assistive tech reads, so it is what this pins down.
-//
-// Owner feedback 2026-09-21 renamed the "Day" LABEL to "Agenda" and reordered the group to
-// Agenda | List | Week. The stored VALUES are deliberately unchanged — `'day'` is persisted
-// under `nixon.today.viewMode` and appears in `?view=` — so `onSwitchMode` still speaks the
-// old vocabulary.
+// The Agenda / Week toolbar on the Meetings page. The view switch moved up into the
+// Meetings header (one switch for all four views), and the "All meetings" link went with
+// the page it pointed at — this pins both out of the toolbar.
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }));
@@ -18,60 +13,41 @@ vi.mock('@/hooks/useActionItemMutations', () => ({
 
 import { TodayToolbar } from '@/components/Today/TodayToolbar';
 
-function renderToolbar(viewMode: 'day' | 'week' = 'day', onSwitchMode = vi.fn()) {
+function renderToolbar(viewMode: 'day' | 'week' = 'day', viewIsToday = true) {
   render(
     <TodayToolbar
       viewMode={viewMode}
       viewDate="2026-09-13"
       navLabel="Sunday, September 13"
-      viewIsToday
+      viewIsToday={viewIsToday}
       onPrev={vi.fn()}
       onNext={vi.fn()}
       onToday={vi.fn()}
       onGoToDate={vi.fn()}
-      onSwitchMode={onSwitchMode}
-    />
+    />,
   );
-  return { onSwitchMode };
 }
 
-describe('TodayToolbar view toggle', () => {
-  it('renders the modes as an "Agenda view" group with aria-pressed on the active mode', () => {
+describe('TodayToolbar', () => {
+  it('has no view switch and no All meetings link of its own', () => {
     renderToolbar('day');
-    const group = screen.getByRole('group', { name: 'Agenda view' });
-    expect(within(group).getByRole('button', { name: 'Agenda' }).getAttribute('aria-pressed')).toBe('true');
-    expect(within(group).getByRole('button', { name: 'Week' }).getAttribute('aria-pressed')).toBe('false');
-    // The old label is gone, not merely relabelled somewhere else.
-    expect(within(group).queryByRole('button', { name: 'Day' })).toBeNull();
+    expect(screen.queryByRole('group', { name: 'Agenda view' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /all meetings/i })).toBeNull();
   });
 
-  it('reads Agenda | List | Week, left to right', () => {
-    renderToolbar('day');
-    const group = screen.getByRole('group', { name: 'Agenda view' });
-    expect(
-      within(group)
-        .getAllByRole('button')
-        .map((b) => b.textContent?.trim()),
-    ).toEqual(['Agenda', 'List', 'Week']);
-  });
-
-  it('moves aria-pressed when the week view is active', () => {
+  it('names its arrows for the mode in view', () => {
     renderToolbar('week');
-    const group = screen.getByRole('group', { name: 'Agenda view' });
-    expect(within(group).getByRole('button', { name: 'Week' }).getAttribute('aria-pressed')).toBe('true');
-    expect(within(group).getByRole('button', { name: 'Agenda' }).getAttribute('aria-pressed')).toBe('false');
+    expect(screen.getByRole('button', { name: 'Previous week' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Next week' })).toBeInTheDocument();
   });
 
-  // The rename must not have leaked into the value the toolbar reports upward.
-  it('still reports the persisted value, not the new label, for the agenda mode', () => {
-    const { onSwitchMode } = renderToolbar('week');
-    fireEvent.click(screen.getByRole('button', { name: 'Agenda' }));
-    expect(onSwitchMode).toHaveBeenCalledWith('day');
+  it('offers Today only when the day in view is not today', () => {
+    renderToolbar('day', true);
+    expect(screen.queryByRole('button', { name: 'Today' })).toBeNull();
   });
 
-  it('calls onSwitchMode with the chosen mode', () => {
-    const { onSwitchMode } = renderToolbar('day');
-    fireEvent.click(screen.getByRole('button', { name: 'Week' }));
-    expect(onSwitchMode).toHaveBeenCalledWith('week');
+  it('keeps Add to-do', () => {
+    renderToolbar('day');
+    expect(screen.getByRole('button', { name: /add to-do/i })).toBeInTheDocument();
   });
 });
