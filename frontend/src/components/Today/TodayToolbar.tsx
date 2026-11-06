@@ -2,6 +2,8 @@
 
 import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
 import type { AgendaMode } from '@/hooks/useDayAgenda';
+import { MEETINGS_CONTENT_WIDTH } from '@/lib/meetings-view';
+import { NavSlotPortal, useHasNavSlot } from '@/components/Meetings/NavSlot';
 
 interface TodayToolbarProps {
   viewMode: AgendaMode;
@@ -21,7 +23,7 @@ interface TodayToolbarProps {
  * (specs/0041 WS6). The view switch lives in the Meetings header, the same place for all
  * four views. The old "Add to-do" and "All meetings" links are gone (owner request):
  * List is a view on this page, and Action items has its own sidebar entry. The inner
- * wrapper mirrors the scroll region's max-w-[840px] centering so nothing shifts.
+ * wrapper mirrors the scroll region's MEETINGS_CONTENT_WIDTH centering so nothing shifts.
  */
 export function TodayToolbar({
   viewMode,
@@ -33,11 +35,8 @@ export function TodayToolbar({
   onToday,
   onGoToDate,
 }: TodayToolbarProps) {
-  return (
-    <div className="flex-shrink-0 px-7 pt-1.5">
-      <div className="mx-auto max-w-[840px]">
-        <div className="mb-2.5 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-1">
-          {/* Date navigation: prev / label + picker / next, plus a Today reset. */}
+  const hasSlot = useHasNavSlot();
+  const nav = (
           <div className="flex items-center gap-1">
             <button
               type="button"
@@ -85,6 +84,16 @@ export function TodayToolbar({
               </button>
             )}
           </div>
+  );
+  // In the Meetings page the navigation sits at the right of the view-tab row (NavSlot);
+  // standalone (tests) it keeps its own row.
+  if (hasSlot) return <NavSlotPortal>{nav}</NavSlotPortal>;
+  return (
+    <div className="flex-shrink-0 px-7 pt-1.5">
+      <div className={`mx-auto ${MEETINGS_CONTENT_WIDTH}`}>
+        <div className="mb-2.5 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-1">
+          {/* Date navigation: prev / label + picker / next, plus a Today reset. */}
+          {nav}
         </div>
       </div>
     </div>

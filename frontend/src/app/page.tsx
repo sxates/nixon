@@ -14,7 +14,7 @@
  * under `components/Meetings/`.
  */
 
-import { Suspense, useCallback, useMemo } from 'react';
+import { Suspense, useCallback, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
@@ -26,11 +26,12 @@ import { useCalendarConnected } from '@/hooks/useCalendarConnected';
 import { useMeetingsUrlSync, useMeetingsView } from '@/hooks/useMeetingsView';
 import { useRecordedMeetings } from '@/hooks/useRecordedMeetings';
 import { agendaNavLabel, agendaSummary } from '@/lib/agenda-labels';
-import { needsCalendar } from '@/lib/meetings-view';
+import { MEETINGS_CONTENT_WIDTH, needsCalendar } from '@/lib/meetings-view';
 import { ConnectCalendarNudge } from '@/components/Today/ConnectCalendarNudge';
 import { AgendaPane } from '@/components/Meetings/AgendaPane';
 import { AgendaDialogs } from '@/components/Meetings/AgendaDialogs';
-import { MeetingsHeader } from '@/components/Meetings/MeetingsHeader';
+import { MeetingsHeader, MeetingsViewTabs } from '@/components/Meetings/MeetingsHeader';
+import { NavSlotProvider } from '@/components/Meetings/NavSlot';
 import { MeetingsList } from '@/components/Meetings/MeetingsList';
 import { MonthCalendar } from '@/components/Meetings/MonthCalendar';
 
@@ -39,6 +40,8 @@ function MeetingsView() {
   const { isRecording } = useRecordingState();
   const { activeRecordingMeetingId } = useSidebar();
   const calendarConnected = useCalendarConnected();
+  // The view-tab row's right-hand slot; each view's date navigation portals into it.
+  const [navSlot, setNavSlot] = useState<HTMLDivElement | null>(null);
   const { view, shown, chooseView } = useMeetingsView(calendarConnected);
   // Until the calendar check resolves, a calendar view waits on a loader rather than
   // drawing an agenda that may be about to become the List.
@@ -86,9 +89,7 @@ function MeetingsView() {
     >
       <MeetingsHeader
         subtitle={subtitle}
-        view={shown}
         calendarConnected={calendarConnected !== false}
-        onChooseView={chooseView}
         onAddMeeting={actions.openAdd}
       />
 
@@ -102,11 +103,22 @@ function MeetingsView() {
           EventKit-only status; `null` (not yet resolved) hides it. */}
       {calendarConnected === false && (
         <div className="flex-shrink-0 px-4 min-[900px]:px-7">
-          <div className={`mx-auto mb-4 w-full ${shown === 'month' ? 'max-w-[1080px]' : 'max-w-[840px]'}`}>
+          <div className={`mx-auto mb-4 w-full ${MEETINGS_CONTENT_WIDTH}`}>
             <ConnectCalendarNudge />
           </div>
         </div>
       )}
+
+      {!pendingCalendar && (
+        <MeetingsViewTabs
+          view={shown}
+          calendarConnected={calendarConnected !== false}
+          onChooseView={chooseView}
+          navSlotRef={setNavSlot}
+        />
+      )}
+
+      <NavSlotProvider value={navSlot}>
 
       {pendingCalendar ? (
         <div className="flex h-64 items-center justify-center text-muted-foreground">
@@ -124,7 +136,7 @@ function MeetingsView() {
         // Month owns the remaining height (the grid divides it); the list scrolls. The month
         // grid is seven columns and needs the width, or every title truncates.
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-4 min-[900px]:px-7 pb-6">
-          <div className="mx-auto flex min-h-0 w-full max-w-[1080px] flex-1 flex-col">
+          <div className={`mx-auto flex min-h-0 w-full flex-1 flex-col ${MEETINGS_CONTENT_WIDTH}`}>
             <MonthCalendar
               onOpenMeeting={(id) => router.push(`/meeting-details?id=${id}`)}
               activeRecordingMeetingId={isRecording ? activeRecordingMeetingId : null}
@@ -136,7 +148,7 @@ function MeetingsView() {
         </div>
       ) : (
         <div className="flex-1 overflow-y-auto px-4 min-[900px]:px-7 pb-12">
-          <div className="mx-auto w-full max-w-[840px]">
+          <div className={`mx-auto w-full ${MEETINGS_CONTENT_WIDTH}`}>
             <MeetingsList
               meetings={recorded.meetings}
               isLoading={recorded.isLoading}
@@ -146,6 +158,7 @@ function MeetingsView() {
           </div>
         </div>
       )}
+      </NavSlotProvider>
     </motion.div>
   );
 }

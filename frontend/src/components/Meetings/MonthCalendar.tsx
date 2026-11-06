@@ -24,6 +24,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
+import { NavSlotPortal, useHasNavSlot } from '@/components/Meetings/NavSlot';
 import { invoke } from '@tauri-apps/api/core';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -85,6 +86,7 @@ export function MonthCalendar({
   /** Set with a calendar connected: the month also shows its events. */
   events?: MonthCalendarEvents;
 }) {
+  const hasSlot = useHasNavSlot();
   const today = useMemo(() => new Date(), []);
   const [cursor, setCursor] = useState(() => ({
     year: today.getFullYear(),
@@ -168,9 +170,8 @@ export function MonthCalendar({
 
   const selected = selectedDay ? (byDay.get(selectedDay) ?? []) : null;
 
-  return (
-    <div className="flex h-full min-h-0 flex-col">
-      <div className="mb-3 flex flex-shrink-0 items-center justify-between gap-3">
+  const nav = (
+    <>
         <div className="flex items-center gap-1">
           <Button
             variant="ghost"
@@ -200,7 +201,18 @@ export function MonthCalendar({
             Today
           </Button>
         </div>
-      </div>
+    </>
+  );
+
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      {/* On the Meetings page the month navigation sits at the right of the view-tab row
+          (NavSlot); standalone it keeps its own row. */}
+      {hasSlot ? (
+        <NavSlotPortal>{nav}</NavSlotPortal>
+      ) : (
+        <div className="mb-3 flex flex-shrink-0 items-center justify-between gap-3">{nav}</div>
+      )}
 
       {error ? (
         <p className="py-10 text-center text-sm text-muted-foreground">{error}</p>

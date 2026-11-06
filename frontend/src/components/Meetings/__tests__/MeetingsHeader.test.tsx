@@ -10,20 +10,25 @@ vi.mock('@/components/DeferredBacklog/ProcessMeetingsButton', () => ({
 const openImportDialog = vi.fn();
 vi.mock('@/contexts/ImportDialogContext', () => ({ useImportDialog: () => ({ openImportDialog }) }));
 
-import { MeetingsHeader } from '@/components/Meetings/MeetingsHeader';
+import { MeetingsHeader, MeetingsViewTabs } from '@/components/Meetings/MeetingsHeader';
 import type { MeetingsView } from '@/lib/meetings-view';
 
 function renderHeader(view: MeetingsView, calendarConnected: boolean) {
   const onChooseView = vi.fn();
   const onAddMeeting = vi.fn();
   render(
-    <MeetingsHeader
-      subtitle="Thursday"
-      view={view}
-      calendarConnected={calendarConnected}
-      onChooseView={onChooseView}
-      onAddMeeting={onAddMeeting}
-    />,
+    <>
+      <MeetingsHeader
+        subtitle="Thursday"
+        calendarConnected={calendarConnected}
+        onAddMeeting={onAddMeeting}
+      />
+      <MeetingsViewTabs
+        view={view}
+        calendarConnected={calendarConnected}
+        onChooseView={onChooseView}
+      />
+    </>,
   );
   const labels = () =>
     within(screen.getByRole('group', { name: 'Meeting view' }))
