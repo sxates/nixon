@@ -19,7 +19,19 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 ## [Unreleased]
 
-_(nothing yet)_
+### Added
+
+- **Summarize with your Claude subscription.** If you have Claude Code installed and signed in
+  on your Mac, you can choose it in Settings → Summary as the model behind summaries, action
+  items, Ask AI and prep briefs. Your own Claude plan does the work, and Nixon never asks for
+  or stores a key. Nixon runs Claude Code with its tools turned off, so it can't read or change
+  files on your Mac. Meeting text is sent to Anthropic under your plan's terms, so a local
+  model stays the default.
+
+### Internal
+
+- New subprocess provider class for AI CLIs (`cli_llm/`), ADR-0017, a fake-CLI test harness
+  and an opt-in real-CLI test.
 
 ## [0.14.0] - 2026-11-05
 
