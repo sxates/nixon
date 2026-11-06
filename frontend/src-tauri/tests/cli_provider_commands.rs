@@ -158,7 +158,28 @@ fn build_status_maps_every_state_and_serializes_camel_case() {
     // A probe that failed some other way is "can't use it", with the reason.
     let odd = serde_json::to_value(build_status(k, Err(CliError::ProbeTimeout), None)).unwrap();
     assert_eq!(odd["state"], "notFound");
-    assert!(odd["authNote"].as_str().unwrap().len() > 10);
+    assert!(odd["probeError"]
+        .as_str()
+        .unwrap()
+        .contains("didn't respond"));
+    assert!(odd.get("authNote").is_none());
+    let found = Discovered {
+        path: "/bin/claude".into(),
+        version: "2.1.319".into(),
+    };
+    for e in [CliError::ProbeTimeout, CliError::Crashed { code: 2 }] {
+        let v = serde_json::to_value(build_status(k, Err(e.clone()), None)).unwrap();
+        assert!(v["probeError"].is_string(), "{e:?}");
+        let v =
+            serde_json::to_value(build_status(k, Ok(found.clone()), Some(Err(e.clone())))).unwrap();
+        assert!(v["probeError"].is_string(), "{e:?}");
+        assert!(v.get("authNote").is_none());
+    }
+    // Genuine states never carry one.
+    for v in [&ready, &signed_out, &api_key] {
+        assert!(serde_json::to_value(v).unwrap().get("probeError").is_none());
+    }
+    assert!(missing.get("probeError").is_none() && old.get("probeError").is_none());
     let codex = serde_json::to_value(build_status(
         CliKind::CodexCli,
         Err(CliError::NotFound),
@@ -200,6 +221,16 @@ async fn status_reports_ready_signed_out_and_too_old_and_only_ever_probes() {
         serde_json::to_value(status_of(&app).await).unwrap()["state"],
         "needsSignIn"
     );
+
+    assert!(serde_json::to_value(status_of(&app).await)
+        .unwrap()
+        .get("probeError")
+        .is_none());
+
+    // An auth probe that crashes is a probe error, not "signed out".
+    fake.set_mode("crash");
+    let crashed = serde_json::to_value(status_of(&app).await).unwrap();
+    assert!(crashed["probeError"].is_string(), "{crashed}");
 
     fake.set_mode("version-old");
     let old = serde_json::to_value(status_of(&app).await).unwrap();

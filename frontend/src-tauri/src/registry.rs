@@ -10,10 +10,10 @@
 // matching section below.
 
 use crate::{
-    action_items, aggregation, anthropic, audio, calendar, cli_llm, database, diarization, fs_guard, groq,
-    llm_activity, meetings, notifications, ollama, onboarding, onboarding_disk, openai, openrouter,
-    parakeet_engine, people, power, search, settings, summary, transcripts, updater, utils,
-    whisper_engine, zoom,
+    action_items, aggregation, anthropic, audio, calendar, cli_llm, database, diarization,
+    fs_guard, groq, llm_activity, meetings, notifications, ollama, onboarding, onboarding_disk,
+    openai, openrouter, parakeet_engine, people, power, search, settings, summary, transcripts,
+    updater, utils, whisper_engine, zoom,
 };
 // specs/0059: the whole `dev_fixtures` module is `#![cfg(debug_assertions)]`-gated, so
 // this import must be too — a release build has no `crate::dev_fixtures` to resolve.
@@ -142,6 +142,8 @@ pub fn invoke_handler() -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Sen
         // Custom OpenAI commands
         settings::custom_openai::api_save_custom_openai_config,
         settings::custom_openai::api_get_custom_openai_config,
+
+        // Subscription CLI providers: detection, Locate... override, Test (specs/0085)
         cli_llm::commands::api_cli_providers_status,
         cli_llm::commands::api_cli_provider_set_path,
         cli_llm::commands::api_cli_provider_test,

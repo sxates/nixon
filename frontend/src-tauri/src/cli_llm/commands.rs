@@ -48,10 +48,14 @@ pub struct CliProviderStatus {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub version: Option<String>,
     pub min_version: &'static str,
-    /// A heads-up or the reason the state isn't `ready` (API-key billing note, a probe
-    /// that timed out).
+    /// The API-key billing heads-up, and nothing else.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub auth_note: Option<String>,
+    /// Set only when a probe failed for a reason other than "not installed", "too old" or
+    /// "signed out" (a hang, a crash, unreadable output): the state is then not trustworthy,
+    /// so the UI shows this with Check again instead of the install / sign-in copy.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub probe_error: Option<String>,
     pub models: Vec<ModelChoice>,
 }
 
@@ -85,7 +89,7 @@ pub fn allow_shell_probe(saved_provider: Option<&str>, kind: CliKind) -> bool {
 
 /// Maps a discovery result (and, when the CLI was found, its auth probe) to the status the
 /// UI shows. A probe that failed for some other reason (timeout, crash, unreadable output)
-/// reads as "not usable" with the reason in `authNote`.
+/// keeps the nearest state but sets `probeError` to the reason.
 pub fn build_status(
     kind: CliKind,
     found: Result<Discovered, CliError>,
@@ -99,6 +103,7 @@ pub fn build_status(
         version: None,
         min_version: discovery::min_version(kind),
         auth_note: None,
+        probe_error: None,
         models: models(kind),
     };
     let reason = |e: CliError| CliFailure::new(kind, e).to_string();
@@ -108,7 +113,7 @@ pub fn build_status(
             status.state = CliState::TooOld;
             status.version = Some(found);
         }
-        Err(other) => status.auth_note = Some(reason(other)),
+        Err(other) => status.probe_error = Some(reason(other)),
         Ok(d) => {
             status.path = Some(d.path.display().to_string());
             status.version = Some(d.version);
@@ -120,7 +125,7 @@ pub fn build_status(
                 Some(Ok(AuthState::NeedsSignIn)) | None => status.state = CliState::NeedsSignIn,
                 Some(Err(e)) => {
                     status.state = CliState::NeedsSignIn;
-                    status.auth_note = Some(reason(e));
+                    status.probe_error = Some(reason(e));
                 }
             }
         }
@@ -199,13 +204,11 @@ pub async fn api_cli_provider_set_path(
 /// path. `model` is accepted for the day the adapters take one; Claude uses its own pin.
 #[tauri::command]
 pub async fn api_cli_provider_test(
-    state: State<'_, AppState>,
+    _state: State<'_, AppState>,
     id: String,
-    model: String,
+    _model: String,
 ) -> Result<CliTestResult, String> {
-    let _ = model;
     let kind = kind_of(&id)?;
-    let _ = &state;
     let started = Instant::now();
     let result = super::generate(
         kind,
