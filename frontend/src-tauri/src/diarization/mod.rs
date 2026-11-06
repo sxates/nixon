@@ -24,6 +24,7 @@ pub mod auto_label;
 pub mod cancel; // specs/0084 W2: per-pass cancel flag + the persist guard
 pub mod candidates; // specs/0078: matcher inputs (moved from pipeline.rs), owner as a room candidate
 pub mod commands;
+pub mod detach; // specs/0084: a Cancel ends the pass for the user while sherpa finishes unseen
 pub mod corrections;
 pub mod embedding;
 pub mod folder_locate; // specs/0073 W1: NULL-folder_path fallback scan over every known root

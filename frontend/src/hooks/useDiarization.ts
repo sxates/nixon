@@ -34,7 +34,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { toast } from 'sonner';
-import { cancelSpeakerIdentification } from '@/lib/diarization-cancel';
+import { cancelSpeakerIdentification, isStillStopping } from '@/lib/diarization-cancel';
 import { safeListen } from '@/lib/safe-listen';
 
 interface DiarizationProgressPayload {
@@ -367,6 +367,9 @@ export function useDiarization({
       const description = error instanceof Error ? error.message : String(error);
       if (downloadToastShown) {
         toast.error('Could not download speaker model', { id: 'diar-dl', description });
+      } else if (isStillStopping(description)) {
+        // specs/0084: a just-cancelled pass is still finishing unseen. Not a failure.
+        toast.info(description);
       } else {
         toast.error('Could not identify speakers', { description });
       }
@@ -377,15 +380,26 @@ export function useDiarization({
     if (!meetingId || !isRunning || isCancelling) return;
     setIsCancelling(true);
     try {
-      // `false` = the pass ended meanwhile; its own event resets the state.
-      if (!(await cancelSpeakerIdentification(meetingId))) setIsCancelling(false);
+      // `false` = the pass ended meanwhile; its own event resets the state. `true` = Rust has
+      // already ended the pass's visible state (specs/0084 detach), so leave "Cancelling…"
+      // now rather than waiting for the event.
+      const cancelled = await cancelSpeakerIdentification(meetingId);
+      setIsCancelling(false);
+      if (cancelled) {
+        setIsRunning(false);
+        setStage(null);
+        setProgressPct(null);
+        setDownloadProgress(null);
+        isDownloadingRef.current = false;
+        resetProgressGuard(null, -1);
+      }
     } catch (error) {
       setIsCancelling(false);
       toast.error('Could not cancel speaker identification', {
         description: error instanceof Error ? error.message : String(error),
       });
     }
-  }, [meetingId, isRunning, isCancelling]);
+  }, [meetingId, isRunning, isCancelling, resetProgressGuard]);
 
   return { isRunning, stage, progressPct, downloadProgress, identifySpeakers, isCancelling, cancel };
 }

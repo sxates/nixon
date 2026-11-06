@@ -7,8 +7,9 @@
 //! never gets `speakers` rows or voiceprints written for it.
 //!
 //! In-process, the sherpa compute step itself can't be interrupted (its progress callback's
-//! return value is ignored), so a cancel during compute takes effect when compute returns.
-//! W3 (the helper process) makes it immediate.
+//! return value is ignored). So a cancel ends the pass's *visible* state at once
+//! (`detach.rs`) and the compute call finishes unseen; when it returns, the pass ends as
+//! cancelled and writes nothing. W3 (the helper process) makes the stop itself immediate.
 //!
 //! Kept out of `pipeline.rs`, which is over the file-size cap.
 
@@ -18,9 +19,11 @@ use std::sync::{Arc, LazyLock, Mutex, MutexGuard};
 
 use anyhow::{anyhow, Context, Result};
 
-static CANCELS: LazyLock<Mutex<HashMap<String, Arc<AtomicBool>>>> = LazyLock::new(Default::default);
+use crate::llm_activity::registry::TaskHandle;
 
-fn cancels() -> MutexGuard<'static, HashMap<String, Arc<AtomicBool>>> {
+static CANCELS: LazyLock<Mutex<HashMap<String, Arc<PassCancel>>>> = LazyLock::new(Default::default);
+
+fn cancels() -> MutexGuard<'static, HashMap<String, Arc<PassCancel>>> {
     CANCELS.lock().unwrap_or_else(|p| p.into_inner())
 }
 
@@ -42,17 +45,91 @@ pub fn is_cancelled(err: &anyhow::Error) -> bool {
     err.chain().any(|e| e.downcast_ref::<Cancelled>().is_some())
 }
 
-/// A running pass's cancel flag. Dropping it unregisters the flag (only its own: a newer
-/// pass that registered meanwhile keeps its flag).
+/// One running pass: its cancel flag, plus what the user sees of it. The visible part (the
+/// queue row, the "Identifying…" state) can end before the pass does: a cancel during
+/// sherpa's compute step ends it at once while the compute call finishes unseen
+/// (`detach.rs`).
+#[derive(Debug, Default)]
+pub struct PassCancel {
+    flag: AtomicBool,
+    visible: Mutex<Visible>,
+}
+
+#[derive(Default)]
+struct Visible {
+    /// The visible state was finished as cancelled. Only the first finish runs.
+    finished: bool,
+    /// The pass's activity-queue row, kept here so whichever ending comes first finishes it.
+    task: Option<TaskHandle>,
+}
+
+impl std::fmt::Debug for Visible {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Visible")
+            .field("finished", &self.finished)
+            .field("has_task", &self.task.is_some())
+            .finish()
+    }
+}
+
+impl PassCancel {
+    fn visible(&self) -> MutexGuard<'_, Visible> {
+        self.visible.lock().unwrap_or_else(|p| p.into_inner())
+    }
+
+    pub fn is_requested(&self) -> bool {
+        self.flag.load(Ordering::SeqCst)
+    }
+
+    /// Claim the one visible finish: `None` when it already happened, otherwise the queue
+    /// row to finish (if the pass had registered one yet).
+    pub fn claim_visible_finish(&self) -> Option<Option<TaskHandle>> {
+        let mut v = self.visible();
+        if v.finished {
+            return None;
+        }
+        v.finished = true;
+        Some(v.task.take())
+    }
+
+    /// Whether a cancel already finished the visible state.
+    pub fn visibly_finished(&self) -> bool {
+        self.visible().finished
+    }
+}
+
+/// A running pass's cancel handle. Dropping it unregisters the pass (only its own: a newer
+/// pass that registered meanwhile keeps its entry).
 #[derive(Debug)]
 pub struct CancelToken {
     meeting_id: String,
-    flag: Arc<AtomicBool>,
+    pass: Arc<PassCancel>,
 }
 
 impl CancelToken {
     pub fn is_requested(&self) -> bool {
-        self.flag.load(Ordering::SeqCst)
+        self.pass.is_requested()
+    }
+
+    pub fn pass(&self) -> &Arc<PassCancel> {
+        &self.pass
+    }
+
+    /// Hand the pass's queue row to the token. When a cancel already finished the visible
+    /// state (it arrived before the row existed), the row is finished as cancelled at once.
+    pub fn attach_task(&self, task: TaskHandle) {
+        let mut v = self.pass.visible();
+        if v.finished {
+            drop(v);
+            task.finish_skipped(super::launch::CANCELLED_REASON);
+        } else {
+            v.task = Some(task);
+        }
+    }
+
+    /// Take the queue row back to finish it. `None` once a cancel finished it.
+    pub fn take_task(&self) -> Option<TaskHandle> {
+        self.pass.visible().task.take()
     }
 }
 
@@ -61,7 +138,7 @@ impl Drop for CancelToken {
         let mut map = cancels();
         if map
             .get(&self.meeting_id)
-            .is_some_and(|f| Arc::ptr_eq(f, &self.flag))
+            .is_some_and(|p| Arc::ptr_eq(p, &self.pass))
         {
             map.remove(&self.meeting_id);
         }
@@ -72,31 +149,37 @@ impl Drop for CancelToken {
 /// Call it when the run slot is claimed, before the pass is spawned, so a cancel that
 /// arrives in between is not lost.
 pub fn token(meeting_id: &str) -> CancelToken {
-    let flag = Arc::new(AtomicBool::new(false));
-    cancels().insert(meeting_id.to_string(), Arc::clone(&flag));
+    let pass = Arc::new(PassCancel::default());
+    cancels().insert(meeting_id.to_string(), Arc::clone(&pass));
     CancelToken {
         meeting_id: meeting_id.to_string(),
-        flag,
+        pass,
     }
 }
 
-/// Ask the running pass on `meeting_id` to stop. Returns `false` when no pass is running
-/// (nothing to cancel). Idempotent.
+/// Ask the running pass on `meeting_id` to stop, returning it; `None` when no pass is
+/// running (nothing to cancel). Idempotent.
+pub fn request_pass(meeting_id: &str) -> Option<Arc<PassCancel>> {
+    let pass = cancels().get(meeting_id).cloned()?;
+    pass.flag.store(true, Ordering::SeqCst);
+    Some(pass)
+}
+
+/// [`request_pass`] for callers that only need to know whether a pass was running.
 pub fn request(meeting_id: &str) -> bool {
-    match cancels().get(meeting_id) {
-        Some(flag) => {
-            flag.store(true, Ordering::SeqCst);
-            true
-        }
-        None => false,
-    }
+    request_pass(meeting_id).is_some()
 }
 
 /// Whether a cancel has been requested for the pass running on `meeting_id`.
 pub fn is_requested(meeting_id: &str) -> bool {
-    cancels()
-        .get(meeting_id)
-        .is_some_and(|f| f.load(Ordering::SeqCst))
+    cancels().get(meeting_id).is_some_and(|p| p.is_requested())
+}
+
+/// A cancelled pass on `meeting_id` has not returned yet. Its visible state may be over,
+/// but no new pass may start until it ends: the old pass's stage checks and persist guard
+/// look its flag up by meeting id, so a newer pass's unset flag would let it write.
+pub fn is_stopping(meeting_id: &str) -> bool {
+    is_requested(meeting_id)
 }
 
 /// A stage boundary: `Err(Cancelled)` once a cancel was requested.
@@ -135,15 +218,21 @@ pub struct CancelDiarizationDto {
 }
 
 /// Cancel the speaker-identification pass running on `meeting_id` (the queue row's and the
-/// meeting page's Cancel). Returns at once; the pass stops at its next stage boundary and
-/// ends with a quiet `diarization-error` carrying `cancelled: true`.
+/// meeting page's Cancel). When this returns `cancelled: true` the pass is over as far as
+/// the user can see: its queue row is finished as skipped and the quiet `diarization-error`
+/// (`cancelled: true`) has been emitted. A pass inside sherpa's compute step keeps running
+/// unseen until that call returns, then writes nothing (`detach.rs`).
 #[tauri::command]
-pub async fn api_cancel_diarization(meeting_id: String) -> Result<CancelDiarizationDto, String> {
-    let cancelled = request(&meeting_id);
-    if cancelled {
-        log::info!("diarization for {meeting_id}: cancel requested");
-    }
-    Ok(CancelDiarizationDto { cancelled })
+pub async fn api_cancel_diarization<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
+    meeting_id: String,
+) -> Result<CancelDiarizationDto, String> {
+    let Some(pass) = request_pass(&meeting_id) else {
+        return Ok(CancelDiarizationDto { cancelled: false });
+    };
+    log::info!("diarization for {meeting_id}: cancel requested");
+    super::detach::finish_cancelled(&app, &meeting_id, &pass, super::detach::Db::KeepMarker).await;
+    Ok(CancelDiarizationDto { cancelled: true })
 }
 
 #[cfg(test)]
@@ -182,5 +271,41 @@ mod tests {
     #[test]
     fn an_ordinary_error_is_not_a_cancel() {
         assert!(!is_cancelled(&anyhow!("model missing")));
+    }
+
+    /// The visible finish runs once, and a queue row that registers after it (the Cancel
+    /// beat the pass's spawn) is finished as a skip at once, never left "running".
+    #[test]
+    fn the_visible_finish_runs_once_and_catches_a_late_queue_row() {
+        use crate::llm_activity::registry::{LlmTaskRegistry, Origin, TaskKind, TaskOutcome};
+        let id = "cancel-unit-visible";
+        let t = token(id);
+        let pass = request_pass(id).expect("running");
+        assert!(is_stopping(id));
+        assert!(pass.claim_visible_finish().is_some());
+        assert!(
+            pass.claim_visible_finish().is_none(),
+            "only the first finish runs"
+        );
+        assert!(pass.visibly_finished());
+
+        let reg = Arc::new(LlmTaskRegistry::new());
+        t.attach_task(Arc::clone(&reg).start_for(
+            TaskKind::Diarization,
+            Origin::Background,
+            "Identifying speakers",
+            Some(id.to_string()),
+        ));
+        let view = reg.view();
+        assert!(view.running.is_empty(), "the late row is finished at once");
+        assert!(matches!(
+            view.history[0].outcome,
+            TaskOutcome::Skipped { .. }
+        ));
+        assert!(!view.has_failure);
+        assert!(t.take_task().is_none());
+
+        drop(t);
+        assert!(!is_stopping(id), "the pass returned");
     }
 }

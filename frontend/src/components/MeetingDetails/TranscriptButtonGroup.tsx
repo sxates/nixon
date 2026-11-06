@@ -215,8 +215,8 @@ export function TranscriptButtonGroup({
           </Button>
         )}
 
-        {/* specs/0084 W2: stop a pass from where the user is watching it. A pass inside its
-            compute step stops when that step returns, so the label holds "Cancelling…". */}
+        {/* specs/0084 W2: stop a pass from where the user is watching it. The pass ends for
+            the user when the cancel call returns, so "Cancelling…" only flashes. */}
         {meetingId && isDiarizing && (
           <Button
             size="xs"

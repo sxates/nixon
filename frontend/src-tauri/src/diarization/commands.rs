@@ -86,6 +86,8 @@ pub async fn api_diarize_meeting<R: Runtime>(
             skipped_after_crash: true,
         });
     }
+    // specs/0084: a cancelled pass still finishing unseen; say so instead of attaching to it.
+    super::detach::refuse_if_stopping(&meeting_id)?;
     let started = launch::diarize_meeting(app, meeting_id);
     Ok(DiarizeStartDto {
         started,

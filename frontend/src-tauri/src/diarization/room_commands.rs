@@ -60,6 +60,8 @@ pub async fn api_set_meeting_audio_setup<R: Runtime>(
     meeting_id: String,
     setup: String,
 ) -> Result<DiarizeStartDto, String> {
+    // specs/0084: refused before the setting is saved, so a refusal changes nothing.
+    super::detach::refuse_if_stopping(&meeting_id)?;
     {
         let state = app.state::<AppState>();
         set_audio_setup(state.db_manager.pool(), &meeting_id, &setup)

@@ -7,7 +7,11 @@ import { cn } from '@/lib/utils';
 import { useBacklog } from '@/contexts/DeferredBacklogProvider';
 import { useOptionalLlmActivity } from '@/contexts/LlmActivityProvider';
 import type { QueueRow, QueueStage, QueueView } from '@/lib/transport/queue-view';
-import { CANCELLING_LABEL, cancelSpeakerIdentification } from '@/lib/diarization-cancel';
+import {
+  CANCELLING_LABEL,
+  cancelSpeakerIdentification,
+  isStillStopping,
+} from '@/lib/diarization-cancel';
 import { LampDot, type LampTone } from './LampDot';
 
 const ROW_LAMP: Record<QueueStage, LampTone> = {
@@ -151,7 +155,10 @@ export function QueuePanel({ view, className }: { view: QueueView; className?: s
       try {
         await invoke('api_llm_activity_retry_task', { taskId: row.taskId });
       } catch (error) {
-        toast.error('Could not retry', { description: messageOf(error) });
+        const message = messageOf(error);
+        // specs/0084: a just-cancelled pass is still finishing unseen. Not a failure.
+        if (isStillStopping(message)) toast.info(message);
+        else toast.error('Could not retry', { description: message });
       }
     }
   };
