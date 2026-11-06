@@ -866,6 +866,8 @@ pub async fn stop_recording<R: Runtime>(
     match stop_result {
         Ok(_) => {
             info!("✅ Audio streams stopped successfully - no more chunks will be created");
+            // Capture is over: the Mac may sleep during the drain and processing (acceptance A).
+            drop(keep_awake_release);
         }
         Err(e) => {
             error!("❌ Failed to stop audio streams: {}", e);
@@ -1112,7 +1114,6 @@ pub async fn stop_recording<R: Runtime>(
     // Set recording flag to false
     info!("🔍 Setting IS_RECORDING to false");
     IS_RECORDING.store(false, Ordering::SeqCst);
-    drop(keep_awake_release); // capture is over: the Mac may sleep during processing
     // specs/0037: was this a resumed session? Read-and-reset so the next start is clean.
     let resumed = RESUMED_SESSION.swap(false, Ordering::SeqCst);
 
