@@ -287,3 +287,43 @@ describe('useDiarization — custom start (specs/0078 "Who was on the mic?")', (
     err.mockRestore();
   });
 });
+
+// specs/0084 W2 — Cancel from the meeting page: "Cancelling…" until the pass ends, and a
+// cancelled pass shows nothing alarming.
+describe('useDiarization — cancel', () => {
+  const fireError = (payload: { meeting_id: string; error: string; cancelled?: boolean }) => {
+    act(() => {
+      listeners.get('diarization-error')?.({ payload });
+    });
+  };
+
+  it('cancels the running pass, holds Cancelling… and ends quietly on the cancelled event', async () => {
+    invokeMock.mockImplementation((cmd: string) =>
+      Promise.resolve(cmd === 'api_cancel_diarization' ? { cancelled: true } : null),
+    );
+    const { result } = renderHook(() => useDiarization({ meetingId: 'm1' }));
+    await act(async () => {});
+    fireProgress({ meeting_id: 'm1', stage: 'diarizing', pct: 40 });
+
+    await act(async () => {
+      await result.current.cancel();
+    });
+    expect(invokeMock).toHaveBeenCalledWith('api_cancel_diarization', { meetingId: 'm1' });
+    expect(result.current.isCancelling).toBe(true);
+    expect(result.current.isRunning).toBe(true);
+
+    fireError({ meeting_id: 'm1', error: 'Cancelled', cancelled: true });
+    expect(result.current.isRunning).toBe(false);
+    expect(result.current.isCancelling).toBe(false);
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it('still toasts a real failure', async () => {
+    const { result } = renderHook(() => useDiarization({ meetingId: 'm1' }));
+    await act(async () => {});
+    fireProgress({ meeting_id: 'm1', stage: 'diarizing', pct: 40 });
+    fireError({ meeting_id: 'm1', error: 'decode failed', cancelled: false });
+    expect(result.current.isRunning).toBe(false);
+    expect(toast.error).toHaveBeenCalled();
+  });
+});

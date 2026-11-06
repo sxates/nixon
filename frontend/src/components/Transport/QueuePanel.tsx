@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils';
 import { useBacklog } from '@/contexts/DeferredBacklogProvider';
 import { useOptionalLlmActivity } from '@/contexts/LlmActivityProvider';
 import type { QueueRow, QueueStage, QueueView } from '@/lib/transport/queue-view';
+import { CANCELLING_LABEL, cancelSpeakerIdentification } from '@/lib/diarization-cancel';
 import { LampDot, type LampTone } from './LampDot';
 
 const ROW_LAMP: Record<QueueStage, LampTone> = {
@@ -21,8 +22,27 @@ const ROW_LAMP: Record<QueueStage, LampTone> = {
 
 const ACTIVE_STAGES: QueueStage[] = ['transcribing', 'diarizing', 'summarizing', 'llm'];
 
-function Row({ row, onRetry, onDismiss }: { row: QueueRow; onRetry: () => void; onDismiss: () => void }) {
+function Row({
+  row,
+  onRetry,
+  onDismiss,
+  onCancel,
+}: {
+  row: QueueRow;
+  onRetry: () => void;
+  onDismiss: () => void;
+  /** Resolves `true` when the pass is now stopping, `false` when the click did nothing. */
+  onCancel: () => Promise<boolean>;
+}) {
   const active = ACTIVE_STAGES.includes(row.stage);
+  // specs/0084 W2: "Cancelling…" from the click until the row leaves this stage. Keyed on the
+  // stage, so a backlog row that moves on to Summarizing drops it by itself.
+  const [cancellingStage, setCancellingStage] = React.useState<QueueStage | null>(null);
+  const cancelling = cancellingStage === row.stage;
+  const handleCancel = async () => {
+    setCancellingStage(row.stage);
+    if (!(await onCancel())) setCancellingStage(null);
+  };
   return (
     <li className="flex flex-col gap-1 px-2 py-1.5">
       <div className="flex items-center gap-2.5">
@@ -52,6 +72,18 @@ function Row({ row, onRetry, onDismiss }: { row: QueueRow; onRetry: () => void; 
         <div className="flex justify-end pl-[18px]">
           <button type="button" onClick={onRetry} className="text-[10px] text-muted-foreground hover:text-foreground">
             Retry
+          </button>
+        </div>
+      )}
+      {row.action === 'cancel' && (
+        <div className="flex justify-end pl-[18px]">
+          <button
+            type="button"
+            onClick={() => void handleCancel()}
+            disabled={cancelling}
+            className="text-[10px] text-muted-foreground hover:text-foreground disabled:pointer-events-none"
+          >
+            {cancelling ? CANCELLING_LABEL : 'Cancel'}
           </button>
         </div>
       )}
@@ -135,6 +167,17 @@ export function QueuePanel({ view, className }: { view: QueueView; className?: s
       }
     }
   };
+  // specs/0084 W2: Cancel on a running speaker-identification row (the backlog's Speakers
+  // row or the registry's). The pass ends quietly and the backlog moves on to the summary.
+  const handleCancel = async (row: QueueRow): Promise<boolean> => {
+    if (!row.meetingId) return false;
+    try {
+      return await cancelSpeakerIdentification(row.meetingId);
+    } catch (error) {
+      toast.error('Could not cancel speaker identification', { description: messageOf(error) });
+      return false;
+    }
+  };
   const handleDismissAll = () => void llm?.dismiss();
   // specs/0074 W4 — "Clear finished" now clears BOTH finished surfaces: the backlog's local
   // done/error items (unchanged, `dismissDone`) and the registry's success/skipped history
@@ -182,6 +225,7 @@ export function QueuePanel({ view, className }: { view: QueueView; className?: s
             row={row}
             onRetry={() => void handleRetry(row)}
             onDismiss={() => void handleDismiss(row)}
+            onCancel={() => handleCancel(row)}
           />
         ))}
       </ul>

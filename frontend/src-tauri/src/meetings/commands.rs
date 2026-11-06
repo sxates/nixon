@@ -99,106 +99,22 @@ pub async fn api_delete_meeting<R: Runtime>(
         meeting_id
     );
 
-    let pool = state.db_manager.pool();
-
-    // specs/0073: hold the meeting's folder lease across the folder_path read, the DB
-    // delete and the folder removal, so a delete never pulls a folder out from under a
-    // retranscription, diarization or move of the same meeting. Waits for that job.
-    let _folder_lease = crate::audio::folder_lease::acquire(
+    // specs/0084 W2: cancels a running speaker identification and never waits for it.
+    match super::delete::delete_meeting_and_folder(
+        state.db_manager.pool(),
         &meeting_id,
-        crate::audio::folder_lease::LeaseHolder::Delete,
+        super::delete::DELETE_LEASE_WAIT,
     )
-    .await;
-
-    // Capture the recording folder BEFORE the delete (and after taking the lease, so it is
-    // the folder's current location) so we can clean it up from disk after the DB
-    // transaction commits. If the lookup fails we still proceed with the DB delete.
-    let folder_path: Option<String> =
-        sqlx::query_scalar("SELECT folder_path FROM meetings WHERE id = ?")
-            .bind(&meeting_id)
-            .fetch_optional(pool)
-            .await
-            .unwrap_or_else(|e| {
-                log_warn!(
-                    "Could not read folder_path for meeting {} before delete: {}",
-                    meeting_id,
-                    e
-                );
-                None
-            })
-            .flatten();
-
-    match MeetingsRepository::delete_meeting(pool, &meeting_id).await {
-        Ok(true) => {
-            log_info!("Successfully deleted meeting {}", meeting_id);
-            // DB rows are gone. Now best-effort remove the on-disk recording
-            // folder. A filesystem error here must NOT fail the command or roll
-            // back the committed DB delete — log and continue.
-            delete_recording_folder_best_effort(&meeting_id, folder_path.as_deref()).await;
-            Ok(serde_json::json!({
-                "status": "success",
-                "message": "Meeting deleted successfully"
-            }))
-        }
-        Ok(false) => {
-            log_warn!("Meeting not found or already deleted: {}", meeting_id);
-            Err(format!(
-                "Meeting not found or could not be deleted: {}",
-                meeting_id
-            ))
-        }
-        Err(e) => {
-            log_error!("Error deleting meeting {}: {}", meeting_id, e);
-            Err(format!("Failed to delete meeting: {}", e))
-        }
-    }
-}
-
-/// Best-effort removal of a meeting's on-disk recording folder after its DB rows
-/// have been deleted.
-///
-/// Safety (specs/0073): the folder is removed only if it passes the ownership check
-/// ([`is_meeting_folder`](crate::audio::meeting_folder::is_meeting_folder)): its
-/// `metadata.json` names this meeting, or (a pre-0037 folder with no id) it lies inside
-/// a recordings folder Nixon knows about, and it is never a root, `$HOME`, `/` or a volume
-/// root. So a meeting left in an EARLIER recordings folder is still deleted, while we
-/// never `remove_dir_all` an arbitrary stored path. A filesystem error (including the
-/// folder already being gone) is logged and swallowed; it never fails the delete command.
-async fn delete_recording_folder_best_effort(meeting_id: &str, folder_path: Option<&str>) {
-    use crate::audio::meeting_folder::{remove_meeting_folder_in, RemoveOutcome};
-
-    let folder_path = match folder_path {
-        Some(p) if !p.trim().is_empty() => p.trim().to_string(),
-        _ => {
-            log_info!("No recording folder to delete (meeting has no folder_path); skipping");
-            return;
-        }
-    };
-    let id = meeting_id.to_string();
-    let target = folder_path.clone();
-    let outcome = tokio::task::spawn_blocking(move || {
-        let roots = crate::audio::recording_preferences::known_recording_roots();
-        remove_meeting_folder_in(std::path::Path::new(&target), &id, &roots)
-    })
-    .await
-    .unwrap_or_else(|e| RemoveOutcome::Failed(format!("delete task failed: {e}")));
-
-    match outcome {
-        RemoveOutcome::Removed => log_info!("Deleted recording folder: {}", folder_path),
-        RemoveOutcome::AlreadyGone => log_info!(
-            "Recording folder '{}' already gone; nothing to delete",
-            folder_path
-        ),
-        RemoveOutcome::NotOwned => log_warn!(
-            "Recording folder '{}' is not this meeting's recording folder; \
-             skipping file deletion for safety",
-            folder_path
-        ),
-        RemoveOutcome::Failed(e) => log_warn!(
-            "Failed to delete recording folder '{}' (DB delete already committed): {}",
-            folder_path,
-            e
-        ),
+    .await?
+    {
+        true => Ok(serde_json::json!({
+            "status": "success",
+            "message": "Meeting deleted successfully"
+        })),
+        false => Err(format!(
+            "Meeting not found or could not be deleted: {}",
+            meeting_id
+        )),
     }
 }
 

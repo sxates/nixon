@@ -219,4 +219,39 @@ describe('QueuePanel — a refused retry says so (specs/0066 W2)', () => {
       }),
     );
   });
+
+  // specs/0084 W2 — a running speaker-identification pass is cancellable from the queue.
+  it('offers Cancel on a running speaker-identification row and shows Cancelling… after the click', async () => {
+    invokeMock.mockImplementation((cmd: string) =>
+      Promise.resolve(cmd === 'api_cancel_diarization' ? { cancelled: true } : undefined),
+    );
+    const view = buildQueueView(
+      backlogView([]),
+      llmView([{ id: 4, kind: 'diarization', label: 'Identifying speakers — Standup', note: null, meetingId: 'm4' }]),
+    );
+    render(<QueuePanel view={view} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    expect(invokeMock).toHaveBeenCalledWith('api_cancel_diarization', { meetingId: 'm4' });
+    const pending = await screen.findByRole('button', { name: 'Cancelling…' });
+    expect(pending).toBeDisabled();
+    expect(toastMock.error).not.toHaveBeenCalled();
+  });
+
+  it('drops back to Cancel when the pass had already finished', async () => {
+    invokeMock.mockImplementation((cmd: string) =>
+      Promise.resolve(cmd === 'api_cancel_diarization' ? { cancelled: false } : undefined),
+    );
+    const view = buildQueueView(
+      backlogView([{ meeting: meeting('m5', 'Retro'), status: 'diarizing' }]),
+      llmView([]),
+    );
+    render(<QueuePanel view={view} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    await waitFor(() => expect(invokeMock).toHaveBeenCalledWith('api_cancel_diarization', { meetingId: 'm5' }));
+    expect(await screen.findByRole('button', { name: 'Cancel' })).toBeEnabled();
+  });
 });

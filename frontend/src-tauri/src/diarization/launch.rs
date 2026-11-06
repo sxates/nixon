@@ -12,6 +12,7 @@ use std::sync::{Mutex, MutexGuard, OnceLock};
 
 use tauri::{AppHandle, Emitter, Manager, Runtime};
 
+use super::outcome::PassOutcome;
 use super::pipeline::{registry_finish, registry_try_begin, run, EVENT_ERROR};
 use crate::database::repositories::meeting::MeetingsRepository;
 use crate::state::AppState;
@@ -98,6 +99,25 @@ pub fn last_pass_safe_mode(meeting_id: &str) -> Option<bool> {
     safe_mode_runs().get(meeting_id).copied()
 }
 
+/// The queue row's skip reason, and the `diarization-error` text, for a cancelled pass.
+pub const CANCELLED_REASON: &str = "Cancelled";
+/// The run-status stage a cancelled pass ends on (`api_diarization_status`).
+pub const STAGE_CANCELLED: &str = "cancelled";
+
+/// Whether the meeting's row still exists: a pass whose meeting was deleted mid-run ends
+/// quietly, whatever error it hit. An unreadable answer counts as present (fail loudly).
+async fn meeting_exists<R: Runtime>(app: &AppHandle<R>, meeting_id: &str) -> bool {
+    let Some(app_state) = app.try_state::<AppState>() else {
+        return true;
+    };
+    sqlx::query_scalar::<_, i64>("SELECT 1 FROM meetings WHERE id = ?")
+        .bind(meeting_id)
+        .fetch_optional(app_state.db_manager.pool())
+        .await
+        .map(|row| row.is_some())
+        .unwrap_or(true)
+}
+
 /// The activity-queue label for a meeting's speaker-identification row.
 pub(crate) async fn queue_label<R: Runtime>(app: &AppHandle<R>, meeting_id: &str) -> String {
     if let Some(app_state) = app.try_state::<AppState>() {
@@ -126,6 +146,9 @@ pub fn diarize_meeting<R: Runtime>(app: AppHandle<R>, meeting_id: String) -> boo
         );
         return false;
     }
+    // specs/0084 W2: registered with the slot, before the spawn, so a cancel that arrives
+    // before the task runs is not lost.
+    let cancel = super::cancel::token(&meeting_id);
     tauri::async_runtime::spawn(async move {
         // specs/0063 W3 — the queue is where the user finds out what the machine is busy
         // with, and a diarization pass is the most CPU-hungry thing it does. Registered
@@ -163,21 +186,52 @@ pub fn diarize_meeting<R: Runtime>(app: AppHandle<R>, meeting_id: String) -> boo
         };
 
         safe_mode_runs().insert(meeting_id.clone(), safe_mode);
-        let outcome = run(app.clone(), meeting_id.clone(), safe_mode).await;
-        crate::audio::lifecycle::on_diarization_outcome(&app, &meeting_id, outcome.is_ok()).await;
-        if let Some(t) = task {
-            t.finish(outcome.as_ref().map(|_| ()).map_err(|e| format!("{e:#}")));
-        }
-        if let Err(e) = outcome {
-            log::warn!("diarization failed for {meeting_id}: {e:#}");
-            // Release the run slot BEFORE emitting so a status query racing the
-            // event never sees a stale "running". (The success path does the same
-            // inside `run`, just before its `diarization-complete` emit.)
-            registry_finish(&meeting_id, "error", 0);
-            let _ = app.emit(
-                EVENT_ERROR,
-                serde_json::json!({ "meeting_id": meeting_id, "error": format!("{e:#}") }),
-            );
+        let result = run(app.clone(), meeting_id.clone(), safe_mode).await;
+        let outcome = PassOutcome::from_result(&result, meeting_exists(&app, &meeting_id).await);
+        crate::audio::lifecycle::on_diarization_outcome(&app, &meeting_id, &outcome).await;
+        drop(cancel); // the pass is over: a later cancel has nothing to stop
+        match outcome {
+            PassOutcome::Ok => {
+                if let Some(t) = task {
+                    t.finish(Ok(()));
+                }
+            }
+            PassOutcome::Cancelled => {
+                log::info!("diarization for {meeting_id}: cancelled");
+                if let Some(t) = task {
+                    t.finish_skipped(CANCELLED_REASON);
+                }
+                registry_finish(&meeting_id, STAGE_CANCELLED, 0);
+                // A cancel means "stop": the queued follow-up would undo it.
+                pending_reruns().remove(&meeting_id);
+                let _ = app.emit(
+                    EVENT_ERROR,
+                    serde_json::json!({
+                        "meeting_id": meeting_id,
+                        "error": CANCELLED_REASON,
+                        "cancelled": true,
+                    }),
+                );
+                return;
+            }
+            PassOutcome::Failed(failure) => {
+                log::warn!("diarization failed for {meeting_id}: {}", failure.message);
+                if let Some(t) = task {
+                    t.finish(Err(failure.message.clone()));
+                }
+                // Release the run slot BEFORE emitting so a status query racing the
+                // event never sees a stale "running". (The success path does the same
+                // inside `run`, just before its `diarization-complete` emit.)
+                registry_finish(&meeting_id, "error", 0);
+                let _ = app.emit(
+                    EVENT_ERROR,
+                    serde_json::json!({
+                        "meeting_id": meeting_id,
+                        "error": failure.message,
+                        "cancelled": false,
+                    }),
+                );
+            }
         }
         start_pending_rerun(&app, &meeting_id);
     });
