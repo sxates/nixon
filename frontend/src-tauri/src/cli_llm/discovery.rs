@@ -301,6 +301,15 @@ pub(super) async fn probe(
     }
 }
 
+/// Checks a user-chosen binary on its own (no search, no cache): it must be an executable
+/// file that answers `--version` with a supported version. Returns the version.
+pub async fn validate_path(kind: CliKind, path: &Path) -> Result<String, CliError> {
+    if !path.is_absolute() || !is_executable(path) {
+        return Err(CliError::NotFound);
+    }
+    validate(&Lookup::new(kind, PathBuf::new()), path).await
+}
+
 /// `<path> --version`, parsed and compared with [`min_version`]. Returns the version.
 async fn validate(lookup: &Lookup, path: &Path) -> Result<String, CliError> {
     let out = probe(

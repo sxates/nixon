@@ -81,6 +81,8 @@ pub async fn initialize_database_on_startup(app: &AppHandle) -> Result<(), Strin
             migrate_keys_to_keychain_best_effort(db_manager.pool())
         .await;
 
+        crate::cli_llm::config::load(db_manager.pool()).await;
+
         app.manage(AppState { db_manager });
         info!("Database initialized successfully");
     }

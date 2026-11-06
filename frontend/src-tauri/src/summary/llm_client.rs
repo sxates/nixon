@@ -165,7 +165,8 @@ pub async fn generate_summary_with_options(
             || {
                 crate::cli_llm::generate(
                     kind,
-                    None,
+                    // The Locate... path from Settings (mirrored in memory; no pool here).
+                    crate::cli_llm::config::user_override(kind),
                     system_prompt,
                     user_prompt,
                     options,

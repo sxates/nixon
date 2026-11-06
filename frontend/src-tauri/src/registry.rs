@@ -10,7 +10,7 @@
 // matching section below.
 
 use crate::{
-    action_items, aggregation, anthropic, audio, calendar, database, diarization, fs_guard, groq,
+    action_items, aggregation, anthropic, audio, calendar, cli_llm, database, diarization, fs_guard, groq,
     llm_activity, meetings, notifications, ollama, onboarding, onboarding_disk, openai, openrouter,
     parakeet_engine, people, power, search, settings, summary, transcripts, updater, utils,
     whisper_engine, zoom,
@@ -142,6 +142,9 @@ pub fn invoke_handler() -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Sen
         // Custom OpenAI commands
         settings::custom_openai::api_save_custom_openai_config,
         settings::custom_openai::api_get_custom_openai_config,
+        cli_llm::commands::api_cli_providers_status,
+        cli_llm::commands::api_cli_provider_set_path,
+        cli_llm::commands::api_cli_provider_test,
         settings::custom_openai::api_test_custom_openai_connection,
         // Summary commands
         summary::commands::api_process_transcript,

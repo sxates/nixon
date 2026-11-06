@@ -35,7 +35,11 @@ impl FakeClaude {
         let wrapper = dir.path().join("claude");
         let script = format!(
             r#"#!/bin/sh
-if [ "$1" = --version ]; then exec '{fake}' --version; fi
+echo "$*" >>'{dir}/invocations'
+if [ "$1" = --version ]; then
+  m="$(cat '{dir}/mode' 2>/dev/null)"; [ "$m" = version-old ] || m=success
+  FAKE_CLI_MODE="$m" exec '{fake}' --version
+fi
 echo run >>'{dir}/calls'
 for a in "$@"; do printf '%s\n' "$a"; done >'{dir}/argv'
 FAKE_CLI_MODE="$(cat '{dir}/mode')" FAKE_CLI_FIXTURES='{fixtures}' exec '{fake}' "$@"
@@ -60,6 +64,7 @@ FAKE_CLI_MODE="$(cat '{dir}/mode')" FAKE_CLI_FIXTURES='{fixtures}' exec '{fake}'
     pub fn set_mode(&self, mode: &str) {
         std::fs::write(self.path("mode"), mode).unwrap();
         let _ = std::fs::remove_file(self.path("calls"));
+        let _ = std::fs::remove_file(self.path("invocations"));
     }
 
     /// Prompt runs since the last [`set_mode`] (`--version` probes are not counted).
@@ -76,6 +81,21 @@ FAKE_CLI_MODE="$(cat '{dir}/mode')" FAKE_CLI_FIXTURES='{fixtures}' exec '{fake}'
             .lines()
             .map(str::to_string)
             .collect()
+    }
+
+    /// Every argv the wrapper saw since install, one line per invocation, `--version`
+    /// probes and auth probes included.
+    pub fn invocations(&self) -> Vec<String> {
+        std::fs::read_to_string(self.path("invocations"))
+            .unwrap_or_default()
+            .lines()
+            .map(str::to_string)
+            .collect()
+    }
+
+    /// The wrapper's path (what `NIXON_CLI_CLAUDE_CODE` points at).
+    pub fn wrapper(&self) -> PathBuf {
+        self.path("claude")
     }
 
     fn path(&self, name: &str) -> PathBuf {

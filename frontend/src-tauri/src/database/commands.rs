@@ -167,6 +167,7 @@ pub async fn import_and_initialize_database(
 
     // Update app state with the new manager
     crate::summary::prompt_migration::spawn_conversion(db_manager.pool().clone());
+    crate::cli_llm::config::load(db_manager.pool()).await;
     app.manage(AppState { db_manager });
 
     info!("Legacy database imported and initialized successfully");

@@ -9,6 +9,8 @@
 
 pub mod auth;
 pub mod claude;
+pub mod commands;
+pub mod config;
 pub mod discovery;
 pub mod errors;
 pub mod runner;
@@ -26,6 +28,23 @@ pub enum CliKind {
 }
 
 impl CliKind {
+    /// The provider string stored in `settings.provider` and sent over IPC.
+    pub fn id(self) -> &'static str {
+        match self {
+            CliKind::ClaudeCode => "claude-code",
+            CliKind::CodexCli => "codex-cli",
+        }
+    }
+
+    /// The inverse of [`CliKind::id`].
+    pub fn from_id(id: &str) -> Option<Self> {
+        match id {
+            "claude-code" => Some(CliKind::ClaudeCode),
+            "codex-cli" => Some(CliKind::CodexCli),
+            _ => None,
+        }
+    }
+
     /// The CLI's name as users know it ("Claude Code").
     pub fn display_name(self) -> &'static str {
         match self {
