@@ -53,7 +53,7 @@ pub async fn check_with(
     let code = out.exit_code();
     match kind {
         CliKind::ClaudeCode => classify_claude(code, &out.stdout),
-        CliKind::CodexCli => Ok(classify_codex(code, &out.stdout, &out.stderr)),
+        CliKind::CodexCli => classify_codex(code, &out.stdout, &out.stderr),
     }
 }
 
@@ -77,14 +77,23 @@ fn classify_claude(code: i32, stdout: &[u8]) -> Result<AuthState, CliError> {
                 _ => Err(CliError::BadOutput),
             }
         }
+        code => classify_failed_exit(code),
+    }
+}
+
+/// Exit 1 is the CLI's "signed out"; 127 means it couldn't run at all (a wrapper's
+/// `node` is gone); anything else is a crash, never a reason to ask the user to sign in.
+fn classify_failed_exit(code: i32) -> Result<AuthState, CliError> {
+    match code {
         1 => Ok(AuthState::NeedsSignIn),
+        127 => Err(CliError::NotFound),
         code => Err(CliError::Crashed { code }),
     }
 }
 
-fn classify_codex(code: i32, stdout: &[u8], stderr: &[u8]) -> AuthState {
+fn classify_codex(code: i32, stdout: &[u8], stderr: &[u8]) -> Result<AuthState, CliError> {
     if code != 0 {
-        return AuthState::NeedsSignIn;
+        return classify_failed_exit(code);
     }
     // Codex has printed its status on either stream across versions.
     let said_api_key = [stdout, stderr].iter().any(|s| {
@@ -92,9 +101,9 @@ fn classify_codex(code: i32, stdout: &[u8], stderr: &[u8]) -> AuthState {
             .to_lowercase()
             .contains("api key")
     });
-    AuthState::Ready {
+    Ok(AuthState::Ready {
         note: said_api_key.then(|| API_KEY_NOTE.to_string()),
-    }
+    })
 }
 
 #[cfg(test)]
@@ -157,17 +166,38 @@ mod tests {
     }
 
     #[test]
+    fn codex_missing_or_crashed_is_not_a_sign_in_problem() {
+        assert_eq!(classify_codex(127, b"", b""), Err(CliError::NotFound));
+        assert_eq!(
+            classify_codex(2, b"", b"panic"),
+            Err(CliError::Crashed { code: 2 })
+        );
+        assert_eq!(
+            classify_codex(137, b"", b""),
+            Err(CliError::Crashed { code: 137 })
+        );
+    }
+
+    #[test]
+    fn claude_exit_127_is_not_found() {
+        assert_eq!(classify_claude(127, b""), Err(CliError::NotFound));
+    }
+
+    #[test]
     fn codex_exit_code_and_api_key_mention() {
-        assert_eq!(classify_codex(0, b"Logged in using ChatGPT", b""), ready());
+        assert_eq!(
+            classify_codex(0, b"Logged in using ChatGPT", b""),
+            Ok(ready())
+        );
         assert_eq!(
             classify_codex(0, b"", b"Logged in using an API key - sk-***"),
-            AuthState::Ready {
+            Ok(AuthState::Ready {
                 note: Some(API_KEY_NOTE.to_string())
-            }
+            })
         );
         assert_eq!(
             classify_codex(1, b"Not logged in", b""),
-            AuthState::NeedsSignIn
+            Ok(AuthState::NeedsSignIn)
         );
     }
 }

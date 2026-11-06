@@ -97,6 +97,7 @@ fn env_override(kind: CliKind) -> Option<PathBuf> {
 
 fn home_dir() -> PathBuf {
     std::env::var_os("HOME")
+        .filter(|h| !h.is_empty())
         .map(PathBuf::from)
         .or_else(dirs::home_dir)
         .unwrap_or_default()
@@ -178,15 +179,20 @@ async fn resolve(lookup: &Lookup) -> Option<PathBuf> {
     None
 }
 
-/// The fixed install locations, in the order they are tried.
+/// The fixed install locations, in the order they are tried. With no usable (absolute)
+/// home, only the system dirs: a home-relative path would resolve against the cwd.
 pub fn candidates(lookup: &Lookup) -> Vec<PathBuf> {
     let name = lookup.kind.command_name();
     let home = &lookup.home;
+    let system = lookup.system_bin_dirs.iter().map(|d| d.join(name));
+    if !home.is_absolute() {
+        return system.collect();
+    }
     let mut list = vec![home.join(".local/bin").join(name)];
     if lookup.kind == CliKind::ClaudeCode {
         list.push(home.join(".claude/local/claude"));
     }
-    list.extend(lookup.system_bin_dirs.iter().map(|d| d.join(name)));
+    list.extend(system);
     list.push(home.join(".npm-global/bin").join(name));
     if let Some(prefix) = npmrc_prefix(home) {
         list.push(prefix.join("bin").join(name));
@@ -387,6 +393,20 @@ mod tests {
         );
         assert_eq!(parse_npmrc_prefix("prefix=relative", home), None);
         assert_eq!(parse_npmrc_prefix("registry=x", home), None);
+    }
+
+    #[test]
+    fn an_empty_or_relative_home_searches_no_home_paths() {
+        // An unset-but-empty HOME must never turn `.local/bin/claude` into a cwd lookup.
+        for home in ["", "relative/home"] {
+            let mut l = Lookup::new(CliKind::ClaudeCode, home.into());
+            l.system_bin_dirs = vec!["/opt/homebrew/bin".into()];
+            let got: Vec<String> = candidates(&l)
+                .iter()
+                .map(|p| p.display().to_string())
+                .collect();
+            assert_eq!(got, ["/opt/homebrew/bin/claude"], "home {home:?}");
+        }
     }
 
     #[test]
