@@ -4,7 +4,7 @@
 //! The copy needs the CLI's name, so it lives on [`CliError::message`], and
 //! [`CliFailure`] pairs an error with its [`CliKind`] for `Display`. That `Display` string
 //! is what reaches `TaskOutcome::Failed.error` and `update_process_failed`, and
-//! `processor.rs::is_retryable_llm_error` matches markers in it, so the copy is pinned by
+//! `summary/llm_retry.rs::is_retryable_llm_error` matches markers in it, so the copy is pinned by
 //! the tests below.
 
 use super::CliKind;

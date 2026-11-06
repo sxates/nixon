@@ -229,6 +229,8 @@ pub(crate) fn provider_name(provider: &LLMProvider) -> &str {
         LLMProvider::BuiltInAI => "Built-in AI",
         LLMProvider::OpenRouter => "OpenRouter",
         LLMProvider::CustomOpenAI => "Custom OpenAI",
+        LLMProvider::ClaudeCode => "Claude Code",
+        LLMProvider::CodexCli => "Codex",
     }
 }
 

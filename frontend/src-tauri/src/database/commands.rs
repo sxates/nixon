@@ -208,7 +208,7 @@ pub async fn initialize_fresh_database(app: AppHandle) -> Result<(), String> {
     // Default Summary Model: Built-in AI (Qwen recommendation for this system)
     if let Err(e) = crate::database::repositories::setting::SettingsRepository::save_model_config(
         pool,
-        "builtin-ai",
+        crate::config::DEFAULT_SUMMARY_PROVIDER,
         default_summary_model,
         "large-v3", // Default whisper model (unused for builtin but required)
         None,

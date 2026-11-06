@@ -39,6 +39,7 @@ pub(crate) mod legacy_templates;
 pub mod length;
 pub mod llm_client;
 pub mod llm_gate;
+pub(crate) mod llm_retry;
 pub mod llm_wire;
 pub(crate) mod metadata;
 pub mod processor;

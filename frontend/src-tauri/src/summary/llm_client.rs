@@ -30,6 +30,11 @@ pub enum LLMProvider {
     OpenRouter,
     BuiltInAI,
     CustomOpenAI,
+    /// The user's installed Claude Code CLI on their own subscription (specs/0085). Not
+    /// `Claude`, which is the Anthropic API with a Keychain key.
+    ClaudeCode,
+    /// The user's installed Codex CLI (specs/0085 W2; `NotFound` until its adapter lands).
+    CodexCli,
 }
 
 impl LLMProvider {
@@ -44,7 +49,19 @@ impl LLMProvider {
             "openrouter" => Ok(Self::OpenRouter),
             "builtin-ai" | "local-llama" | "localllama" => Ok(Self::BuiltInAI),
             "custom-openai" => Ok(Self::CustomOpenAI),
+            // specs/0085. "gemini-cli" is reserved and deliberately not parsed.
+            "claude-code" => Ok(Self::ClaudeCode),
+            "codex-cli" => Ok(Self::CodexCli),
             _ => Err(format!("Unsupported LLM provider: {}", s)),
+        }
+    }
+
+    /// The subscription CLI this provider runs, if it is one (specs/0085).
+    pub fn cli_kind(&self) -> Option<crate::cli_llm::CliKind> {
+        match self {
+            Self::ClaudeCode => Some(crate::cli_llm::CliKind::ClaudeCode),
+            Self::CodexCli => Some(crate::cli_llm::CliKind::CodexCli),
+            _ => None,
         }
     }
 }
@@ -137,6 +154,28 @@ pub async fn generate_summary_with_options(
         .await;
     }
 
+    // specs/0085: a subscription CLI runs as a one-shot subprocess, scheduled like BuiltInAI
+    // (background calls serialize and yield to interactive ones; never preempted, since a
+    // re-issued call would spend the user's plan twice). No key, endpoint or sampling knobs.
+    if let Some(kind) = provider.cli_kind() {
+        return llm_gate::run_gated(
+            provider,
+            cancellation_token,
+            || "Summary generation was cancelled".to_string(),
+            || {
+                crate::cli_llm::generate(
+                    kind,
+                    None,
+                    system_prompt,
+                    user_prompt,
+                    options,
+                    cancellation_token,
+                )
+            },
+        )
+        .await;
+    }
+
     let (api_url, mut headers) = match provider {
         LLMProvider::OpenAI => (
             "https://api.openai.com/v1/chat/completions".to_string(),
@@ -186,9 +225,9 @@ pub async fn generate_summary_with_options(
                 header_map,
             )
         }
-        LLMProvider::BuiltInAI => {
-            // This case is handled earlier with early returns
-            unreachable!("BuiltInAI is handled before this match statement")
+        LLMProvider::BuiltInAI | LLMProvider::ClaudeCode | LLMProvider::CodexCli => {
+            // These are handled earlier with early returns
+            unreachable!("BuiltInAI and the CLI providers are handled before this match")
         }
     };
 

@@ -44,7 +44,7 @@ pub struct ProviderConfig {
 /// Resolve the credentials/endpoints for `model_provider` + `model_name` from settings.
 ///
 /// - **CustomOpenAI**: requires a stored config (endpoint + optional key + tuning).
-/// - **Ollama / BuiltInAI**: keyless; Ollama additionally reads its custom endpoint from
+/// - **Ollama / BuiltInAI / Claude Code / Codex**: keyless; Ollama additionally reads its custom endpoint from
 ///   the model config (a read failure degrades to the default endpoint, matching the
 ///   summary path's long-standing behavior).
 /// - **Cloud providers**: require a non-empty API key (Keychain-backed reads that come
@@ -72,7 +72,11 @@ pub async fn resolve_provider_config(
                 config.top_p,
             )
         }
-        LLMProvider::Ollama | LLMProvider::BuiltInAI => (String::new(), None, None, None, None),
+        // specs/0085: the subscription CLIs sign in on their own; Nixon holds no key.
+        LLMProvider::Ollama
+        | LLMProvider::BuiltInAI
+        | LLMProvider::ClaudeCode
+        | LLMProvider::CodexCli => (String::new(), None, None, None, None),
         _ => {
             let key = SettingsRepository::get_api_key(pool, model_provider)
                 .await

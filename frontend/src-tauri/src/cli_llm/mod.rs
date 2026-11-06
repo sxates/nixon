@@ -1,16 +1,22 @@
 //! Subscription CLI providers (specs/0085): Nixon runs the user's own installed AI CLI
 //! (Claude Code, Codex) as a one-shot subprocess for each LLM call.
 //!
-//! `runner` owns the process (temp dir, env, stdin, capture, timeout, kill); `errors` owns
-//! the failure kinds and their user-facing copy. `claude` is the Claude Code adapter; the
-//! shared `generate()` entry arrives with the wiring task. `discovery` finds the binary and checks its version; `auth` asks it whether
-//! the user is signed in (neither ever sends a prompt).
+//! [`generate`] is the one entry `summary/llm_client.rs` calls. `runner` owns the process
+//! (temp dir, env, stdin, capture, timeout, kill); `errors` owns the failure kinds and
+//! their user-facing copy. `claude` is the Claude Code adapter. `discovery` finds the
+//! binary and checks its version; `auth` asks it whether the user is signed in (neither
+//! ever sends a prompt).
 
 pub mod auth;
 pub mod claude;
 pub mod discovery;
 pub mod errors;
 pub mod runner;
+
+use crate::summary::summary_engine::options::GenerationOptions;
+use errors::{CliError, CliFailure};
+use std::path::PathBuf;
+use tokio_util::sync::CancellationToken;
 
 /// Which subscription CLI a call runs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -53,6 +59,40 @@ impl CliKind {
     }
 }
 
+/// One LLM call through `kind`'s CLI. Finds the binary (cached; `user_override` is the
+/// Locate… path, and the login-shell probe never runs from here), runs the adapter, and
+/// returns the reply or the user-facing copy of the failure. A `NotFound` forgets the
+/// cached binary so the next call looks again.
+///
+/// `options` carries only what a CLI can honour; temperature, top-p and max tokens are
+/// not exposed by the CLIs and are ignored.
+pub async fn generate(
+    kind: CliKind,
+    user_override: Option<PathBuf>,
+    system: &str,
+    user: &str,
+    options: &GenerationOptions,
+    cancel: Option<&CancellationToken>,
+) -> Result<String, String> {
+    let _ = options; // json_schema arrives with specs/0085 task 7
+    let result = match kind {
+        CliKind::ClaudeCode => {
+            match discovery::discover(kind, user_override, false).await {
+                Ok(found) => claude::generate(&found.path, system, user, None, cancel).await,
+                Err(e) => Err(e),
+            }
+        }
+        // specs/0085 W2.
+        CliKind::CodexCli => Err(CliError::NotFound),
+    };
+    result.map_err(|error| {
+        if error == CliError::NotFound {
+            discovery::invalidate(kind);
+        }
+        CliFailure::new(kind, error).to_string()
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::CliKind;
@@ -65,3 +105,6 @@ mod tests {
         assert_eq!(CliKind::CodexCli.command_name(), "codex");
     }
 }
+
+#[cfg(test)]
+mod wiring_tests;
