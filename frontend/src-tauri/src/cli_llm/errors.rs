@@ -25,6 +25,9 @@ pub enum CliError {
     RateLimited,
     IsolationFailed,
     Timeout,
+    /// A quick probe (`--version`, `auth status`) got no answer in time. Not `Timeout`: that
+    /// copy says "5 minutes", which is false for a 10-second check.
+    ProbeTimeout,
     Cancelled,
     BadOutput,
     OutputTooLarge,
@@ -74,6 +77,9 @@ impl CliError {
                  Nothing was sent."
             ),
             CliError::Timeout => format!("{cli} didn't answer within 5 minutes."),
+            CliError::ProbeTimeout => {
+                format!("{cli} didn't respond. Check again in a moment.")
+            }
             // The existing summary-cancel string, so cancel handling stays uniform.
             CliError::Cancelled => "Summary generation was cancelled".to_string(),
             CliError::BadOutput => format!("{cli} returned an answer Nixon couldn't read."),
@@ -100,6 +106,7 @@ impl CliError {
             CliError::RateLimited => "rate_limited",
             CliError::IsolationFailed => "isolation_failed",
             CliError::Timeout => "timeout",
+            CliError::ProbeTimeout => "probe_timeout",
             CliError::Cancelled => "cancelled",
             CliError::BadOutput => "bad_output",
             CliError::OutputTooLarge => "output_too_large",
@@ -160,6 +167,7 @@ mod tests {
             (CliError::RateLimited, "Claude is busy right now (rate limited)."),
             (CliError::IsolationFailed, "Nixon stopped Claude Code because it started with tools or plugins enabled. Nothing was sent."),
             (CliError::Timeout, "Claude Code didn't answer within 5 minutes."),
+            (CliError::ProbeTimeout, "Claude Code didn't respond. Check again in a moment."),
             (CliError::Cancelled, "Summary generation was cancelled"),
             (CliError::BadOutput, "Claude Code returned an answer Nixon couldn't read."),
             (CliError::OutputTooLarge, "Claude Code returned more output than Nixon can handle, so Nixon stopped it."),
@@ -185,6 +193,7 @@ mod tests {
             (CliError::RateLimited, "Codex is busy right now (rate limited)."),
             (CliError::IsolationFailed, "Nixon stopped Codex because it started with tools or plugins enabled. Nothing was sent."),
             (CliError::Timeout, "Codex didn't answer within 5 minutes."),
+            (CliError::ProbeTimeout, "Codex didn't respond. Check again in a moment."),
             (CliError::Cancelled, "Summary generation was cancelled"),
             (CliError::BadOutput, "Codex returned an answer Nixon couldn't read."),
             (CliError::OutputTooLarge, "Codex returned more output than Nixon can handle, so Nixon stopped it."),

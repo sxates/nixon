@@ -3,8 +3,11 @@
 //!
 //! `runner` owns the process (temp dir, env, stdin, capture, timeout, kill); `errors` owns
 //! the failure kinds and their user-facing copy. The adapters and `generate()` arrive in
-//! later tasks.
+//! later tasks. `discovery` finds the binary and checks its version; `auth` asks it whether
+//! the user is signed in (neither ever sends a prompt).
 
+pub mod auth;
+pub mod discovery;
 pub mod errors;
 pub mod runner;
 

@@ -13,6 +13,15 @@
 #   hang     start a `sleep 3600` grandchild, then sleep (kill tests)
 #   crash    exit 2
 #   flood    write 20 MiB to stdout (output cap)
+#
+# Probe modes (discovery and auth checks, which never send a prompt). `--version` answers
+# "2.1.319 (Claude Code)" in every mode but `version-old`, which answers an old version;
+# `hang`, `crash` and `flood` act on any args, so a probe can be made to time out.
+#   status-ready       `auth status` / `login status` signed in (exit 0)
+#   status-signed-out  the same, signed out (exit 1)
+#   version-old        `--version` prints 2.1.200
+# The auth-status replies are the committed fixtures, found via $FAKE_CLI_FIXTURES (the
+# tests/fixtures/cli/claude dir) or next to this script.
 
 log="${FAKE_CLI_LOG:-/dev/null}"
 mode="${FAKE_CLI_MODE:-success}"
@@ -36,6 +45,34 @@ consume_stdin() {
   cat >"$stdin_copy"
   log_stdin_sha
 }
+
+fixtures="${FAKE_CLI_FIXTURES:-$(dirname "$0")/claude}"
+case "$mode:$1" in
+  version-old:--version)
+    echo "2.1.200 (Claude Code)"
+    exit 0
+    ;;
+  success:--version | status-*:--version)
+    echo "2.1.319 (Claude Code)"
+    exit 0
+    ;;
+  status-ready:auth)
+    cat "$fixtures/auth-status-signed-in.json"
+    exit 0
+    ;;
+  status-signed-out:auth)
+    cat "$fixtures/auth-status-signed-out.json"
+    exit 1
+    ;;
+  status-ready:login)
+    echo "Logged in using ChatGPT"
+    exit 0
+    ;;
+  status-signed-out:login)
+    echo "Not logged in" >&2
+    exit 1
+    ;;
+esac
 
 case "$mode" in
   success)
