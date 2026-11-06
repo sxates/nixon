@@ -17,6 +17,7 @@ pub mod diff;
 pub mod extractor;
 pub mod grammar;
 mod reply_parse;
+pub mod schema;
 
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex, OnceLock};

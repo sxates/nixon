@@ -2,58 +2,20 @@
 //! provider, through `llm_client` → the gate → `cli_llm::generate` → discovery → the
 //! adapter → the runner, against the fake CLI. Never runs a real `claude`.
 //!
-//! Production calls pass no test env to the runner, so the fake's mode can't travel in
-//! `FAKE_CLI_MODE` from here. A wrapper script stands in for the binary instead: it
-//! answers `--version` (discovery), counts every other run, and execs the fake in the
-//! mode named in a file this test rewrites between cases. Discovery finds the wrapper
-//! through `NIXON_CLI_CLAUDE_CODE`, and HOME points at an empty temp dir, so no real
-//! install can be picked up. The cases share that process-wide state, so they run in one
-//! test, in order.
+//! The fake is reached through the wrapper in `common_cli` (see its docs).
 //!
 //! Run with:
 //!   cargo test --features metal --test cli_summary_retry
 
+mod common_cli;
+
 use app_lib::cli_llm::{discovery, CliKind};
 use app_lib::summary::llm_client::LLMProvider;
 use app_lib::summary::processor::generate_summary_with_retry;
-use std::os::unix::fs::PermissionsExt;
-use std::path::{Path, PathBuf};
+use common_cli::FakeClaude;
 
-fn fake_cli() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/cli/fake-ai-cli.sh")
-}
-
-fn fixtures_dir() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/cli/claude")
-}
-
-/// Writes the wrapper into `dir` and returns its path.
-fn write_wrapper(dir: &Path) -> PathBuf {
-    let wrapper = dir.join("claude");
-    let script = format!(
-        r#"#!/bin/sh
-if [ "$1" = --version ]; then exec '{fake}' --version; fi
-echo run >>'{dir}/calls'
-FAKE_CLI_MODE="$(cat '{dir}/mode')" FAKE_CLI_FIXTURES='{fixtures}' exec '{fake}' "$@"
-"#,
-        fake = fake_cli().display(),
-        dir = dir.display(),
-        fixtures = fixtures_dir().display(),
-    );
-    std::fs::write(&wrapper, script).unwrap();
-    std::fs::set_permissions(&wrapper, std::fs::Permissions::from_mode(0o755)).unwrap();
-    wrapper
-}
-
-fn calls(dir: &Path) -> usize {
-    std::fs::read_to_string(dir.join("calls"))
-        .map(|s| s.lines().count())
-        .unwrap_or(0)
-}
-
-async fn summarize(dir: &Path, mode: &str) -> (Result<String, String>, usize) {
-    std::fs::write(dir.join("mode"), mode).unwrap();
-    let _ = std::fs::remove_file(dir.join("calls"));
+async fn summarize(fake: &FakeClaude, mode: &str) -> (Result<String, String>, usize) {
+    fake.set_mode(mode);
     let result = generate_summary_with_retry(
         &reqwest::Client::new(),
         &LLMProvider::ClaudeCode,
@@ -70,19 +32,14 @@ async fn summarize(dir: &Path, mode: &str) -> (Result<String, String>, usize) {
         None,
     )
     .await;
-    (result, calls(dir))
+    (result, fake.calls())
 }
 
 #[tokio::test]
 async fn terminal_cli_errors_make_one_attempt_and_rate_limits_retry() {
-    let scratch = tempfile::tempdir().unwrap();
-    let home = tempfile::tempdir().unwrap();
-    let wrapper = write_wrapper(scratch.path());
-    // Edition 2021: set_var is safe. Nothing else in this test binary reads these.
-    std::env::set_var("NIXON_CLI_CLAUDE_CODE", &wrapper);
-    std::env::set_var("HOME", home.path());
+    let fake = FakeClaude::install();
 
-    let (ok, n) = summarize(scratch.path(), "success").await;
+    let (ok, n) = summarize(&fake, "success").await;
     assert!(
         ok.as_deref().unwrap().starts_with("**Summary"),
         "success returns the reply: {ok:?}"
@@ -106,19 +63,19 @@ async fn terminal_cli_errors_make_one_attempt_and_rate_limits_retry() {
     ];
     for (mode, copy) in terminal {
         assert!(discovery::cached(CliKind::ClaudeCode).is_some(), "{mode}");
-        let (result, n) = summarize(scratch.path(), mode).await;
+        let (result, n) = summarize(&fake, mode).await;
         assert_eq!(result, Err(copy.to_string()), "{mode}");
         assert_eq!(n, 1, "{mode}: exactly one attempt, no backoff retries");
     }
 
     // NotFound forgot the cached binary; the next call finds it again and works.
     assert!(discovery::cached(CliKind::ClaudeCode).is_none());
-    let (ok, n) = summarize(scratch.path(), "success").await;
+    let (ok, n) = summarize(&fake, "success").await;
     assert!(ok.is_ok(), "rediscovered after NotFound: {ok:?}");
     assert_eq!(n, 1);
 
     // A transient rate limit gets the normal bounded retries: 1 + MAX_LLM_RETRIES (2).
-    let (result, n) = summarize(scratch.path(), "rate-limit").await;
+    let (result, n) = summarize(&fake, "rate-limit").await;
     assert_eq!(
         result,
         Err("Claude is busy right now (rate limited).".to_string())

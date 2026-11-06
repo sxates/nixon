@@ -64,8 +64,8 @@ impl CliKind {
 /// returns the reply or the user-facing copy of the failure. A `NotFound` forgets the
 /// cached binary so the next call looks again.
 ///
-/// `options` carries only what a CLI can honour; temperature, top-p and max tokens are
-/// not exposed by the CLIs and are ignored.
+/// From `options` only `json_schema` is used (the reply is then the validated structured
+/// output as a JSON string); the CLIs expose no temperature, top-p or max-token control.
 pub async fn generate(
     kind: CliKind,
     user_override: Option<PathBuf>,
@@ -74,11 +74,11 @@ pub async fn generate(
     options: &GenerationOptions,
     cancel: Option<&CancellationToken>,
 ) -> Result<String, String> {
-    let _ = options; // json_schema arrives with specs/0085 task 7
+    let schema = options.json_schema.as_ref();
     let result = match kind {
         CliKind::ClaudeCode => {
             match discovery::discover(kind, user_override, false).await {
-                Ok(found) => claude::generate(&found.path, system, user, None, cancel).await,
+                Ok(found) => claude::generate(&found.path, system, user, schema, cancel).await,
                 Err(e) => Err(e),
             }
         }

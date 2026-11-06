@@ -11,6 +11,8 @@
 # `system/init`, and replays a committed W0 capture (tests/fixtures/cli/claude):
 #   success        success-stream.ndjson (a plain summary)
 #   json           success-json-schema.ndjson (structured_output with 4 action items)
+#   json-3         the same capture, its result swapped for a synthetic one with 3 items
+#                  (the specs/0054 shape a json_object reply once collapsed to one)
 #   not-logged-in  not-signed-in-stream.ndjson, exit 1
 #   limit          usage-limit-stream.SYNTHETIC.ndjson, exit 1
 #   rate-limit     init, then a 429 rate_limit error result, exit 1
@@ -111,6 +113,11 @@ case "$mode" in
   json)
     consume_stdin
     cat "$fixtures/success-json-schema.ndjson"
+    ;;
+  json-3)
+    consume_stdin
+    sed '$d' "$fixtures/success-json-schema.ndjson"
+    echo '{"type":"result","subtype":"success","is_error":false,"result":"","structured_output":{"action_items":[{"description":"Send the revised launch checklist to the team","assignee":"me","due":"Friday"},{"description":"Book the demo room for the review","assignee":null,"due":null},{"description":"Draft the release notes","assignee":"me","due":"next week"}]}}'
     ;;
   not-logged-in)
     consume_stdin
