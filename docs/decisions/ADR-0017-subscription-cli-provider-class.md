@@ -35,8 +35,13 @@ Every call, in `runner.rs` and `claude.rs`:
   `--json-schema` for extraction. The model is pinned to `sonnet`, with no picker.
   Overlapping flags are kept on purpose as defence in depth.
 - **Clean environment.** `env_clear()`, then only `HOME`, `USER`, `LOGNAME`, `PATH` (keeps
-  `/usr/bin`), `LANG`, `TERM=dumb`, `NO_COLOR`, `TMPDIR`, and the CLI's no-autoupdate,
-  no-telemetry and no-prompt-history switches. Nothing from Nixon's environment is inherited.
+  `/usr/bin`), `LANG`, `TERM=dumb`, `NO_COLOR` and `TMPDIR`. Nothing from Nixon's environment
+  is inherited. Every Claude Code run, model calls and the `--version` / `auth status` probes
+  alike, also gets the CLI's three switches: `DISABLE_AUTOUPDATER=1`,
+  `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1` and `CLAUDE_CODE_SKIP_PROMPT_HISTORY=1`.
+- **Binary override.** `NIXON_CLI_CLAUDE_CODE` / `NIXON_CLI_CODEX` override discovery in
+  release builds too, not only in dev: an env var set with `launchctl setenv` reaches a
+  Finder-launched app. The init tripwire still checks whatever binary actually runs.
 - **Empty working directory.** A fresh `nixon-cli-XXXX/work` directory under a mode-0700
   root. The name never contains a meeting title. No project files, CLAUDE.md or AGENTS.md
   can be found there or in a parent.
@@ -44,9 +49,14 @@ Every call, in `runner.rs` and `claude.rs`:
   process via `ps`). The system prompt goes in a file inside the 0700 root.
 - **No session persistence.** `--no-session-persistence` was verified with a scratch config
   directory: no transcript, history line or memory directory is written.
-- **Own process group.** On cancel, timeout, oversized output or drop, the whole group is
-  SIGKILLed (npm-installed CLIs fork). `kill_all()` at app quit sends one SIGKILL per group;
-  a process forking at that instant may escape. Accepted.
+- **Own process group.** On cancel, timeout or oversized output the whole group gets
+  SIGTERM, then 2 s, then SIGKILL, repeated until the group is gone (npm-installed CLIs
+  fork). A tripped init check and a dropped call future SIGKILL the group at once, with no
+  grace. `kill_all()` at app quit sends one SIGKILL per group; a process forking at that
+  instant may escape. Accepted.
+- **Leftover run dirs.** A crash or force quit can leave a `nixon-cli-XXXX` dir behind. At
+  launch, a best-effort sweep off the main thread removes those the current user owns that
+  are more than 10 minutes old (longer than any call).
 - **Limits.** 300 s per call, 10 s for `--version` / auth probes, capped stdout. The CLI
   must be at least `min_version` (2.1.290 for Claude Code, which fixed two `--restricted`
   holes).
@@ -90,7 +100,9 @@ a cloud API provider, and choosing the provider is the consent. Claude Code addi
 attaches the **account email, the working-directory path and machine details** (platform,
 shell, OS version, date) to each request; no flag removes this. It goes to the vendor who
 already holds it, but the privacy copy says so. Prompts must not ask the model to echo its
-instructions. Nixon never logs prompt, stdin, stdout or stderr bodies.
+instructions. Nixon never logs prompt, stdin or stdout bodies, and never logs stderr in a
+release build. A debug build logs the first 200 characters of stderr for an `Unknown` failure
+only, to diagnose new error shapes.
 
 ### 5. Never the default
 
