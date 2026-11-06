@@ -284,6 +284,22 @@
     "viewport": [760, 860]
   },
   {
+    "name": "meeting-transcript-scrolled",
+    "route": "/meeting-details?id=demo-01&tab=transcript",
+    "headless_only": true,
+    "scroll": { "selector": "[data-testid=meeting-scroll-column]", "top": 100000 },
+    "ignore": [
+      {
+        "x": 338,
+        "y": 816,
+        "w": 106,
+        "h": 22,
+        "why": "footer TapeCounter roller digits (specs/0060 Task 3)."
+      }
+    ],
+    "wait": 4500
+  },
+  {
     "name": "meeting-notes",
     "route": "/meeting-details?id=demo-01&tab=notes",
     "ignore": [

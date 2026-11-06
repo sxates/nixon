@@ -61,7 +61,7 @@ export function openSession(wsUrl) {
  *  target. The whole body races against `deadlineMs` (default 30s) — each CDP RPC already
  *  has its own 15s timeout, but a target that keeps answering slowly (rather than timing
  *  out outright) could otherwise take minutes to fail and blow the run's time budget. */
-export async function capture(browser, { url, mock, width, height, waitMs, readyTimeoutMs = 10000, deadlineMs = 30000 }) {
+export async function capture(browser, { url, mock, width, height, waitMs, scroll, readyTimeoutMs = 10000, deadlineMs = 30000 }) {
   let targetId;
   const body = (async () => {
     ({ targetId } = await browser.send('Target.createTarget', { url: 'about:blank' }));
@@ -78,6 +78,11 @@ export async function capture(browser, { url, mock, width, height, waitMs, ready
       await sleep(100);
     }
     if (!ready) throw new Error(`not ready after ${readyTimeoutMs} ms: ${url}`);
+    if (scroll) {
+      const expr = `(() => { const el = document.querySelector(${JSON.stringify(scroll.selector)}); if (!el) return false; el.scrollTop = ${Number(scroll.top)}; return true; })()`;
+      const r = await s('Runtime.evaluate', { expression: expr, returnByValue: true });
+      if (r?.result?.value !== true) throw new Error(`scroll target not found: ${scroll.selector}`);
+    }
     await sleep(waitMs);
     const shot = await s('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
     return Buffer.from(shot.data, 'base64');

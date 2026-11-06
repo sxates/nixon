@@ -18,6 +18,7 @@ An array of entries. Each is expanded (by `lib/manifest.mjs`) into one shot per 
 | `sidebar` | no | `"open"` expands the sidebar (collapsed is the default, fresh-profile state). |
 | `onboardingStep` | no | `1..5`; forces the onboarding wizard to that step instead of the completed app. |
 | `state` | no | Free-form annotation; only `"recording"` has code behind it — `real.mjs` reads it to run the record-live choreography (see below). Other values (e.g. `"downloading"` on `onboarding-3`) are documentation only; that screen's actual downloading state comes from `onboardingStep` alone. |
+| `scroll` | no | `{selector, top}`: after the ready signal, set that element's `scrollTop` to `top` px (the browser clamps it) before the `wait` dwell, for a scrolled-state capture such as `meeting-transcript-scrolled`. Requires `headless_only: true`. |
 | `real_only` | no | `true` skips the entry for headless `pnpm shots` (e.g. `record-live` — headless has no audio pipeline to drive it). |
 | `ignore` | no | Array of `{x, y, w, h, why}` pixel rects that `pnpm shots:diff` overwrites with the base image before comparing — for regions that are non-deterministic between runs by design (the live now-line, the footer tape counter, spinner icons), not a way to hide a real bug. |
 

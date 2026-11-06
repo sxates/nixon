@@ -25,6 +25,10 @@ export function loadManifest(path = join(here, '..', 'routes.json')) {
     if (e.update !== undefined && !UPDATE_STATES.has(e.update)) throw new Error(`${e.name}: unknown update state ${e.update}`);
     if (e.calendar !== undefined && !CALENDAR_STATES.has(e.calendar)) throw new Error(`${e.name}: unknown calendar state ${e.calendar}`);
     if (e.move !== undefined && !MOVE_STATES.has(e.move)) throw new Error(`${e.name}: unknown move state ${e.move}`);
+    // `scroll` scrolls one element (a CSS selector) to `top` px after the ready signal, for
+    // a scrolled-state capture. Headless only: `real.mjs` drives a real window it can't script.
+    if (e.scroll !== undefined && (typeof e.scroll.selector !== 'string' || !(e.scroll.top >= 0))) throw new Error(`${e.name}: scroll needs {selector, top >= 0}`);
+    if (e.scroll !== undefined && !e.headless_only) throw new Error(`${e.name}: scroll entries must be headless_only`);
     return { ...e, viewport: e.viewport ?? DEFAULTS.viewport, themes, wait: e.wait ?? DEFAULTS.wait, ignore: e.ignore ?? [] };
   });
 }
