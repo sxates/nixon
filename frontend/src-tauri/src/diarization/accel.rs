@@ -89,6 +89,41 @@ pub fn diarizer_threads() -> usize {
     embedding_threads()
 }
 
+/// [`diarizer_threads`], or 1 in safe mode (specs/0084 W1: the retry after a pass crashed
+/// drops 0053's multi-threaded ONNX, the one acceleration knob left to suspect).
+pub fn diarizer_threads_for(safe: bool) -> usize {
+    if safe {
+        MIN_THREADS
+    } else {
+        diarizer_threads()
+    }
+}
+
+/// [`embedding_threads`], or 1 in safe mode (specs/0084 W1).
+pub fn embedding_threads_for(safe: bool) -> usize {
+    if safe {
+        MIN_THREADS
+    } else {
+        embedding_threads()
+    }
+}
+
+/// [`build_with_provider_fallback`], except safe mode builds on `cpu` only, whatever the
+/// env override says (specs/0084 W1).
+pub fn build_with_provider_fallback_for<T, F>(
+    label: &str,
+    safe: bool,
+    mut build: F,
+) -> anyhow::Result<T>
+where
+    F: FnMut(&str) -> anyhow::Result<T>,
+{
+    if safe {
+        return build("cpu");
+    }
+    build_with_provider_fallback(label, build)
+}
+
 /// Try to build an ONNX-backed resource on the preferred provider, falling back
 /// to CPU on any error. `build` is called with the provider string; the first
 /// successful result wins. The CPU attempt is the guaranteed fallback — if it
@@ -180,6 +215,26 @@ mod tests {
         {
             assert!(n > 1, "expected >1 thread on a multicore host, got {n}");
         }
+    }
+
+    /// specs/0084 W1: safe mode is one thread on CPU, even with every override set.
+    #[test]
+    fn safe_mode_is_one_thread_on_cpu_whatever_the_env_says() {
+        let _guard = THREADS_ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        std::env::set_var("NIXON_DIARIZATION_THREADS", "6");
+        std::env::set_var("NIXON_DIARIZATION_PROVIDER", "coreml");
+        assert_eq!(diarizer_threads_for(true), 1);
+        assert_eq!(embedding_threads_for(true), 1);
+        assert_eq!(diarizer_threads_for(false), 6);
+        let mut calls = Vec::new();
+        let out = build_with_provider_fallback_for("test", true, |p| {
+            calls.push(p.to_string());
+            Ok::<_, anyhow::Error>(())
+        });
+        std::env::remove_var("NIXON_DIARIZATION_THREADS");
+        std::env::remove_var("NIXON_DIARIZATION_PROVIDER");
+        assert!(out.is_ok());
+        assert_eq!(calls, vec!["cpu".to_string()]);
     }
 
     /// The env seam still wins, and is still clamped.

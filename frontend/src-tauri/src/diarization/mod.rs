@@ -46,6 +46,8 @@ pub mod sherpa;
 pub(crate) mod sherpa_sys;
 pub mod speaker_maintenance;
 pub mod split;
+#[cfg(debug_assertions)]
+pub(crate) mod test_crash; // specs/0084 W1: NIXON_DIARIZATION_TEST_CRASH, debug builds only
 
 /// specs/0047 real-meeting attribution eval — dev/diagnostic `#[ignore]` harness.
 #[cfg(test)]

@@ -176,6 +176,15 @@ pub fn run_status(meeting_id: &str) -> Option<DiarizationRunStatus> {
     registry_lock().get(meeting_id).cloned()
 }
 
+/// Meetings with a pass running now (specs/0084 W1: a graceful quit clears their markers).
+pub fn running_ids() -> Vec<String> {
+    let map = registry_lock();
+    map.iter()
+        .filter(|(_, s)| s.running)
+        .map(|(id, _)| id.clone())
+        .collect()
+}
+
 /// Display name for a speaker key. `local` → "You"; `spk_N` → "Speaker {N+1}";
 /// `unknown` (the WS3.3 overflow bucket) → "Unknown speaker"; anything else (e.g.
 /// a fallback key) is passed through best-effort.
@@ -494,6 +503,7 @@ fn diarize_audio_blocking<R: Runtime>(
     wav: PathBuf,
     speaker_count: crate::diarization::SpeakerCount,
     consolidation_floor: Option<f32>,
+    safe_mode: bool,
 ) -> Result<crate::diarization::TurnsWithEmbeddings> {
     // 1. Models (download on demand). Emit a coarse progress event per stage.
     let app_for_progress = app.clone();
@@ -567,10 +577,17 @@ fn diarize_audio_blocking<R: Runtime>(
         }
     }
     let diarizer = {
-        let d = SherpaDiarizer::with_speaker_count(
+        if safe_mode {
+            log::warn!(
+                "diarization: a previous pass crashed; running in safe mode (1 thread, cpu)"
+            );
+        }
+        let d = SherpaDiarizer::with_config_mode(
             &paths.segmentation,
             &paths.embedding,
             speaker_count,
+            crate::diarization::sherpa::DiarizeTuning::default(),
+            safe_mode,
         )
         .context("init sherpa diarizer")?;
         // specs/0039 WS1: apply the optional consolidation-floor tuning override when set;
@@ -602,6 +619,8 @@ fn diarize_audio_blocking<R: Runtime>(
             );
         }
     };
+    #[cfg(debug_assertions)]
+    crate::diarization::test_crash::maybe_crash();
     let (turns, embeddings) = diarizer
         .diarize_with_embeddings_with_progress(&samples, DIARIZATION_SAMPLE_RATE, &mut on_progress)
         .context("run diarization")?;
@@ -681,7 +700,11 @@ pub async fn attribute_and_persist(
 
 /// The async body of `diarize_meeting` ([`crate::diarization::launch::diarize_meeting`]);
 /// factored out so errors funnel to one `diarization-error` emit.
-pub(super) async fn run<R: Runtime>(app: AppHandle<R>, meeting_id: String) -> Result<()> {
+pub(super) async fn run<R: Runtime>(
+    app: AppHandle<R>,
+    meeting_id: String,
+    safe_mode: bool,
+) -> Result<()> {
     log::info!("Starting diarization for meeting {meeting_id}");
 
     // specs/0073: hold the meeting's folder lease across every audio read (room detection
@@ -723,6 +746,7 @@ pub(super) async fn run<R: Runtime>(app: AppHandle<R>, meeting_id: String) -> Re
             wav,
             speaker_count,
             consolidation_floor,
+            safe_mode,
         )
     })
     .await
