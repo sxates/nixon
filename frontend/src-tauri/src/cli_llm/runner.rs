@@ -24,6 +24,7 @@ use std::collections::HashSet;
 use std::ffi::OsString;
 use std::path::Path;
 use std::process::{ExitStatus, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWriteExt};
@@ -54,6 +55,11 @@ const BASE_PATH: &str = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbi
 /// Process groups of runs still in flight, for [`kill_all`] at app quit.
 static LIVE: Lazy<Mutex<HashSet<i32>>> = Lazy::new(|| Mutex::new(HashSet::new()));
 
+/// Sees each stdout line (newline stripped) as it arrives, while the call runs. An `Err`
+/// stops the call at once: the process group is SIGKILLed with no SIGTERM grace, and
+/// `run` fails with that error. Claude's init tripwire is one.
+pub type LineHook<'a> = Box<dyn FnMut(&[u8]) -> Result<(), CliError> + Send + 'a>;
+
 pub struct Invocation<'a> {
     /// Which CLI this is (for logs).
     pub kind: CliKind,
@@ -67,6 +73,7 @@ pub struct Invocation<'a> {
     pub env: Vec<(String, String)>,
     pub timeout: Duration,
     pub cancel: Option<&'a CancellationToken>,
+    pub on_stdout_line: Option<LineHook<'a>>,
     /// Test hook only (the fake CLI's `FAKE_CLI_MODE` / `FAKE_CLI_LOG`); production never
     /// sets it.
     #[cfg(any(test, debug_assertions))]
@@ -85,6 +92,7 @@ impl<'a> Invocation<'a> {
             env: Vec::new(),
             timeout,
             cancel: None,
+            on_stdout_line: None,
             #[cfg(any(test, debug_assertions))]
             extra_env: Vec::new(),
         }
@@ -193,13 +201,15 @@ async fn run_inner(inv: Invocation<'_>) -> Result<RunOutput, CliError> {
         return Err(CliError::Unknown);
     };
 
+    let hook_stopped = AtomicBool::new(false);
+    let mut hook = inv.on_stdout_line;
     let outcome = {
         let io = async {
             // Concurrently: a prompt bigger than the pipe buffer would otherwise deadlock
             // against a child that writes before it has read all of stdin.
             let pipes = async {
                 tokio::try_join!(
-                    read_capped(stdout, STDOUT_CAP),
+                    read_stdout(stdout, hook.as_mut(), &hook_stopped),
                     read_capped(stderr, STDERR_CAP),
                     write_stdin(stdin, &inv.stdin),
                 )
@@ -273,7 +283,11 @@ async fn run_inner(inv: Invocation<'_>) -> Result<RunOutput, CliError> {
             })
         }
         Err(e) => {
-            terminate_group(pgid, &mut child).await;
+            if hook_stopped.load(Ordering::SeqCst) {
+                signal_group(pgid, Signal::Kill);
+            } else {
+                terminate_group(pgid, &mut child).await;
+            }
             let _ = child.wait().await;
             group.reaped();
             Err(e)
@@ -466,6 +480,49 @@ fn substitute(arg: OsString, in_dir: &Path, work_dir: &Path) -> OsString {
     }
 }
 
+/// [`read_capped`] for stdout, feeding each complete line to `hook` as it arrives (and a
+/// final unterminated one at EOF). A hook error sets `stopped` and ends the read.
+async fn read_stdout(
+    mut reader: impl AsyncRead + Unpin,
+    mut hook: Option<&mut LineHook<'_>>,
+    stopped: &AtomicBool,
+) -> Result<Vec<u8>, CliError> {
+    let Some(hook) = hook.as_mut() else {
+        return read_capped(reader, STDOUT_CAP).await;
+    };
+    let mut buf = Vec::new();
+    let mut chunk = vec![0u8; 64 * 1024];
+    let mut line_start = 0;
+    // Where the newline search resumes, so a long line arriving in many chunks is scanned
+    // once, not once per chunk.
+    let mut scanned = 0;
+    loop {
+        let n = reader
+            .read(&mut chunk)
+            .await
+            .map_err(io_failure("read the CLI's output"))?;
+        if buf.len() + n > STDOUT_CAP {
+            return Err(CliError::OutputTooLarge);
+        }
+        buf.extend_from_slice(&chunk[..n]);
+        let mut feed =
+            |line: &[u8]| hook(line).inspect_err(|_| stopped.store(true, Ordering::SeqCst));
+        if n == 0 {
+            if line_start < buf.len() {
+                feed(&buf[line_start..])?;
+            }
+            return Ok(buf);
+        }
+        while let Some(nl) = buf[scanned..].iter().position(|b| *b == b'\n') {
+            let end = scanned + nl;
+            feed(&buf[line_start..end])?;
+            line_start = end + 1;
+            scanned = line_start;
+        }
+        scanned = buf.len();
+    }
+}
+
 async fn read_capped(mut reader: impl AsyncRead + Unpin, cap: usize) -> Result<Vec<u8>, CliError> {
     let mut buf = Vec::new();
     let mut chunk = vec![0u8; 64 * 1024];
@@ -539,6 +596,32 @@ mod tests {
         for bad in ["", ".", "..", "../x", "a/b"] {
             assert!(!is_plain_file_name(bad), "{bad:?}");
         }
+    }
+
+    #[tokio::test]
+    async fn line_hook_reassembles_lines_split_across_reads() {
+        // A 16-byte pipe forces every line to arrive in several reads.
+        let (mut tx, rx) = tokio::io::duplex(16);
+        let long = "x".repeat(100);
+        let body = format!("{long}\nshort\n\nlast-no-newline");
+        let writer = tokio::spawn({
+            let body = body.clone();
+            async move {
+                tx.write_all(body.as_bytes()).await.unwrap();
+            }
+        });
+        let mut seen: Vec<String> = Vec::new();
+        let mut hook: LineHook = Box::new(|l: &[u8]| {
+            seen.push(String::from_utf8(l.to_vec()).unwrap());
+            Ok(())
+        });
+        let stopped = AtomicBool::new(false);
+        let out = read_stdout(rx, Some(&mut hook), &stopped).await.unwrap();
+        drop(hook);
+        writer.await.unwrap();
+        assert_eq!(out, body.as_bytes());
+        assert_eq!(seen, [long.as_str(), "short", "", "last-no-newline"]);
+        assert!(!stopped.load(Ordering::SeqCst));
     }
 
     #[test]

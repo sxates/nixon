@@ -72,9 +72,11 @@ impl CliError {
                 )
             }
             CliError::RateLimited => format!("{service} is busy right now (rate limited)."),
+            // Not "nothing was sent": Claude reports what it loaded only after reading the
+            // prompt, so the check is a tripwire that stops the call before its answer.
             CliError::IsolationFailed => format!(
-                "Nixon stopped {cli} because it started with tools or plugins enabled. \
-                 Nothing was sent."
+                "Nixon stopped {cli} because it started with tools or plugins enabled, and \
+                 discarded its answer."
             ),
             CliError::Timeout => format!("{cli} didn't answer within 5 minutes."),
             CliError::ProbeTimeout => {
@@ -165,7 +167,7 @@ mod tests {
             (CliError::NotSignedIn, "Nixon couldn't reach Claude with your account. Make sure you're signed in to Claude Code on this Mac, then press Retry."),
             (limit("resets 5pm"), "Your Claude plan's usage limit is reached (resets 5pm). Press Retry after it resets, or pick another summary model in Settings."),
             (CliError::RateLimited, "Claude is busy right now (rate limited)."),
-            (CliError::IsolationFailed, "Nixon stopped Claude Code because it started with tools or plugins enabled. Nothing was sent."),
+            (CliError::IsolationFailed, "Nixon stopped Claude Code because it started with tools or plugins enabled, and discarded its answer."),
             (CliError::Timeout, "Claude Code didn't answer within 5 minutes."),
             (CliError::ProbeTimeout, "Claude Code didn't respond. Check again in a moment."),
             (CliError::Cancelled, "Summary generation was cancelled"),
@@ -191,7 +193,7 @@ mod tests {
             (CliError::NotSignedIn, "Nixon couldn't reach Codex with your account. Make sure you're signed in to Codex on this Mac, then press Retry."),
             (limit("resets 5pm"), "Your ChatGPT plan's usage limit is reached (resets 5pm). Press Retry after it resets, or pick another summary model in Settings."),
             (CliError::RateLimited, "Codex is busy right now (rate limited)."),
-            (CliError::IsolationFailed, "Nixon stopped Codex because it started with tools or plugins enabled. Nothing was sent."),
+            (CliError::IsolationFailed, "Nixon stopped Codex because it started with tools or plugins enabled, and discarded its answer."),
             (CliError::Timeout, "Codex didn't answer within 5 minutes."),
             (CliError::ProbeTimeout, "Codex didn't respond. Check again in a moment."),
             (CliError::Cancelled, "Summary generation was cancelled"),

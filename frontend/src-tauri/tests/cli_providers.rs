@@ -9,6 +9,11 @@
 //! 3 (5 MB through stdin in < 5 s), 4 (timeout / cancel / kill_all take the grandchild
 //! down within 3 s), the output cap, and a crash exit code.
 //!
+//! Claude Code adapter: acceptance 1 (the exact isolation argv, stdin framing, the system
+//! prompt in `in/system.txt`), 2 (a bad `system/init` is killed at once and fails
+//! `IsolationFailed`; init only arrives after stdin, so this is a tripwire), and the copy
+//! half of 5 (not signed in, usage limit, rate limited, not found).
+//!
 //! Needs a debug build (the default for `cargo test`): the fake's mode and log reach it
 //! through the runner's `extra_env`, which only exists under `cfg(any(test,
 //! debug_assertions))`. `cargo test --release` does not compile this file.
@@ -16,7 +21,8 @@
 //! Run with:
 //!   cargo test --features metal --test cli_providers
 
-use app_lib::cli_llm::errors::CliError;
+use app_lib::cli_llm::claude;
+use app_lib::cli_llm::errors::{CliError, CliFailure};
 use app_lib::cli_llm::runner::{self, Invocation, RunOutput, IN_DIR_TOKEN, WORK_DIR_TOKEN};
 use app_lib::cli_llm::CliKind;
 use once_cell::sync::Lazy;
@@ -24,6 +30,7 @@ use sha2::{Digest, Sha256};
 use std::collections::BTreeSet;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
 use tokio_util::sync::CancellationToken;
@@ -143,7 +150,12 @@ async fn isolation_argv_cwd_env_and_temp_dir() {
 
     let out = ok(runner::run(inv).await);
     assert!(out.status.success());
-    assert_eq!(out.stdout, b"fake reply\n");
+    let replay = std::fs::read(
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures/cli/claude/success-stream.ndjson"),
+    )
+    .unwrap();
+    assert_eq!(out.stdout, replay);
     let text = read_log(&log);
 
     // argv: no byte of the prompt, and the `{in}` / `{work}` tokens resolved to absolute
@@ -427,6 +439,63 @@ async fn an_unexecutable_binary_is_not_found_not_a_crash() {
 }
 
 #[tokio::test]
+async fn stdout_line_hook_sees_every_line_as_it_arrives() {
+    let _guard = KILL_ALL_LOCK.read().await;
+    let scratch = tempfile::tempdir().unwrap();
+    let log = log_path(&scratch);
+    let binary = fake_cli();
+    let mut inv = invocation(&binary, "success", &log, vec![], Duration::from_secs(30));
+    let seen = Arc::new(Mutex::new(Vec::<Vec<u8>>::new()));
+    let sink = seen.clone();
+    inv.on_stdout_line = Some(Box::new(move |line: &[u8]| {
+        sink.lock().unwrap().push(line.to_vec());
+        Ok(())
+    }));
+
+    let out = ok(runner::run(inv).await);
+    let want: Vec<Vec<u8>> = out
+        .stdout
+        .split(|b| *b == b'\n')
+        .filter(|l| !l.is_empty())
+        .map(<[u8]>::to_vec)
+        .collect();
+    assert!(want.len() >= 5, "fixture has {} lines", want.len());
+    assert_eq!(*seen.lock().unwrap(), want);
+}
+
+#[tokio::test]
+async fn stdout_line_hook_error_kills_the_group_at_once() {
+    let _guard = KILL_ALL_LOCK.read().await;
+    let scratch = tempfile::tempdir().unwrap();
+    let log = log_path(&scratch);
+    let binary = fake_cli();
+    let mut inv = invocation(
+        &binary,
+        "line-then-hang",
+        &log,
+        vec![],
+        Duration::from_secs(60),
+    );
+    inv.on_stdout_line = Some(Box::new(|line: &[u8]| {
+        assert_eq!(line, b"first line");
+        Err(CliError::IsolationFailed)
+    }));
+
+    let started = Instant::now();
+    let result = runner::run(inv).await;
+    let took = started.elapsed();
+    assert_eq!(result.unwrap_err(), CliError::IsolationFailed);
+    // The fake's grandchild ignores SIGTERM, so going through the SIGTERM grace would take
+    // 2 s; a hook abort is a straight SIGKILL.
+    assert!(took < Duration::from_secs(1), "took {took:?}");
+    let grandchild = wait_for_grandchild(&log).await;
+    assert!(
+        wait_gone(grandchild, Duration::from_millis(500)).await,
+        "grandchild {grandchild} survived the hook abort"
+    );
+}
+
+#[tokio::test]
 async fn flood_hits_the_output_cap() {
     let _guard = KILL_ALL_LOCK.read().await;
     let scratch = tempfile::tempdir().unwrap();
@@ -461,4 +530,250 @@ async fn missing_binary_is_not_found() {
 
 fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
+}
+
+// ---- Claude Code adapter (specs/0085 task 5) ----
+
+const SYSTEM_PROMPT: &str = "SYSTEM-SENTINEL-be41 synthetic system prompt";
+
+fn fixtures_dir() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/cli/claude")
+}
+
+fn claude_call<'a>(
+    binary: &'a Path,
+    mode: &str,
+    log: &Path,
+    json_schema: Option<&'a serde_json::Value>,
+) -> claude::Call<'a> {
+    claude::Call {
+        binary,
+        system: SYSTEM_PROMPT,
+        user: PROMPT_SENTINEL,
+        json_schema,
+        cancel: None,
+        timeout: Duration::from_secs(30),
+        test_env: vec![
+            ("FAKE_CLI_MODE".into(), mode.into()),
+            ("FAKE_CLI_LOG".into(), log.display().to_string()),
+            (
+                "FAKE_CLI_FIXTURES".into(),
+                fixtures_dir().display().to_string(),
+            ),
+        ],
+    }
+}
+
+async fn claude_mode(mode: &str, schema: Option<&serde_json::Value>) -> Result<String, CliError> {
+    let scratch = tempfile::tempdir().unwrap();
+    let log = log_path(&scratch);
+    let binary = fake_cli();
+    claude::generate_with(claude_call(&binary, mode, &log, schema)).await
+}
+
+fn copy(error: CliError) -> String {
+    CliFailure::new(CliKind::ClaudeCode, error).to_string()
+}
+
+/// The action-items schema shape the extractor will pass (strict form).
+fn action_items_schema() -> serde_json::Value {
+    serde_json::json!({
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["action_items"],
+        "properties": {"action_items": {"type": "array", "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["description", "assignee", "due"],
+            "properties": {
+                "description": {"type": "string"},
+                "assignee": {"type": ["string", "null"]},
+                "due": {"type": ["string", "null"]}
+            }
+        }}}
+    })
+}
+
+#[tokio::test]
+async fn claude_argv_has_every_isolation_flag_in_order_and_no_prompt_byte() {
+    let _guard = KILL_ALL_LOCK.read().await;
+    let scratch = tempfile::tempdir().unwrap();
+    let log = log_path(&scratch);
+    let binary = fake_cli();
+
+    let reply = claude::generate_with(claude_call(&binary, "success", &log, None))
+        .await
+        .unwrap();
+    assert!(
+        reply.starts_with("**Summary (partial transcript)**"),
+        "{reply}"
+    );
+
+    let text = read_log(&log);
+    let args = log_values(&text, "ARG");
+    let pwd = PathBuf::from(&log_values(&text, "PWD")[0]);
+    let system_file = pwd.parent().unwrap().join("in/system.txt");
+    let want: Vec<String> = [
+        "-p",
+        "--safe-mode",
+        "--restricted",
+        "--tools",
+        "",
+        "--disallowedTools",
+        "mcp__*",
+        "--strict-mcp-config",
+        "--mcp-config",
+        r#"{"mcpServers":{}}"#,
+        "--permission-mode",
+        "dontAsk",
+        "--permission-prompts",
+        "none",
+        "--no-session-persistence",
+        "--max-turns",
+        "1",
+        "--system-prompt-file",
+        &system_file.display().to_string(),
+        "--input-format",
+        "stream-json",
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--model",
+        "sonnet",
+    ]
+    .map(String::from)
+    .to_vec();
+    assert_eq!(args, want);
+    for a in &args {
+        assert!(!a.contains("SENTINEL"), "prompt leaked into argv: {a}");
+    }
+
+    // stdin is exactly one stream-json user message; the system prompt is the in/ file.
+    let framed = format!(
+        "{}\n",
+        serde_json::json!({"type": "user", "message": {"role": "user", "content": PROMPT_SENTINEL}})
+    );
+    assert_eq!(
+        log_values(&text, "STDIN_SHA256"),
+        vec![hex(&Sha256::digest(framed.as_bytes()))]
+    );
+    assert_eq!(
+        log_values(&text, "SYSTEM_SHA256"),
+        vec![hex(&Sha256::digest(SYSTEM_PROMPT.as_bytes()))]
+    );
+
+    let env = log_values(&text, "ENV");
+    for want in [
+        "DISABLE_AUTOUPDATER=1",
+        "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1",
+        "CLAUDE_CODE_SKIP_PROMPT_HISTORY=1",
+    ] {
+        assert!(env.iter().any(|e| e == want), "missing env {want}");
+    }
+    assert!(!env.iter().any(|e| e.starts_with("ANTHROPIC_API_KEY=")));
+}
+
+#[tokio::test]
+async fn claude_schema_run_passes_the_schema_and_returns_four_action_items() {
+    let _guard = KILL_ALL_LOCK.read().await;
+    let scratch = tempfile::tempdir().unwrap();
+    let log = log_path(&scratch);
+    let binary = fake_cli();
+    let schema = action_items_schema();
+
+    let reply = claude::generate_with(claude_call(&binary, "json", &log, Some(&schema)))
+        .await
+        .unwrap();
+    let parsed: serde_json::Value = serde_json::from_str(&reply).unwrap();
+    assert_eq!(parsed["action_items"].as_array().unwrap().len(), 4);
+
+    let args = log_values(&read_log(&log), "ARG");
+    let n = args.len();
+    assert_eq!(args[n - 2], "--json-schema");
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(&args[n - 1]).unwrap(),
+        schema
+    );
+    assert!(args.iter().any(|a| a == "--max-turns"));
+}
+
+#[tokio::test]
+async fn claude_schema_run_without_structured_output_is_bad_output() {
+    let _guard = KILL_ALL_LOCK.read().await;
+    // The plain-summary capture has no structured_output.
+    let schema = action_items_schema();
+    assert_eq!(
+        claude_mode("success", Some(&schema)).await,
+        Err(CliError::BadOutput)
+    );
+}
+
+#[tokio::test]
+async fn claude_bad_init_is_killed_at_once_and_fails_isolation() {
+    let _guard = KILL_ALL_LOCK.read().await;
+    for mode in ["bad-init", "bad-init-mcp"] {
+        let scratch = tempfile::tempdir().unwrap();
+        let log = log_path(&scratch);
+        let binary = fake_cli();
+        let started = Instant::now();
+        let result = claude::generate_with(claude_call(&binary, mode, &log, None)).await;
+        let took = started.elapsed();
+        assert_eq!(result, Err(CliError::IsolationFailed), "{mode}");
+        // The fake sleeps 30 s after its init before replaying the answer.
+        assert!(took < Duration::from_secs(3), "{mode} took {took:?}");
+        let pid: i32 = log_values(&read_log(&log), "PID")[0].parse().unwrap();
+        assert!(
+            wait_gone(pid, Duration::from_secs(1)).await,
+            "{mode}: fake {pid} survived"
+        );
+    }
+    assert_eq!(
+        copy(CliError::IsolationFailed),
+        "Nixon stopped Claude Code because it started with tools or plugins enabled, and discarded its answer."
+    );
+}
+
+#[tokio::test]
+async fn claude_api_retry_auth_failure_stops_at_once_as_not_signed_in() {
+    let _guard = KILL_ALL_LOCK.read().await;
+    let started = Instant::now();
+    assert_eq!(
+        claude_mode("api-retry-auth", None).await,
+        Err(CliError::NotSignedIn)
+    );
+    assert!(started.elapsed() < Duration::from_secs(3));
+}
+
+#[tokio::test]
+async fn claude_error_modes_produce_the_exact_copy() {
+    let _guard = KILL_ALL_LOCK.read().await;
+    let cases = [
+        (
+            "not-logged-in",
+            "Nixon couldn't reach Claude with your account. Make sure you're signed in to Claude Code on this Mac, then press Retry.",
+        ),
+        (
+            "limit",
+            "Your Claude plan's usage limit is reached (resets 3:45pm). Press Retry after it resets, or pick another summary model in Settings.",
+        ),
+        ("rate-limit", "Claude is busy right now (rate limited)."),
+        ("garbage", "Claude Code returned an answer Nixon couldn't read."),
+        ("crash", "Claude Code stopped unexpectedly (exit code 2)."),
+    ];
+    for (mode, want) in cases {
+        let error = claude_mode(mode, None).await.unwrap_err();
+        assert_eq!(copy(error), want, "{mode}");
+    }
+}
+
+#[tokio::test]
+async fn claude_missing_binary_is_not_found_copy() {
+    let missing = Path::new("/nonexistent/nixon-test/claude");
+    let error = claude::generate(missing, "s", "u", None, None)
+        .await
+        .unwrap_err();
+    assert_eq!(
+        copy(error),
+        "Claude Code wasn't found on this Mac. Install it, or choose it in Settings → Summary."
+    );
 }

@@ -5,11 +5,25 @@
 # FAKE_CLI_MODE, which the runner passes through its test-only `extra_env`. Every run
 # writes what it saw (argv, pwd, the cwd's entry count, the temp dir's mode, env, and a
 # SHA-256 of stdin) to $FAKE_CLI_LOG, so tests check isolation from the outside instead
-# of trusting the runner.
+# of trusting the runner. The file after `--system-prompt-file` is logged as SYSTEM_SHA256.
 #
-# Modes (more arrive with later tasks):
-#   success  print a fixed reply
+# Claude stream-json modes. Like the real CLI, each reads all of stdin before printing
+# `system/init`, and replays a committed W0 capture (tests/fixtures/cli/claude):
+#   success        success-stream.ndjson (a plain summary)
+#   json           success-json-schema.ndjson (structured_output with 4 action items)
+#   not-logged-in  not-signed-in-stream.ndjson, exit 1
+#   limit          usage-limit-stream.SYNTHETIC.ndjson, exit 1
+#   rate-limit     init, then a 429 rate_limit error result, exit 1
+#   bad-init       init lists a tool (Bash), then sleeps before the rest of the success
+#                  stream, so only an early kill keeps its answer out
+#   bad-init-mcp   the same, but init lists an MCP server
+#   api-retry-auth init, then an api_retry authentication_failed event, then sleeps (as
+#                  Claude does between its own retries)
+#   garbage        non-JSON stdout, exit 0
+#
+# Runner modes:
 #   echo     stream stdin straight back to stdout (large-input round trip)
+#   line-then-hang  print one line, then hang like `hang-ignore-term` (stdout line hook)
 #   hang     start a `sleep 3600` grandchild, then sleep (kill tests)
 #   hang-ignore-term  like hang, but the grandchild ignores SIGTERM (SIGKILL fallback)
 #   orphan   start a grandchild that keeps stdout open, print a reply, exit 0
@@ -37,6 +51,13 @@ stdin_copy="${TMPDIR:-/tmp}/fake-cli-stdin.$$"
   printf 'PWD_ENTRIES:%s\n' "$(ls -A | wc -l | tr -d ' ')"
   printf 'TMPDIR_MODE:%s\n' "$(stat -f '%Lp' "$TMPDIR" 2>/dev/null || stat -c '%a' "$TMPDIR")"
   env | sed 's/^/ENV:/'
+  prev=""
+  for a in "$@"; do
+    if [ "$prev" = --system-prompt-file ]; then
+      printf 'SYSTEM_SHA256:%s\n' "$(shasum -a 256 "$a" | cut -d' ' -f1)"
+    fi
+    prev="$a"
+  done
 } >>"$log"
 
 log_stdin_sha() {
@@ -77,10 +98,68 @@ case "$mode:$1" in
     ;;
 esac
 
+# Line 2 of every stream capture is `system/init`.
+init_line() { sed -n 2p "$fixtures/success-stream.ndjson"; }
+
 case "$mode" in
   success)
     consume_stdin
-    echo "fake reply"
+    cat "$fixtures/success-stream.ndjson"
+    ;;
+  json)
+    consume_stdin
+    cat "$fixtures/success-json-schema.ndjson"
+    ;;
+  not-logged-in)
+    consume_stdin
+    cat "$fixtures/not-signed-in-stream.ndjson"
+    exit 1
+    ;;
+  limit)
+    consume_stdin
+    cat "$fixtures/usage-limit-stream.SYNTHETIC.ndjson"
+    exit 1
+    ;;
+  rate-limit)
+    consume_stdin
+    sed -n 1p "$fixtures/success-stream.ndjson"
+    init_line
+    echo '{"type":"assistant","message":{"role":"assistant","model":"<synthetic>","content":[{"type":"text","text":"API Error: Request rejected (429)"}]},"error":"rate_limit","is_api_error_message":true}'
+    echo '{"type":"result","subtype":"success","is_error":true,"api_error_status":429,"result":"API Error: Request rejected (429)","terminal_reason":"api_error"}'
+    exit 1
+    ;;
+  bad-init | bad-init-mcp)
+    consume_stdin
+    echo "PID:$$" >>"$log"
+    sed -n 1p "$fixtures/success-stream.ndjson"
+    if [ "$mode" = bad-init ]; then
+      init_line | sed 's/"tools": \[\]/"tools": ["Bash"]/'
+    else
+      init_line | sed 's/"mcp_servers": \[\]/"mcp_servers": [{"name": "canary", "status": "connected"}]/'
+    fi
+    sleep 30
+    sed -n '3,$p' "$fixtures/success-stream.ndjson"
+    ;;
+  api-retry-auth)
+    consume_stdin
+    echo "PID:$$" >>"$log"
+    sed -n 1,2p "$fixtures/not-signed-in-stream.ndjson"
+    cat "$fixtures/api-retry-auth.SYNTHETIC.ndjson"
+    sleep 30
+    sed -n '3,$p' "$fixtures/not-signed-in-stream.ndjson"
+    exit 1
+    ;;
+  garbage)
+    consume_stdin
+    echo "this is not json"
+    echo "<html>Something went wrong</html>"
+    ;;
+  line-then-hang)
+    consume_stdin
+    (trap '' TERM; exec sleep 3600) &
+    echo "GRANDCHILD:$!" >>"$log"
+    echo "first line"
+    sleep 3600
     ;;
   echo)
     tee "$stdin_copy"
