@@ -45,6 +45,8 @@ const KILL_GRACE: Duration = Duration::from_secs(2);
 /// Once the CLI itself has exited, how long its pipes get to drain before a leftover
 /// child still holding them is killed (rather than the run waiting out its timeout).
 const DRAIN_GRACE: Duration = Duration::from_millis(500);
+/// How long [`kill_group`] keeps re-signalling a group that hasn't gone yet.
+const KILL_SETTLE: Duration = Duration::from_millis(500);
 /// `nice`'s exit code when it couldn't exec the binary (gone, or a broken shebang).
 const NICE_EXEC_FAILED: i32 = 127;
 
@@ -234,7 +236,7 @@ async fn run_inner(inv: Invocation<'_>) -> Result<RunOutput, CliError> {
                         "cli_llm: {:?} exited but a child kept its output open",
                         kind
                     );
-                    signal_group(pgid, Signal::Kill);
+                    kill_group(pgid, None).await;
                     pipes.await?
                 }
             };
@@ -258,7 +260,7 @@ async fn run_inner(inv: Invocation<'_>) -> Result<RunOutput, CliError> {
             // The leader is reaped. Anything left in its group (a CLI's background helper)
             // dies with the call; a pgid is never reused while its group still exists.
             if group_exists(pgid) {
-                signal_group(pgid, Signal::Kill);
+                kill_group(pgid, None).await;
             }
             group.reaped();
             if exit_code(&status) == NICE_EXEC_FAILED && stderr.starts_with(b"nice:") {
@@ -284,7 +286,7 @@ async fn run_inner(inv: Invocation<'_>) -> Result<RunOutput, CliError> {
         }
         Err(e) => {
             if hook_stopped.load(Ordering::SeqCst) {
-                signal_group(pgid, Signal::Kill);
+                kill_group(pgid, Some(&mut child)).await;
             } else {
                 terminate_group(pgid, &mut child).await;
             }
@@ -310,7 +312,24 @@ async fn terminate_group(pgid: i32, child: &mut Child) {
         }
         tokio::time::sleep(Duration::from_millis(25)).await;
     }
-    signal_group(pgid, Signal::Kill);
+    kill_group(pgid, Some(child)).await;
+}
+
+/// SIGKILLs the group, and again until it is gone (up to [`KILL_SETTLE`]): a member that
+/// was mid-`fork` when the first signal went out can come out of it unsignalled.
+async fn kill_group(pgid: i32, mut child: Option<&mut Child>) {
+    let deadline = Instant::now() + KILL_SETTLE;
+    loop {
+        signal_group(pgid, Signal::Kill);
+        if let Some(child) = child.as_deref_mut() {
+            // Reap the leader, so its zombie doesn't read as a live group.
+            let _ = child.try_wait();
+        }
+        if !group_exists(pgid) || Instant::now() >= deadline {
+            return;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
 }
 
 /// SIGKILLs every in-flight run's process group. Called at app quit.
