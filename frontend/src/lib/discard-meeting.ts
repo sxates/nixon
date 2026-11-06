@@ -1,6 +1,6 @@
 /**
  * Shared safety gate for auto-deleting a meeting row the recording flow believes is
- * disposable (specs/0037 review-2, extracted from useRecordingStop's abandoned-recording
+ * disposable (specs/0037 review-2, extracted from the old JS stop path's abandoned-recording
  * cleanup so the failed-start orphan cleanup in useRecordingStart runs the SAME checks).
  *
  * `canDiscardMeeting` answers "is it provably safe to delete this row?": true ONLY when

@@ -7,7 +7,6 @@
 
 import { invoke } from '@tauri-apps/api/core';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
-import { recordStopRecordingResult, type StopRecordingResult } from '@/lib/recording-stop';
 
 export interface RecordingState {
   is_recording: boolean;
@@ -110,25 +109,8 @@ export class RecordingService {
     return invoke('start_recording_with_devices_and_meeting', payload);
   }
 
-  /**
-   * Stop recording and save to file.
-   *
-   * specs/0037 (review-2): the command RETURNS the stop payload
-   * ({ folder_path, meeting_name, resumed, prior_audio_duration_seconds }) — the same
-   * data as the `recording-stopped` event, but race-free (the event is emitted only
-   * after the possibly-slow stop_and_save). The result is stashed in memory (see
-   * lib/recording-stop) as the save path's PRIMARY source; an older backend resolving
-   * with undefined records nothing and the event transport takes over.
-   *
-   * @param savePath - Path to save audio file
-   * @returns The normalized stop payload, or null when the backend returned none
-   */
-  async stopRecording(savePath: string): Promise<StopRecordingResult | null> {
-    const result = await invoke<unknown>('stop_recording', {
-      args: { save_path: savePath }
-    });
-    return recordStopRecordingResult(result);
-  }
+  // Stopping is `requestStop` in lib/wrap-up (specs/0083): `stop_recording` hands the stop to
+  // the Rust wrap-up and returns `{ accepted, meetingId }` as soon as it is accepted.
 
   /**
    * Pause active recording

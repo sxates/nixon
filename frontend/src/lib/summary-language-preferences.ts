@@ -1,5 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { normaliseLanguageCode } from '@/lib/summary-languages';
+import { saveWrapUpPreferences } from '@/lib/wrap-up-preferences';
 
 export const SUMMARY_LANGUAGE_RECENTS_KEY = 'summaryLanguageRecents';
 export const SUMMARY_LANGUAGE_DEFAULT_KEY = 'summaryLanguageDefault';
@@ -39,6 +40,11 @@ export function readPinnedSummaryLanguageDefault(): string | null {
   }
 }
 
+/**
+ * The pinned default lives in Rust (specs/0083: the wrap-up applies it to a new meeting with
+ * the window hidden); this localStorage copy is the synchronous cache the pickers read,
+ * pulled from Rust at launch by `syncWrapUpPreferences`.
+ */
 export function writePinnedSummaryLanguageDefault(value: string | null): void {
   if (typeof window === 'undefined') return;
   try {
@@ -47,6 +53,7 @@ export function writePinnedSummaryLanguageDefault(value: string | null): void {
   } catch {
     // Preference writes are non-critical; meeting-specific persistence happens separately.
   }
+  void saveWrapUpPreferences({ summaryLanguageDefault: value || null });
 }
 
 function fallbackKey(prefix: string, meetingId: string): string {

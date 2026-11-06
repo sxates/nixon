@@ -20,7 +20,6 @@ import {
   autoSummarySkipToast,
 } from "@/lib/auto-summary";
 import { devLog } from "@/lib/dev-log";
-import { canTranscribe, type MeetingAudioStatus } from '@/hooks/useMeetingAudioStatus';
 
 interface MeetingDetailsResponse {
   id: string;
@@ -49,7 +48,9 @@ interface MeetingDetailsResponse {
 function MeetingDetailsContent() {
   const searchParams = useSearchParams();
   const meetingId = searchParams.get('id');
-  const source = searchParams.get('source'); // Check if navigated from recording
+  // `import` when an audio import just landed here. A recording never sets it any more: the
+  // Rust wrap-up starts that summary (specs/0083), and nothing navigates on a stop.
+  const source = searchParams.get('source');
   // specs/0033 — search deep-link: scroll the transcript to this segment. Best-effort
   // (segment ids regenerate on re-transcription), so a stale id silently no-ops. The
   // param only SEEDS the intent — useSegmentDeepLink below owns its lifecycle.
@@ -145,9 +146,10 @@ function MeetingDetailsContent() {
     onClearParam: clearSegmentParam,
   });
 
-  // specs/0029 WS7.3 — when we land here fresh off a recording (?source=recording) and
+  // specs/0029 WS7.3 — when we land here fresh off an import (?source=import) and
   // auto-generation is skipped, tell the user why instead of a silent console.log. One
-  // subtle toast per visit; normal navigation (source !== 'recording') never toasts.
+  // subtle toast per visit; normal navigation never toasts. (A recording's skip reasons come
+  // from the Rust wrap-up's own toast.)
   const skipToastShownRef = useRef(false);
   const reportAutoGenSkip = useCallback((reason: AutoSummarySkipReason) => {
     console.log('[AutoSummary] Skipped:', reason);
@@ -175,33 +177,10 @@ function MeetingDetailsContent() {
   const setupAutoGeneration = useCallback(async (transcriptCount: number) => {
     if (hasCheckedAutoGen) return; // Only check once
 
-    // specs/0029 WS7.2: a record-only meeting has zero transcripts but recorded
-    // audio awaiting deferred transcription — auto-summary must proceed (the summary
-    // flow transcribes first) instead of skipping with "transcript is empty".
-    // Probed only for the empty case; failures leave the classic gate untouched.
-    let audioAwaitingTranscription = false;
-    if (transcriptCount <= 0 && source === 'recording') {
-      try {
-        const audio = await invoke<MeetingAudioStatus>('api_meeting_audio_status', { meetingId });
-        audioAwaitingTranscription = !!audio && canTranscribe(audio);
-      } catch (error) {
-        console.warn('Could not check audio availability for auto-summary gate:', error);
-      }
-    }
-
-    // 1.10 feedback: a deferred meeting (or one whose immediate go-live pass is
-    // running) is owned by the deferred-processing machinery — auto-summary must
-    // not fire here. Probe failures leave the marker unknown (null → no gate).
-    let processingMode: string | null = null;
-    if (source === 'recording') {
-      try {
-        processingMode = await invoke<string | null>('api_get_meeting_processing_mode', {
-          meetingId,
-        });
-      } catch (error) {
-        console.warn('Could not check processing mode for auto-summary gate:', error);
-      }
-    }
+    // The deferral/backlog inputs below only ever applied to a recording (specs/0083 moved
+    // that summary to Rust); an import has no defer marker and arrives transcribed.
+    const processingMode: string | null = null;
+    const audioAwaitingTranscription = false;
 
     // Synchronous gates (source / deferral / toggle / transcript) — pure and testable
     // (specs/0029 WS7.3). Model availability is probed below, so pass it as true here.
@@ -215,8 +194,8 @@ function MeetingDetailsContent() {
       isProcessingInBacklog: isMeetingInFlight(backlogItems, meetingId),
     });
     if (preReason) {
-      if (preReason === 'not-from-recording') {
-        console.log('Not from recording navigation, skipping auto-generation');
+      if (preReason === 'not-auto-source') {
+        console.log('Not an import landing, skipping auto-generation');
       } else {
         console.log('Auto-summary skipped:', preReason);
       }

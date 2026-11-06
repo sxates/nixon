@@ -11,10 +11,8 @@ import { TranscriptPanel } from '@/app/_components/TranscriptPanel';
 import { useModalState } from '@/hooks/useModalState';
 import { useRecordingStateSync } from '@/hooks/useRecordingStateSync';
 import { useRecordingStart } from '@/hooks/useRecordingStart';
-import { useRecordingStop } from '@/hooks/useRecordingStop';
 import { useTranscriptionErrorListeners } from '@/hooks/useTranscriptionErrorListeners';
 import { useRecordingTitleEdit } from '@/hooks/useRecordingTitleEdit';
-import { useGlobalBarStop } from '@/hooks/useGlobalBarStop';
 import { useStartupRecovery } from '@/hooks/useStartupRecovery';
 import { TranscriptRecovery } from '@/components/TranscriptRecovery';
 import { useSummaryPrompts } from '@/hooks/meeting-details/useSummaryPrompts';
@@ -36,22 +34,15 @@ export default function Home() {
   // Hooks
   const { setIsMeetingActive, isContentInsetCollapsed: sidebarCollapsed, activeRecordingMeetingId } = useSidebar();
   const { modals, messages, showModal, hideModal } = useModalState(transcriptModelConfig);
-  const { setIsRecordingDisabled } = useRecordingStateSync(isRecording, setIsRecordingState, setIsMeetingActive);
+  useRecordingStateSync(isRecording, setIsRecordingState, setIsMeetingActive);
   useRecordingStart(isRecording, setIsRecordingState, showModal);
-
-  // Get handleRecordingStop function and setIsStopping (state comes from global context)
-  const { handleRecordingStop, setIsStopping } = useRecordingStop(
-    setIsRecordingState,
-    setIsRecordingDisabled
-  );
 
   // Transcription event listeners (transcription-error / speech-detected).
   // Mounted at the page level so registration is continuous across the not-recording→recording
   // transition — a control that remounts on that transition used to leave a gap where an
-  // error event could be dropped. See specs/0014.
-  useTranscriptionErrorListeners({
-    onRecordingStop: (callApi = true) => handleRecordingStop(callApi),
-  });
+  // error event could be dropped. See specs/0014. Stopping is Rust's (specs/0083): the
+  // recorder never runs a stop or a save of its own, and stays here when one finishes.
+  useTranscriptionErrorListeners();
 
   // Rename-while-recording (specs/0029 WS4.3) — inline click-to-edit title state.
   const titleEdit = useRecordingTitleEdit();
@@ -60,9 +51,6 @@ export default function Home() {
   // Explicitly bound to the recording's SQLite id; picks made before the row exists are
   // queued inside the hook and flushed once the id arrives.
   const promptsApi = useSummaryPrompts(activeRecordingMeetingId);
-
-  // Stop triggered from the transport rail on another route (flag + window event).
-  useGlobalBarStop({ setIsStopping, handleRecordingStop });
 
   // Startup recovery checks + the once-per-session recovery dialog.
   const {

@@ -30,7 +30,6 @@ pub fn invoke_handler() -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Sen
         audio::capture_commands::start_recording,
         audio::capture_commands::stop_recording,
         audio::capture_commands::is_recording,
-        audio::capture_commands::get_transcription_status,
         // Webview-confined file access (specs/0028)
         fs_guard::read_audio_file,
         fs_guard::save_transcript,
@@ -97,6 +96,11 @@ pub fn invoke_handler() -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Sen
         audio::live_toggle::api_apply_live_transcription_now,
         // low-power-mode spec §5: late-mount/remount hydration of session mode
         audio::live_toggle::api_get_session_processing_state,
+        // specs/0083 W2a: the Rust-owned meeting wrap-up
+        audio::wrap_up::api_get_wrap_up_state,
+        audio::wrap_up::api_wrap_up_handoff_result,
+        audio::wrap_up::prefs::api_get_wrap_up_preferences,
+        audio::wrap_up::prefs::api_set_wrap_up_preferences,
         // LLM provider model listings
         ollama::get_ollama_models,
         ollama::pull_ollama_model,
@@ -120,6 +124,7 @@ pub fn invoke_handler() -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Sen
         meetings::commands::api_create_meeting,
         meetings::commands::api_delete_meeting,
         meetings::discard::api_recording_is_safe_to_discard,
+        meetings::recovery::api_folder_has_saved_transcript,
         meetings::commands::api_get_meeting,
         meetings::commands::api_get_meeting_metadata,
         meetings::commands::api_get_meeting_processing_mode,

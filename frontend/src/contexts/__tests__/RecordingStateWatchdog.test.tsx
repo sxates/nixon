@@ -26,6 +26,7 @@ vi.mock('@/services/recordingService', () => ({
     onRecordingResumed: vi.fn().mockResolvedValue(() => {}),
   },
 }));
+vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn().mockResolvedValue(null) }));
 vi.mock('@/lib/safe-listen', () => ({
   makeSafeUnlisten: () => () => {},
   safeListen: () => () => {},
@@ -82,13 +83,14 @@ describe('RecordingState finalize watchdog (WS6.2)', () => {
     });
     act(() => {
       vi.advanceTimersByTime(5000);
-      result.current.setStatus(RecordingStatus.COMPLETED); // saved before the bound
+      result.current.setStatus(RecordingStatus.ERROR); // a terminal state before the bound
     });
     act(() => {
       vi.advanceTimersByTime(120000);
     });
-    // The watchdog cleared when status left the transient set; COMPLETED is preserved.
-    expect(result.current.status).toBe(RecordingStatus.COMPLETED);
+    // The watchdog cleared when status left the transient set; ERROR is preserved (COMPLETED
+    // settles to IDLE by itself since specs/0083, so it can't tell the two apart).
+    expect(result.current.status).toBe(RecordingStatus.ERROR);
   });
 
   it('never arms while actively recording', () => {

@@ -1,5 +1,12 @@
-import { describe, it, expect } from 'vitest';
-import { describeRecordingStartError } from '@/lib/recording-start-errors';
+import { describe, it, expect, vi } from 'vitest';
+
+const { toastInfo, toastError } = vi.hoisted(() => ({ toastInfo: vi.fn(), toastError: vi.fn() }));
+vi.mock('sonner', () => ({ toast: { info: toastInfo, error: toastError } }));
+
+import {
+  describeRecordingStartError,
+  surfaceRecordingStartFailure,
+} from '@/lib/recording-start-errors';
 
 // specs/0057 Plan 2 Task 7 — the device-error mapping extracted verbatim from the retired
 // RecordingControls.tsx (:120-146). Same four branches, same titles: the copy is the
@@ -46,5 +53,16 @@ describe('describeRecordingStartError', () => {
     expect(describeRecordingStartError(new Error('microphone and system audio failed')).title).toBe(
       'Microphone Not Available',
     );
+  });
+});
+
+// specs/0083: a start while the last meeting is still being saved is refused by Rust. It is
+// a moment's wait, so it must not open the device-error modal.
+describe('surfaceRecordingStartFailure — still saving the last meeting', () => {
+  it('shows a friendly toast, not the error modal', () => {
+    const showModal = vi.fn();
+    surfaceRecordingStartFailure('Nixon is still saving the last meeting. Try again in a moment.', showModal);
+    expect(showModal).not.toHaveBeenCalled();
+    expect(toastInfo).toHaveBeenCalledWith('Still saving your last meeting', expect.any(Object));
   });
 });

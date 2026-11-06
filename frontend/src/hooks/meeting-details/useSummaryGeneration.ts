@@ -16,6 +16,7 @@ import {
   SPARSE_TRANSCRIPT_SEGMENTS,
 } from '@/lib/deferred-transcription';
 import { resolveSummaryLanguage } from '@/lib/resolve-summary-language';
+import { useJoinRunningSummary, joinedSummaryResult } from './useJoinRunningSummary';
 
 // 'speaker_refresh' (specs/0041 WS2): the backend is quietly regenerating the summary
 // with freshly-diarized speaker names — the existing summary stays on screen.
@@ -113,6 +114,25 @@ export function useSummaryGeneration({
       dispose();
     };
   }, [meeting.id, startSummaryPolling, setAiSummary]);
+
+  // specs/0083: a recording's summary is started by the Rust wrap-up; follow it here.
+  useJoinRunningSummary(meeting.id, startSummaryPolling, {
+    onJoin: () => {
+      setSummaryStatus('processing');
+      setSummaryError(null);
+    },
+    onResult: joinedSummaryResult({
+      showSummary: (summary) => setAiSummary(summary as Summary),
+      setStatus: setSummaryStatus,
+      setError: setSummaryError,
+      // The user's own title (calendar or hand-edited) wins, as in processSummary.
+      applyTitle: (title) => {
+        if (meeting.calendarEventId || meeting.titleManuallySet) return;
+        updateMeetingTitle(title);
+        void onMeetingUpdated?.();
+      },
+    }),
+  });
 
   // Unified summary processing logic
   const processSummary = useCallback(async ({
@@ -386,7 +406,7 @@ export function useSummaryGeneration({
 
   // True when the meeting has non-empty saved notes — used to decide whether a
   // transcript-less meeting can still be summarized (notes-grounded). Mirrors the
-  // abandoned-recording notes check in useRecordingStop.
+  // the notes check the Rust wrap-up runs before discarding an empty session (specs/0083).
   const meetingHasNotes = useCallback(async (meetingId: string): Promise<boolean> => {
     try {
       const notes = await invokeTauri<{ notesMarkdown: string | null; notesJson: string | null } | null>(

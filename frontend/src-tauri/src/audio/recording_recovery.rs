@@ -212,7 +212,9 @@ struct FolderSegment {
 /// Read + map a folder's `transcripts.json` segments into API transcript segments
 /// (blank-text rows dropped; `display_time` becomes the row timestamp). Empty vec on
 /// a missing/unreadable file.
-fn load_folder_transcript_segments(folder: &Path) -> Vec<crate::transcripts::TranscriptSegment> {
+pub(crate) fn load_folder_transcript_segments(
+    folder: &Path,
+) -> Vec<crate::transcripts::TranscriptSegment> {
     let path = folder.join("transcripts.json");
     let Ok(bytes) = std::fs::read(&path) else {
         return Vec::new(); // no transcripts.json → nothing to import

@@ -6,7 +6,6 @@
 // shapes are unchanged from when they lived in lib.rs.
 
 use log::{error as log_error, info as log_info};
-use serde::{Deserialize, Serialize};
 use std::sync::Mutex as StdMutex;
 use tauri::{AppHandle, Runtime};
 
@@ -23,18 +22,6 @@ use super::{list_audio_devices, trigger_audio_permission, AudioDevice};
 // Global language preference storage (default to "auto-translate" for automatic translation to English)
 static LANGUAGE_PREFERENCE: std::sync::LazyLock<StdMutex<String>> =
     std::sync::LazyLock::new(|| StdMutex::new("auto-translate".to_string()));
-
-#[derive(Debug, Deserialize)]
-pub struct RecordingArgs {
-    save_path: String,
-}
-
-#[derive(Debug, Serialize, Clone)]
-pub struct TranscriptionStatus {
-    chunks_in_queue: usize,
-    is_processing: bool,
-    last_activity_ms: u64,
-}
 
 #[tauri::command]
 pub async fn start_recording<R: Runtime>(
@@ -54,6 +41,7 @@ pub async fn start_recording<R: Runtime>(
     if is_recording().await {
         return Err("Recording already in progress".to_string());
     }
+    super::wrap_up::refuse_start_while_saving()?;
 
     // Call the actual audio recording system with meeting name
     match super::recording_commands::start_recording_with_devices_and_meeting(
@@ -91,78 +79,26 @@ pub async fn start_recording<R: Runtime>(
     }
 }
 
+/// specs/0083 W2a: hand the stop to the Rust wrap-up and return once it is accepted, with
+/// `{ accepted, meetingId }`. Progress arrives as `meeting-wrap-up` events. `source` is
+/// optional (`"shortcut"`, `"notification"`; default the user). The old `args.save_path` is
+/// ignored if a caller still sends it.
 #[tauri::command]
 pub async fn stop_recording<R: Runtime>(
     app: AppHandle<R>,
-    args: RecordingArgs,
-) -> Result<serde_json::Value, String> {
+    source: Option<String>,
+) -> Result<super::wrap_up::WrapUpTicket, String> {
     log_info!("Attempting to stop recording...");
-
-    // Check the actual audio recording system state instead of the flag
-    if !super::recording_commands::is_recording().await {
-        log_info!("Recording is already stopped");
-        return Ok(serde_json::json!({ "message": "Recording is already stopped" }));
-    }
-
-    // Call the actual audio recording system to stop
-    match super::recording_commands::stop_recording(
-        app.clone(),
-        super::recording_commands::RecordingArgs {
-            save_path: args.save_path.clone(),
-        },
+    super::wrap_up::request_stop(
+        &app,
+        super::wrap_up::StopSource::from_label(source.as_deref()),
     )
     .await
-    {
-        // specs/0037: pass the stop info (folder_path, meeting_name, resumed,
-        // prior_audio_duration_seconds) through as the command's resolved value —
-        // the frontend's race-free primary source for resume-save routing.
-        Ok(stop_info) => {
-            tray::update_tray_menu(&app);
-
-            // Create the save directory if it doesn't exist
-            if let Some(parent) = std::path::Path::new(&args.save_path).parent() {
-                if !parent.exists() {
-                    log_info!("Creating directory: {:?}", parent);
-                    if let Err(e) = std::fs::create_dir_all(parent) {
-                        let err_msg = format!("Failed to create save directory: {}", e);
-                        log_error!("{}", err_msg);
-                        return Err(err_msg);
-                    }
-                }
-            }
-
-            // Same id as the start banner, so the stop notice replaces it rather than
-            // leaving two entries for one recording in Notification Center.
-            notifications::os_commands::recording_banner(
-                &app,
-                "Recording stopped",
-                "Nixon is processing the meeting.",
-                "nixon-recording",
-            )
-            .await;
-
-            Ok(stop_info)
-        }
-        Err(e) => {
-            log_error!("Failed to stop audio recording: {}", e);
-            tray::update_tray_menu(&app);
-            Err(format!("Failed to stop recording: {}", e))
-        }
-    }
 }
 
 #[tauri::command]
 pub async fn is_recording() -> bool {
     super::recording_commands::is_recording().await
-}
-
-#[tauri::command]
-pub fn get_transcription_status() -> TranscriptionStatus {
-    TranscriptionStatus {
-        chunks_in_queue: 0,
-        is_processing: false,
-        last_activity_ms: 0,
-    }
 }
 
 // Audio level monitoring commands
@@ -224,6 +160,7 @@ pub async fn start_recording_with_devices_and_meeting<R: Runtime>(
     log_info!("🚀 CALLED start_recording_with_devices_and_meeting - Mic: {:?}, System: {:?}, Meeting: {:?}, meeting_id: {:?}, resume: {:?}",
              mic_device_name, system_device_name, meeting_name, meeting_id, resume_folder_path);
 
+    super::wrap_up::refuse_start_while_saving()?;
     // Clone meeting_name for notification use later
     let meeting_name_for_notification = meeting_name.clone();
 

@@ -5,7 +5,7 @@
 
 use anyhow::Result;
 use log::{error, info, warn};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc, Mutex,
@@ -247,18 +247,6 @@ fn teardown_live_diarizer() {
 // ============================================================================
 // PUBLIC TYPES
 // ============================================================================
-
-#[derive(Debug, Deserialize)]
-pub struct RecordingArgs {
-    pub save_path: String,
-}
-
-#[derive(Debug, Serialize, Clone)]
-pub struct TranscriptionStatus {
-    pub chunks_in_queue: usize,
-    pub is_processing: bool,
-    pub last_activity_ms: u64,
-}
 
 // ============================================================================
 // RECORDING COMMANDS
@@ -768,11 +756,21 @@ pub async fn start_recording_with_devices_and_meeting<R: Runtime>(
     Ok(())
 }
 
-/// Stop recording with optimized graceful shutdown ensuring NO transcript chunks are lost
+/// specs/0083 W2a: the session as it stands, for the wrap-up's fallback if the stop fails.
+pub fn session_snapshot() -> super::wrap_up::SessionSnapshot {
+    let manager = RECORDING_MANAGER.lock().unwrap();
+    super::wrap_up::SessionSnapshot::from_manager(
+        manager.as_ref(),
+        RESUMED_SESSION.load(Ordering::SeqCst),
+    )
+}
+
+/// Stop recording with optimized graceful shutdown ensuring NO transcript chunks are lost.
+/// specs/0083 W2a: the stop body of the Rust wrap-up (`wrap_up::request_stop`); it returns
+/// the stop payload and the drained session's segments in memory.
 pub async fn stop_recording<R: Runtime>(
     app: AppHandle<R>,
-    _args: RecordingArgs,
-) -> Result<serde_json::Value, String> {
+) -> Result<super::wrap_up::StoppedSession, String> {
     info!(
         "🛑 Starting optimized recording shutdown - ensuring ALL transcript chunks are preserved"
     );
@@ -780,7 +778,7 @@ pub async fn stop_recording<R: Runtime>(
     // Check if recording is active
     if !IS_RECORDING.load(Ordering::SeqCst) {
         info!("Recording was not active");
-        return Ok(serde_json::json!({ "message": "Recording was not active" }));
+        return Err("No recording in progress".to_string());
     }
     // specs/0083 W1: every return below (errors included) releases the keep-awake hold.
     let keep_awake_release = crate::power::keep_awake::EndRecordingOnDrop;
@@ -820,6 +818,7 @@ pub async fn stop_recording<R: Runtime>(
             info!("✅ Audio streams stopped successfully - no more chunks will be created");
             // Capture is over: the Mac may sleep during the drain and processing (acceptance A).
             drop(keep_awake_release);
+            super::wrap_up::capture_stopped(&app);
         }
         Err(e) => {
             error!("❌ Failed to stop audio streams: {}", e);
@@ -856,7 +855,7 @@ pub async fn stop_recording<R: Runtime>(
     // Wait up to 10 minutes for every queued chunk, THEN unlisten, THEN rewrite
     // transcripts.json with the drained tail (specs/0083 W2a).
     let listener_id = TRANSCRIPT_LISTENER_ID.lock().unwrap().take();
-    super::transcript_sink::drain_then_detach(
+    let drain = super::transcript_sink::drain_then_detach(
         &app,
         super::live_toggle::take_transcription_task(),
         listener_id,
@@ -864,6 +863,11 @@ pub async fn stop_recording<R: Runtime>(
         std::time::Duration::from_secs(600),
     )
     .await;
+    // Snapshot the drained session now: `save_recording_only` below clears the store.
+    let segments = transcript_sink
+        .as_ref()
+        .map(|sink| super::wrap_up::save::session_segments(&sink.segments()))
+        .unwrap_or_default();
 
     // Step 3: Now safely unload Whisper model after ALL chunks are processed
     let _ = app.emit(
@@ -1021,20 +1025,10 @@ pub async fn stop_recording<R: Runtime>(
     // specs/0037: was this a resumed session? Read-and-reset so the next start is clean.
     let resumed = RESUMED_SESSION.swap(false, Ordering::SeqCst);
 
-    // Step 4.5: Prepare metadata for frontend (NO database save)
-    // NOTE: We do NOT save to database here. The frontend will save after all transcripts are displayed.
-    // This ensures the user sees all transcripts streaming in before the database save happens.
     let (folder_path_str, meeting_name_str) = match (&meeting_folder, &meeting_name) {
         (Some(path), Some(name)) => (Some(path.to_string_lossy().to_string()), Some(name.clone())),
         _ => (None, None),
     };
-
-    info!("📤 Preparing recording metadata for frontend save");
-    info!("   folder_path: {:?}", folder_path_str);
-    info!("   meeting_name: {:?}", meeting_name_str);
-
-    // Database save removed - frontend will handle this after receiving all transcripts
-    info!("ℹ️ Skipping database save in Rust - frontend will save after all transcripts received");
 
     // Step 5: Complete shutdown
     let _ = app.emit(
@@ -1046,45 +1040,31 @@ pub async fn stop_recording<R: Runtime>(
         }),
     );
 
-    // The stop payload — emitted as `recording-stopped` AND returned from the command.
-    // specs/0037 (review-2): a resumed session's stop APPENDS to the existing meeting with
-    // this audio offset (the prior segments' total duration); a fresh session sends
-    // resumed=false / 0.0. Returning it makes the invoke's resolved value the frontend's
-    // race-free primary source — the event alone arrives only after the (possibly slow,
-    // multi-segment-concat) save, and could lose a 5s wait race on long meetings.
-    let stop_info = serde_json::json!({
-        "message": "Recording stopped - frontend will save after all transcripts received",
-        "folder_path": folder_path_str,
-        "meeting_name": meeting_name_str,
-        "resumed": resumed,
-        "prior_audio_duration_seconds": prior_audio_duration,
-        // v1.6.1: authoritative save target — see recording_meeting_id above.
-        "meeting_id": recording_meeting_id
-    });
-
-    // Emit final stop event with folder_path and meeting_name for frontend to save
-    app.emit("recording-stopped", stop_info.clone())
-        .map_err(|e| e.to_string())?;
+    // specs/0037: a resumed session APPENDS with this audio offset. The wrap-up saves from
+    // this in memory; `recording-stopped` still feeds TranscriptContext's IndexedDB update.
+    let stopped = super::wrap_up::StoppedSession {
+        folder_path: folder_path_str,
+        meeting_name: meeting_name_str,
+        resumed,
+        prior_audio_duration_seconds: prior_audio_duration,
+        meeting_id: recording_meeting_id, // v1.6.1: the authoritative save target
+        segments,
+        drain: Some(drain),
+    };
+    if let Err(e) = app.emit("recording-stopped", stopped.event_payload()) {
+        warn!("Failed to emit recording-stopped: {e}");
+    }
 
     // Update tray menu to reflect stopped state
     crate::tray::update_tray_menu(&app);
 
     info!("🎉 Recording stopped successfully with ZERO transcript chunks lost");
-    Ok(stop_info)
+    Ok(stopped)
 }
 
 /// Check if recording is active
 pub async fn is_recording() -> bool {
     IS_RECORDING.load(Ordering::SeqCst)
-}
-
-/// Get recording statistics
-pub async fn get_transcription_status() -> TranscriptionStatus {
-    TranscriptionStatus {
-        chunks_in_queue: 0,
-        is_processing: IS_RECORDING.load(Ordering::SeqCst),
-        last_activity_ms: 0,
-    }
 }
 
 /// Pause the current recording

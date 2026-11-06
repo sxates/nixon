@@ -18,7 +18,7 @@ import { OllamaDownloadProvider } from '@/contexts/OllamaDownloadContext'
 import { TranscriptProvider } from '@/contexts/TranscriptContext'
 import { ConfigProvider } from '@/contexts/ConfigContext'
 import { OnboardingProvider } from '@/contexts/OnboardingContext'
-import { RecordingPostProcessingProvider } from '@/contexts/RecordingPostProcessingProvider'
+import { WrapUpEffects } from '@/hooks/useWrapUpEffects'
 import { ImportAudioDialog, ImportDropOverlay } from '@/components/ImportAudio'
 import { DeferredBacklogProvider } from '@/contexts/DeferredBacklogProvider'
 import { QueueOpenProvider } from '@/contexts/QueueOpenContext'
@@ -286,14 +286,10 @@ export default function RootLayout({
                     <OnboardingProvider>
                       <SidebarProvider>
                           <TooltipProvider>
-                            {/* spec 0051 WS2 — hoisted above RecordingPostProcessingProvider (and
-                                out of the showOnboarding ternary, so it's ALWAYS mounted): the
-                                tray / global-shortcut stop path runs through
-                                RecordingPostProcessingProvider, which calls useRecordingStop
-                                unconditionally, and useRecordingStop now reads useBacklog() to
-                                hand a 'process-now' meeting to the backlog. That handoff must be
-                                live outside onboarding too.
-  
+                            {/* Always mounted (outside the showOnboarding ternary): the backlog
+                                answers the wrap-up's `handoff` stage (specs/0083), and that
+                                must work during onboarding too.
+
                                 Being always-mounted means the backlog's mount effect also
                                 fires DURING onboarding, when the Rust `AppState` is not yet
                                 managed. `api_list_deferred_meetings` therefore uses
@@ -304,7 +300,8 @@ export default function RootLayout({
                                 backlog stayed dead for the session. */}
                             <QueueOpenProvider>
                             <DeferredBacklogProvider>
-                            <RecordingPostProcessingProvider>
+                            {/* specs/0083 W2b: reflects the Rust-owned wrap-up after a stop. */}
+                            <WrapUpEffects />
                               <PermissionsModalProvider>
                               <ImportDialogProvider onOpen={handleOpenImportDialog}>
                                 {/* specs/0061 W1 Task 2 — AppShell owns the showOnboarding ternary
@@ -324,7 +321,6 @@ export default function RootLayout({
                                 />
                               </ImportDialogProvider>
                               </PermissionsModalProvider>
-                            </RecordingPostProcessingProvider>
                             </DeferredBacklogProvider>
                             </QueueOpenProvider>
                           </TooltipProvider>

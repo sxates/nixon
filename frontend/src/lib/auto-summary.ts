@@ -1,14 +1,16 @@
 /**
- * specs/0029 WS7.3 — auto-summary gate for the post-recording meeting-details visit.
+ * specs/0029 WS7.3 — auto-summary gate for the post-import meeting-details visit.
  *
- * Post-stop navigation lands on /meeting-details?source=recording, where a summary is
- * auto-generated iff every gate passes. Each skip used to be a silent console.log — the
+ * An audio import lands on /meeting-details?source=import, where a summary is
+ * auto-generated iff every gate passes. A recording no longer comes through here: the Rust
+ * wrap-up starts its summary itself, window hidden or not (specs/0083), so the page firing
+ * on `source=recording` would be a second summary. Each skip used to be a silent console.log — the
  * user asked for a feature that already existed but never visibly fired. This module is
  * the pure, testable decision: WHY auto-generation is skipped, and what (if anything) to
  * tell the user about it.
  *
  * Reason priority (first match wins):
- *   1. not-from-recording  — normal navigation; never surfaced to the user.
+ *   1. not-auto-source     — normal navigation (or a recording); never surfaced.
  *   2. deferred /
  *      deferred-processing — the deferred-meeting machinery owns this meeting
  *                            (1.10 feedback); nothing may auto-run here.
@@ -19,7 +21,7 @@
  */
 
 export type AutoSummarySkipReason =
-  | 'not-from-recording'
+  | 'not-auto-source'
   // 1.10 feedback: the meeting was recorded in deferred (record-only) mode and is
   // waiting for the backlog (AC return) or the manual "Process now" button. The
   // post-recording visit must NOT kick off transcribe-then-summarize itself —
@@ -42,9 +44,9 @@ export type AutoSummarySkipReason =
 
 export interface AutoSummaryGateInput {
   /**
-   * The `source` query param on /meeting-details. Auto-summary fires for the two
-   * flows that land here with a fresh transcript: post-recording (`'recording'`)
-   * and audio import (`'import'`). Any other value (or null) is normal navigation.
+   * The `source` query param on /meeting-details. Auto-summary fires only for an audio
+   * import (`'import'`). A recording's summary is the Rust wrap-up's (specs/0083); any other
+   * value (or null) is normal navigation.
    */
   source: string | null;
   /** The user's auto-summary toggle (ConfigContext `isAutoSummary`). */
@@ -84,7 +86,7 @@ export interface AutoSummaryGateInput {
 export function autoSummarySkipReason(
   input: AutoSummaryGateInput,
 ): AutoSummarySkipReason | null {
-  if (input.source !== 'recording' && input.source !== 'import') return 'not-from-recording';
+  if (input.source !== 'import') return 'not-auto-source';
   // A 'defer' marker means "needs processing". If the backlog already has this meeting
   // in flight, that processing IS happening — skip silently (its pill shows progress)
   // instead of telling the user to press "Process now".
@@ -107,13 +109,13 @@ export interface AutoSummarySkipToast {
 
 /**
  * User-facing copy for a skip reason, or null when the skip should stay silent
- * ('not-from-recording' is just normal navigation — never toast it).
+ * ('not-auto-source' is just normal navigation — never toast it).
  */
 export function autoSummarySkipToast(
   reason: AutoSummarySkipReason,
 ): AutoSummarySkipToast | null {
   switch (reason) {
-    case 'not-from-recording':
+    case 'not-auto-source':
       return null;
     case 'deferred':
       return {

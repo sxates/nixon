@@ -140,9 +140,9 @@ pub fn spawn_meeting_monitor<R: Runtime>(app: AppHandle<R>) {
             match machine.observe(raw) {
                 Transition::None => {}
                 Transition::Started(platform) => on_started(&app, platform).await,
-                Transition::Ended(platform) => on_ended(&app, platform),
+                Transition::Ended(platform) => on_ended(&app, platform).await,
                 Transition::Switched { ended, started } => {
-                    on_ended(&app, ended);
+                    on_ended(&app, ended).await;
                     on_started(&app, started).await;
                 }
             }
@@ -187,12 +187,20 @@ async fn on_started<R: Runtime>(app: &AppHandle<R>, platform: Platform) {
     emit(app, EVENT_MEETING_DETECTED, platform, "detected");
 }
 
-fn on_ended<R: Runtime>(app: &AppHandle<R>, platform: Platform) {
+async fn on_ended<R: Runtime>(app: &AppHandle<R>, platform: Platform) {
     log::info!(
         "{platform:?} call ended; emitting {EVENT_MEETING_ENDED} (stops a recording: {})",
         platform.end_stops_recording()
     );
     emit(app, EVENT_MEETING_ENDED, platform, "ended");
+    // specs/0083 W2a: the auto-stop is Rust's, so it works with the window hidden. The
+    // frontend only closes its prompt.
+    if platform.end_stops_recording() && is_recording().await {
+        let source = crate::audio::wrap_up::StopSource::MeetingEnded(platform);
+        if let Err(e) = crate::audio::wrap_up::request_stop(app, source).await {
+            log::warn!("{platform:?} call ended but the recording didn't stop: {e}");
+        }
+    }
 }
 
 fn emit<R: Runtime>(app: &AppHandle<R>, event: &str, platform: Platform, kind: &'static str) {

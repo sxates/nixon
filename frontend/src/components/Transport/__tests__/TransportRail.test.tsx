@@ -1,14 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 
-const { state, sidebar, backlog, llm, pauseMock, resumeMock, stopMock, toastErrorMock, transcripts, invokeMock } = vi.hoisted(() => ({
+const { state, sidebar, backlog, llm, pauseMock, resumeMock, navMock, toastErrorMock, transcripts, invokeMock } = vi.hoisted(() => ({
   state: { isRecording: false, isPaused: false, isActive: false, status: 'idle', activeDuration: null as number | null, recordingDuration: null as number | null, isStopping: false, isProcessing: false, isSaving: false },
   sidebar: { isCollapsed: true, handleRecordingToggle: vi.fn(), activeRecordingMeetingId: null as string | null, currentMeeting: null as { id: string; title: string } | null },
   backlog: { view: { items: [], pendingCount: 0, processing: false, active: null, activeOrdinal: 0, total: 0 }, stop: vi.fn(), startNow: vi.fn(), dismissDone: vi.fn(), enqueueMeeting: vi.fn() },
   // The provider's context value is FLAT (`{...view, dismiss}` — LlmActivityProvider.tsx),
   // so the fixture mirrors that shape rather than nesting a `view`.
   llm: { running: [] as unknown[], history: [] as unknown[], hasFailure: false, dismiss: vi.fn(), retry: vi.fn() },
-  pauseMock: vi.fn(), resumeMock: vi.fn(), stopMock: vi.fn(), toastErrorMock: vi.fn(),
+  pauseMock: vi.fn(), resumeMock: vi.fn(), navMock: vi.fn(), toastErrorMock: vi.fn(),
   transcripts: { meetingTitle: 'Pricing sync' },
   invokeMock: vi.fn(),
 }));
@@ -23,13 +23,12 @@ vi.mock('@/contexts/QueueOpenContext', async () => {
   return { useQueueOpen: () => { const [open, setOpen] = react.useState(false); return { open, setOpen }; } };
 });
 vi.mock('@/services/recordingService', () => ({ recordingService: { pauseRecording: pauseMock, resumeRecording: resumeMock } }));
-vi.mock('@/lib/recording-stop', () => ({ requestFullRecordingStop: stopMock }));
 vi.mock('sonner', () => ({ toast: { error: toastErrorMock, success: vi.fn() } }));
 vi.mock('@/contexts/TranscriptContext', () => ({ useTranscripts: () => transcripts }));
 vi.mock('@/hooks/useRecordingLevel', () => ({ useRecordingLevel: () => ({ rms: 0.4, peak: 0.5, peakLatched: false }) }));
 vi.mock('@/hooks/useMicGate', () => ({ useMicGate: () => false }));
 vi.mock('@tauri-apps/api/core', () => ({ invoke: invokeMock }));
-vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }), usePathname: () => '/' }));
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push: navMock, replace: navMock }), usePathname: () => '/' }));
 
 import { TransportRail } from '@/components/Transport/TransportRail';
 
@@ -58,7 +57,7 @@ describe('TransportRail', () => {
     expect(screen.getByRole('button', { name: 'Pause recording' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Stop recording' })).toBeDisabled();
   });
-  it('recording: REC lit, counter runs, HOLD pauses, STOP requests the full stop', () => {
+  it('recording: REC lit, counter runs, HOLD pauses, STOP calls stop_recording and stays put', async () => {
     Object.assign(state, { isRecording: true, isActive: true, status: 'recording', activeDuration: 252 });
     render(<TransportRail />);
     expect(screen.getByRole('region', { name: 'Recording in progress' })).toBeTruthy();
@@ -68,7 +67,10 @@ describe('TransportRail', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Pause recording' }));
     expect(pauseMock).toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Stop recording' }));
-    expect(stopMock).toHaveBeenCalled();
+    // specs/0083: the command and nothing else — Rust saves; nothing navigates.
+    await waitFor(() => expect(invokeMock).toHaveBeenCalledWith('stop_recording'));
+    expect(invokeMock.mock.calls.filter(([cmd]) => cmd === 'stop_recording')).toHaveLength(1);
+    expect(navMock).not.toHaveBeenCalled();
   });
   it('paused: HOLD lit and labelled Resume, counter amber', () => {
     Object.assign(state, { isRecording: true, isPaused: true, isActive: true, status: 'recording', activeDuration: 10 });

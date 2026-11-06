@@ -357,30 +357,6 @@ describe('useRecordingStart — orphan cleanup on failed start (specs/0037 FIX #
   });
 });
 
-describe('useRecordingStart — stale resumed keys cleared at start (specs/0037 FIX #7)', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    sessionStorage.clear();
-    routeInvoke();
-    getAllMeetings.mockResolvedValue([]);
-  });
-
-  it('clears last_recording_resumed + prior_audio_duration when a fresh start begins', async () => {
-    // Stale keys left by a prior resumed session whose save errored / was navigated away from.
-    sessionStorage.setItem('last_recording_resumed', 'true');
-    sessionStorage.setItem('last_recording_prior_audio_duration', '123.4');
-
-    const { result } = renderHook(() => useRecordingStart(false, vi.fn()));
-    await act(async () => {
-      await result.current.handleRecordingStart();
-    });
-
-    // Both keys are gone, so the NEXT stop can't be misrouted into the append path.
-    expect(sessionStorage.getItem('last_recording_resumed')).toBeNull();
-    expect(sessionStorage.getItem('last_recording_prior_audio_duration')).toBeNull();
-  });
-});
-
 describe('useRecordingStart — arm-while-mounted resume (specs/0037 FIX #8)', () => {
   beforeEach(() => {
     vi.clearAllMocks();

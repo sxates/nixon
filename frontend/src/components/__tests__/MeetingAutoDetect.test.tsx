@@ -37,7 +37,8 @@ vi.mock('@/lib/osNotification', async () => {
     getNotificationCapability: h.capabilityMock,
   };
 });
-vi.mock('@/lib/recording-stop', () => ({ requestFullRecordingStop: h.stopMock }));
+vi.mock('@/lib/wrap-up', () => ({ requestStop: h.stopMock }));
+vi.mock('@tauri-apps/api/core', () => ({ invoke: h.stopMock }));
 vi.mock('@/lib/calendar', () => ({ peekPendingJoinMeeting: h.pendingJoinMock }));
 
 let recording = false;
@@ -249,28 +250,20 @@ describe('a banner that could not be sent', () => {
 });
 
 describe('the meeting ending while recording', () => {
-  it('runs the full stop', async () => {
-    recording = true;
-    render(<MeetingAutoDetect />);
-    emit('meeting-ended', { timestamp_ms: 9, kind: 'ended' });
-    expect(h.stopMock).toHaveBeenCalledTimes(1);
-  });
-
-  // specs/0074 W6: only a Zoom end stops a recording. Teams and browsers may let go of the
-  // microphone on mute, and a recording must never stop on mute.
-  it('runs the full stop when the call was Zoom', async () => {
-    recording = true;
-    render(<MeetingAutoDetect />);
-    emit('meeting-ended', { timestamp_ms: 9, kind: 'ended', platform: 'zoom' });
-    expect(h.stopMock).toHaveBeenCalledTimes(1);
-  });
-
-  it.each(['teams', 'meet'])('keeps recording when a %s call ends', async (platform) => {
-    recording = true;
-    render(<MeetingAutoDetect />);
-    emit('meeting-ended', { timestamp_ms: 9, kind: 'ended', platform });
-    expect(h.stopMock).not.toHaveBeenCalled();
-  });
+  // specs/0083: Rust stops a recording a Zoom end ends (`monitor::on_ended`) and wraps it up
+  // with the window hidden or not. The webview neither stops nor navigates; a second stop
+  // from here would race Rust's.
+  it.each([undefined, 'zoom', 'teams', 'meet'])(
+    'leaves the stop to Rust and stays on the route (%s)',
+    async (platform) => {
+      recording = true;
+      render(<MeetingAutoDetect />);
+      emit('meeting-ended', { timestamp_ms: 9, kind: 'ended', platform });
+      await settle();
+      expect(h.stopMock).not.toHaveBeenCalled();
+      expect(h.pushMock).not.toHaveBeenCalled();
+    },
+  );
 
   it('a Teams call ending still takes its prompt down', async () => {
     render(<MeetingAutoDetect />);

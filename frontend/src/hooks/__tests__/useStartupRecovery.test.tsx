@@ -11,6 +11,7 @@ const h = vi.hoisted(() => ({
   getRecordingState: vi.fn(),
   invoke: vi.fn(),
   getAllMeetings: vi.fn(),
+  markMeetingSaved: vi.fn(),
 }));
 
 vi.mock('@/services/recordingService', () => ({
@@ -32,6 +33,7 @@ vi.mock('@/services/indexedDBService', () => ({
     getAllMeetings: h.getAllMeetings,
     deleteOldMeetings: vi.fn().mockResolvedValue(undefined),
     deleteSavedMeetings: vi.fn().mockResolvedValue(undefined),
+    markMeetingSaved: h.markMeetingSaved,
   },
 }));
 vi.mock('@/services/storageService', () => ({ storageService: {} }));
@@ -179,6 +181,49 @@ describe('the recoverable list never includes the live meeting (specs/0075 W4)',
     const { result } = renderHook(() => useStartupRecovery(), { wrapper });
 
     await waitFor(() => expect(h.getAllMeetings).toHaveBeenCalled());
+    await waitFor(() => expect(result.current.showRecoveryDialog).toBe(true));
+    expect(result.current.recoverableMeetings.map((m) => m.meetingId)).toEqual(['meeting-old']);
+  });
+});
+
+// specs/0083 W2b — Rust saves the meeting itself, possibly while the webview was asleep and
+// never heard `saved`, so its IndexedDB copy stays unmarked. The next launch must not offer
+// to "recover" (and so duplicate) a meeting that already has transcript rows.
+describe('the recoverable list skips meetings Rust already saved (specs/0083)', () => {
+  it('drops (and marks saved) a copy whose folder already has transcript rows', async () => {
+    h.getRecordingState.mockResolvedValue(backendState(false));
+    h.markMeetingSaved.mockResolvedValue(undefined);
+    const SAVED_FOLDER = '/rec/Meeting saved';
+    h.invoke.mockImplementation(async (cmd: string, args?: { folderPath?: string }) => {
+      if (cmd === 'get_recording_state') return backendState(false);
+      if (cmd === 'has_audio_checkpoints') return true;
+      if (cmd === 'api_folder_has_saved_transcript') return args?.folderPath === SAVED_FOLDER;
+      return null;
+    });
+    h.getAllMeetings.mockResolvedValue([
+      row('meeting-saved', { folderPath: SAVED_FOLDER }),
+      interruptedRow(),
+    ]);
+
+    const { result } = renderHook(() => useStartupRecovery(), { wrapper });
+
+    await waitFor(() => expect(result.current.showRecoveryDialog).toBe(true));
+    expect(result.current.recoverableMeetings.map((m) => m.meetingId)).toEqual(['meeting-old']);
+    expect(h.markMeetingSaved).toHaveBeenCalledWith('meeting-saved');
+  });
+
+  it('keeps a copy when the check fails (never hide a meeting that might be lost)', async () => {
+    h.getRecordingState.mockResolvedValue(backendState(false));
+    h.invoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'get_recording_state') return backendState(false);
+      if (cmd === 'has_audio_checkpoints') return true;
+      if (cmd === 'api_folder_has_saved_transcript') throw new Error('db busy');
+      return null;
+    });
+    h.getAllMeetings.mockResolvedValue([interruptedRow()]);
+
+    const { result } = renderHook(() => useStartupRecovery(), { wrapper });
+
     await waitFor(() => expect(result.current.showRecoveryDialog).toBe(true));
     expect(result.current.recoverableMeetings.map((m) => m.meetingId)).toEqual(['meeting-old']);
   });

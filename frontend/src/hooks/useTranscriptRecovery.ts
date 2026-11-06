@@ -59,9 +59,31 @@ export function useTranscriptRecovery(): UseTranscriptRecoveryReturn {
         return isWithinRetention && isOldEnough && !isLiveMeeting(m, live);
       });
 
+      // specs/0083: Rust saves the meeting itself, possibly while this webview was asleep and
+      // never heard `saved`, so an unmarked copy may already be in the database. Offering to
+      // "recover" it would duplicate it: mark it saved here instead. Any error keeps it.
+      const unsaved = (
+        await Promise.all(
+          recentMeetings.map(async (meeting) => {
+            if (!meeting.folderPath) return meeting;
+            try {
+              const saved = await invoke<boolean>('api_folder_has_saved_transcript', {
+                folderPath: meeting.folderPath,
+              });
+              if (!saved) return meeting;
+              await indexedDBService.markMeetingSaved(meeting.meetingId).catch(() => {});
+              return null;
+            } catch (error) {
+              console.warn('Could not check whether a recoverable meeting is saved:', error);
+              return meeting;
+            }
+          }),
+        )
+      ).filter((m): m is MeetingMetadata => m !== null);
+
       // Verify audio checkpoint availability for each meeting
       const meetingsWithAudioStatus = await Promise.all(
-        recentMeetings.map(async (meeting) => {
+        unsaved.map(async (meeting) => {
           if (meeting.folderPath) {
             try {
               const hasAudio = await invoke<boolean>('has_audio_checkpoints', {

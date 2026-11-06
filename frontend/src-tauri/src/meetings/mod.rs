@@ -8,6 +8,8 @@ pub mod commands;
 pub mod delete;
 pub mod discard;
 pub mod manual_commands;
+/// Whether a recording folder's meeting is already saved (transcript recovery, specs/0083).
+pub mod recovery;
 pub mod view;
 
 pub use commands::*;

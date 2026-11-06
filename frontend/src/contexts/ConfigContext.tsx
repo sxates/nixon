@@ -6,6 +6,7 @@ import { SelectedDevices } from '@/components/DeviceSelection';
 import { configService, ModelConfig } from '@/services/configService';
 import { invoke } from '@tauri-apps/api/core';
 import { safeListen } from '@/lib/safe-listen';
+import { AUTO_SUMMARY_KEY, saveWrapUpPreferences, syncWrapUpPreferences } from '@/lib/wrap-up-preferences';
 import { ApiKeyStatus, apiKeyHint, maskApiKey } from '@/lib/utils';
 
 export interface OllamaModel {
@@ -138,11 +139,23 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
   // keeps that choice, since only an ABSENT key falls through to the default.
   const [isAutoSummary, setisAutoSummary] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('isAutoSummary');
+      const saved = localStorage.getItem(AUTO_SUMMARY_KEY);
       return saved !== null ? saved === 'true' : true
     }
     return true;
   });
+
+  // specs/0083 W2b: Rust's wrap-up reads this (it runs with the window hidden), so Rust holds
+  // it. At launch, reconcile once — the first launch pushes this cache, later ones pull.
+  useEffect(() => {
+    let cancelled = false;
+    void syncWrapUpPreferences().then((prefs) => {
+      if (!cancelled && prefs) setisAutoSummary(prefs.autoSummary);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Preference settings state (lazy loaded)
   const [storageLocations, setStorageLocations] = useState<StorageLocations | null>(null);
@@ -355,8 +368,9 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
   const toggleIsAutoSummary = useCallback((checked: boolean) => {
     setisAutoSummary(checked);
     if (typeof window !== 'undefined') {
-      localStorage.setItem('isAutoSummary', checked.toString());
+      localStorage.setItem(AUTO_SUMMARY_KEY, checked.toString());
     }
+    void saveWrapUpPreferences({ autoSummary: checked });
   }, [])
 
   // Update individual provider API key

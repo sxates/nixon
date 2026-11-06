@@ -61,6 +61,11 @@ impl TranscriptSink {
         }
     }
 
+    /// How many resumed sessions' segments precede this session's in `transcripts.json`.
+    pub fn prior_len(&self) -> usize {
+        self.prior.len()
+    }
+
     /// The current session's segments (prior sessions excluded).
     pub fn segments(&self) -> Vec<TranscriptSegment> {
         self.segments.lock().map(|s| s.clone()).unwrap_or_default()

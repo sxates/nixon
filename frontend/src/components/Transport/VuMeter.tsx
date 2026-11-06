@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { useCalmMotion } from '@/contexts/CalmMotionContext';
+import { useDocumentVisible } from '@/lib/use-document-visible';
 import { createVuIntegrator, vuToArcFraction, VU_MIN_DB } from '@/lib/transport/vu-ballistics';
 
 const ANGLE_MIN = -50;
@@ -42,6 +43,8 @@ export function VuMeter({
   // snaps to each 12.5 Hz level instead of animating on every frame.
   const calm = useCalmMotion();
   const reduced = prefersReduced || calm;
+  // specs/0083 W2c: nothing to draw for a hidden window, so no frame loop at all.
+  const visible = useDocumentVisible();
   // The rAF clock lives OUTSIDE the loop effect. The effect re-arms on every `db` change
   // (12.5 Hz), and a `last` local would be re-seeded at re-arm time — mid-frame — so each
   // tick measured only the sliver since the re-arm instead of since the previous step,
@@ -63,16 +66,16 @@ export function VuMeter({
 
   // Reduced motion: snap to the target, no animation loop at all.
   useEffect(() => {
-    if (!reduced) return;
+    if (!reduced || !visible) return;
     integ.current.reset(target.current);
     rendered.current = target.current;
     setNeedleDb(target.current);
-  }, [reduced, db, active]);
+  }, [reduced, visible, db, active]);
 
   // `active`/`db` are effect deps only so the loop RE-ARMS after it parks; the loop itself
   // always reads the live `target` ref, so a re-run never restarts the ballistics.
   useEffect(() => {
-    if (reduced) return;
+    if (reduced || !visible) return;
     let raf = 0;
     if (last.current === 0) last.current = performance.now();
     const tick = (now: number) => {
@@ -98,7 +101,7 @@ export function VuMeter({
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [reduced, active, db]);
+  }, [reduced, visible, active, db]);
 
   const angle = ANGLE_MIN + vuToArcFraction(needleDb) * (ANGLE_MAX - ANGLE_MIN);
   return (
