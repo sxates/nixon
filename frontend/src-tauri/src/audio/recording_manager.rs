@@ -592,9 +592,9 @@ impl RecordingManager {
         self.recording_saver.prior_audio_duration_seconds()
     }
 
-    /// Add a structured transcript segment to be saved later
-    pub fn add_transcript_segment(&self, segment: super::recording_saver::TranscriptSegment) {
-        self.recording_saver.add_transcript_segment(segment);
+    /// specs/0083 W2a: the saver's segment store, for the `transcript-update` listener.
+    pub fn transcript_sink(&self) -> super::transcript_sink::TranscriptSink {
+        self.recording_saver.transcript_sink()
     }
 
     /// Add a transcript chunk to be saved later (legacy method)

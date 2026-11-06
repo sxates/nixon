@@ -459,6 +459,9 @@ pub async fn start_recording_with_meeting_name<R: Runtime>(
         .await
         .map_err(|e| format!("Failed to start recording: {}", e))?;
 
+    // specs/0083 W2a: the listener writes into the saver's store directly (see below).
+    let transcript_sink = manager.transcript_sink();
+
     // Store the manager globally to keep it alive
     {
         let mut global_manager = RECORDING_MANAGER.lock().unwrap();
@@ -486,45 +489,17 @@ pub async fn start_recording_with_meeting_name<R: Runtime>(
         super::live_toggle::stash_receiver(transcription_receiver);
     }
 
-    // CRITICAL: Listen for transcript-update events and save to recording manager
-    // This enables transcript history persistence for page reload sync
-    // Store listener ID for cleanup during stop_recording to ensure microphone is released
+    // CRITICAL: Listen for transcript-update events and save them into the saver's store
+    // (history persistence for page reload sync + transcripts.json). specs/0083 W2a: the
+    // listener holds the sink itself — not a RECORDING_MANAGER lookup, which is empty
+    // during the stop drain — and stop_recording unlistens only after the drain.
     {
-        use tauri::Listener;
-        let listener_id = app.listen("transcript-update", move |event: tauri::Event| {
-            // Parse the transcript update from the event payload
-            if let Ok(update) = serde_json::from_str::<TranscriptUpdate>(event.payload()) {
-                // Create structured transcript segment
-                let segment = crate::audio::recording_saver::TranscriptSegment {
-                    id: format!("seg_{}", update.sequence_id),
-                    text: update.text.clone(),
-                    audio_start_time: update.audio_start_time,
-                    audio_end_time: update.audio_end_time,
-                    duration: update.duration,
-                    display_time: update.timestamp.clone(), // Use wall-clock timestamp for display
-                    confidence: update.confidence,
-                    sequence_id: update.sequence_id,
-                    // specs/0029 WS3.4 follow-up: keep the capture-channel tag in the
-                    // rehydration copy so a page reload mid-recording doesn't lose it.
-                    channel: update.channel.clone(),
-                };
-
-                // Save to recording manager
-                if let Ok(manager_guard) = RECORDING_MANAGER.lock() {
-                    if let Some(manager) = manager_guard.as_ref() {
-                        manager.add_transcript_segment(segment);
-                    }
-                }
-
-                // specs/0011 P3-B: feed the live diarizer the accumulated segment windows
-                // so its next pass can align turns to them. `segment_id` = `sequence_id`
-                // (string), the key the live panel correlates `live-diarization-update` on.
-                // Inert (no diarizer present) unless live diarization is enabled.
-                feed_live_diarizer_segment(&update);
-            }
-        });
-        let mut global_listener = TRANSCRIPT_LISTENER_ID.lock().unwrap();
-        *global_listener = Some(listener_id);
+        let listener_id = super::transcript_sink::listen_into_sink(
+            &app,
+            transcript_sink,
+            feed_live_diarizer_segment,
+        );
+        *TRANSCRIPT_LISTENER_ID.lock().unwrap() = Some(listener_id);
         info!("✅ Transcript-update event listener registered for history persistence");
     }
 
@@ -730,6 +705,9 @@ pub async fn start_recording_with_devices_and_meeting<R: Runtime>(
         .await
         .map_err(|e| format!("Failed to start recording: {}", e))?;
 
+    // specs/0083 W2a: the listener writes into the saver's store directly (see below).
+    let transcript_sink = manager.transcript_sink();
+
     // Store the manager globally to keep it alive
     {
         let mut global_manager = RECORDING_MANAGER.lock().unwrap();
@@ -754,43 +732,17 @@ pub async fn start_recording_with_devices_and_meeting<R: Runtime>(
         super::live_toggle::stash_receiver(transcription_receiver);
     }
 
-    // CRITICAL: Listen for transcript-update events and save to recording manager
-    // This enables transcript history persistence for page reload sync
-    // Store listener ID for cleanup during stop_recording to ensure microphone is released
+    // CRITICAL: Listen for transcript-update events and save them into the saver's store
+    // (history persistence for page reload sync + transcripts.json). specs/0083 W2a: the
+    // listener holds the sink itself — not a RECORDING_MANAGER lookup, which is empty
+    // during the stop drain — and stop_recording unlistens only after the drain.
     {
-        use tauri::Listener;
-        let listener_id = app.listen("transcript-update", move |event: tauri::Event| {
-            // Parse the transcript update from the event payload
-            if let Ok(update) = serde_json::from_str::<TranscriptUpdate>(event.payload()) {
-                // Create structured transcript segment
-                let segment = crate::audio::recording_saver::TranscriptSegment {
-                    id: format!("seg_{}", update.sequence_id),
-                    text: update.text.clone(),
-                    audio_start_time: update.audio_start_time,
-                    audio_end_time: update.audio_end_time,
-                    duration: update.duration,
-                    display_time: update.timestamp.clone(), // Use wall-clock timestamp for display
-                    confidence: update.confidence,
-                    sequence_id: update.sequence_id,
-                    // specs/0029 WS3.4 follow-up: keep the capture-channel tag in the
-                    // rehydration copy so a page reload mid-recording doesn't lose it.
-                    channel: update.channel.clone(),
-                };
-
-                // Save to recording manager
-                if let Ok(manager_guard) = RECORDING_MANAGER.lock() {
-                    if let Some(manager) = manager_guard.as_ref() {
-                        manager.add_transcript_segment(segment);
-                    }
-                }
-
-                // specs/0011 P3-B: feed the live diarizer the accumulated segment windows
-                // (inert unless live diarization is enabled). See first start path.
-                feed_live_diarizer_segment(&update);
-            }
-        });
-        let mut global_listener = TRANSCRIPT_LISTENER_ID.lock().unwrap();
-        *global_listener = Some(listener_id);
+        let listener_id = super::transcript_sink::listen_into_sink(
+            &app,
+            transcript_sink,
+            feed_live_diarizer_segment,
+        );
+        *TRANSCRIPT_LISTENER_ID.lock().unwrap() = Some(listener_id);
         info!("✅ Transcript-update event listener registered for history persistence");
     }
 
@@ -875,15 +827,10 @@ pub async fn stop_recording<R: Runtime>(
         }
     }
 
-    // Step 1.5: Clean up transcript listener to release microphone
-    // Unlisten transcript-update event to prevent lingering references
-    {
-        use tauri::Listener;
-        if let Some(listener_id) = TRANSCRIPT_LISTENER_ID.lock().unwrap().take() {
-            app.unlisten(listener_id);
-            info!("✅ Transcript-update listener removed");
-        }
-    }
+    // Step 1.5 (specs/0083 W2a): the transcript-update listener stays registered until
+    // the drain below has finished, so the drained tail reaches the saver's store and
+    // transcripts.json. The audio streams are already stopped, so the mic is released.
+    let transcript_sink = manager_for_cleanup.as_ref().map(|m| m.transcript_sink());
 
     // Step 1.6: Stop live diarization (specs/0011 P3-B). The authoritative offline pass
     // runs after this (frontend-driven on `recording-stopped` → `api_diarize_meeting`,
@@ -906,60 +853,17 @@ pub async fn stop_recording<R: Runtime>(
         }),
     );
 
-    // Wait for transcription task with enhanced progress monitoring (NO TIMEOUT - we must process all chunks)
-    let transcription_task = super::live_toggle::take_transcription_task();
-
-    if let Some(task_handle) = transcription_task {
-        info!("⏳ Waiting for ALL transcription chunks to be processed (no timeout - preserving every chunk)");
-
-        // Enhanced progress monitoring during shutdown
-        let progress_app = app.clone();
-        let progress_task = tokio::spawn(async move {
-            let last_update = std::time::Instant::now();
-
-            loop {
-                tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-
-                // Emit periodic progress updates during shutdown
-                let elapsed = last_update.elapsed().as_secs();
-                let _ = progress_app.emit(
-                    "recording-shutdown-progress",
-                    serde_json::json!({
-                        "stage": "processing_transcripts",
-                        "message": format!("Processing transcripts... ({}s elapsed)", elapsed),
-                        "progress": 40,
-                        "detailed": true,
-                        "elapsed_seconds": elapsed
-                    }),
-                );
-            }
-        });
-
-        // Wait up to 10 minutes for transcription completion to prevent indefinite hangs
-        match tokio::time::timeout(
-            tokio::time::Duration::from_secs(600), // 10 minutes max
-            task_handle,
-        )
-        .await
-        {
-            Ok(Ok(())) => {
-                info!("✅ ALL transcription chunks processed successfully - no data lost");
-            }
-            Ok(Err(e)) => {
-                warn!("⚠️ Transcription task completed with error: {:?}", e);
-                // Continue anyway - the worker may have processed most chunks
-            }
-            Err(_) => {
-                warn!("⏱️ Transcription timeout (10 minutes) reached, continuing shutdown to prevent indefinite hang");
-                // Continue shutdown even on timeout - better to lose some chunks than hang forever
-            }
-        }
-
-        // Stop progress monitoring
-        progress_task.abort();
-    } else {
-        info!("ℹ️ No transcription task found to wait for");
-    }
+    // Wait up to 10 minutes for every queued chunk, THEN unlisten, THEN rewrite
+    // transcripts.json with the drained tail (specs/0083 W2a).
+    let listener_id = TRANSCRIPT_LISTENER_ID.lock().unwrap().take();
+    super::transcript_sink::drain_then_detach(
+        &app,
+        super::live_toggle::take_transcription_task(),
+        listener_id,
+        transcript_sink.as_ref(),
+        std::time::Duration::from_secs(600),
+    )
+    .await;
 
     // Step 3: Now safely unload Whisper model after ALL chunks are processed
     let _ = app.emit(
