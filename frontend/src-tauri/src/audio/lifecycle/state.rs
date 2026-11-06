@@ -461,6 +461,26 @@ pub async fn mark_failed_if_pending(
     meeting_id: &str,
     failure: SpeakerIdFailure,
 ) -> Result<bool> {
+    fail_if_pending(pool, meeting_id, failure, true).await
+}
+
+/// [`mark_failed_if_pending`] for a cancelled pass that is still running unseen (specs/0084
+/// detach): the crash-loop marker stays set until the pass really returns, so a crash in it
+/// is still caught by the startup breaker.
+pub async fn mark_failed_if_pending_keeping_marker(
+    pool: &SqlitePool,
+    meeting_id: &str,
+    failure: SpeakerIdFailure,
+) -> Result<bool> {
+    fail_if_pending(pool, meeting_id, failure, false).await
+}
+
+async fn fail_if_pending(
+    pool: &SqlitePool,
+    meeting_id: &str,
+    failure: SpeakerIdFailure,
+    clear_marker: bool,
+) -> Result<bool> {
     let err = |e: sqlx::Error| anyhow!("Could not mark meeting {meeting_id} failed: {e}");
     let mut tx = pool.begin().await.map_err(err)?;
     let sql = format!(
@@ -475,10 +495,13 @@ pub async fn mark_failed_if_pending(
         .map_err(err)?
         .rows_affected();
     sqlx::query(
-        "UPDATE meetings SET speaker_id_started_at = NULL, speaker_id_failure = \
+        "UPDATE meetings SET \
+                speaker_id_started_at = CASE WHEN ? THEN NULL ELSE speaker_id_started_at END, \
+                speaker_id_failure = \
                 CASE WHEN audio_state = 'failed' THEN ? ELSE speaker_id_failure END \
          WHERE id = ?",
     )
+    .bind(clear_marker)
     .bind(failure.as_str())
     .bind(meeting_id)
     .execute(&mut *tx)

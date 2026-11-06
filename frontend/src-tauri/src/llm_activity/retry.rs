@@ -64,6 +64,12 @@ pub async fn retry_task<R: Runtime>(app: &AppHandle<R>, task_id: u64) -> Result<
         .ok_or_else(|| "That task is no longer in the queue.".to_string())?
         .ok_or_else(|| "That task has no meeting to retry against.".to_string())?;
 
+    // specs/0084: a cancelled pass still finishing unseen. Checked before `take_record`, so
+    // the row (and its Retry) stays for the user to try again in a moment.
+    if kind == TaskKind::Diarization {
+        crate::diarization::detach::refuse_if_stopping(&meeting_id)?;
+    }
+
     let record = registry
         .take_record(task_id)
         .ok_or_else(|| "That task is no longer in the queue.".to_string())?;

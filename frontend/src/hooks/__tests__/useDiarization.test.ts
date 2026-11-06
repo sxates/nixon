@@ -297,25 +297,57 @@ describe('useDiarization — cancel', () => {
     });
   };
 
-  it('cancels the running pass, holds Cancelling… and ends quietly on the cancelled event', async () => {
+  // specs/0084 detach: Rust ends the pass's visible state before the command returns, so
+  // "Cancelling…" lasts only as long as the call; the pass's own quiet event changes nothing.
+  it('ends the pass on the cancel response, quietly, with no lingering Cancelling…', async () => {
+    let resolveCancel: (v: { cancelled: boolean }) => void = () => {};
     invokeMock.mockImplementation((cmd: string) =>
-      Promise.resolve(cmd === 'api_cancel_diarization' ? { cancelled: true } : null),
+      cmd === 'api_cancel_diarization'
+        ? new Promise((resolve) => {
+            resolveCancel = resolve;
+          })
+        : Promise.resolve(null),
     );
     const { result } = renderHook(() => useDiarization({ meetingId: 'm1' }));
     await act(async () => {});
     fireProgress({ meeting_id: 'm1', stage: 'diarizing', pct: 40 });
 
-    await act(async () => {
-      await result.current.cancel();
+    let pending: Promise<void> = Promise.resolve();
+    act(() => {
+      pending = result.current.cancel();
     });
     expect(invokeMock).toHaveBeenCalledWith('api_cancel_diarization', { meetingId: 'm1' });
     expect(result.current.isCancelling).toBe(true);
-    expect(result.current.isRunning).toBe(true);
+
+    await act(async () => {
+      resolveCancel({ cancelled: true });
+      await pending;
+    });
+    expect(result.current.isRunning).toBe(false);
+    expect(result.current.isCancelling).toBe(false);
+    expect(result.current.stage).toBeNull();
 
     fireError({ meeting_id: 'm1', error: 'Cancelled', cancelled: true });
     expect(result.current.isRunning).toBe(false);
-    expect(result.current.isCancelling).toBe(false);
     expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it('says "still stopping" plainly when a start is refused right after a cancel', async () => {
+    const stopping = 'Still stopping the previous run — try again in a moment.';
+    invokeMock.mockImplementation((cmd: string) =>
+      cmd === 'api_diarize_meeting'
+        ? Promise.reject(stopping)
+        : Promise.resolve(cmd === 'api_diarization_models_present' ? true : null),
+    );
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { result } = renderHook(() => useDiarization({ meetingId: 'm1' }));
+    await act(async () => {
+      await result.current.identifySpeakers();
+    });
+    expect(result.current.isRunning).toBe(false);
+    expect(toast.info).toHaveBeenCalledWith(stopping);
+    expect(toast.error).not.toHaveBeenCalled();
+    err.mockRestore();
   });
 
   it('still toasts a real failure', async () => {

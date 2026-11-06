@@ -40,9 +40,17 @@ pub fn diarize_meeting_or_queue<R: Runtime>(app: AppHandle<R>, meeting_id: Strin
     if diarize_meeting(app, meeting_id.clone()) {
         return true;
     }
+    if super::cancel::is_stopping(&meeting_id) {
+        return false; // a cancelled pass is finishing; its ending would never run a re-run
+    }
     log::info!("diarization for {meeting_id} is running; queued one more pass after it");
     pending.insert(meeting_id);
     false
+}
+
+/// Forget a queued re-run (a cancel means "stop": the follow-up would undo it).
+pub(super) fn drop_pending_rerun(meeting_id: &str) {
+    pending_reruns().remove(meeting_id);
 }
 
 /// After a pass ends: start the queued re-run, if one was asked for. Returns whether one
@@ -140,7 +148,8 @@ pub(crate) async fn queue_label<R: Runtime>(app: &AppHandle<R>, meeting_id: &str
 /// Gating on the opt-in setting (and on models-present, for an auto-run) lives at
 /// the call site (P1-C); this entry point always runs when called.
 pub fn diarize_meeting<R: Runtime>(app: AppHandle<R>, meeting_id: String) -> bool {
-    if !registry_try_begin(&meeting_id) {
+    // A cancelled pass that hasn't returned yet (`detach.rs`): never stack a second one.
+    if super::detach::refuse_if_stopping(&meeting_id).is_err() || !registry_try_begin(&meeting_id) {
         log::info!(
             "diarization already running for meeting {meeting_id}; not starting a second run"
         );
@@ -156,15 +165,15 @@ pub fn diarize_meeting<R: Runtime>(app: AppHandle<R>, meeting_id: String) -> boo
         // registration happens here (not before the spawn) precisely so this async lookup
         // of the meeting's title is available — mirrors `action_items::run_extraction` and
         // `summary::background`, which resolve the same metadata the same way.
-        let task = match app.try_state::<crate::llm_activity::LlmActivityState>() {
-            Some(state) => Some(std::sync::Arc::clone(&state.0).start_for(
+        // Held by the cancel token, so a Cancel can finish the row before the pass returns.
+        if let Some(state) = app.try_state::<crate::llm_activity::LlmActivityState>() {
+            cancel.attach_task(std::sync::Arc::clone(&state.0).start_for(
                 crate::llm_activity::registry::TaskKind::Diarization,
                 crate::llm_activity::registry::Origin::Background,
                 queue_label(&app, &meeting_id).await,
                 Some(meeting_id.clone()),
-            )),
-            None => None,
-        };
+            ));
+        }
 
         // specs/0084 W1: stamp the crash-loop marker before the pass touches audio. If the
         // app dies mid-pass, the next launch finds it and fails the meeting instead of
@@ -187,55 +196,63 @@ pub fn diarize_meeting<R: Runtime>(app: AppHandle<R>, meeting_id: String) -> boo
 
         safe_mode_runs().insert(meeting_id.clone(), safe_mode);
         let result = run(app.clone(), meeting_id.clone(), safe_mode).await;
-        let outcome = PassOutcome::from_result(&result, meeting_exists(&app, &meeting_id).await);
-        crate::audio::lifecycle::on_diarization_outcome(&app, &meeting_id, &outcome).await;
-        drop(cancel); // the pass is over: a later cancel has nothing to stop
-        match outcome {
-            PassOutcome::Ok => {
-                if let Some(t) = task {
-                    t.finish(Ok(()));
-                }
-            }
-            PassOutcome::Cancelled => {
-                log::info!("diarization for {meeting_id}: cancelled");
-                if let Some(t) = task {
-                    t.finish_skipped(CANCELLED_REASON);
-                }
-                registry_finish(&meeting_id, STAGE_CANCELLED, 0);
-                // A cancel means "stop": the queued follow-up would undo it.
-                pending_reruns().remove(&meeting_id);
-                let _ = app.emit(
-                    EVENT_ERROR,
-                    serde_json::json!({
-                        "meeting_id": meeting_id,
-                        "error": CANCELLED_REASON,
-                        "cancelled": true,
-                    }),
-                );
-                return;
-            }
-            PassOutcome::Failed(failure) => {
-                log::warn!("diarization failed for {meeting_id}: {}", failure.message);
-                if let Some(t) = task {
-                    t.finish(Err(failure.message.clone()));
-                }
-                // Release the run slot BEFORE emitting so a status query racing the
-                // event never sees a stale "running". (The success path does the same
-                // inside `run`, just before its `diarization-complete` emit.)
-                registry_finish(&meeting_id, "error", 0);
-                let _ = app.emit(
-                    EVENT_ERROR,
-                    serde_json::json!({
-                        "meeting_id": meeting_id,
-                        "error": failure.message,
-                        "cancelled": false,
-                    }),
-                );
-            }
-        }
-        start_pending_rerun(&app, &meeting_id);
+        conclude(&app, &meeting_id, result, cancel).await;
     });
     true
+}
+
+/// End a pass: route its outcome through the lifecycle hook (which clears the crash-loop
+/// marker), finish the queue row, release the run slot, emit the terminal event and start a
+/// queued re-run. Once a cancel was requested, any non-Ok result is a cancel, and a pass
+/// whose visible state the Cancel click already finished (`detach.rs`) ends without a
+/// second event, row finish or toast.
+pub async fn conclude<R: Runtime>(
+    app: &AppHandle<R>,
+    meeting_id: &str,
+    result: anyhow::Result<()>,
+    cancel: super::cancel::CancelToken,
+) {
+    let mut outcome = PassOutcome::from_result(&result, meeting_exists(app, meeting_id).await);
+    if cancel.is_requested() && !outcome.is_ok() {
+        outcome = PassOutcome::Cancelled; // what the user asked for; never a red failure
+    }
+    crate::audio::lifecycle::on_diarization_outcome(app, meeting_id, &outcome).await;
+    match outcome {
+        PassOutcome::Ok => {
+            if let Some(t) = cancel.take_task() {
+                t.finish(Ok(()));
+            }
+        }
+        PassOutcome::Cancelled => {
+            log::info!("diarization for {meeting_id}: cancelled");
+            let pass = std::sync::Arc::clone(cancel.pass());
+            super::detach::finish_cancelled(app, meeting_id, &pass, super::detach::Db::Done).await;
+            // Last: until the token goes the meeting reads "still stopping", so no new pass
+            // can start and then have its run slot overwritten by this one's ending.
+            drop(cancel);
+            return;
+        }
+        PassOutcome::Failed(failure) => {
+            log::warn!("diarization failed for {meeting_id}: {}", failure.message);
+            if let Some(t) = cancel.take_task() {
+                t.finish(Err(failure.message.clone()));
+            }
+            // Release the run slot BEFORE emitting so a status query racing the
+            // event never sees a stale "running". (The success path does the same
+            // inside `run`, just before its `diarization-complete` emit.)
+            registry_finish(meeting_id, "error", 0);
+            let _ = app.emit(
+                EVENT_ERROR,
+                serde_json::json!({
+                    "meeting_id": meeting_id,
+                    "error": failure.message,
+                    "cancelled": false,
+                }),
+            );
+        }
+    }
+    drop(cancel); // the pass is over: a later cancel has nothing to stop
+    start_pending_rerun(app, meeting_id);
 }
 
 #[cfg(test)]
@@ -287,6 +304,34 @@ mod tests {
             message.contains("already running"),
             "the message has to say why nothing started, got: {message}"
         );
+    }
+
+    /// specs/0084 detach: a queue Retry while a cancelled pass still finishes unseen says
+    /// so, and keeps the row (with its Retry) for the user to try again in a moment.
+    #[tokio::test]
+    async fn a_retry_while_a_cancelled_pass_finishes_says_so_and_keeps_the_row() {
+        let meeting_id = "m-still-stopping";
+        let reg = Arc::new(LlmTaskRegistry::new());
+        let task = Arc::clone(&reg).start_for(
+            TaskKind::Diarization,
+            Origin::Background,
+            "Identifying speakers",
+            Some(meeting_id.to_string()),
+        );
+        task.finish(Err("an earlier attempt failed".into()));
+        let id = reg.view().history[0].id;
+        let app = tauri::test::mock_app();
+        app.handle().manage(LlmActivityState(Arc::clone(&reg)));
+
+        let pass = crate::diarization::cancel::token(meeting_id);
+        assert!(crate::diarization::cancel::request(meeting_id));
+        let result = crate::llm_activity::retry::retry_task(app.handle(), id).await;
+        assert_eq!(
+            result,
+            Err(crate::diarization::detach::STILL_STOPPING.to_string())
+        );
+        assert_eq!(reg.view().history.len(), 1, "the row stays");
+        drop(pass);
     }
 
     /// specs/0078 review: changing "Who was on the mic?" while a pass runs used to do
