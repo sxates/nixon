@@ -267,6 +267,9 @@ pub fn run() {
             // restarts by itself; dev builds set NIXON_DISABLE_UPDATER=1.
             updater::spawn_update_loop(_app.handle().clone());
 
+            // specs/0085: remove `nixon-cli-*` run dirs a crash or force quit left behind.
+            cli_llm::temp_sweep::spawn_startup_sweep();
+
             // Set models directory to use app_data_dir (unified storage location)
             whisper_engine::commands::set_models_directory(_app.handle());
 

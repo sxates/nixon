@@ -360,6 +360,43 @@ async fn a_status_check_runs_only_version_and_auth_status_never_a_prompt() {
 }
 
 #[tokio::test]
+async fn claude_probes_run_with_the_no_update_no_traffic_no_history_switches() {
+    const SWITCHES: [&str; 3] = [
+        "ENV:DISABLE_AUTOUPDATER=1",
+        "ENV:CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1",
+        "ENV:CLAUDE_CODE_SKIP_PROMPT_HISTORY=1",
+    ];
+    let sb = Sandbox::new();
+    let bin = sb.home().join(".local/bin/claude");
+    plant(&bin);
+    let l = sb.lookup(CliKind::ClaudeCode, "status-ready");
+    let d = found(&l).await;
+    auth::check_with(CliKind::ClaudeCode, &d.path, l.probe_timeout, &l.test_env)
+        .await
+        .unwrap();
+    let log = format!("\n{}", std::fs::read_to_string(sb.log()).unwrap());
+    let runs: Vec<&str> = log.split("\nMODE:").skip(1).collect();
+    assert_eq!(runs.len(), 2, "--version and auth status: {log}");
+    for run in &runs {
+        let env: Vec<&str> = run.lines().filter(|l| l.starts_with("ENV:")).collect();
+        for switch in SWITCHES {
+            assert!(env.contains(&switch), "{switch} missing from a probe: {run}");
+        }
+    }
+
+    // Codex probes don't get Claude's switches.
+    let sb = Sandbox::new();
+    let codex = sb.home().join(".local/bin/codex");
+    plant(&codex);
+    let l = sb.lookup(CliKind::CodexCli, "status-ready");
+    auth::check_with(CliKind::CodexCli, &codex, l.probe_timeout, &l.test_env)
+        .await
+        .unwrap();
+    let log = std::fs::read_to_string(sb.log()).unwrap();
+    assert!(!log.contains("ENV:DISABLE_AUTOUPDATER"), "{log}");
+}
+
+#[tokio::test]
 async fn auth_probe_that_hangs_is_a_probe_timeout() {
     let sb = Sandbox::new();
     let bin = sb.home().join(".local/bin/claude");

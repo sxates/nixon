@@ -279,7 +279,8 @@ async fn shell_probe(lookup: &Lookup) -> Option<PathBuf> {
 }
 
 /// Runs a quick probe (`--version`, `auth status`). A timeout is [`CliError::ProbeTimeout`],
-/// never the five-minute copy.
+/// never the five-minute copy. Claude probes get the adapter's env switches too (no
+/// self-update, no non-essential traffic, no prompt history), like its model calls.
 pub(super) async fn probe(
     kind: CliKind,
     binary: &Path,
@@ -289,6 +290,9 @@ pub(super) async fn probe(
 ) -> Result<RunOutput, CliError> {
     let mut inv = Invocation::new(kind, binary, timeout);
     inv.args = args.iter().map(OsString::from).collect();
+    if kind == CliKind::ClaudeCode {
+        inv.env = super::claude::env();
+    }
     #[cfg(any(test, debug_assertions))]
     {
         inv.extra_env = test_env.to_vec();

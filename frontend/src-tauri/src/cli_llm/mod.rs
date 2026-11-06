@@ -14,6 +14,7 @@ pub mod config;
 pub mod discovery;
 pub mod errors;
 pub mod runner;
+pub mod temp_sweep;
 
 use crate::summary::summary_engine::options::GenerationOptions;
 use errors::{CliError, CliFailure};
