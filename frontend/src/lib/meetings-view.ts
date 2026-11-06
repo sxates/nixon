@@ -108,5 +108,5 @@ export function meetingsRedirectTarget(search: string): string {
 }
 
 /** One content width for every Meetings view (the month grid's), so switching views never
- *  moves the edges. A literal class string so Tailwind's scan of src/lib keeps it. */
+ *  moves the edges. Action items uses it too, so the two list pages line up. A literal class string so Tailwind's scan of src/lib keeps it. */
 export const MEETINGS_CONTENT_WIDTH = 'max-w-[1080px]';
