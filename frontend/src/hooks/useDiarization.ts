@@ -12,7 +12,7 @@
  *  3. Listen for `diarization-{progress,complete,error}` events (via `safeListen`):
  *     - progress  → update the stage text shown next to the spinner
  *     - complete  → re-fetch the transcript so labels appear + success toast
- *     - error     → error toast
+ *     - error     → error toast (none for a cancel, specs/0084 W2)
  *
  * The button is disabled while a pass is running (`isRunning`). Events for a
  * different meeting are ignored so two open meetings don't cross-talk.
@@ -34,6 +34,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { toast } from 'sonner';
+import { cancelSpeakerIdentification } from '@/lib/diarization-cancel';
 import { safeListen } from '@/lib/safe-listen';
 
 interface DiarizationProgressPayload {
@@ -69,6 +70,8 @@ interface DiarizationCompletePayload {
 interface DiarizationErrorPayload {
   meeting_id: string;
   error: string;
+  /** specs/0084 W2: the user cancelled (or the meeting was deleted). Not a failure. */
+  cancelled?: boolean;
 }
 /** `api_diarization_status` result (specs/0029 WS3.1); null when no run this session. */
 interface DiarizationStatusPayload {
@@ -102,6 +105,10 @@ interface UseDiarizationReturn {
    *  `api_set_meeting_audio_setup`), so the model check, progress and errors are
    *  shared. */
   identifySpeakers: (start?: () => Promise<DiarizeStartResult>) => Promise<void>;
+  /** specs/0084 W2: true between a Cancel click and the pass ending ("Cancelling…"). */
+  isCancelling: boolean;
+  /** specs/0084 W2: cancel the running pass. It ends quietly, with no error toast. */
+  cancel: () => Promise<void>;
 }
 
 export function useDiarization({
@@ -112,6 +119,7 @@ export function useDiarization({
   const [stage, setStage] = useState<string | null>(null);
   const [progressPct, setProgressPct] = useState<number | null>(null);
   const [downloadProgress, setDownloadProgress] = useState<{ label: string } | null>(null);
+  const [isCancelling, setIsCancelling] = useState(false);
 
   // Monotonic-progress guard (specs/0029 WS3.1 defense-in-depth): within one
   // stage the percentage must never move backwards. A stage change resets it.
@@ -250,6 +258,7 @@ export function useDiarization({
       (event) => {
         if (event.payload.meeting_id !== meetingId) return;
         setIsRunning(false);
+        setIsCancelling(false);
         setStage(null);
         setProgressPct(null);
         setDownloadProgress(null);
@@ -264,11 +273,14 @@ export function useDiarization({
       (event) => {
         if (event.payload.meeting_id !== meetingId) return;
         setIsRunning(false);
+        setIsCancelling(false);
         setStage(null);
         setProgressPct(null);
         setDownloadProgress(null);
         isDownloadingRef.current = false;
         resetProgressGuard(null, -1);
+        // specs/0084 W2: a cancel is what the user asked for, so nothing alarming.
+        if (event.payload.cancelled) return;
         toast.error('Could not identify speakers', {
           description: event.payload.error || 'Diarization failed.',
         });
@@ -361,5 +373,19 @@ export function useDiarization({
     }
   }, [meetingId, isRunning, resetProgressGuard]);
 
-  return { isRunning, stage, progressPct, downloadProgress, identifySpeakers };
+  const cancel = useCallback(async () => {
+    if (!meetingId || !isRunning || isCancelling) return;
+    setIsCancelling(true);
+    try {
+      // `false` = the pass ended meanwhile; its own event resets the state.
+      if (!(await cancelSpeakerIdentification(meetingId))) setIsCancelling(false);
+    } catch (error) {
+      setIsCancelling(false);
+      toast.error('Could not cancel speaker identification', {
+        description: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }, [meetingId, isRunning, isCancelling]);
+
+  return { isRunning, stage, progressPct, downloadProgress, identifySpeakers, isCancelling, cancel };
 }

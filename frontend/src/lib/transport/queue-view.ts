@@ -13,8 +13,11 @@ export interface QueueRow {
   meetingId?: string | null;
   /** Failed rows only: whether a retry dispatch exists for it (specs/0063 W3). */
   retryable?: boolean;
-  /** Failed rows only: which control the row offers — a real Retry, or just Dismiss. */
-  action?: 'retry' | 'dismiss' | null;
+  /**
+   * Which control the row offers: on a failed row a real Retry, or just Dismiss; on a running
+   * speaker-identification row, Cancel (specs/0084 W2).
+   */
+  action?: 'retry' | 'dismiss' | 'cancel' | null;
   /**
    * `llm` rows only: the registry's numeric task id, straight from `h.id`/`t.id`. `id` above
    * is a prefixed string (`llm:${id}`) built for React keys and must never be string-sliced
@@ -76,6 +79,7 @@ function backlogRow(item: BacklogItem): QueueRow {
     source: 'backlog',
     meetingId: item.meeting.id,
     ...(isError ? { retryable: true, action: 'retry' as const } : {}),
+    ...(item.status === 'diarizing' ? { action: 'cancel' as const } : {}),
   };
 }
 
@@ -113,6 +117,8 @@ export function buildQueueView(
     meetingId: t.meetingId,
     taskId: t.id,
     kind: t.kind,
+    // specs/0084 W2: a running speaker-identification pass can be cancelled.
+    ...(t.kind === 'diarization' && t.meetingId ? { action: 'cancel' as const } : {}),
   }));
   const backlogWaiting = backlog.items.filter((i) => i.status === 'waiting').map(backlogRow);
   // specs/0074 W4 — a queued prep brief (background work waiting its turn, distinct from a

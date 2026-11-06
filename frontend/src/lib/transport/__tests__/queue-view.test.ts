@@ -235,4 +235,25 @@ describe('buildQueueView', () => {
     const v = buildQueueView(backlog([]), llm([]));
     expect(v.rows).toEqual([]);
   });
+
+  // specs/0084 W2 — only a RUNNING speaker-identification row is cancellable.
+  it('gives running speaker-identification rows a cancel action, and nothing else', () => {
+    const v = buildQueueView(
+      backlog([
+        { meeting: meeting('a', 'Backlog speakers'), status: 'diarizing' },
+        { meeting: meeting('b', 'Backlog summary'), status: 'summarizing' },
+      ], true),
+      llm([
+        { id: 1, kind: 'diarization', label: 'Identifying speakers — A', note: null, meetingId: 'a' },
+        { id: 2, kind: 'meetingSummary', label: 'Summarizing B', note: null, meetingId: 'b' },
+      ]),
+    );
+    const actions = Object.fromEntries(v.rows.map((r) => [r.title, r.action ?? null]));
+    expect(actions).toEqual({
+      'Backlog speakers': 'cancel',
+      'Backlog summary': null,
+      'Identifying speakers — A': 'cancel',
+      'Summarizing B': null,
+    });
+  });
 });

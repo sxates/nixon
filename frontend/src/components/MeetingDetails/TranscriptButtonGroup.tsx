@@ -21,6 +21,7 @@ import type {
 } from '@/hooks/useAudioSetup';
 import { useBacklog } from '@/contexts/DeferredBacklogProvider';
 import { useDiarization } from '@/hooks/useDiarization';
+import { CANCELLING_LABEL } from '@/lib/diarization-cancel';
 import { SPARSE_TRANSCRIPT_SEGMENTS } from '@/lib/deferred-transcription';
 import { isMeetingInFlight } from '@/lib/deferred-backlog';
 import {
@@ -139,6 +140,8 @@ export function TranscriptButtonGroup({
     progressPct: diarizationPct,
     downloadProgress,
     identifySpeakers,
+    isCancelling,
+    cancel: cancelDiarization,
   } = useDiarization({
     meetingId,
     onComplete: onRefetchTranscripts,
@@ -209,6 +212,20 @@ export function TranscriptButtonGroup({
                     : (diarizationStage ?? 'Identifying…')))
                 : 'Identify speakers'}
             </span>
+          </Button>
+        )}
+
+        {/* specs/0084 W2: stop a pass from where the user is watching it. A pass inside its
+            compute step stops when that step returns, so the label holds "Cancelling…". */}
+        {meetingId && isDiarizing && (
+          <Button
+            size="xs"
+            variant="outline"
+            onClick={() => void cancelDiarization()}
+            disabled={isCancelling}
+            title="Stop identifying speakers. Your transcript is kept."
+          >
+            {isCancelling ? CANCELLING_LABEL : 'Cancel'}
           </Button>
         )}
 
