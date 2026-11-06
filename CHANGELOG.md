@@ -26,6 +26,11 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 ### Fixed
 
 - If identifying speakers ever stops Nixon unexpectedly, Nixon no longer starts it again on its own the next time it opens. The meeting shows what happened, your transcript is kept, and you can retry speaker identification whenever you choose, in a slower, more careful mode.
+- The last few seconds of a meeting are always kept in its recording folder's transcript, so a meeting Nixon recovers after an unexpected quit ends where you stopped.
+
+### Internal
+
+- The transcript save behind the meeting-save command is now a shared function, ready for the background wrap-up (specs/0083 W2a).
 
 ## [0.13.1] - 2026-10-04
 
