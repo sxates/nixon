@@ -98,7 +98,12 @@ pub struct FixtureManualMeeting {
     pub id: String,
     pub title: String,
     /// Re-based at seed time: 0 = today, 1 = yesterday, …
+    #[serde(default)]
     pub days_ago: u32,
+    /// Re-based at seed time: 1 = tomorrow, … (upcoming entries for Agenda/Week/Month).
+    /// Set at most one of `days_ago` / `days_ahead`.
+    #[serde(default)]
+    pub days_ahead: u32,
     /// "HH:MM" local wall-clock start
     pub time_of_day: String,
     pub duration_minutes: u32,
@@ -291,6 +296,9 @@ pub fn validate(ds: &Dataset) -> Result<(), Vec<String>> {
         if m.duration_minutes == 0 {
             errs.push(format!("{}: duration_minutes must be nonzero", m.id));
         }
+        if m.days_ago > 0 && m.days_ahead > 0 {
+            errs.push(format!("{}: set only one of days_ago and days_ahead", m.id));
+        }
     }
     if errs.is_empty() {
         Ok(())
@@ -350,8 +358,72 @@ mod tests {
         let ds = load_embedded().expect("embedded fixtures parse");
         assert_eq!(ds.meetings.len(), 9);
         assert_eq!(ds.people.len(), 7);
-        assert_eq!(ds.manual_meetings.len(), 3);
         validate(&ds).expect("embedded fixtures valid");
+    }
+
+    #[test]
+    fn embedded_demo_has_upcoming_meetings_beyond_today() {
+        // Agenda, Week and Month need something ahead of "now" to show (owner, 2026-11-06).
+        let ds = load_embedded().expect("embedded fixtures parse");
+        let ahead = ds
+            .manual_meetings
+            .iter()
+            .filter(|m| m.days_ahead > 0)
+            .count();
+        assert!(ahead >= 5, "only {ahead} future demo meetings");
+        assert!(
+            ds.manual_meetings.iter().any(|m| m.days_ahead > 7),
+            "nothing past next week"
+        );
+    }
+
+    #[tokio::test]
+    async fn days_ahead_seeds_an_upcoming_meeting_on_a_future_day() {
+        let pool = crate::database::repositories::meeting::test_support::memory_db().await;
+        let now = chrono::Utc::now();
+        let m = FixtureManualMeeting {
+            id: "demo-20".into(),
+            title: "Firmware GA readiness".into(),
+            days_ago: 0,
+            days_ahead: 3,
+            time_of_day: "10:00".into(),
+            duration_minutes: 60,
+            join_url: None,
+        };
+        crate::dev_fixtures::seed::seed_manual_meetings(&pool, &[m], now)
+            .await
+            .unwrap();
+
+        let (created_at,): (String,) =
+            sqlx::query_as("SELECT created_at FROM meetings WHERE id = 'demo-20'")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        let start = chrono::DateTime::parse_from_rfc3339(&created_at)
+            .unwrap()
+            .with_timezone(&chrono::Local);
+        let today = now.with_timezone(&chrono::Local).date_naive();
+        assert_eq!(start.date_naive(), today + chrono::Duration::days(3));
+        assert_eq!(start.format("%H:%M").to_string(), "10:00");
+    }
+
+    #[test]
+    fn validate_rejects_a_manual_meeting_both_past_and_future() {
+        let mut ds = minimal();
+        ds.manual_meetings.push(FixtureManualMeeting {
+            id: "demo-98".into(),
+            title: "Both".into(),
+            days_ago: 1,
+            days_ahead: 2,
+            time_of_day: "10:00".into(),
+            duration_minutes: 30,
+            join_url: None,
+        });
+        let errs = validate(&ds).unwrap_err();
+        assert!(
+            errs.iter().any(|e| e.contains("days_ago and days_ahead")),
+            "{errs:?}"
+        );
     }
 
     #[test]
@@ -361,6 +433,7 @@ mod tests {
             id: "demo-01".into(),
             title: "Dup".into(),
             days_ago: 0,
+            days_ahead: 0,
             time_of_day: "15:00".into(),
             duration_minutes: 30,
             join_url: None,
@@ -379,6 +452,7 @@ mod tests {
             id: "demo-99".into(),
             title: "Bad time".into(),
             days_ago: 0,
+            days_ahead: 0,
             time_of_day: "not-a-time".into(),
             duration_minutes: 30,
             join_url: None,

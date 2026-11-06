@@ -176,7 +176,8 @@ pub async fn seed_manual_meetings(
 ) -> Result<u32> {
     let mut n = 0u32;
     for m in manual {
-        let start = started_at_raw(m.days_ago, &m.time_of_day, now);
+        let start = started_at_raw(m.days_ago, &m.time_of_day, now)
+            + chrono::Duration::days(m.days_ahead as i64);
         let end = start + chrono::Duration::minutes(m.duration_minutes as i64);
         let event_id = format!(
             "{}{}",
@@ -580,6 +581,7 @@ mod manual_tests {
             id: id.into(),
             title: title.into(),
             days_ago: 0,
+            days_ahead: 0,
             time_of_day: time_of_day.into(),
             duration_minutes,
             join_url: None,

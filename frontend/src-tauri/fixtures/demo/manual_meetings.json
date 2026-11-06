@@ -20,5 +20,70 @@
     "time_of_day": "17:15",
     "duration_minutes": 30,
     "join_url": "https://zoom.us/j/5550142839"
+  },
+  {
+    "id": "demo-20",
+    "title": "Firmware standup",
+    "days_ahead": 1,
+    "time_of_day": "09:15",
+    "duration_minutes": 15
+  },
+  {
+    "id": "demo-21",
+    "title": "Seam-seal test results",
+    "days_ahead": 1,
+    "time_of_day": "13:00",
+    "duration_minutes": 30,
+    "join_url": "https://meet.google.com/abc-defg-hij"
+  },
+  {
+    "id": "demo-22",
+    "title": "1:1 with Maya",
+    "days_ahead": 2,
+    "time_of_day": "10:30",
+    "duration_minutes": 30
+  },
+  {
+    "id": "demo-23",
+    "title": "Rev C bring-up check-in",
+    "days_ahead": 3,
+    "time_of_day": "14:00",
+    "duration_minutes": 45
+  },
+  {
+    "id": "demo-24",
+    "title": "Vendor call — enclosure supplier",
+    "days_ahead": 4,
+    "time_of_day": "11:00",
+    "duration_minutes": 30,
+    "join_url": "https://zoom.us/j/5550198273"
+  },
+  {
+    "id": "demo-25",
+    "title": "Sensor line steerco",
+    "days_ahead": 7,
+    "time_of_day": "16:00",
+    "duration_minutes": 45
+  },
+  {
+    "id": "demo-26",
+    "title": "Q1 planning — cloud connectivity",
+    "days_ahead": 10,
+    "time_of_day": "13:00",
+    "duration_minutes": 90
+  },
+  {
+    "id": "demo-27",
+    "title": "Firmware GA readiness review",
+    "days_ahead": 17,
+    "time_of_day": "10:00",
+    "duration_minutes": 60
+  },
+  {
+    "id": "demo-28",
+    "title": "Q4 retro",
+    "days_ahead": 24,
+    "time_of_day": "15:00",
+    "duration_minutes": 60
   }
 ]
