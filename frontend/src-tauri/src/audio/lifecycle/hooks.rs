@@ -156,7 +156,12 @@ pub async fn finish_processing<R: Runtime>(
                 let audio = scan_folder(&folder);
                 let finalized = audio.as_ref().is_some_and(|a| !a.recording);
                 let has_system = audio.is_some_and(|a| a.system_channel);
-                if finalized && diarization_gate().await.applies(has_system) {
+                // specs/0084 W1: every caller here is automatic (stop, import, reconcile), so
+                // a meeting whose pass crashed the app is left for the user's Retry.
+                if finalized
+                    && diarization_gate().await.applies(has_system)
+                    && crate::diarization::launch::automatic_pass_allowed(app, meeting_id).await
+                {
                     crate::diarization::launch::diarize_meeting(app.clone(), meeting_id.into());
                     return FinishOutcome::Diarizing;
                 }

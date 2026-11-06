@@ -67,7 +67,7 @@ const DIARIZATION_TIMEOUT_MS = 15 * 60_000; // 15 min
 const WAIT_ABORT_POLL_MS = 2_000;
 
 /** Outcome of a bounded, abortable wait for a meeting-scoped completion/error event. */
-type WaitResult = 'complete' | 'error' | 'timeout' | 'aborted';
+type WaitResult = 'complete' | 'error' | 'timeout' | 'aborted' | 'skipped';
 
 export interface UseDeferredBacklogReturn {
   view: BacklogView;
@@ -96,7 +96,16 @@ async function awaitMeetingCompletion(
   completeEvent: string,
   errorEvent: string,
   start: () => Promise<unknown>,
-  { timeoutMs, shouldAbort }: { timeoutMs: number; shouldAbort: () => boolean },
+  {
+    timeoutMs,
+    shouldAbort,
+    isSkipped,
+  }: {
+    timeoutMs: number;
+    shouldAbort: () => boolean;
+    /** The start call refused to start (no event will follow): settle as 'skipped'. */
+    isSkipped?: (started: unknown) => boolean;
+  },
 ): Promise<WaitResult> {
   let settle: (result: WaitResult) => void = () => {};
   const done = new Promise<WaitResult>((resolve) => {
@@ -121,7 +130,8 @@ async function awaitMeetingCompletion(
     abortPoll = setInterval(() => {
       if (shouldAbort()) settle('aborted');
     }, WAIT_ABORT_POLL_MS);
-    await start();
+    const started = await start();
+    if (isSkipped?.(started)) settle('skipped');
     const result = await done;
     // Every wait reports how it ended. A 'complete' here and no further step in the log is
     // what localises a stall to `processMeeting` rather than to the wait.
@@ -214,8 +224,17 @@ export function useDeferredBacklog(): UseDeferredBacklogReturn {
         m.id,
         'diarization-complete',
         'diarization-error',
-        () => invoke('api_diarize_meeting', { meetingId: m.id }),
-        { timeoutMs: DIARIZATION_TIMEOUT_MS, shouldAbort: () => stopRef.current },
+        // specs/0084 W1: an automatic pass. Rust refuses it for a meeting whose last pass
+        // crashed the app (`skippedAfterCrash`); the drain then skips speaker
+        // identification, still summarizes and clears the marker, and leaves the failed
+        // state and its Retry for the user.
+        () => invoke('api_diarize_meeting', { meetingId: m.id, automatic: true }),
+        {
+          timeoutMs: DIARIZATION_TIMEOUT_MS,
+          shouldAbort: () => stopRef.current,
+          isSkipped: (started) =>
+            (started as { skippedAfterCrash?: boolean } | null)?.skippedAfterCrash === true,
+        },
       );
       return result === 'aborted' ? 'aborted' : 'done';
     } catch (error) {

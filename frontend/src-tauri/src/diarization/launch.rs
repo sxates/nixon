@@ -61,6 +61,43 @@ fn start_pending_rerun<R: Runtime>(app: &AppHandle<R>, meeting_id: &str) -> bool
     true
 }
 
+/// specs/0084 W1: whether an automatic caller may start a pass on this meeting (none may
+/// once a pass has died mid-run on it). An unreadable history allows it, as before 0084.
+pub async fn automatic_pass_allowed<R: Runtime>(app: &AppHandle<R>, meeting_id: &str) -> bool {
+    let Some(app_state) = app.try_state::<AppState>() else {
+        return true;
+    };
+    let pool = app_state.db_manager.pool();
+    match crate::audio::lifecycle::state::automatic_pass_allowed(pool, meeting_id).await {
+        Ok(true) => true,
+        Ok(false) => {
+            log::warn!(
+                "diarization for {meeting_id}: a previous pass crashed the app; not starting \
+                 one automatically (Retry or Identify speakers runs it in safe mode)"
+            );
+            false
+        }
+        Err(e) => {
+            log::warn!("diarization for {meeting_id}: {e:#}");
+            true
+        }
+    }
+}
+
+/// Whether each meeting's latest pass this session ran in safe mode (specs/0084 W1). For
+/// diagnostics and tests; the log line in `pipeline.rs` is the user-visible evidence.
+fn safe_mode_runs() -> MutexGuard<'static, std::collections::HashMap<String, bool>> {
+    static RUNS: OnceLock<Mutex<std::collections::HashMap<String, bool>>> = OnceLock::new();
+    RUNS.get_or_init(Default::default)
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+}
+
+/// Did the latest pass for this meeting (this session) run in safe mode?
+pub fn last_pass_safe_mode(meeting_id: &str) -> Option<bool> {
+    safe_mode_runs().get(meeting_id).copied()
+}
+
 /// The activity-queue label for a meeting's speaker-identification row.
 pub(crate) async fn queue_label<R: Runtime>(app: &AppHandle<R>, meeting_id: &str) -> String {
     if let Some(app_state) = app.try_state::<AppState>() {
@@ -125,6 +162,7 @@ pub fn diarize_meeting<R: Runtime>(app: AppHandle<R>, meeting_id: String) -> boo
             None => false,
         };
 
+        safe_mode_runs().insert(meeting_id.clone(), safe_mode);
         let outcome = run(app.clone(), meeting_id.clone(), safe_mode).await;
         crate::audio::lifecycle::on_diarization_outcome(&app, &meeting_id, outcome.is_ok()).await;
         if let Some(t) = task {

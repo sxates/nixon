@@ -1276,3 +1276,67 @@ async fn the_startup_breaker_announces_and_queues_the_failure() {
     );
     assert_eq!(reg.view().history.len(), 1);
 }
+
+/// Review fix: the deferred backlog runs on every launch and used to restart the pass that
+/// crashed the app. An automatic request for a crashed meeting is refused, with a distinct
+/// result, even after the backlog's retranscription; the user's own request runs, in safe mode.
+#[tokio::test]
+async fn an_automatic_pass_never_restarts_a_crashed_meeting_but_a_manual_one_runs_safe() {
+    use app_lib::diarization::commands::api_diarize_meeting;
+    let (app, pool, db_dir) = app_with_db().await;
+    diarizable(&pool, db_dir.path(), "auto-crashed", None).await;
+    set_mode(&pool, "auto-crashed", Some("defer")).await;
+    state::mark_speaker_id_started(&pool, "auto-crashed")
+        .await
+        .unwrap();
+    state::fail_interrupted_speaker_id(&pool).await.unwrap(); // the crash, then a relaunch
+                                                              // The backlog retranscribes first; that must not re-arm the meeting.
+    state::clear_speakers_identified(&pool, "auto-crashed")
+        .await
+        .unwrap();
+    assert_eq!(
+        speaker_id_cols(&pool, "auto-crashed")
+            .await
+            .speaker_id_failure
+            .as_deref(),
+        Some("interrupted"),
+        "a crash is about the audio; a new transcript keeps the reason"
+    );
+
+    let auto = api_diarize_meeting(app.handle().clone(), "auto-crashed".into(), Some(true))
+        .await
+        .unwrap();
+    assert!(auto.skipped_after_crash && !auto.started && !auto.already_running);
+    assert!(
+        app_lib::diarization::pipeline::run_status("auto-crashed").is_none(),
+        "no pass started"
+    );
+    assert_eq!(
+        speaker_id_cols(&pool, "auto-crashed")
+            .await
+            .speaker_id_started_at,
+        None
+    );
+
+    let manual = api_diarize_meeting(app.handle().clone(), "auto-crashed".into(), None)
+        .await
+        .unwrap();
+    assert!(manual.started && !manual.skipped_after_crash);
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
+    while app_lib::diarization::pipeline::run_status("auto-crashed").is_none_or(|s| s.running)
+        && std::time::Instant::now() < deadline
+    {
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
+    assert_eq!(
+        app_lib::diarization::launch::last_pass_safe_mode("auto-crashed"),
+        Some(true),
+        "the retry after a crash runs in safe mode"
+    );
+
+    // A meeting with no crash is unaffected by `automatic`.
+    diarizable(&pool, db_dir.path(), "auto-fine", None).await;
+    assert!(state::automatic_pass_allowed(&pool, "auto-fine")
+        .await
+        .unwrap());
+}

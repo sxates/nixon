@@ -70,6 +70,8 @@ pub async fn api_set_meeting_audio_setup<R: Runtime>(
     Ok(DiarizeStartDto {
         started,
         already_running: !started,
+        // The user just changed this meeting's setup: a manual re-run (specs/0084).
+        skipped_after_crash: false,
     })
 }
 

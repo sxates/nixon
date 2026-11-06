@@ -356,6 +356,20 @@ pub async fn mark_speaker_id_started(pool: &SqlitePool, meeting_id: &str) -> Res
     Ok(crashes.unwrap_or(0))
 }
 
+/// specs/0084 W1: may an *automatic* pass (the backlog, the stop path, the startup reconcile)
+/// start on this meeting? Not once a pass has died mid-run on it: only the user's Retry or
+/// Identify speakers runs it again (in safe mode). Keyed on the crash count, which only a
+/// successful pass resets, so a retranscription can't re-arm the crash. True for a missing row.
+pub async fn automatic_pass_allowed(pool: &SqlitePool, meeting_id: &str) -> Result<bool> {
+    let crashes: Option<i64> =
+        sqlx::query_scalar("SELECT speaker_id_crashes FROM meetings WHERE id = ?")
+            .bind(meeting_id)
+            .fetch_optional(pool)
+            .await
+            .map_err(|e| anyhow!("Could not read the speaker identification history: {e}"))?;
+    Ok(crashes.unwrap_or(0) == 0)
+}
+
 /// specs/0084 W1: a graceful quit ended these passes on purpose. Clears their markers so the
 /// next launch finishes them as plain pending meetings instead of reading them as crashes.
 pub async fn clear_speaker_id_markers(pool: &SqlitePool, meeting_ids: &[String]) -> Result<()> {
@@ -475,10 +489,14 @@ pub async fn mark_failed_if_pending(
 }
 
 /// The transcript rows were replaced: the old speaker labels no longer describe them, and the
-/// last failure reason is history (specs/0084: a new transcript is a fresh start).
+/// last failure reason is history (specs/0084: a new transcript is a fresh start) — except a
+/// crash, which is about the audio, not the transcript: the deferred backlog retranscribes a
+/// crashed meeting, and its note must still say the pass stopped unexpectedly.
 pub async fn clear_speakers_identified(pool: &SqlitePool, meeting_id: &str) -> Result<()> {
     sqlx::query(
-        "UPDATE meetings SET speakers_identified_at = NULL, speaker_id_failure = NULL \
+        "UPDATE meetings SET speakers_identified_at = NULL, speaker_id_failure = \
+                CASE WHEN speaker_id_failure IN ('interrupted', 'crashed') \
+                     THEN speaker_id_failure END \
          WHERE id = ?",
     )
     .bind(meeting_id)
