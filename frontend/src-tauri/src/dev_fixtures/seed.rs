@@ -8,7 +8,7 @@ use anyhow::{Context, Result};
 use chrono::{DateTime, Local, NaiveTime, TimeZone, Utc};
 use sqlx::SqlitePool;
 
-use super::dataset::{Dataset, FixtureManualMeeting, FixtureMeeting};
+use super::dataset::{add_working_days, Dataset, FixtureManualMeeting, FixtureMeeting};
 use crate::action_items::diff::{content_key, stable_text_fingerprint, ResolvedCandidate};
 use crate::aggregation::engine::SourceMeeting;
 use crate::aggregation::scope::AggregationScope;
@@ -151,9 +151,13 @@ pub fn started_at(m: &FixtureMeeting, now: DateTime<Utc>) -> DateTime<Utc> {
 /// (`"HH:MM"`, falling back to noon on a bad string) in the machine's local zone,
 /// returned as UTC.
 fn started_at_raw(days_ago: u32, time_of_day: &str, now: DateTime<Utc>) -> DateTime<Utc> {
+    let day = now.with_timezone(&Local).date_naive() - chrono::Duration::days(days_ago as i64);
+    local_start(day, time_of_day)
+}
+
+fn local_start(day: chrono::NaiveDate, time_of_day: &str) -> DateTime<Utc> {
     let t = NaiveTime::parse_from_str(time_of_day, "%H:%M")
         .unwrap_or_else(|_| NaiveTime::from_hms_opt(12, 0, 0).unwrap());
-    let day = now.with_timezone(&Local).date_naive() - chrono::Duration::days(days_ago as i64);
     Local
         .from_local_datetime(&day.and_time(t))
         .single()
@@ -176,8 +180,12 @@ pub async fn seed_manual_meetings(
 ) -> Result<u32> {
     let mut n = 0u32;
     for m in manual {
-        let start = started_at_raw(m.days_ago, &m.time_of_day, now)
-            + chrono::Duration::days(m.days_ahead as i64);
+        let start = if m.days_ahead > 0 {
+            let today = now.with_timezone(&Local).date_naive();
+            local_start(add_working_days(today, m.days_ahead), &m.time_of_day)
+        } else {
+            started_at_raw(m.days_ago, &m.time_of_day, now)
+        };
         let end = start + chrono::Duration::minutes(m.duration_minutes as i64);
         let event_id = format!(
             "{}{}",

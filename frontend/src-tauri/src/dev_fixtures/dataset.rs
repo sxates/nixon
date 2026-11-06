@@ -100,8 +100,9 @@ pub struct FixtureManualMeeting {
     /// Re-based at seed time: 0 = today, 1 = yesterday, …
     #[serde(default)]
     pub days_ago: u32,
-    /// Re-based at seed time: 1 = tomorrow, … (upcoming entries for Agenda/Week/Month).
-    /// Set at most one of `days_ago` / `days_ahead`.
+    /// Re-based at seed time, in WORKING days: 1 = the next weekday, … (upcoming entries
+    /// for Agenda/Week/Month; weekends are skipped so a demo seeded on a Friday doesn't
+    /// put meetings on Saturday). Set at most one of `days_ago` / `days_ahead`.
     #[serde(default)]
     pub days_ahead: u32,
     /// "HH:MM" local wall-clock start
@@ -109,6 +110,20 @@ pub struct FixtureManualMeeting {
     pub duration_minutes: u32,
     #[serde(default)]
     pub join_url: Option<String>,
+}
+
+/// `from` plus `n` weekdays (Mon–Fri); `n == 0` returns `from` unchanged.
+pub(crate) fn add_working_days(from: chrono::NaiveDate, n: u32) -> chrono::NaiveDate {
+    use chrono::Datelike;
+    let mut day = from;
+    let mut left = n;
+    while left > 0 {
+        day = day.succ_opt().expect("date in range");
+        if day.weekday().num_days_from_monday() < 5 {
+            left -= 1;
+        }
+    }
+    day
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -380,7 +395,13 @@ mod tests {
     #[tokio::test]
     async fn days_ahead_seeds_an_upcoming_meeting_on_a_future_day() {
         let pool = crate::database::repositories::meeting::test_support::memory_db().await;
-        let now = chrono::Utc::now();
+        use chrono::TimeZone;
+        // A Friday: three working days ahead is the following Wednesday.
+        let friday = chrono::NaiveDate::from_ymd_opt(2026, 11, 6).unwrap();
+        let now = chrono::Local
+            .from_local_datetime(&friday.and_hms_opt(12, 0, 0).unwrap())
+            .unwrap()
+            .with_timezone(&chrono::Utc);
         let m = FixtureManualMeeting {
             id: "demo-20".into(),
             title: "Firmware GA readiness".into(),
@@ -402,9 +423,21 @@ mod tests {
         let start = chrono::DateTime::parse_from_rfc3339(&created_at)
             .unwrap()
             .with_timezone(&chrono::Local);
-        let today = now.with_timezone(&chrono::Local).date_naive();
-        assert_eq!(start.date_naive(), today + chrono::Duration::days(3));
+        assert_eq!(
+            start.date_naive(),
+            chrono::NaiveDate::from_ymd_opt(2026, 11, 11).unwrap()
+        );
         assert_eq!(start.format("%H:%M").to_string(), "10:00");
+    }
+
+    #[test]
+    fn working_days_ahead_skip_the_weekend() {
+        let d = |m, day| chrono::NaiveDate::from_ymd_opt(2026, m, day).unwrap();
+        assert_eq!(add_working_days(d(11, 6), 0), d(11, 6)); // Fri stays Fri
+        assert_eq!(add_working_days(d(11, 6), 1), d(11, 9)); // Fri + 1 = Mon
+        assert_eq!(add_working_days(d(11, 5), 2), d(11, 9)); // Thu + 2 = Mon
+        assert_eq!(add_working_days(d(11, 7), 1), d(11, 9)); // Sat + 1 = Mon
+        assert_eq!(add_working_days(d(11, 6), 5), d(11, 13)); // a full week
     }
 
     #[test]
