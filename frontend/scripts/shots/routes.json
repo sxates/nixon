@@ -1,7 +1,7 @@
 [
   {
-    "name": "today",
-    "route": "/?view=day",
+    "name": "meetings-agenda",
+    "route": "/?view=agenda",
     "ignore": [
       {
         "x": 300,
@@ -19,17 +19,17 @@
       },
       {
         "x": 88,
-        "y": 26,
-        "w": 250,
-        "h": 30,
-        "why": "Today greeting (\"Good morning/afternoon/evening\") is derived from the wall clock, so two runs at different hours differ by real glyphs, not sub-pixels (specs/0066)."
+        "y": 50,
+        "w": 420,
+        "h": 22,
+        "why": "the Meetings subtitle on Agenda/Week names today's date and counts, so runs on different days differ by real glyphs (replaces the old Today greeting rect; the title above it is a static \"Meetings\")."
       }
     ]
   },
   {
-    "name": "today-google-lapsed",
+    "name": "meetings-agenda-google-lapsed",
     "headless_only": true,
-    "route": "/?view=day&google=lapsed",
+    "route": "/?view=agenda&google=lapsed",
     "ignore": [
       {
         "x": 300,
@@ -47,96 +47,16 @@
       },
       {
         "x": 88,
-        "y": 26,
-        "w": 250,
-        "h": 30,
-        "why": "Today greeting (\"Good morning/afternoon/evening\") is derived from the wall clock, so two runs at different hours differ by real glyphs, not sub-pixels (specs/0066)."
-      }
-    ]
-  },
-  {
-    "name": "today-list",
-    "route": "/?view=list",
-    "ignore": [
-      {
-        "x": 338,
-        "y": 816,
-        "w": 106,
+        "y": 50,
+        "w": 420,
         "h": 22,
-        "why": "footer TapeCounter roller digits (specs/0060 Task 3). Moved here in specs/0066: specs/0064 W6 reordered the rail (reel, then counter-over-meter, then title, keys right), so the old box at x=470 sat over \"Deck ready\" while the digits flaked unignored at x=343..434 — measured, not guessed."
-      },
-      {
-        "x": 88,
-        "y": 26,
-        "w": 250,
-        "h": 30,
-        "why": "Today greeting (\"Good morning/afternoon/evening\") is derived from the wall clock, so two runs at different hours differ by real glyphs, not sub-pixels (specs/0066). The List view (specs/0069 W4) shares this same header."
+        "why": "the Meetings subtitle on Agenda/Week names today's date and counts, so runs on different days differ by real glyphs (replaces the old Today greeting rect; the title above it is a static \"Meetings\")."
       }
     ]
   },
   {
-    "name": "today-list-processing",
-    "route": "/?view=list&processing=1",
-    "ignore": [
-      {
-        "x": 338,
-        "y": 816,
-        "w": 106,
-        "h": 22,
-        "why": "footer TapeCounter roller digits (specs/0060 Task 3). Moved here in specs/0066: specs/0064 W6 reordered the rail (reel, then counter-over-meter, then title, keys right), so the old box at x=470 sat over \"Deck ready\" while the digits flaked unignored at x=343..434 — measured, not guessed."
-      },
-      {
-        "x": 88,
-        "y": 26,
-        "w": 250,
-        "h": 30,
-        "why": "Today greeting (\"Good morning/afternoon/evening\") is derived from the wall clock, so two runs at different hours differ by real glyphs, not sub-pixels (specs/0066). The List view (specs/0069 W4) shares this same header."
-      }
-    ]
-  },
-  {
-    "name": "today-week",
-    "route": "/?view=week",
-    "ignore": [
-      {
-        "x": 338,
-        "y": 816,
-        "w": 106,
-        "h": 22,
-        "why": "footer TapeCounter roller digits (specs/0060 Task 3). Moved here in specs/0066: specs/0064 W6 reordered the rail (reel, then counter-over-meter, then title, keys right), so the old box at x=470 sat over \"Deck ready\" while the digits flaked unignored at x=343..434 — measured, not guessed."
-      },
-      {
-        "x": 88,
-        "y": 26,
-        "w": 250,
-        "h": 30,
-        "why": "Today greeting (\"Good morning/afternoon/evening\") is derived from the wall clock, so two runs at different hours differ by real glyphs, not sub-pixels (specs/0066). The List view (specs/0069 W4) shares this same header."
-      }
-    ]
-  },
-  {
-    "name": "today-week-processing",
-    "route": "/?view=week&processing=1",
-    "ignore": [
-      {
-        "x": 338,
-        "y": 816,
-        "w": 106,
-        "h": 22,
-        "why": "footer TapeCounter roller digits (specs/0060 Task 3). Moved here in specs/0066: specs/0064 W6 reordered the rail (reel, then counter-over-meter, then title, keys right), so the old box at x=470 sat over \"Deck ready\" while the digits flaked unignored at x=343..434 — measured, not guessed."
-      },
-      {
-        "x": 88,
-        "y": 26,
-        "w": 250,
-        "h": 30,
-        "why": "Today greeting (\"Good morning/afternoon/evening\") is derived from the wall clock, so two runs at different hours differ by real glyphs, not sub-pixels (specs/0066). The List view (specs/0069 W4) shares this same header."
-      }
-    ]
-  },
-  {
-    "name": "today-narrow",
-    "route": "/?view=day",
+    "name": "meetings-agenda-narrow",
+    "route": "/?view=agenda",
     "ignore": [
       {
         "x": 300,
@@ -150,57 +70,77 @@
         "y": 816,
         "w": 106,
         "h": 22,
-        "why": "footer TapeCounter roller digits (specs/0060 Task 3). Moved here in specs/0066: specs/0064 W6 reordered the rail (reel, then counter-over-meter, then title, keys right), so the old box at x=470 sat over \"Deck ready\" while the digits flaked unignored at x=343..434 — measured, not guessed."
+        "why": "footer TapeCounter roller digits (specs/0060 Task 3). Moved here in specs/0066: specs/0064 W6 reordered the rail (reel, then counter-over-meter, then title, keys right), so the old box at x=470 sat over \"Deck ready\" while the digits flaked unignored at x=343..434 \u2014 measured, not guessed."
       },
       {
         "x": 88,
-        "y": 26,
-        "w": 250,
-        "h": 30,
-        "why": "Today greeting (\"Good morning/afternoon/evening\") is derived from the wall clock, so two runs at different hours differ by real glyphs, not sub-pixels (specs/0066)."
+        "y": 50,
+        "w": 420,
+        "h": 22,
+        "why": "the Meetings subtitle on Agenda/Week names today's date and counts, so runs on different days differ by real glyphs (replaces the old Today greeting rect; the title above it is a static \"Meetings\")."
       }
     ],
-    "viewport": [760, 860]
+    "viewport": [
+      760,
+      860
+    ]
   },
   {
-    "name": "today-no-calendar",
-    "route": "/",
-    "calendar": "none",
+    "name": "meetings-week",
+    "route": "/?view=week",
     "ignore": [
       {
         "x": 338,
         "y": 816,
         "w": 106,
         "h": 22,
-        "why": "footer TapeCounter roller digits (specs/0060 Task 3). Moved here in specs/0066: specs/0064 W6 reordered the rail (reel, then counter-over-meter, then title, keys right), so the old box at x=470 sat over \"Deck ready\" while the digits flaked unignored at x=343..434 — measured, not guessed."
+        "why": "footer TapeCounter roller digits (specs/0060 Task 3). Moved here in specs/0066: specs/0064 W6 reordered the rail (reel, then counter-over-meter, then title, keys right), so the old box at x=470 sat over \"Deck ready\" while the digits flaked unignored at x=343..434 \u2014 measured, not guessed."
       },
       {
         "x": 88,
-        "y": 26,
-        "w": 250,
-        "h": 30,
-        "why": "Today greeting (\"Good morning/afternoon/evening\") is derived from the wall clock, so two runs at different hours differ by real glyphs, not sub-pixels (specs/0066). The List view (specs/0069 W4) shares this same header."
+        "y": 50,
+        "w": 420,
+        "h": 22,
+        "why": "the Meetings subtitle on Agenda/Week names today's date and counts, so runs on different days differ by real glyphs (replaces the old Today greeting rect; the title above it is a static \"Meetings\")."
       }
     ]
   },
   {
-    "name": "sidebar-update-ready",
-    "route": "/meetings",
-    "sidebar": "open",
-    "update": "ready",
+    "name": "meetings-week-processing",
+    "route": "/?view=week&processing=1",
     "ignore": [
       {
         "x": 338,
         "y": 816,
         "w": 106,
         "h": 22,
-        "why": "footer TapeCounter roller digits (specs/0060 Task 3). Moved here in specs/0066: specs/0064 W6 reordered the rail (reel, then counter-over-meter, then title, keys right), so the old box at x=470 sat over \"Deck ready\" while the digits flaked unignored at x=343..434 — measured, not guessed."
+        "why": "footer TapeCounter roller digits (specs/0060 Task 3). Moved here in specs/0066: specs/0064 W6 reordered the rail (reel, then counter-over-meter, then title, keys right), so the old box at x=470 sat over \"Deck ready\" while the digits flaked unignored at x=343..434 \u2014 measured, not guessed."
+      },
+      {
+        "x": 88,
+        "y": 50,
+        "w": 420,
+        "h": 22,
+        "why": "the Meetings subtitle on Agenda/Week names today's date and counts, so runs on different days differ by real glyphs (replaces the old Today greeting rect; the title above it is a static \"Meetings\")."
       }
     ]
   },
   {
-    "name": "meetings",
-    "route": "/meetings",
+    "name": "meetings-month",
+    "route": "/?view=month",
+    "ignore": [
+      {
+        "x": 338,
+        "y": 816,
+        "w": 106,
+        "h": 22,
+        "why": "footer TapeCounter roller digits (specs/0060 Task 3). Moved here in specs/0066: specs/0064 W6 reordered the rail (reel, then counter-over-meter, then title, keys right), so the old box at x=470 sat over \"Deck ready\" while the digits flaked unignored at x=343..434 \u2014 measured, not guessed."
+      }
+    ]
+  },
+  {
+    "name": "meetings-list",
+    "route": "/?view=list",
     "sidebar": "open",
     "ignore": [
       {
@@ -213,9 +153,52 @@
     ]
   },
   {
-    "name": "meetings-processing",
-    "route": "/meetings?processing=1",
+    "name": "meetings-list-processing",
+    "route": "/?view=list&processing=1",
     "sidebar": "open",
+    "ignore": [
+      {
+        "x": 338,
+        "y": 816,
+        "w": 106,
+        "h": 22,
+        "why": "footer TapeCounter roller digits (specs/0060 Task 3). Moved here in specs/0066: specs/0064 W6 reordered the rail (reel, then counter-over-meter, then title, keys right), so the old box at x=470 sat over \"Deck ready\" while the digits flaked unignored at x=343..434 \u2014 measured, not guessed."
+      }
+    ]
+  },
+  {
+    "name": "meetings-no-calendar",
+    "route": "/",
+    "calendar": "none",
+    "ignore": [
+      {
+        "x": 338,
+        "y": 816,
+        "w": 106,
+        "h": 22,
+        "why": "footer TapeCounter roller digits (specs/0060 Task 3). Moved here in specs/0066: specs/0064 W6 reordered the rail (reel, then counter-over-meter, then title, keys right), so the old box at x=470 sat over \"Deck ready\" while the digits flaked unignored at x=343..434 \u2014 measured, not guessed."
+      }
+    ]
+  },
+  {
+    "name": "meetings-month-no-calendar",
+    "route": "/?view=month",
+    "calendar": "none",
+    "ignore": [
+      {
+        "x": 338,
+        "y": 816,
+        "w": 106,
+        "h": 22,
+        "why": "footer TapeCounter roller digits (specs/0060 Task 3). Moved here in specs/0066: specs/0064 W6 reordered the rail (reel, then counter-over-meter, then title, keys right), so the old box at x=470 sat over \"Deck ready\" while the digits flaked unignored at x=343..434 \u2014 measured, not guessed."
+      }
+    ]
+  },
+  {
+    "name": "sidebar-update-ready",
+    "route": "/?view=list",
+    "sidebar": "open",
+    "update": "ready",
     "ignore": [
       {
         "x": 338,

@@ -18,7 +18,7 @@ export const LANE_GAP_PX = 6; // horizontal gap between side-by-side (overlappin
  * calendar event that was never recorded — a dashed outline over nothing, because
  * there is no tape.
  *
- * Exported (specs/0069 W4 fix round 1) so `DayList` paints the SAME per-state chrome —
+ * Exported so the Meetings Month view's event chips paint the SAME per-state chrome —
  * notably the dashed/transparent "no tape" treatment for `past-unrecorded` — instead of
  * a single hardcoded style that silently drifts from the grid's.
  */
@@ -44,8 +44,8 @@ export function blockClasses(state: TimelineVisualState): string {
 
 /**
  * The 3px spine down the left edge — the block's state colour. `null` = no tape, no bar.
- * Exported so the List presentation (`DayList`, specs/0069 W4) paints the SAME spine
- * rather than re-deriving its own state→colour mapping.
+ * Exported so any other presentation of agenda rows paints the SAME spine rather than
+ * re-deriving its own state→colour mapping.
  */
 export function barClass(state: TimelineVisualState): string | null {
   switch (state) {

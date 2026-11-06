@@ -408,7 +408,7 @@ export function CalendarSettings() {
             <span className="font-medium">Google Calendar needs reconnecting</span>
             <div className="mt-0.5">
               Your Google session expired or was revoked, so nothing has synced since.
-              Today still shows the events from the last sync.
+              Meetings still shows the events from the last sync.
             </div>
           </div>
           <Button

@@ -68,8 +68,8 @@ vi.mock('@/contexts/UpdateStatusContext', () => ({
 
 import Sidebar from '@/components/Sidebar';
 
-// specs/0064 W5 — 'Home' is now 'Today', matching the screen it opens.
-const NAV_NAMES = ['Today', 'All meetings', 'Action items', 'People', 'Ask AI'];
+// Today and All meetings merged into one Meetings page.
+const NAV_NAMES = ['Meetings', 'Action items', 'People', 'Ask AI'];
 
 describe('Sidebar (specs/0057 Plan 3 Task 3)', () => {
   beforeEach(() => {
@@ -77,7 +77,7 @@ describe('Sidebar (specs/0057 Plan 3 Task 3)', () => {
     sidebarState.isCollapsed = false;
   });
 
-  it('renders all five nav destinations when expanded', () => {
+  it('renders all four nav destinations when expanded', () => {
     render(<Sidebar />);
     for (const name of NAV_NAMES) {
       expect(screen.getByRole('button', { name })).toBeInTheDocument();
@@ -86,11 +86,35 @@ describe('Sidebar (specs/0057 Plan 3 Task 3)', () => {
 
   it('marks the active destination with aria-current="page" when expanded', () => {
     render(<Sidebar />);
-    expect(screen.getByRole('button', { name: 'All meetings' })).toHaveAttribute(
+    expect(screen.getByRole('button', { name: 'Meetings' })).toHaveAttribute(
       'aria-current',
       'page',
     );
-    expect(screen.getByRole('button', { name: 'Today' })).not.toHaveAttribute('aria-current');
+    expect(screen.getByRole('button', { name: 'Action items' })).not.toHaveAttribute('aria-current');
+  });
+
+  it('offers no separate Today or All meetings item any more', () => {
+    render(<Sidebar />);
+    expect(screen.queryByRole('button', { name: 'Today' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'All meetings' })).toBeNull();
+  });
+
+  it.each(['/', '/meetings', '/meetings?view=month', '/meeting-details'])(
+    'lights Meetings on %s',
+    (path) => {
+      pathname = path;
+      render(<Sidebar />);
+      expect(screen.getByRole('button', { name: 'Meetings' })).toHaveAttribute('aria-current', 'page');
+    },
+  );
+
+  it('opens Meetings at / and leaves it unlit elsewhere', () => {
+    pathname = '/people';
+    render(<Sidebar />);
+    const meetings = screen.getByRole('button', { name: 'Meetings' });
+    expect(meetings).not.toHaveAttribute('aria-current');
+    meetings.click();
+    expect(push).toHaveBeenCalledWith('/');
   });
 
   it('shows the engraved NIXON wordmark when expanded', () => {
@@ -103,7 +127,7 @@ describe('Sidebar (specs/0057 Plan 3 Task 3)', () => {
     expect(screen.queryByText(/^N$/)).toBeNull();
   });
 
-  it('renders the same five destinations as labelled icon buttons when collapsed', () => {
+  it('renders the same four destinations as labelled icon buttons when collapsed', () => {
     sidebarState.isCollapsed = true;
     render(<Sidebar />);
     for (const name of NAV_NAMES) {

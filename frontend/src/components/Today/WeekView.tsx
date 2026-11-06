@@ -33,8 +33,7 @@ function WeekRow({
   return (
     // A `div` with `role="button"`, not a real `<button>` — the `…` menu is a button of its
     // own, and a button inside a button is invalid HTML that browsers silently un-nest
-    // (which is how the week row lost its menu in the first place). Same treatment
-    // `DayList` already uses for the same reason.
+    // (which is how the week row lost its menu in the first place).
     <div
       role="button"
       tabIndex={0}
