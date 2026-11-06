@@ -97,6 +97,11 @@ pub fn invoke_handler() -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Sen
         audio::live_toggle::api_apply_live_transcription_now,
         // low-power-mode spec §5: late-mount/remount hydration of session mode
         audio::live_toggle::api_get_session_processing_state,
+        // specs/0083 W2a: the Rust-owned meeting wrap-up
+        audio::wrap_up::api_get_wrap_up_state,
+        audio::wrap_up::api_wrap_up_handoff_result,
+        audio::wrap_up::prefs::api_get_wrap_up_preferences,
+        audio::wrap_up::prefs::api_set_wrap_up_preferences,
         // LLM provider model listings
         ollama::get_ollama_models,
         ollama::pull_ollama_model,

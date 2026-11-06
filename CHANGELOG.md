@@ -32,6 +32,7 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 ### Internal
 
 - The transcript save behind the meeting-save command is now a shared function, ready for the background wrap-up (specs/0083 W2a).
+- The Rust side of the background wrap-up (specs/0083 W2a tasks 5–10): every stop source goes through one single-flight `request_stop`, which saves, marks/hands off deferred meetings, finishes audio processing and starts the auto-summary, emitting `meeting-wrap-up` stages. The stop-time decisions and the auto-summary gate were ported from the frontend with their test tables; a startup pre-pass imports a session that a crash left unsaved. The frontend still has to switch over to it.
 
 ## [0.13.1] - 2026-10-04
 
