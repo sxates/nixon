@@ -1,0 +1,12 @@
+{
+  "loggedIn": true,
+  "authMethod": "claude.ai",
+  "apiProvider": "firstParty",
+  "analyticsDisabled": true,
+  "projectsDirectory": "/Users/user/.claude/projects",
+  "configDirectory": "/Users/user/.claude",
+  "loginExpiresAt": "2026-12-01T00:00:00.000Z",
+  "subscriptionType": "<redacted>",
+  "storedClaudeAiLogin": true,
+  "planTier": "<redacted>"
+}
