@@ -37,6 +37,8 @@ export interface CliProviderStatus {
   minVersion: string;
   authNote?: string;
   probeError?: string;
+  /** Set only when a Locate… path is saved. */
+  overridePath?: string;
   models: { id: string; label: string }[];
 }
 
@@ -74,8 +76,11 @@ function writeConfirmed(id: string) {
 
 const errText = (e: unknown) => (typeof e === 'string' ? e : e instanceof Error ? e.message : 'Something went wrong.');
 
-/** Fetch the CLI providers' status; `refresh` re-probes. */
-function useCliStatuses(enabled = true) {
+/**
+ * Fetch the CLI providers' status; `refresh` re-probes. `selected` is the CLI whose panel is
+ * showing: it lets the Rust side try the login shell for that CLI. The dropdown passes none.
+ */
+function useCliStatuses(selected?: CliProviderId) {
   const [statuses, setStatuses] = useState<CliProviderStatus[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
@@ -83,18 +88,22 @@ function useCliStatuses(enabled = true) {
   const refresh = useCallback(async () => {
     setChecking(true);
     try {
-      setStatuses(await invoke<CliProviderStatus[]>('api_cli_providers_status'));
+      setStatuses(
+        await (selected
+          ? invoke<CliProviderStatus[]>('api_cli_providers_status', { selected })
+          : invoke<CliProviderStatus[]>('api_cli_providers_status')),
+      );
       setError(null);
     } catch (e) {
       setError(errText(e));
     } finally {
       setChecking(false);
     }
-  }, []);
+  }, [selected]);
 
   useEffect(() => {
-    if (enabled) void refresh();
-  }, [enabled, refresh]);
+    void refresh();
+  }, [refresh]);
 
   return { statuses, setStatuses, error, checking, refresh };
 }
@@ -181,11 +190,12 @@ function StatusLine({ status }: { status: CliProviderStatus }) {
 }
 
 function ClaudeCodePanel({ onSave }: { onSave: () => void }) {
-  const { statuses, setStatuses, error, checking, refresh } = useCliStatuses();
+  const { statuses, setStatuses, error, checking, refresh } = useCliStatuses('claude-code');
   const status = statuses?.find((s) => s.id === 'claude-code') ?? null;
 
   const [pathError, setPathError] = useState<string | null>(null);
   const [applyingPath, setApplyingPath] = useState(false);
+  const [picking, setPicking] = useState(false);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<CliTestResult | null>(null);
   const [testError, setTestError] = useState<string | null>(null);
@@ -209,13 +219,18 @@ function ClaudeCodePanel({ onSave }: { onSave: () => void }) {
 
   // Locate…: the native file chooser picks, set_path validates and saves. A cancel is not an error.
   const locate = async () => {
+    if (picking) return;
     setPathError(null);
+    setPicking(true);
+    let picked: string | null = null;
     try {
-      const picked = await invoke<string | null>('api_cli_provider_pick_binary');
-      if (picked) await applyPath(picked);
+      picked = await invoke<string | null>('api_cli_provider_pick_binary');
     } catch (e) {
       setPathError(errText(e));
+    } finally {
+      setPicking(false);
     }
+    if (picked) await applyPath(picked);
   };
 
   const sendTest = async () => {
@@ -271,7 +286,7 @@ function ClaudeCodePanel({ onSave }: { onSave: () => void }) {
             {checking ? 'Checking…' : 'Check again'}
           </Button>
           <Button type="button" variant="outline" size="sm" onClick={() => void locate()}
-            disabled={applyingPath}>
+            disabled={applyingPath || picking}>
             Locate…
           </Button>
           {showInstall && (
@@ -288,7 +303,7 @@ function ClaudeCodePanel({ onSave }: { onSave: () => void }) {
         <p className="text-xs text-muted-foreground">
           Signed in somewhere else? Choose the program you use with Locate…
         </p>
-        {status?.path && (
+        {status?.overridePath && (
           <button
             type="button"
             className="text-xs text-muted-foreground underline"

@@ -8,7 +8,8 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 const { invokeMock } = vi.hoisted(() => ({ invokeMock: vi.fn() }));
 vi.mock('@tauri-apps/api/core', () => ({ invoke: invokeMock }));
 
-import { CliProviderPanel } from '@/components/CliProviderPanel';
+import { CliProviderPanel, CliProviderSelectItems } from '@/components/CliProviderPanel';
+import { Select, SelectContent, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 const BASE = {
   id: 'claude-code',
@@ -151,13 +152,58 @@ describe('CliProviderPanel (specs/0085)', () => {
   });
 
   it('Use default clears a saved location', async () => {
-    arrange(READY, { api_cli_provider_set_path: READY });
+    arrange({ ...READY, overridePath: '/usr/local/bin/claude' }, { api_cli_provider_set_path: READY });
     render(<CliProviderPanel provider="claude-code" onSave={vi.fn()} />);
 
     fireEvent.click(await screen.findByRole('button', { name: /Use default/ }));
 
     await waitFor(() => expect(calls('api_cli_provider_set_path')).toHaveLength(1));
     expect(calls('api_cli_provider_set_path')[0][1]).toEqual({ id: 'claude-code', path: null });
+  });
+
+  it('hides Use default when no location is saved, even with a found path', async () => {
+    arrange(READY);
+    render(<CliProviderPanel provider="claude-code" onSave={vi.fn()} />);
+    await screen.findByText(/\/usr\/local\/bin\/claude/);
+    expect(screen.queryByRole('button', { name: /Use default/ })).toBeNull();
+  });
+
+  it('disables Locate while the file picker is open', async () => {
+    let finishPick: (v: string | null) => void = () => {};
+    arrange({ ...BASE, state: 'notFound' }, {
+      api_cli_provider_pick_binary: () => new Promise((resolve) => { finishPick = resolve; }),
+    });
+    render(<CliProviderPanel provider="claude-code" onSave={vi.fn()} />);
+
+    const locate = await screen.findByRole('button', { name: /Locate/ });
+    fireEvent.click(locate);
+    await waitFor(() => expect(locate).toBeDisabled());
+    fireEvent.click(locate);
+    expect(calls('api_cli_provider_pick_binary')).toHaveLength(1);
+
+    finishPick(null);
+    await waitFor(() => expect(locate).toBeEnabled());
+  });
+
+  it('names Claude Code as selected when the panel asks for status', async () => {
+    arrange(READY);
+    render(<CliProviderPanel provider="claude-code" onSave={vi.fn()} />);
+    await screen.findByText(/\/usr\/local\/bin\/claude/);
+    expect(calls('api_cli_providers_status')[0][1]).toEqual({ selected: 'claude-code' });
+  });
+
+  it('the chooser dropdown asks for status without naming a selection', async () => {
+    arrange(READY);
+    render(
+      <Select open value="ollama">
+        <SelectTrigger><SelectValue /></SelectTrigger>
+        <SelectContent>
+          <CliProviderSelectItems />
+        </SelectContent>
+      </Select>,
+    );
+    await waitFor(() => expect(calls('api_cli_providers_status')).toHaveLength(1));
+    expect(calls('api_cli_providers_status')[0][1]).toBeUndefined();
   });
 
   it('Send a test reports the result and says it uses a little of the plan', async () => {
