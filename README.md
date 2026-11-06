@@ -17,9 +17,9 @@ Apple Silicon, macOS 14.4 or later. Open the `.dmg` and drag Nixon to Applicatio
 
 ## What it looks like
 
-| Your day | Recording |
+| Your week | Recording |
 |---|---|
-| ![Today view](docs/screenshots/real/today.deck.png) | ![Live recording](docs/screenshots/real/record-live.deck.png) |
+| ![Meetings, week view](docs/screenshots/real/meetings-week.deck.png) | ![Live recording](docs/screenshots/real/record-live.deck.png) |
 
 | Who said what | The summary |
 |---|---|
@@ -27,7 +27,7 @@ Apple Silicon, macOS 14.4 or later. Open the `.dmg` and drag Nixon to Applicatio
 
 | Ask across every meeting | Every meeting you've recorded |
 |---|---|
-| ![Ask AI](docs/screenshots/real/ask.deck.png) | ![All meetings](docs/screenshots/real/meetings.deck.png) |
+| ![Ask AI](docs/screenshots/real/ask.deck.png) | ![Meetings, list view](docs/screenshots/real/meetings-list.deck.png) |
 
 Light-theme versions are in [`docs/screenshots/real`](docs/screenshots/real). The meetings
 shown are fictional.
