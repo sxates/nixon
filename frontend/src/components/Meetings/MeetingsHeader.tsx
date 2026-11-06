@@ -60,32 +60,32 @@ export function MeetingsHeader({
   onAddMeeting: () => void;
 }) {
   const { openImportDialog } = useImportDialog();
-  const listLike = view === 'list' || view === 'month';
   return (
     <PageHeader
       title="Meetings"
       subtitle={subtitle}
+      afterTitle={
+        <SegmentedControl
+          aria-label="Meeting view"
+          options={viewOptions(calendarConnected)}
+          value={view}
+          onChange={(next) => isMeetingsView(next) && onChooseView(next)}
+        />
+      }
       actions={
         <>
-          <SegmentedControl
-            aria-label="Meeting view"
-            options={viewOptions(calendarConnected)}
-            value={view}
-            onChange={(next) => isMeetingsView(next) && onChooseView(next)}
-          />
           <SearchMeetingsButton />
-          {/* specs/0069 W2 — import sits where an imported recording lands: the List and
-              Month views. Muted, not brand — it is a secondary action. */}
-          {listLike && (
-            <button
-              type="button"
-              onClick={() => openImportDialog()}
-              className="flex items-center gap-[7px] rounded-[3px] border border-border bg-card px-[11px] py-[7px] text-[13px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <FileAudio className="h-[13px] w-[13px]" aria-hidden="true" />
-              <span>Import audio</span>
-            </button>
-          )}
+          {/* Import audio: an icon button beside Search, on every view (owner, 2026-11-05).
+              Same 32px box and 12px glyph as SearchMeetingsButton. */}
+          <button
+            type="button"
+            onClick={() => openImportDialog()}
+            aria-label="Import audio"
+            title="Import audio"
+            className="inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-[3px] border border-border bg-card text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <FileAudio className="h-3 w-3" aria-hidden="true" />
+          </button>
           <ProcessMeetingsButton />
           {/* A meeting added here lives on the calendar views; without a calendar there is
               no view that would show it until it is recorded. */}

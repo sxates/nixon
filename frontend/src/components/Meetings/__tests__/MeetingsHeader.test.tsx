@@ -86,9 +86,19 @@ describe('MeetingsHeader', () => {
     expect(screen.queryByRole('button', { name: /to-do/i })).toBeNull();
   });
 
-  it('offers Import audio on List and Month, where an import lands', () => {
-    renderHeader('list', false);
-    fireEvent.click(screen.getByRole('button', { name: /import audio/i }));
+  it.each([
+    ['agenda', true],
+    ['week', true],
+    ['month', true],
+    ['list', true],
+    ['month', false],
+    ['list', false],
+  ] as const)('offers Import audio as an icon button on %s (calendar: %s)', (view, calendar) => {
+    renderHeader(view, calendar);
+    const button = screen.getByRole('button', { name: /import audio/i });
+    // Icon-only, like Search: the label lives in aria-label/title, not visible text.
+    expect(button.textContent).toBe('');
+    fireEvent.click(button);
     expect(openImportDialog).toHaveBeenCalled();
   });
 });
