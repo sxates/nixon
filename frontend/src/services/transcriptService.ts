@@ -9,12 +9,6 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { TranscriptUpdate, Transcript } from '@/types';
 
-export interface TranscriptionStatus {
-  chunks_in_queue: number;
-  is_processing: boolean;
-  last_activity_ms: number;
-}
-
 export interface TranscriptionErrorPayload {
   error: string;
   userMessage: string;
@@ -36,14 +30,6 @@ export class TranscriptService {
    */
   async getTranscriptHistory(): Promise<Transcript[]> {
     return invoke<Transcript[]>('get_transcript_history');
-  }
-
-  /**
-   * Get current transcription queue status
-   * @returns Promise with transcription status
-   */
-  async getTranscriptionStatus(): Promise<TranscriptionStatus> {
-    return invoke<TranscriptionStatus>('get_transcription_status');
   }
 
   // Event Listeners

@@ -19,7 +19,6 @@ import {
   setResumeInFlight,
   type ResumeRecordingDescriptor,
 } from '@/lib/resume-recording';
-import { clearStopRecordingResult } from '@/lib/recording-stop';
 import { canDiscardMeeting } from '@/lib/discard-meeting';
 import { surfaceRecordingStartFailure } from '@/lib/recording-start-errors';
 import { AUTO_START_ABANDONED_EVENT } from '@/hooks/useRecordEmptyPhase';
@@ -32,14 +31,6 @@ interface UseRecordingStartReturn {
 
 /** Placeholder meeting the sidebar shows when nothing is being recorded (mirrors SidebarProvider). */
 const PLACEHOLDER_MEETING = { id: 'intro-call', title: '+ New Call' };
-
-/**
- * Session-storage keys the STOP path (useRecordingStop) writes from the `recording-stopped`
- * event to route a resumed session's save into the append branch. They are cleared at every
- * fresh START so a stale `last_recording_resumed='true'` from an errored/abandoned prior save
- * can never misroute the NEXT recording's stop (specs/0037 FIX #7).
- */
-const RESUME_STOP_KEYS = ['last_recording_resumed', 'last_recording_prior_audio_duration'] as const;
 
 /**
  * Custom hook for managing recording start lifecycle.
@@ -86,16 +77,6 @@ export function useRecordingStart(
   // racing second start's "already in progress" failure delete the LIVE session's row.
   const freshlyCreatedMeetingIdRef = useRef<string | null>(null);
 
-  // Clear the resumed-session routing state a prior STOP may have left behind — the
-  // sessionStorage keys the recording-stopped listener writes AND the in-memory stop-invoke
-  // result stash — so every new recording starts clean and its stop can't be misrouted
-  // into the append path (FIX #7 / review-2 FIX C).
-  const clearStaleResumeStopKeys = useCallback(() => {
-    clearStopRecordingResult();
-    if (typeof window === 'undefined') return;
-    RESUME_STOP_KEYS.forEach((key) => sessionStorage.removeItem(key));
-  }, []);
-
   // Undo a fresh meeting row created earlier in THIS start attempt when the backend start
   // then failed (specs/0037 FIX #6, hardened by review-2 FIX A). `orphanId` is the row the
   // CALLING attempt inserted (null when it created nothing — adopted calendar row, resumed
@@ -114,7 +95,7 @@ export function useRecordingStart(
       if (/already in progress/i.test(message)) return;
       if (activeRecordingMeetingId && orphanId === activeRecordingMeetingId) return;
 
-      // Same safety gate as the stop path's abandoned cleanup (lib/discard-meeting): typed
+      // Same safety gate as the wrap-up's empty-session discard (lib/discard-meeting): typed
       // notes or anything durable (transcripts/audio/calendar link) always vetoes the delete.
       if (!(await canDiscardMeeting(orphanId, null))) return;
 
@@ -367,8 +348,6 @@ export function useRecordingStart(
   const startResumeSession = useCallback(
     async (descriptor: ResumeRecordingDescriptor) => {
       setIsAutoStarting(true);
-      // Wipe any stale resumed-stop routing keys from a previous session (FIX #7).
-      clearStaleResumeStopKeys();
       try {
         // Same model-readiness gate as every other start path.
         const parakeetReady = await checkParakeetReady();
@@ -465,7 +444,6 @@ export function useRecordingStart(
       checkIfModelDownloading,
       showModal,
       setStatus,
-      clearStaleResumeStopKeys,
     ],
   );
 
@@ -513,8 +491,6 @@ export function useRecordingStart(
 
   // Handle manual recording start (from button click)
   const handleRecordingStart = useCallback(async () => {
-    // Wipe any stale resumed-stop routing keys from a previous session (FIX #7).
-    clearStaleResumeStopKeys();
     // The row THIS attempt freshly inserts (null when it adopts or loses the create race);
     // scopes the failed-start cleanup in the catch to this attempt's own row (FIX A).
     let freshRowId: string | null = null;
@@ -594,7 +570,7 @@ export function useRecordingStart(
       // Re-throw so callers can still react to a failed start.
       throw error;
     }
-  }, [consumeStartIdentity, setMeetingTitle, setIsRecording, clearTranscripts, setIsMeetingActive, checkParakeetReady, checkIfModelDownloading, selectedDevices, showModal, setStatus, createMeetingForRecording, clearStaleResumeStopKeys, deleteOrphanMeetingOnStartFailure]);
+  }, [consumeStartIdentity, setMeetingTitle, setIsRecording, clearTranscripts, setIsMeetingActive, checkParakeetReady, checkIfModelDownloading, selectedDevices, showModal, setStatus, createMeetingForRecording, deleteOrphanMeetingOnStartFailure]);
 
   // Check for autoStartRecording flag and start recording automatically
   useEffect(() => {
@@ -605,7 +581,6 @@ export function useRecordingStart(
           console.log('Auto-starting recording from navigation...');
           setIsAutoStarting(true);
           sessionStorage.removeItem('autoStartRecording'); // Clear the flag
-          clearStaleResumeStopKeys(); // Wipe stale resumed-stop routing keys (FIX #7)
 
           // Check if Parakeet transcription model is ready before starting
           const parakeetReady = await checkParakeetReady();
@@ -698,7 +673,6 @@ export function useRecordingStart(
     showModal,
     setStatus,
     createMeetingForRecording,
-    clearStaleResumeStopKeys,
     deleteOrphanMeetingOnStartFailure,
   ]);
 
@@ -712,7 +686,6 @@ export function useRecordingStart(
 
       console.log('Direct start from sidebar - checking Parakeet model status');
       setIsAutoStarting(true);
-      clearStaleResumeStopKeys(); // Wipe stale resumed-stop routing keys (FIX #7)
 
       // Check if Parakeet transcription model is ready before starting
       const parakeetReady = await checkParakeetReady();
@@ -803,7 +776,6 @@ export function useRecordingStart(
     showModal,
     setStatus,
     createMeetingForRecording,
-    clearStaleResumeStopKeys,
     deleteOrphanMeetingOnStartFailure,
   ]);
 

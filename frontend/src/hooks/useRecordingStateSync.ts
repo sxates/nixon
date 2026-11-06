@@ -1,16 +1,8 @@
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import { recordingService } from '@/services/recordingService';
 
 interface UseRecordingStateSyncReturn {
   isBackendRecording: boolean;
-  /**
-   * No-op sink for `useRecordingStop`'s "disable re-recording while processing" flag
-   * (specs/0057 Plan 2 residual). The state it used to hold was write-only — nothing ever
-   * read `isRecordingDisabled` — and the transport rail now owns REC gating, so the state
-   * is gone and only the setter shape remains until `useRecordingStop` drops the argument.
-   * `RecordingPostProcessingProvider` already passes the same no-op.
-   */
-  setIsRecordingDisabled: (value: boolean) => void;
 }
 
 /**
@@ -25,9 +17,6 @@ export function useRecordingStateSync(
   setIsRecording: (value: boolean) => void,
   setIsMeetingActive: (value: boolean) => void
 ): UseRecordingStateSyncReturn {
-  // Stable identity so it can sit in `useRecordingStop`'s callback deps without re-arming.
-  const setIsRecordingDisabled = useRef(() => {}).current;
-
   useEffect(() => {
     console.log('Setting up recording state check effect, current isRecording:', isRecording);
 
@@ -71,6 +60,5 @@ export function useRecordingStateSync(
 
   return {
     isBackendRecording: isRecording,
-    setIsRecordingDisabled,
   };
 }

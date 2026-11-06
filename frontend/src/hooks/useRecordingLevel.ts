@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { safeListen } from '@/lib/safe-listen';
+import { useDocumentVisible } from '@/lib/use-document-visible';
 
 // specs/0057 §3.2 — the backend emits `recording-level` at ~12.5 Hz
 // (audio/live_meter.rs LIVE_METER_EMIT_INTERVAL): `{ rms, peak }` for the MIX plus
@@ -47,7 +48,10 @@ export function parseLevelPayload(payload: LevelPayload | undefined): Omit<Recor
   return { rms, peak, mic: channel(payload?.mic), sys: channel(payload?.sys) };
 }
 
-export function useRecordingLevel(enabled: boolean): RecordingLevel {
+export function useRecordingLevel(enabledWhenVisible: boolean): RecordingLevel {
+  // specs/0083 W2c: a hidden window shows no meters, so it takes no 12.5 Hz renders either.
+  const visible = useDocumentVisible();
+  const enabled = enabledWhenVisible && visible;
   const [level, setLevel] = useState<RecordingLevel>(IDLE);
   const decayTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);

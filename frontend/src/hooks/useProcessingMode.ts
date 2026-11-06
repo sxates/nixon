@@ -7,24 +7,14 @@
  *  - on mid-meeting toggles (e.g. battery state flips, or an explicit
  *    override), without a `meetingId`.
  *
- * The start-time emit (the one WITH a `meetingId` key present in the
- * payload) also records whether this session started deferred
- * (`markSessionDeferred`), via `src/lib/processing-mode.ts`'s
- * sessionStorage-backed flag — `useRecordingStop`'s stop-time bookkeeping
- * reads it back via `sessionStartedDeferred()` to decide `stopAction`.
- * Additionally, ANY event that reports live transcription OFF (start-time or
- * mid-meeting) sets the sticky "ever deferred" flag so a live→defer→live
- * session still gets a repair pass at stop.
+ * Whether the session started (or was ever) deferred is Rust's to remember now
+ * (specs/0083: `live_toggle`), since Rust decides what the stop does with it.
  *
  * Because the state above is event-only, it is lost on remount / a late mount
  * (navigating away from /record and back, or an auto-started recording that
  * begins while the user is elsewhere). To fix that, on mount we also query
  * `api_get_session_processing_state`: if a session is active we hydrate the
- * live/battery state (without clobbering a fresher event value) and, when the
- * active session is currently deferred, set the "ever deferred" flag — a
- * currently-deferred session was necessarily deferred at some point. We do NOT
- * touch the started-deferred flag from a snapshot (a snapshot can't tell how the
- * session STARTED); the start-time event owns that.
+ * live/battery state (without clobbering a fresher event value).
  *
  * It also subscribes to `power-source-changed` so a mid-recording AC/battery
  * transition updates `onBattery` (Finding 4: plugging in mid-deferred-recording
@@ -35,7 +25,6 @@
 import { useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { safeListen } from '@/lib/safe-listen';
-import { markSessionDeferred, markSessionEverDeferred } from '@/lib/processing-mode';
 
 interface ProcessingModeChangedPayload {
   meetingId?: string | null;
@@ -69,17 +58,6 @@ export function useProcessingMode(): UseProcessingModeReturn {
       const { liveTranscription: live, onBattery: battery } = event.payload;
       setLiveTranscription(live);
       setOnBattery(battery);
-
-      // 'meetingId' present (even if null) marks the start-time emit — the
-      // mid-meeting toggle emit omits the key entirely.
-      if ('meetingId' in event.payload) {
-        markSessionDeferred(!live);
-      }
-      // ANY deferred event (start-time or mid-meeting) makes the session
-      // "ever deferred" — sticky until the next session's live start resets it.
-      if (!live) {
-        markSessionEverDeferred();
-      }
     });
   }, []);
 
@@ -102,12 +80,6 @@ export function useProcessingMode(): UseProcessingModeReturn {
         // fresher live event never gets clobbered by this snapshot.
         setLiveTranscription((prev) => (prev === null ? state.liveTranscription : prev));
         setOnBattery((prev) => (prev === null ? state.onBattery : prev));
-        // A currently-deferred active session was deferred at some point ⇒
-        // ever-deferred. Additive only; never clears a flag a real start-time
-        // event already set, and never sets started-deferred from a snapshot.
-        if (state.liveTranscription === false) {
-          markSessionEverDeferred();
-        }
       })
       .catch((error) => {
         console.warn('Failed to hydrate processing-mode state on mount:', error);

@@ -1,13 +1,12 @@
 'use client';
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { useRecordingState } from '@/contexts/RecordingStateContext';
 import { useSidebar } from '@/components/Sidebar/SidebarProvider';
 import { recordingService } from '@/services/recordingService';
-import { requestFullRecordingStop } from '@/lib/recording-stop';
+import { requestStop } from '@/lib/wrap-up';
 import { TransportKey } from './TransportKey';
 import { TransportStatus, type TransportPhase } from './TransportStatus';
 
@@ -18,13 +17,12 @@ import { TransportStatus, type TransportPhase } from './TransportStatus';
  * spec §3.1 table). The queue it used to host on its right moved to the sidebar in
  * specs/0064 W5 — the rail is the recording surface, the queue is app state.
  *
- * Stop deliberately goes through `requestFullRecordingStop`, not a raw `stop_recording`: the
- * complete stop is the command PLUS the post-stop save flow that only /record mounts.
+ * Stop is `stop_recording` and nothing else (specs/0083): Rust saves and processes the
+ * meeting and reports through `meeting-wrap-up`, and the route you are on stays put.
  */
 export function TransportRail() {
   const rs = useRecordingState();
   const { isContentInsetCollapsed, handleRecordingToggle } = useSidebar();
-  const router = useRouter();
 
   const finalizing = rs.isStopping || rs.isProcessing || rs.isSaving;
   // `starting` is evaluated after `finalizing` and before the isRecording branches: the tap
@@ -90,8 +88,8 @@ export function TransportRail() {
     setHoldBusy(false);
   }, [phase]);
   const onStop = useCallback(() => {
-    if (phase === 'recording' || phase === 'paused') requestFullRecordingStop((p) => router.push(p));
-  }, [phase, router]);
+    if (phase === 'recording' || phase === 'paused') void requestStop();
+  }, [phase]);
 
   return (
     <div

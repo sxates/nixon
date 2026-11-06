@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import { safeListen } from '@/lib/safe-listen';
 
 /**
@@ -18,21 +18,12 @@ import { safeListen } from '@/lib/safe-listen';
  * mounted for the entire lifetime of the screen, so registration is continuous and gap-free —
  * and there is exactly one registration (no double-listen).
  *
- * The handlers are kept in refs so the listeners register exactly ONCE (empty dep array) and
- * never re-register when the caller's callbacks change identity between renders.
+ * A `transcription-error` no longer stops anything here (specs/0083). It used to call the
+ * page's post-stop handler with `callApi=false`, which only reset the UI's status while the
+ * backend kept recording — a per-chunk engine failure leaves the recording running. The
+ * user-facing toast/modal comes from useModalState's global listener; stopping is Rust's.
  */
-export function useTranscriptionErrorListeners({
-  onRecordingStop,
-}: {
-  /** Same `onRecordingStop` the recording controls receive; called with `false` on error. */
-  onRecordingStop: (callApi?: boolean) => void;
-}) {
-  // Hold the latest callback in a ref so the listener effect can run once and stay stable.
-  const onRecordingStopRef = useRef(onRecordingStop);
-  useEffect(() => {
-    onRecordingStopRef.current = onRecordingStop;
-  }, [onRecordingStop]);
-
+export function useTranscriptionErrorListeners() {
   useEffect(() => {
     console.log('Setting up recording event listeners (page-level)');
 
@@ -45,10 +36,6 @@ export function useTranscriptionErrorListeners({
       safeListen('transcription-error', (event) => {
         console.log('transcription-error event received:', event);
         console.error('Transcription error received:', event.payload);
-
-        console.log('Calling onRecordingStop(false) due to transcription error');
-        onRecordingStopRef.current(false);
-
         // For actionable errors (like model loading failures), the page handles showing the model
         // selector; for regular errors, useModalState's global listener shows a toast — so this
         // hook deliberately raises no modal of its own (matching RecordingControls' behaviour).
@@ -69,6 +56,6 @@ export function useTranscriptionErrorListeners({
       console.log('Cleaning up recording event listeners (page-level)');
       disposers.forEach((dispose) => dispose());
     };
-    // Register once for the lifetime of the screen; callbacks are read from refs.
+    // Register once for the lifetime of the screen.
   }, []);
 }

@@ -15,10 +15,10 @@
  * once per session, with an Enable action to the notification permission row. An unbundled
  * dev build cannot notify at all and has nothing to enable, so it stays quiet about it.
  *
- * On the ended event: if Nixon is recording AND the call was Zoom, run the SAME full
- * two-part stop as "Stop & summarize" (`requestFullRecordingStop`, specs/0024 WS1.1). A Teams
- * or Meet end only takes the prompt down (specs/0074 W6: those apps may let go of the
- * microphone on mute, and a recording must never stop on mute).
+ * On the ended event it only takes the prompt down. A Zoom end that should stop the recording
+ * is stopped by Rust (`meeting_detect::monitor::on_ended`, specs/0083), which then wraps the
+ * meeting up whether or not this window is awake; a Teams or Meet end never stops it
+ * (specs/0074 W6: those apps may let go of the microphone on mute).
  *
  * The payload's `platform` (absent = Zoom) names the app in the copy. The backend emits
  * `meeting-detected` only on the idle → in-call transition, while not recording and with the
@@ -36,13 +36,11 @@ import {
   getNotificationCapability,
   CATEGORY_RECORD,
 } from '@/lib/osNotification';
-import { requestFullRecordingStop } from '@/lib/recording-stop';
 import { peekPendingJoinMeeting } from '@/lib/calendar';
 import {
   type MeetingDetectEvent,
   MEETING_DETECTED_EVENT,
   MEETING_ENDED_EVENT,
-  endStopsRecording,
   detectedTitle,
   detectedBannerId,
   DETECTED_BODY,
@@ -193,17 +191,10 @@ export default function MeetingAutoDetect() {
       void onDetected(event?.payload);
     });
 
-    const disposeEnded = safeListen<MeetingDetectEvent>(MEETING_ENDED_EVENT, (event) => {
+    const disposeEnded = safeListen<MeetingDetectEvent>(MEETING_ENDED_EVENT, () => {
       console.log('[MeetingAutoDetect] Meeting ended');
-      // The meeting is over: nothing left to ask.
+      // The meeting is over: nothing left to ask. Rust stops a recording a Zoom end ends.
       closePrompt();
-      if (!isRecordingRef.current || !endStopsRecording(event?.payload?.platform)) return;
-
-      // Same full two-part stop as "Stop & summarize" (specs/0024 WS1.1): backend
-      // `stop_recording` (stops the tap, flushes the WAV), then post-stop processing.
-      console.log('[MeetingAutoDetect] Auto-stopping recording (meeting ended)');
-      toast('Meeting ended', { description: 'Wrapping up your recording…' });
-      requestFullRecordingStop((path) => routerRef.current.push(path));
     });
 
     return () => {

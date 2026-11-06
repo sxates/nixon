@@ -24,6 +24,11 @@ function messageOf(err: unknown): string {
   return err == null ? '' : String(err);
 }
 
+/** The wrap-up's start refusal (`wrap_up::refuse_start_while_saving`). */
+export function isStillSavingLastMeeting(err: unknown): boolean {
+  return messageOf(err).includes('still saving the last meeting');
+}
+
 export function describeRecordingStartError(err: unknown): RecordingStartErrorCopy {
   const errorMsg = messageOf(err);
 
@@ -65,6 +70,14 @@ export function surfaceRecordingStartFailure(
   error: unknown,
   showModal?: (name: 'errorAlert', message?: string) => void,
 ): void {
+  // specs/0083: Rust refuses a start while the last meeting is still being saved. That is a
+  // moment's wait, not a device problem, so it gets a light toast instead of the modal.
+  if (isStillSavingLastMeeting(error)) {
+    toast.info('Still saving your last meeting', {
+      description: 'Nixon needs a moment to finish it. Try again in a few seconds.',
+    });
+    return;
+  }
   const { title, message } = describeRecordingStartError(error);
   if (showModal) showModal('errorAlert', `${title}\n${message}`);
   else toast.error(title, { description: message });

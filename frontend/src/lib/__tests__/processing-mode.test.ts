@@ -3,55 +3,11 @@ import {
   effectiveLiveTranscription,
   isUnprocessedRecording,
   modeChipDisplay,
-  shouldAutoDiarizeAtStop,
-  stopAction,
   transcriptEmptyStateVariant,
 } from '../processing-mode';
 
-describe('stopAction', () => {
-  // Signature: stopAction(startedDeferred, everDeferred, overrideMode).
-  it('processes immediately when a deferred-started session was overridden live', () => {
-    expect(stopAction(true, true, 'live')).toBe('process-now');
-  });
-  it('marks a still-deferred session for backlog', () => {
-    expect(stopAction(true, true, null)).toBe('mark-defer');
-  });
-  it('marks a live session the user deferred mid-meeting', () => {
-    // Live-started, deferred mid-way (chip sets mode='defer') → ever-deferred.
-    expect(stopAction(false, true, 'defer')).toBe('mark-defer');
-  });
-  it('does nothing for a normal live meeting that was never deferred', () => {
-    expect(stopAction(false, false, null)).toBe('none');
-  });
-
-  // The square of the matrix Finding 1 was about: a session that started LIVE,
-  // was flipped to defer mid-recording, then flipped back to live. It has
-  // startedDeferred=false but everDeferred=true — its deferred span is a gap and
-  // the re-attached VAD restarts timestamps near 0, so it MUST get a repair pass.
-  it('repairs a live→defer→live session via ever-deferred', () => {
-    expect(stopAction(false, true, 'live')).toBe('process-now');
-  });
-  // Live-started, deferred mid-way and NOT overridden back to live: its tail is
-  // missing, so mark-defer even if no explicit override was recorded.
-  it('marks a live→defer (never re-lived) session for backlog even with no override', () => {
-    expect(stopAction(false, true, null)).toBe('mark-defer');
-  });
-});
-
-describe('shouldAutoDiarizeAtStop', () => {
-  it('runs stop-time auto-diarization only for a normal live meeting', () => {
-    expect(shouldAutoDiarizeAtStop('none')).toBe(true);
-  });
-  it('skips it for a process-now meeting (the full pass already diarizes)', () => {
-    expect(shouldAutoDiarizeAtStop('process-now')).toBe(false);
-  });
-  it('skips it for a mark-defer meeting — NOTHING runs until manual/AC processing', () => {
-    // The 1.10 feedback bug: on battery the meeting was marked deferred but
-    // auto-diarization still ran immediately at stop. Deferred meetings get
-    // their diarization from the backlog pipeline instead.
-    expect(shouldAutoDiarizeAtStop('mark-defer')).toBe(false);
-  });
-});
+// stopAction / shouldAutoDiarizeAtStop moved to Rust with their tables (specs/0083:
+// audio/wrap_up/stop_action.rs).
 
 describe('effectiveLiveTranscription', () => {
   it('prefers the live event value when present', () => {

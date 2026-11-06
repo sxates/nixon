@@ -1,8 +1,10 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { invoke } from '@tauri-apps/api/core';
 import { recordingService } from '@/services/recordingService';
-import { makeSafeUnlisten } from '@/lib/safe-listen';
+import { makeSafeUnlisten, safeListen } from '@/lib/safe-listen';
+import { WRAP_UP_EVENT, wrapUpStatus, type WrapUpState } from '@/lib/wrap-up';
 
 /**
  * Recording state synchronized with backend
@@ -50,7 +52,13 @@ interface RecordingStateContextType extends RecordingState {
   isStopping: boolean;
   isProcessing: boolean;
   isSaving: boolean;
+
+  /** specs/0083 W2b: the latest meeting wrap-up Rust reported, or null when none is recent. */
+  wrapUp: WrapUpState | null;
 }
+
+/** How long `completed` shows after a save before the recorder settles back to idle. */
+const COMPLETED_SETTLE_MS = 1500;
 
 const RecordingStateContext = createContext<RecordingStateContextType | null>(null);
 
@@ -61,6 +69,9 @@ export const useRecordingState = () => {
   }
   return context;
 };
+
+/** specs/0083 W2b: the latest `meeting-wrap-up` state (hydrated on mount), or null. */
+export const useWrapUp = (): WrapUpState | null => useRecordingState().wrapUp;
 
 export function RecordingStateProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<RecordingState>({
@@ -75,6 +86,7 @@ export function RecordingStateProvider({ children }: { children: React.ReactNode
   });
 
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const [wrapUp, setWrapUp] = useState<WrapUpState | null>(null);
 
   // NEW: Status setter with logging
   const setStatus = useCallback((status: RecordingStatus, message?: string) => {
@@ -178,10 +190,12 @@ export function RecordingStateProvider({ children }: { children: React.ReactNode
           setState(prev => {
             // Set status to STOPPING if not already in stop flow
             // This ensures smooth UI transition for tray/keyboard stops
+            // specs/0083: `meeting-wrap-up` drives these; never step back from them.
             const newStatus = [
               RecordingStatus.STOPPING,
               RecordingStatus.PROCESSING_TRANSCRIPTS,
-              RecordingStatus.SAVING
+              RecordingStatus.SAVING,
+              RecordingStatus.COMPLETED,
             ].includes(prev.status)
               ? prev.status  // Already in stop flow
               : RecordingStatus.STOPPING;  // New stop, transition smoothly
@@ -248,10 +262,60 @@ export function RecordingStateProvider({ children }: { children: React.ReactNode
     syncWithBackend();
   }, []);
 
+  // specs/0083 W2b — the wrap-up drives the post-stop status. Every stop source (rail, tray,
+  // Zoom end, notification) reports here, whatever route is showing, so the rail and the
+  // sidebar reflect it without anyone navigating. A stage that maps to no status (the saved
+  // meeting's diarizing/summarizing) leaves it alone: the queue shows those.
+  const applyWrapUp = useCallback((next: WrapUpState, hydrated: boolean) => {
+    setWrapUp(next);
+    const mapped = wrapUpStatus(next.stage);
+    if (!mapped) return;
+    // A wrap-up that finished before this mount is history, not a status to show again.
+    if (hydrated && (mapped === 'completed' || mapped === 'error' || mapped === 'idle')) return;
+    setState((prev) => ({
+      ...prev,
+      status: mapped as RecordingStatus,
+      statusMessage: next.stage === 'failed' ? next.message ?? undefined : undefined,
+      ...(mapped === 'processing' || mapped === 'saving'
+        ? { isRecording: false, isPaused: false, isActive: false }
+        : {}),
+    }));
+  }, []);
+
+  useEffect(() => {
+    let latestId = 0;
+    const dispose = safeListen<WrapUpState>(WRAP_UP_EVENT, (event) => {
+      if (!event.payload) return;
+      latestId = Math.max(latestId, event.payload.id);
+      applyWrapUp(event.payload, false);
+    });
+    // A reload, or a window shown mid-wrap-up: pick up where Rust is.
+    invoke<WrapUpState | null>('api_get_wrap_up_state')
+      .then((current) => {
+        // A live event already arrived for this (or a later) wrap-up: it is fresher.
+        if (current && current.id > latestId) applyWrapUp(current, true);
+      })
+      .catch((error) => console.warn('[RecordingStateContext] wrap-up state unavailable:', error));
+    return dispose;
+  }, [applyWrapUp]);
+
+  // `saved` shows as completed for a moment, then the recorder is idle again.
+  useEffect(() => {
+    if (state.status !== RecordingStatus.COMPLETED) return;
+    const timer = setTimeout(() => {
+      setState((prev) =>
+        prev.status === RecordingStatus.COMPLETED
+          ? { ...prev, status: RecordingStatus.IDLE, statusMessage: undefined }
+          : prev,
+      );
+    }, COMPLETED_SETTLE_MS);
+    return () => clearTimeout(timer);
+  }, [state.status]);
+
   // specs/0019 WS6.2 — watchdog so the floating recording bar can never linger. The
-  // post-stop pipeline (transcription wait up to 60s + buffer/save) drives the transient
-  // STOPPING/PROCESSING/SAVING states; if any branch of the stop handler fails to reach a
-  // terminal state (COMPLETED/IDLE/ERROR), the bar would stay forever. This forces IDLE
+  // wrap-up's events drive the transient STOPPING/PROCESSING/SAVING states (specs/0083); if
+  // a terminal stage never arrives (a lost event, a stop with no wrap-up such as a dev
+  // fixture's), the bar would stay forever. This forces IDLE
   // after a generous bound past the longest legitimate finalize, as a pure safety net —
   // any normal flow reaches a terminal state well before it fires and cancels it.
   useEffect(() => {
@@ -261,7 +325,7 @@ export function RecordingStateProvider({ children }: { children: React.ReactNode
       state.status === RecordingStatus.SAVING;
     if (!transient) return;
 
-    const FINALIZE_WATCHDOG_MS = 120000; // > 60s transcription wait + buffers + save
+    const FINALIZE_WATCHDOG_MS = 120000; // well past the drain timeout + save
     const timer = setTimeout(() => {
       console.warn(
         `[RecordingState] Finalize watchdog fired in '${state.status}' — forcing IDLE so the recording bar clears`,
@@ -285,7 +349,8 @@ export function RecordingStateProvider({ children }: { children: React.ReactNode
     isStopping: state.status === RecordingStatus.STOPPING,
     isProcessing: state.status === RecordingStatus.PROCESSING_TRANSCRIPTS,
     isSaving: state.status === RecordingStatus.SAVING,
-  }), [state, setStatus]);
+    wrapUp,
+  }), [state, setStatus, wrapUp]);
 
   return (
     <RecordingStateContext.Provider value={contextValue}>

@@ -45,9 +45,9 @@ import {
   needsRetranscription,
   type BacklogView,
   type DeferredMeeting,
+  type HandoffOutcome,
 } from '@/lib/deferred-backlog';
 import { decideAutostart, AUTOSTART_DEBOUNCE_MS } from '@/lib/backlog-autostart';
-import type { HandoffOutcome } from '@/lib/stop-processing-handoff';
 
 interface PowerState {
   onBattery: boolean;
@@ -212,7 +212,7 @@ export function useDeferredBacklog(): UseDeferredBacklogReturn {
   // Best-effort. Returns 'aborted' if the user stopped mid-wait, else 'done' (a timeout/
   // error just skips diarization — it never blocks the drain).
   const runDiarization = useCallback(async (m: DeferredMeeting): Promise<'aborted' | 'done'> => {
-    // Same gating as useRecordingStop's auto-diarization: opt-in AND models already
+    // Same gating as the wrap-up's stop-time diarization: opt-in AND models already
     // present (never auto-download mid-flow).
     try {
       const [enabled, present] = await Promise.all([

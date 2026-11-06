@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { TranscriptSegmentData } from '@/types';
+import { useDocumentVisible } from '@/lib/use-document-visible';
 
 const INTERVAL_MS = 15; // Character reveal interval
 const DURATION_MS = 800; // Total streaming duration
@@ -18,8 +19,11 @@ interface StreamingSegment {
 export function useTranscriptStreaming(
   segments: TranscriptSegmentData[],
   isRecording: boolean,
-  enableStreaming: boolean
+  enableStreamingWhenVisible: boolean
 ) {
+  // specs/0083 W2c: the typewriter is a 15 ms timer; a hidden window shows the text whole.
+  const visible = useDocumentVisible();
+  const enableStreaming = enableStreamingWhenVisible && visible;
   const [streamingSegment, setStreamingSegment] = useState<StreamingSegment | null>(null);
   const lastSegmentIdRef = useRef<string | null>(null);
   const streamingIntervalRef = useRef<NodeJS.Timeout | null>(null);

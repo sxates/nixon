@@ -2,8 +2,9 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 
 // specs/0057 Plan 2 residual — the `transcript-error` listener had no emitter anywhere (no Rust
-// `emit`, no frontend producer), so it was dead code. These tests pin the live wiring:
-// `transcription-error` still stops the recording, and nothing subscribes to `transcript-error`.
+// `emit`, no frontend producer), so it was dead code. These tests pin the live wiring. Since
+// specs/0083 a `transcription-error` stops nothing from the webview (a per-chunk engine failure
+// leaves the recording running; stopping is Rust's), and nothing subscribes to `transcript-error`.
 
 const { listenMock, handlers } = vi.hoisted(() => {
   const handlers = new Map<string, (event: { payload: unknown }) => void>();
@@ -27,19 +28,17 @@ describe('useTranscriptionErrorListeners', () => {
     listenMock.mockClear();
   });
 
-  it('stops the recording when transcription-error fires', async () => {
-    const onRecordingStop = vi.fn();
-    renderHook(() => useTranscriptionErrorListeners({ onRecordingStop }));
+  it('handles transcription-error without throwing', async () => {
+    renderHook(() => useTranscriptionErrorListeners());
     await flush();
 
     const handler = handlers.get('transcription-error');
     expect(handler).toBeDefined();
-    act(() => handler!({ payload: { message: 'model failed to load' } }));
-    expect(onRecordingStop).toHaveBeenCalledWith(false);
+    expect(() => act(() => handler!({ payload: { message: 'model failed to load' } }))).not.toThrow();
   });
 
   it('does not subscribe to the emitter-less transcript-error event', async () => {
-    renderHook(() => useTranscriptionErrorListeners({ onRecordingStop: vi.fn() }));
+    renderHook(() => useTranscriptionErrorListeners());
     await flush();
 
     expect(listenMock.mock.calls.map((c) => c[0])).toEqual([

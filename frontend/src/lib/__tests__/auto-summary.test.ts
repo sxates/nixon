@@ -5,12 +5,12 @@ import {
   autoSummarySkipToast,
 } from '@/lib/auto-summary';
 
-// specs/0029 WS7.3 — the auto-summary gate on /meeting-details?source=recording. Every
-// skip must have an explicit reason (surfaced as a toast when the user just finished a
-// recording), and normal navigation must stay silent.
+// specs/0029 WS7.3 — the auto-summary gate on /meeting-details?source=import. Every skip
+// must have an explicit reason (surfaced as a toast when the user just finished an import),
+// and normal navigation must stay silent. A recording's summary is Rust's (specs/0083).
 
 const passing: AutoSummaryGateInput = {
-  source: 'recording',
+  source: 'import',
   isAutoSummaryEnabled: true,
   transcriptCount: 12,
   hasModelConfigured: true,
@@ -22,13 +22,18 @@ describe('autoSummarySkipReason (WS7.3)', () => {
   });
 
   it('skips silently-classified when not navigated from a recording', () => {
-    expect(autoSummarySkipReason({ ...passing, source: null })).toBe('not-from-recording');
-    expect(autoSummarySkipReason({ ...passing, source: 'sidebar' })).toBe('not-from-recording');
+    expect(autoSummarySkipReason({ ...passing, source: null })).toBe('not-auto-source');
+    expect(autoSummarySkipReason({ ...passing, source: 'sidebar' })).toBe('not-auto-source');
   });
 
   it('proceeds when navigated from an audio import (source=import)', () => {
-    // Imports land here with a full transcript already — treat them like recordings.
     expect(autoSummarySkipReason({ ...passing, source: 'import' })).toBeNull();
+  });
+
+  // specs/0083: the Rust wrap-up starts a recording's summary, in parallel with diarization.
+  // A page that also fired on `source=recording` would run a second one.
+  it('never fires for source=recording — the wrap-up already started that summary', () => {
+    expect(autoSummarySkipReason({ ...passing, source: 'recording' })).toBe('not-auto-source');
   });
 
   it('skips when the toggle is off (the default!)', () => {
@@ -152,7 +157,7 @@ describe('autoSummarySkipReason (WS7.3)', () => {
         transcriptCount: 0,
         hasModelConfigured: false,
       }),
-    ).toBe('not-from-recording');
+    ).toBe('not-auto-source');
   });
 
   it('prioritizes the disabled toggle over transcript/model state', () => {
@@ -189,7 +194,7 @@ describe('autoSummarySkipToast — 0051 defer copy', () => {
 
 describe('autoSummarySkipToast (WS7.3)', () => {
   it('stays silent for normal navigation', () => {
-    expect(autoSummarySkipToast('not-from-recording')).toBeNull();
+    expect(autoSummarySkipToast('not-auto-source')).toBeNull();
   });
 
   it('explains the deferral and how to process manually', () => {

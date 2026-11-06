@@ -6,7 +6,6 @@
 // shapes are unchanged from when they lived in lib.rs.
 
 use log::{error as log_error, info as log_info};
-use serde::Serialize;
 use std::sync::Mutex as StdMutex;
 use tauri::{AppHandle, Runtime};
 
@@ -23,13 +22,6 @@ use super::{list_audio_devices, trigger_audio_permission, AudioDevice};
 // Global language preference storage (default to "auto-translate" for automatic translation to English)
 static LANGUAGE_PREFERENCE: std::sync::LazyLock<StdMutex<String>> =
     std::sync::LazyLock::new(|| StdMutex::new("auto-translate".to_string()));
-
-#[derive(Debug, Serialize, Clone)]
-pub struct TranscriptionStatus {
-    chunks_in_queue: usize,
-    is_processing: bool,
-    last_activity_ms: u64,
-}
 
 #[tauri::command]
 pub async fn start_recording<R: Runtime>(
@@ -107,15 +99,6 @@ pub async fn stop_recording<R: Runtime>(
 #[tauri::command]
 pub async fn is_recording() -> bool {
     super::recording_commands::is_recording().await
-}
-
-#[tauri::command]
-pub fn get_transcription_status() -> TranscriptionStatus {
-    TranscriptionStatus {
-        chunks_in_queue: 0,
-        is_processing: false,
-        last_activity_ms: 0,
-    }
 }
 
 // Audio level monitoring commands

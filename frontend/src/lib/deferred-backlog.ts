@@ -193,3 +193,11 @@ export function selectBacklogView(state: BacklogState): BacklogView {
     total: state.items.length,
   };
 }
+
+/** Whether the deferred backlog took ownership of a meeting handed to it (spec 0051 WS2;
+ * the wrap-up's `handoff` stage, specs/0083). */
+export type HandoffOutcome =
+  | { accepted: true }
+  /** `no-folder-path`: the backlog could not resolve the meeting's audio folder.
+   *  `threw`: the enqueue call itself failed. */
+  | { accepted: false; reason: 'no-folder-path' | 'threw' };

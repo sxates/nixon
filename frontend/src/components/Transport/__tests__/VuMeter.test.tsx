@@ -104,4 +104,23 @@ describe('VuMeter', () => {
     expect(pending.size).toBe(0);
     expect(getByRole('img').getAttribute('aria-label')).toBe('MIX level -3 VU');
   });
+
+  // specs/0083 W2c: the window runs unthrottled when hidden, so the loop must stop itself.
+  it('schedules no frames while the window is hidden, and resumes when shown', () => {
+    let state: DocumentVisibilityState = 'hidden';
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => state });
+    try {
+      const { rerender } = render(<VuMeter db={-10} active label="MIX" />);
+      rerender(<VuMeter db={-3} active label="MIX" />);
+      expect(pending.size).toBe(0);
+
+      state = 'visible';
+      act(() => {
+        document.dispatchEvent(new Event('visibilitychange'));
+      });
+      expect(pending.size).toBe(1);
+    } finally {
+      state = 'visible';
+    }
+  });
 });

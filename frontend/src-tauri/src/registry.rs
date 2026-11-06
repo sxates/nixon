@@ -30,7 +30,6 @@ pub fn invoke_handler() -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Sen
         audio::capture_commands::start_recording,
         audio::capture_commands::stop_recording,
         audio::capture_commands::is_recording,
-        audio::capture_commands::get_transcription_status,
         // Webview-confined file access (specs/0028)
         fs_guard::read_audio_file,
         fs_guard::save_transcript,
@@ -125,6 +124,7 @@ pub fn invoke_handler() -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Sen
         meetings::commands::api_create_meeting,
         meetings::commands::api_delete_meeting,
         meetings::discard::api_recording_is_safe_to_discard,
+        meetings::recovery::api_folder_has_saved_transcript,
         meetings::commands::api_get_meeting,
         meetings::commands::api_get_meeting_metadata,
         meetings::commands::api_get_meeting_processing_mode,
