@@ -468,6 +468,7 @@ pub async fn start_recording_with_meeting_name<R: Runtime>(
     // Set recording flag and reset speech detection flag
     info!("🔍 Setting IS_RECORDING to true and resetting SPEECH_DETECTED_EMITTED");
     IS_RECORDING.store(true, Ordering::SeqCst);
+    crate::power::keep_awake::begin_recording(); // specs/0083 W1: no idle sleep mid-recording
     drop(engine_lifecycle_guard);
     reset_speech_detected_flag(); // Reset for new recording session
 
@@ -738,6 +739,7 @@ pub async fn start_recording_with_devices_and_meeting<R: Runtime>(
     // Set recording flag and reset speech detection flag
     info!("🔍 Setting IS_RECORDING to true and resetting SPEECH_DETECTED_EMITTED");
     IS_RECORDING.store(true, Ordering::SeqCst);
+    crate::power::keep_awake::begin_recording(); // specs/0083 W1: no idle sleep mid-recording
     drop(engine_lifecycle_guard);
     reset_speech_detected_flag(); // Reset for new recording session
 
@@ -828,6 +830,8 @@ pub async fn stop_recording<R: Runtime>(
         info!("Recording was not active");
         return Ok(serde_json::json!({ "message": "Recording was not active" }));
     }
+    // specs/0083 W1: every return below (errors included) releases the keep-awake hold.
+    let keep_awake_release = crate::power::keep_awake::EndRecordingOnDrop;
 
     // Emit shutdown progress to frontend
     let _ = app.emit(
@@ -862,6 +866,8 @@ pub async fn stop_recording<R: Runtime>(
     match stop_result {
         Ok(_) => {
             info!("✅ Audio streams stopped successfully - no more chunks will be created");
+            // Capture is over: the Mac may sleep during the drain and processing (acceptance A).
+            drop(keep_awake_release);
         }
         Err(e) => {
             error!("❌ Failed to stop audio streams: {}", e);
