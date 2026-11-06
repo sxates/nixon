@@ -38,6 +38,17 @@ export function TodayToolbar({
   const hasSlot = useHasNavSlot();
   const nav = (
           <div className="flex items-center gap-1">
+            {/* Today sits LEFT of the arrows: the nav is right-aligned, so it appearing and
+                disappearing never moves the arrows. */}
+            {!(viewMode !== 'week' && viewIsToday) && (
+              <button
+                type="button"
+                onClick={onToday}
+                className="mr-1 rounded-md border border-border bg-card px-2.5 py-1 text-[12px] font-semibold text-foreground transition-colors hover:bg-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                Today
+              </button>
+            )}
             <button
               type="button"
               onClick={onPrev}
@@ -73,16 +84,6 @@ export function TodayToolbar({
             >
               <ChevronRight className="h-4 w-4" aria-hidden="true" />
             </button>
-
-            {!(viewMode !== 'week' && viewIsToday) && (
-              <button
-                type="button"
-                onClick={onToday}
-                className="ml-1 rounded-md border border-border bg-card px-2.5 py-1 text-[12px] font-semibold text-foreground transition-colors hover:bg-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                Today
-              </button>
-            )}
           </div>
   );
   // In the Meetings page the navigation sits at the right of the view-tab row (NavSlot);
