@@ -46,33 +46,43 @@ pub async fn binary_path(pool: &SqlitePool, kind: CliKind) -> Result<Option<Stri
         .and_then(|e| e.binary_path))
 }
 
+/// What Locate… says on a database that has no settings row yet (onboarding not done).
+pub const NO_SETTINGS_ROW: &str = "Finish setting up Nixon first, then choose Claude Code.";
+
+/// [`set_binary_path`] found no settings row to store the override in. Its message is
+/// [`NO_SETTINGS_ROW`], shown to the user as is.
+#[derive(Debug)]
+pub struct NoSettingsRow;
+
+impl std::fmt::Display for NoSettingsRow {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(NO_SETTINGS_ROW)
+    }
+}
+
+impl std::error::Error for NoSettingsRow {}
+
 /// Saves (or, with `None`, clears) the override for `kind`, leaving the other CLI's entry
 /// and the saved provider/model alone, and updates the in-memory mirror.
+///
+/// It never creates the settings row: inventing one would save a provider the user never
+/// chose. With no row, saving a path fails with [`NoSettingsRow`]; clearing is a no-op.
 pub async fn set_binary_path(
     pool: &SqlitePool,
     kind: CliKind,
     path: Option<&str>,
-) -> Result<(), sqlx::Error> {
+) -> anyhow::Result<()> {
     let mut config = read(pool).await?;
     config.entry(kind.id().to_string()).or_default().binary_path = path.map(str::to_string);
-    let json = serde_json::to_string(&config).map_err(|e| {
-        sqlx::Error::Protocol(format!("Failed to serialize cliProviderConfig: {e}"))
-    })?;
+    let json = serde_json::to_string(&config)
+        .map_err(|e| anyhow::anyhow!("Failed to serialize cliProviderConfig: {e}"))?;
     let updated = sqlx::query("UPDATE settings SET cliProviderConfig = ?1 WHERE id = '1'")
         .bind(&json)
         .execute(pool)
         .await?
         .rows_affected();
-    if updated == 0 {
-        // No settings row yet (nothing chosen): create it with the built-in default.
-        sqlx::query(
-            "INSERT INTO settings (id, provider, model, whisperModel, cliProviderConfig) \
-             VALUES ('1', ?1, '', 'large-v3', ?2)",
-        )
-        .bind(crate::config::DEFAULT_SUMMARY_PROVIDER)
-        .bind(&json)
-        .execute(pool)
-        .await?;
+    if updated == 0 && path.is_some() {
+        return Err(NoSettingsRow.into());
     }
     mirror(kind, path);
     Ok(())

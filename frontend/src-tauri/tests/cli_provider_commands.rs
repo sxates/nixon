@@ -41,13 +41,15 @@ async fn app_with_db(
 }
 
 async fn status_of(app: &tauri::App<tauri::test::MockRuntime>) -> CliProviderStatus {
-    let all = api_cli_providers_status(app.state()).await.unwrap();
+    let all = api_cli_providers_status(app.state(), None).await.unwrap();
     assert_eq!(all.len(), 1, "only Claude Code until W2");
     all.into_iter().next().unwrap()
 }
 
 #[tokio::test]
 async fn migration_adds_the_column_on_a_fresh_db_and_config_round_trips() {
+    // The override mirror is process-wide: hold the binary-wide lock while changing it.
+    let _fake = FakeClaude::install().await;
     let (app, _dir) = app_with_db(None).await;
     let pool = app.state::<AppState>().db_manager.pool().clone();
     // The column exists even with no settings row yet.
@@ -57,6 +59,20 @@ async fn migration_adds_the_column_on_a_fresh_db_and_config_round_trips() {
             .unwrap(),
         None
     );
+    // With no settings row, Locate refuses rather than inventing a provider row.
+    let err = config::set_binary_path(&pool, CliKind::ClaudeCode, Some("/opt/x/claude"))
+        .await
+        .unwrap_err();
+    assert_eq!(err.to_string(), config::NO_SETTINGS_ROW);
+    let rows: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM settings")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(rows, 0, "no settings row may be created by Locate");
+    assert_eq!(config::user_override(CliKind::ClaudeCode), None);
+    SettingsRepository::save_model_config(&pool, "builtin-ai", "qwen3.5:2b", "large-v3", None)
+        .await
+        .unwrap();
     config::set_binary_path(&pool, CliKind::ClaudeCode, Some("/opt/x/claude"))
         .await
         .unwrap();
@@ -91,6 +107,7 @@ async fn migration_adds_the_column_on_a_fresh_db_and_config_round_trips() {
 
 #[tokio::test]
 async fn saving_the_override_keeps_the_chosen_provider_and_model() {
+    let _fake = FakeClaude::install().await;
     let (app, _dir) = app_with_db(Some("claude-code")).await;
     let pool = app.state::<AppState>().db_manager.pool().clone();
     config::set_binary_path(&pool, CliKind::ClaudeCode, Some("/opt/x/claude"))
@@ -102,6 +119,9 @@ async fn saving_the_override_keeps_the_chosen_provider_and_model() {
             .await
             .unwrap();
     assert_eq!((p.as_str(), m.as_str()), ("claude-code", "sonnet"));
+    config::set_binary_path(&pool, CliKind::ClaudeCode, None)
+        .await
+        .unwrap();
 }
 
 #[test]
@@ -242,10 +262,37 @@ async fn status_reports_ready_signed_out_and_too_old_and_only_ever_probes() {
 #[test]
 fn the_login_shell_probe_is_allowed_only_for_the_selected_provider() {
     use app_lib::cli_llm::commands::allow_shell_probe;
-    assert!(allow_shell_probe(Some("claude-code"), CliKind::ClaudeCode));
-    assert!(!allow_shell_probe(Some("claude-code"), CliKind::CodexCli));
-    assert!(!allow_shell_probe(Some("builtin-ai"), CliKind::ClaudeCode));
-    assert!(!allow_shell_probe(None, CliKind::ClaudeCode));
+    let (k, c) = (CliKind::ClaudeCode, CliKind::CodexCli);
+    // Saved in Settings.
+    assert!(allow_shell_probe(Some("claude-code"), None, k));
+    assert!(!allow_shell_probe(Some("claude-code"), None, c));
+    assert!(!allow_shell_probe(Some("builtin-ai"), None, k));
+    // Picked in the chooser (the panel is showing it), not yet saved.
+    assert!(allow_shell_probe(None, Some("claude-code"), k));
+    assert!(allow_shell_probe(Some("builtin-ai"), Some("claude-code"), k));
+    assert!(!allow_shell_probe(None, Some("codex-cli"), k));
+    // The dropdown's status call names nothing.
+    assert!(!allow_shell_probe(None, None, k));
+}
+
+#[tokio::test]
+async fn the_chooser_selection_allows_the_shell_probe_and_the_dropdown_never_does() {
+    use app_lib::cli_llm::commands::shell_probe_allowed;
+    let k = CliKind::ClaudeCode;
+    // First-time user: nothing saved yet, Claude Code picked in the chooser.
+    let (app, _dir) = app_with_db(Some("builtin-ai")).await;
+    let pool = app.state::<AppState>().db_manager.pool().clone();
+    assert!(shell_probe_allowed(&pool, Some("claude-code"), k).await);
+    assert!(!shell_probe_allowed(&pool, None, k).await, "dropdown open");
+    // No settings row at all: same rule.
+    let (fresh, _d) = app_with_db(None).await;
+    let fresh_pool = fresh.state::<AppState>().db_manager.pool().clone();
+    assert!(shell_probe_allowed(&fresh_pool, Some("claude-code"), k).await);
+    assert!(!shell_probe_allowed(&fresh_pool, None, k).await);
+    // Saved provider keeps working with no selection passed.
+    let (saved, _s) = app_with_db(Some("claude-code")).await;
+    let saved_pool = saved.state::<AppState>().db_manager.pool().clone();
+    assert!(shell_probe_allowed(&saved_pool, None, k).await);
 }
 
 #[tokio::test]
@@ -269,7 +316,7 @@ async fn status_checks_again_every_call() {
 async fn set_path_rejects_what_cannot_run_and_saves_what_can() {
     let fake = FakeClaude::install().await;
     fake.set_mode("status-ready");
-    let (app, scratch) = app_with_db(None).await;
+    let (app, scratch) = app_with_db(Some("builtin-ai")).await;
     let pool = app.state::<AppState>().db_manager.pool().clone();
 
     let plain = scratch.path().join("not-executable");
@@ -337,6 +384,11 @@ async fn set_path_rejects_what_cannot_run_and_saves_what_can() {
     .await
     .unwrap();
     assert_eq!(serde_json::to_value(&s).unwrap()["state"], "ready");
+    // The status says an override is saved, so the panel can offer "Use default".
+    assert_eq!(
+        serde_json::to_value(&s).unwrap()["overridePath"],
+        wrapper.to_str().unwrap()
+    );
     assert_eq!(
         config::binary_path(&pool, CliKind::ClaudeCode)
             .await
@@ -351,9 +403,13 @@ async fn set_path_rejects_what_cannot_run_and_saves_what_can() {
     assert!(discovery::cached(CliKind::ClaudeCode).is_some());
 
     // None clears it (and the cache, so the next lookup re-resolves).
-    api_cli_provider_set_path(app.state(), "claude-code".into(), None)
+    let cleared = api_cli_provider_set_path(app.state(), "claude-code".into(), None)
         .await
         .unwrap();
+    assert!(serde_json::to_value(&cleared)
+        .unwrap()
+        .get("overridePath")
+        .is_none());
     assert_eq!(
         config::binary_path(&pool, CliKind::ClaudeCode)
             .await
@@ -382,4 +438,43 @@ async fn test_command_sends_the_fixed_prompt_and_reports_latency_or_the_failure_
     assert!(bad.error.unwrap().contains("signed in"));
     let v = serde_json::to_value(&ok).unwrap();
     assert!(v.get("latencyMs").is_some() && v.get("error").is_none());
+}
+
+#[tokio::test]
+async fn locate_on_a_db_with_no_settings_row_refuses_with_plain_copy() {
+    let fake = FakeClaude::install().await;
+    fake.set_mode("status-ready");
+    let (app, _dir) = app_with_db(None).await;
+    let pool = app.state::<AppState>().db_manager.pool().clone();
+    let err = api_cli_provider_set_path(
+        app.state(),
+        "claude-code".into(),
+        Some(fake.wrapper().display().to_string()),
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(
+        err,
+        "Finish setting up Nixon first, then choose Claude Code."
+    );
+    let rows: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM settings")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(rows, 0, "Locate must not insert provider='builtin-ai', model=''");
+    assert_eq!(config::user_override(CliKind::ClaudeCode), None);
+}
+
+#[tokio::test]
+async fn status_reports_no_override_when_none_is_saved() {
+    let fake = FakeClaude::install().await;
+    fake.set_mode("status-ready");
+    let (app, _dir) = app_with_db(Some("builtin-ai")).await;
+    let pool = app.state::<AppState>().db_manager.pool().clone();
+    config::set_binary_path(&pool, CliKind::ClaudeCode, None)
+        .await
+        .unwrap();
+    let v = serde_json::to_value(status_of(&app).await).unwrap();
+    assert_eq!(v["state"], "ready");
+    assert!(v.get("overridePath").is_none(), "{v}");
 }

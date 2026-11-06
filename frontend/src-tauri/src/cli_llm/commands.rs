@@ -56,6 +56,9 @@ pub struct CliProviderStatus {
     /// so the UI shows this with Check again instead of the install / sign-in copy.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub probe_error: Option<String>,
+    /// The Locate… path, when one is saved (so the UI offers "Use default" only then).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub override_path: Option<String>,
     pub models: Vec<ModelChoice>,
 }
 
@@ -82,9 +85,25 @@ fn models(kind: CliKind) -> Vec<ModelChoice> {
 }
 
 /// The login-shell `command -v` runs user dotfiles, so it is allowed only while the user
-/// has this very provider selected in Settings (owner decision 7), never per LLM call.
-pub fn allow_shell_probe(saved_provider: Option<&str>, kind: CliKind) -> bool {
-    saved_provider == Some(kind.id())
+/// has this very provider selected (owner decision 7): saved in Settings, or picked in the
+/// provider chooser so its panel is showing (`selected`). Never from the dropdown's own
+/// status call, and never per LLM call.
+pub fn allow_shell_probe(
+    saved_provider: Option<&str>,
+    selected: Option<&str>,
+    kind: CliKind,
+) -> bool {
+    saved_provider == Some(kind.id()) || selected == Some(kind.id())
+}
+
+/// [`allow_shell_probe`] with the saved provider read from the DB.
+pub async fn shell_probe_allowed(
+    pool: &sqlx::SqlitePool,
+    selected: Option<&str>,
+    kind: CliKind,
+) -> bool {
+    let saved = config::saved_provider(pool).await.ok().flatten();
+    allow_shell_probe(saved.as_deref(), selected, kind)
 }
 
 /// Maps a discovery result (and, when the CLI was found, its auth probe) to the status the
@@ -104,6 +123,7 @@ pub fn build_status(
         min_version: discovery::min_version(kind),
         auth_note: None,
         probe_error: None,
+        override_path: None,
         models: models(kind),
     };
     let reason = |e: CliError| CliFailure::new(kind, e).to_string();
@@ -135,21 +155,22 @@ pub fn build_status(
 
 /// Forgets the cached binary, then looks again and asks the CLI who is signed in. Always
 /// re-probing makes every call double as "Check again".
-async fn probe_status(pool: &sqlx::SqlitePool, kind: CliKind) -> CliProviderStatus {
+async fn probe_status(
+    pool: &sqlx::SqlitePool,
+    kind: CliKind,
+    selected: Option<&str>,
+) -> CliProviderStatus {
     discovery::invalidate(kind);
-    let provider = config::saved_provider(pool).await.ok().flatten();
     let override_path = config::user_override(kind);
-    let found = discovery::discover(
-        kind,
-        override_path,
-        allow_shell_probe(provider.as_deref(), kind),
-    )
-    .await;
+    let allow_shell = shell_probe_allowed(pool, selected, kind).await;
+    let found = discovery::discover(kind, override_path.clone(), allow_shell).await;
     let auth = match &found {
         Ok(d) => Some(auth::check(kind, &d.path).await),
         Err(_) => None,
     };
-    build_status(kind, found, auth)
+    let mut status = build_status(kind, found, auth);
+    status.override_path = override_path.map(|p| p.display().to_string());
+    status
 }
 
 fn kind_of(id: &str) -> Result<CliKind, String> {
@@ -158,14 +179,18 @@ fn kind_of(id: &str) -> Result<CliKind, String> {
 
 /// Detection state for each subscription CLI. Safe to call whenever Settings opens or the
 /// user presses "Check again"; it re-probes every time.
+///
+/// `selected` is the CLI id whose panel is showing (the user picked it in the chooser); it
+/// lets that CLI's lookup try the login shell. The chooser's dropdown passes nothing.
 #[tauri::command]
 pub async fn api_cli_providers_status(
     state: State<'_, AppState>,
+    selected: Option<String>,
 ) -> Result<Vec<CliProviderStatus>, String> {
     let pool = state.db_manager.pool();
     let mut all = Vec::new();
     for kind in LISTED {
-        all.push(probe_status(pool, kind).await);
+        all.push(probe_status(pool, kind, selected.as_deref()).await);
     }
     Ok(all)
 }
@@ -196,8 +221,15 @@ pub async fn api_cli_provider_set_path(
     }
     config::set_binary_path(pool, kind, path.as_deref())
         .await
-        .map_err(|e| format!("Couldn't save that location: {e}"))?;
-    Ok(probe_status(pool, kind).await)
+        .map_err(|e| {
+            if e.is::<config::NoSettingsRow>() {
+                e.to_string()
+            } else {
+                format!("Couldn't save that location: {e}")
+            }
+        })?;
+    // Locate… and Use default live on this CLI's own panel, so it counts as selected.
+    Ok(probe_status(pool, kind, Some(kind.id())).await)
 }
 
 /// Locate...: opens the native file chooser and returns the chosen program's absolute path,
