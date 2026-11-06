@@ -67,6 +67,7 @@ import { safeListen } from '@/lib/safe-listen';
 import type { ActionItemWithMeeting, Person } from '@/types';
 import { cn } from '@/lib/utils';
 import { PageHeader } from '@/components/ui/page-header';
+import { MEETINGS_CONTENT_WIDTH } from '@/lib/meetings-view';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 
 const STATUS_SEGMENTS: Array<{ value: StatusFilter; label: string }> = [
@@ -313,7 +314,7 @@ export default function TasksPage() {
 
       {/* Filter bar: status · view (Mine/Everyone/By person) · sort · bulk. */}
       <div className="flex-shrink-0 px-4 min-[900px]:px-7 pb-3">
-        <div className="mx-auto flex max-w-[840px] flex-wrap items-center gap-2">
+        <div className={`mx-auto flex flex-wrap items-center gap-2 ${MEETINGS_CONTENT_WIDTH}`}>
           <SegmentedControl
             aria-label="Filter by status"
             options={STATUS_SEGMENTS}
@@ -461,7 +462,7 @@ export default function TasksPage() {
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 min-[900px]:px-7 pb-12">
-        <div className="mx-auto max-w-[840px]">
+        <div className={`mx-auto ${MEETINGS_CONTENT_WIDTH}`}>
           {/* Standalone to-do entry — creates an "Unattached" manual item. */}
           <AddActionItemRow placeholder="New item — add a to-do…" onAdd={add} />
 
