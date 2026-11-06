@@ -225,3 +225,22 @@ describe('meeting-details channel strip placement (specs/0057 Plan 3, Task 5)', 
     expect(await screen.findByRole('table', { name: 'Channels' })).toBeInTheDocument();
   });
 });
+
+describe('meeting-details header stays pinned while the document scrolls', () => {
+  it('mounts the back button + title OUTSIDE the scroll column, and the tabs inside it', async () => {
+    render(<PageContent meeting={meeting} summaryData={null} />);
+
+    const scrollColumn = await screen.findByTestId('meeting-scroll-column');
+    expect(scrollColumn.className).toContain('overflow-y-auto');
+
+    // Owner feedback: deep in a transcript, "back" must not have scrolled away with it.
+    const back = screen.getByRole('button', { name: 'Back to meetings' });
+    const title = screen.getByRole('heading', { name: 'Standup' });
+    expect(scrollColumn.contains(back)).toBe(false);
+    expect(scrollColumn.contains(title)).toBe(false);
+    expect(screen.getByTestId('meeting-header').contains(back)).toBe(true);
+
+    // The sticky tablist pins to the top of the scroll column, i.e. right under the header.
+    expect(scrollColumn.contains(screen.getByRole('tablist'))).toBe(true);
+  });
+});

@@ -30,6 +30,7 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 - Today and All meetings are now one Meetings page. With a calendar connected, switch between Agenda, Week, Month and List; it remembers the view you used last. The Month view now shows your upcoming meetings, and past ones you didn't record, alongside your recordings.
 - Stopping from the menu bar no longer brings Nixon's window forward, and stopping from any screen, the recorder included, keeps you on it.
 - Nixon starts each meeting's summary as soon as the meeting is saved, so opening the meeting later shows it already written or on its way.
+- The back button and meeting title stay at the top of the page while you scroll a long transcript, summary or notes, with the tabs pinned just below them.
 
 ### Fixed
 
@@ -41,6 +42,7 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 - The transcript save behind the meeting-save command is now a shared function, ready for the background wrap-up (specs/0083 W2a).
 - The Rust side of the background wrap-up (specs/0083 W2a tasks 5–10): every stop source goes through one single-flight `request_stop`, which saves, marks/hands off deferred meetings, finishes audio processing and starts the auto-summary, emitting `meeting-wrap-up` stages. The stop-time decisions and the auto-summary gate were ported from the frontend with their test tables; a startup pre-pass imports a session that a crash left unsaved. The frontend still has to switch over to it.
 - The frontend half (specs/0083 W2b/W2c): the webview only reflects the wrap-up. `useWrapUp` maps stages to `RecordingStatus` and hydrates from `api_get_wrap_up_state`; `WrapUpEffects` marks the IndexedDB copy saved and shows the saved toast; the backlog answers the `handoff` stage; the meeting page joins the shared summary poll instead of auto-generating for `source=recording`; the auto-summary and pinned-language preferences write through to Rust (one-time push of the old localStorage values). Deleted `useRecordingStop`, `useGlobalBarStop`, `lib/recording-stop`, `RecordingPostProcessingProvider`, `lib/stop-processing-handoff`, the session-deferral flags and the `get_transcription_status` stub; added `api_folder_has_saved_transcript` so startup recovery skips meetings Rust already saved. The main window runs with `backgroundThrottling: "disabled"`, and the VU rAF, level feed and transcript typewriter pause while the window is hidden.
+- `pnpm shots` manifest entries can take a `scroll: {selector, top}` for a scrolled-state capture (headless only); `meeting-transcript-scrolled` uses it.
 
 ## [0.13.1] - 2026-10-04
 
