@@ -261,6 +261,8 @@ async fn persist(
         .begin()
         .await
         .context("begin diarization transaction")?;
+    // specs/0084 W2: a deleted or cancelled meeting gets nothing written.
+    super::cancel::ensure_live(&mut *tx, meeting_id).await?;
 
     // Clear prior keys + speaker rows so a re-run never leaves stale labels.
     SpeakersRepository::clear_meeting_speakers(&mut tx, meeting_id)
@@ -644,6 +646,7 @@ pub async fn attribute_and_persist(
     embeddings: &std::collections::HashMap<String, Vec<f32>>,
     setup: AudioSetup,
 ) -> Result<(usize, usize)> {
+    super::cancel::ensure_live(pool, meeting_id).await?; // specs/0084 W2: before any write
     let room = setup.owner_is_clustered();
     let (split_mode, align_mode) = if room {
         (SplitMode::Room, AlignMode::Room)
@@ -715,11 +718,14 @@ pub(super) async fn run<R: Runtime>(
         crate::audio::folder_lease::LeaseHolder::Diarization,
     )
     .await;
+    // specs/0084 W2: a cancel takes effect at each stage boundary (`cancel.rs`).
+    super::cancel::check(&meeting_id)?;
     // specs/0078: which setup (call or room) and which track to cluster; recorded in
     // `meetings.audio_setup_resolved` when the results persist.
     let state = app.state::<AppState>();
     let pool = state.db_manager.pool();
     let input = crate::diarization::room::resolve_diarization_input(pool, &meeting_id).await?;
+    super::cancel::check(&meeting_id)?;
     let setup = input.setup;
 
     // Resolve the speaker count by precedence: manual override > calendar-seed >
@@ -751,6 +757,7 @@ pub(super) async fn run<R: Runtime>(
     })
     .await
     .context("diarization task panicked")??;
+    super::cancel::check(&meeting_id)?;
 
     log::info!(
         "Diarization produced {} turns for meeting {meeting_id}",
@@ -795,6 +802,7 @@ pub(super) async fn run<R: Runtime>(
         (None, clip)
     };
     drop(folder_lease); // the last audio read is done
+    super::cancel::check(&meeting_id)?;
 
     let (persisted_count, segment_count) =
         attribute_and_persist(pool, &meeting_id, &turns, &embeddings, setup).await?;
@@ -822,6 +830,7 @@ pub(super) async fn run<R: Runtime>(
     // persisted remote voiceprints vs. previously-identified speakers AND the voiceprint
     // gallery. Best-effort: a matcher/DB hiccup must not fail the (already-
     // persisted) diarization pass.
+    super::cancel::check(&meeting_id)?;
     registry_update(&meeting_id, STAGE_MATCHING, None);
     let _ = app.emit(
         EVENT_PROGRESS,
@@ -861,6 +870,7 @@ pub(super) async fn run<R: Runtime>(
     // `summaryRefreshing: true`) reaches the frontend, the summary process row is
     // already reset to PENDING — polling can't race a stale 'completed'. Best-effort:
     // a refresh failure must never fail the (already-persisted) diarization pass.
+    super::cancel::check(&meeting_id)?;
     let summary_refreshing = match crate::summary::refresh::refresh_summary_after_diarization(
         &app,
         pool,
@@ -1296,6 +1306,11 @@ mod tests {
         .unwrap();
         // `persist` records the pass's setup on the meeting row (specs/0078).
         sqlx::query("CREATE TABLE meetings (id TEXT PRIMARY KEY, audio_setup_resolved TEXT, owner_label TEXT)")
+            .execute(&pool)
+            .await
+            .unwrap();
+        // specs/0084 W2: `persist` writes only for a meeting that still exists.
+        sqlx::query("INSERT INTO meetings (id) VALUES ('m1')")
             .execute(&pool)
             .await
             .unwrap();

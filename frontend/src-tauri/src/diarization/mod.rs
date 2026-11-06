@@ -21,6 +21,7 @@
 pub mod accel;
 pub mod align;
 pub mod auto_label;
+pub mod cancel; // specs/0084 W2: per-pass cancel flag + the persist guard
 pub mod candidates; // specs/0078: matcher inputs (moved from pipeline.rs), owner as a room candidate
 pub mod commands;
 pub mod corrections;
@@ -32,6 +33,7 @@ pub mod launch;
 pub mod live;
 pub mod model_commands;
 pub mod models;
+pub mod outcome; // specs/0084 W2: PassOutcome { Ok, Failed, Cancelled }
 pub mod owner_assign; // specs/0078: assigning a room cluster to yourself = "This is me"
 pub mod owner_bootstrap; // specs/0078 W5: owner voiceprint from the mic / a single room voice
 pub mod owner_turns;
@@ -57,6 +59,7 @@ pub use align::{
     align_system_turns_to_segments, align_turns_to_segments, AlignMode, AlignableSegment, Channel,
     LOCAL_SPEAKER_KEY,
 };
+pub use outcome::{PassFailure, PassOutcome};
 pub use sherpa::{SherpaDiarizer, SpeakerCount, UNKNOWN_SPEAKER_KEY};
 
 /// A diarization "speaker turn": a contiguous span of the recording attributed to

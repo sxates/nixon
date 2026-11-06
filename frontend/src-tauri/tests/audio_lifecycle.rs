@@ -21,6 +21,7 @@ use app_lib::audio::lifecycle::sweep::{
 };
 use app_lib::database::manager::DatabaseManager;
 use app_lib::database::repositories::meeting::MeetingsRepository;
+use app_lib::diarization::{PassFailure, PassOutcome};
 use app_lib::state::AppState;
 use chrono::{Duration, Utc};
 use sqlx::SqlitePool;
@@ -908,7 +909,7 @@ async fn a_successful_identification_marks_the_meeting_processed() {
         &["audio.mp4", "system.wav"],
     );
     meeting(&pool, "ok", 0, Some(&dir), None, 5).await;
-    app_lib::audio::lifecycle::on_diarization_outcome(app.handle(), "ok", true).await;
+    app_lib::audio::lifecycle::on_diarization_outcome(app.handle(), "ok", &PassOutcome::Ok).await;
     let row = state::load_row(&pool, "ok").await.unwrap().unwrap();
     assert!(row.speakers_identified_at.is_some());
     assert_eq!(row.state(), AudioState::Processed);
@@ -1126,6 +1127,13 @@ async fn the_breaker_fails_only_meetings_whose_pass_died_mid_run() {
     );
 }
 
+fn failed() -> PassOutcome {
+    PassOutcome::Failed(PassFailure {
+        code: state::SpeakerIdFailure::Error,
+        message: "speaker models are missing".into(),
+    })
+}
+
 /// Every ending clears the marker: success (which also forgets the crashes), a failure that
 /// marks the meeting failed, and a failure that leaves an untranscribed meeting pending.
 #[tokio::test]
@@ -1142,9 +1150,10 @@ async fn every_outcome_clears_the_marker() {
     }
     set_mode(&pool, "err-deferred", Some("defer")).await;
 
-    app_lib::audio::lifecycle::on_diarization_outcome(app.handle(), "ok", true).await;
-    app_lib::audio::lifecycle::on_diarization_outcome(app.handle(), "err", false).await;
-    app_lib::audio::lifecycle::on_diarization_outcome(app.handle(), "err-deferred", false).await;
+    app_lib::audio::lifecycle::on_diarization_outcome(app.handle(), "ok", &PassOutcome::Ok).await;
+    app_lib::audio::lifecycle::on_diarization_outcome(app.handle(), "err", &failed()).await;
+    app_lib::audio::lifecycle::on_diarization_outcome(app.handle(), "err-deferred", &failed())
+        .await;
 
     let ok = speaker_id_cols(&pool, "ok").await;
     assert_eq!((ok.speaker_id_started_at, ok.speaker_id_crashes), (None, 0));
@@ -1339,4 +1348,173 @@ async fn an_automatic_pass_never_restarts_a_crashed_meeting_but_a_manual_one_run
     assert!(state::automatic_pass_allowed(&pool, "auto-fine")
         .await
         .unwrap());
+}
+
+async fn wait_for_pass_end(meeting_id: &str) {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
+    while app_lib::diarization::pipeline::run_status(meeting_id).is_none_or(|s| s.running)
+        && std::time::Instant::now() < deadline
+    {
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
+}
+
+/// specs/0084 W2: Cancel ends the pass quietly. The pass is held at its first stage by the
+/// folder lease (as a long compute would hold it), cancelled, then released: it stops at the
+/// next boundary. The meeting ends `failed`/`cancelled` with the marker cleared, the queue row
+/// is a skip (no red lamp), `diarization-error` says `cancelled`, the queued re-run is
+/// dropped, and a relaunch neither restarts it nor reads it as a crash.
+#[tokio::test]
+async fn a_cancelled_pass_ends_quietly_and_stays_cancelled() {
+    use app_lib::llm_activity::registry::{LlmTaskRegistry, TaskOutcome};
+    use app_lib::llm_activity::LlmActivityState;
+
+    let (app, pool, db_dir) = app_with_db().await;
+    let activity = std::sync::Arc::new(LlmTaskRegistry::new());
+    app.handle()
+        .manage(LlmActivityState(std::sync::Arc::clone(&activity)));
+    let errors = std::sync::Arc::new(std::sync::Mutex::new(Vec::<serde_json::Value>::new()));
+    let sink = std::sync::Arc::clone(&errors);
+    app.listen("diarization-error", move |e| {
+        sink.lock()
+            .unwrap()
+            .push(serde_json::from_str(e.payload()).unwrap());
+    });
+    let id = "cancel-me";
+    diarizable(&pool, db_dir.path(), id, None).await;
+
+    let held = folder_lease::acquire(id, LeaseHolder::Retranscription).await;
+    assert!(app_lib::diarization::launch::diarize_meeting(
+        app.handle().clone(),
+        id.into()
+    ));
+    let cancelled = app_lib::diarization::cancel::api_cancel_diarization(id.into())
+        .await
+        .unwrap();
+    assert!(cancelled.cancelled, "a running pass is cancellable");
+    // A follow-up asked for while it runs is queued, and the cancel must drop it.
+    assert!(!app_lib::diarization::launch::diarize_meeting_or_queue(
+        app.handle().clone(),
+        id.into()
+    ));
+    tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+    drop(held);
+    wait_for_pass_end(id).await;
+    tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+
+    let status = app_lib::diarization::pipeline::run_status(id).unwrap();
+    assert!(!status.running, "no re-run started after the cancel");
+    assert_eq!(status.stage, "cancelled");
+    assert_eq!(
+        speaker_id_cols(&pool, id).await,
+        SpeakerIdCols {
+            audio_state: Some("failed".into()),
+            speaker_id_started_at: None,
+            speaker_id_failure: Some("cancelled".into()),
+            speaker_id_crashes: 0,
+        }
+    );
+    let events = errors.lock().unwrap().clone();
+    assert_eq!(events.len(), 1, "{events:?}");
+    assert_eq!(events[0]["cancelled"], serde_json::json!(true));
+    let view = activity.view();
+    assert!(!view.has_failure, "a cancel never lights the failure lamp");
+    assert!(
+        matches!(&view.history[0].outcome, TaskOutcome::Skipped { .. }),
+        "{:?}",
+        view.history[0].outcome
+    );
+
+    // Relaunch: not a crash, not unfinished.
+    assert!(state::fail_interrupted_speaker_id(&pool)
+        .await
+        .unwrap()
+        .is_empty());
+    assert!(!state::list_unfinished(&pool)
+        .await
+        .unwrap()
+        .contains(&id.to_string()));
+    assert!(
+        !app_lib::diarization::cancel::api_cancel_diarization(id.into())
+            .await
+            .unwrap()
+            .cancelled,
+        "nothing left to cancel"
+    );
+
+    // The user's next Identify speakers runs once (here it fails on the fake audio); the
+    // follow-up queued before the cancel must not resurface after it.
+    assert!(app_lib::diarization::launch::diarize_meeting(
+        app.handle().clone(),
+        id.into()
+    ));
+    wait_for_pass_end(id).await;
+    tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+    wait_for_pass_end(id).await;
+    let events = errors.lock().unwrap().clone();
+    assert_eq!(
+        events.len(),
+        2,
+        "one more pass, no stale re-run: {events:?}"
+    );
+    assert_eq!(events[1]["cancelled"], serde_json::json!(false));
+}
+
+/// specs/0084 W2: a delete while speaker identification holds the folder returns within the
+/// wait, the meeting is gone at once, and the folder goes when the pass lets go.
+#[tokio::test]
+async fn delete_does_not_wait_for_speaker_identification() {
+    let (_app, pool, db_dir) = app_with_db().await;
+    let id = "delete-while-identifying";
+    diarizable(&pool, db_dir.path(), id, None).await;
+    let dir = db_dir.path().join(id);
+    let pass = app_lib::diarization::cancel::token(id);
+    let held = folder_lease::acquire(id, LeaseHolder::Diarization).await;
+
+    let deleted = tokio::time::timeout(
+        std::time::Duration::from_secs(2),
+        app_lib::meetings::delete::delete_meeting_and_folder(
+            &pool,
+            id,
+            std::time::Duration::from_millis(300),
+        ),
+    )
+    .await
+    .expect("delete must not wait for the pass")
+    .unwrap();
+    assert!(deleted);
+    assert!(pass.is_requested(), "delete cancels the pass first");
+    assert!(state::load_row(&pool, id).await.unwrap().is_none());
+    assert!(dir.exists(), "the pass still holds the folder");
+
+    drop(held);
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    while dir.exists() && std::time::Instant::now() < deadline {
+        tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+    }
+    assert!(!dir.exists(), "the folder goes once the lease is free");
+}
+
+/// A free folder is deleted with its meeting, as before.
+#[tokio::test]
+async fn delete_with_a_free_folder_removes_both_at_once() {
+    let (_app, pool, db_dir) = app_with_db().await;
+    let id = "delete-free";
+    diarizable(&pool, db_dir.path(), id, None).await;
+    let deleted = app_lib::meetings::delete::delete_meeting_and_folder(
+        &pool,
+        id,
+        std::time::Duration::from_millis(300),
+    )
+    .await
+    .unwrap();
+    assert!(deleted);
+    assert!(!db_dir.path().join(id).exists());
+    assert!(!app_lib::meetings::delete::delete_meeting_and_folder(
+        &pool,
+        id,
+        std::time::Duration::from_millis(300)
+    )
+    .await
+    .unwrap());
 }

@@ -1057,3 +1057,66 @@ async fn a_rerun_turns_a_room_cluster_assigned_to_you_into_you() {
         }
     }
 }
+
+/// specs/0084 W2: a pass whose meeting was deleted mid-run writes nothing (no orphan
+/// `speakers` rows or voiceprints) and ends as Cancelled, not as a failure.
+#[tokio::test]
+async fn persist_on_a_deleted_meeting_writes_nothing_and_is_cancelled() {
+    let (_dir, db) = fresh_db().await;
+    let pool = db.pool();
+    let meeting = seed_room_meeting(pool).await;
+    MeetingsRepository::delete_meeting(pool, &meeting)
+        .await
+        .unwrap();
+
+    let err = attribute_and_persist(
+        pool,
+        &meeting,
+        &room_turns(),
+        &room_embeddings(),
+        AudioSetup::Room,
+    )
+    .await
+    .expect_err("a deleted meeting must not persist");
+    assert!(
+        app_lib::diarization::cancel::is_cancelled(&err),
+        "a deleted meeting ends the pass quietly, got: {err:#}"
+    );
+    let speakers: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM speakers WHERE meeting_id = ?")
+        .bind(&meeting)
+        .fetch_one(pool)
+        .await
+        .unwrap();
+    assert_eq!(speakers, 0, "no orphan speakers rows");
+}
+
+/// specs/0084 W2: a cancel requested before the persist leaves the meeting's rows as they
+/// were: no speaker keys, no `speakers` rows.
+#[tokio::test]
+async fn persist_after_a_cancel_writes_nothing_and_is_cancelled() {
+    let (_dir, db) = fresh_db().await;
+    let pool = db.pool();
+    let meeting = seed_room_meeting(pool).await;
+    let token = app_lib::diarization::cancel::token(&meeting);
+    assert!(app_lib::diarization::cancel::request(&meeting));
+
+    let err = attribute_and_persist(
+        pool,
+        &meeting,
+        &room_turns(),
+        &room_embeddings(),
+        AudioSetup::Room,
+    )
+    .await
+    .expect_err("a cancelled pass must not persist");
+    assert!(app_lib::diarization::cancel::is_cancelled(&err), "{err:#}");
+    drop(token);
+
+    let rows = stored_rows(pool, &meeting).await;
+    assert_eq!(rows.len(), 4, "the glued row was not split");
+    assert!(rows.iter().all(|(k, _)| k.is_empty()), "{rows:?}");
+    assert!(SpeakersRepository::get_by_meeting(pool, &meeting)
+        .await
+        .unwrap()
+        .is_empty());
+}

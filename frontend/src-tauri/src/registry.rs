@@ -321,6 +321,8 @@ pub fn invoke_handler() -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Sen
         calendar::google::commands::api_google_capabilities,
         // Speaker diarization commands (specs/0010 P1)
         diarization::commands::api_diarize_meeting,
+        // Cancel a running speaker-identification pass (specs/0084 W2)
+        diarization::cancel::api_cancel_diarization,
         // Per-meeting run status for UI rehydration (specs/0029 WS3.1)
         diarization::commands::api_diarization_status,
         diarization::commands::api_get_meeting_speakers,

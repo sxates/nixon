@@ -13,6 +13,7 @@ use tauri::{AppHandle, Emitter, Manager, Runtime};
 use super::policy::{AudioRetention, AudioState};
 use super::state::{self, scan_folder, DiarizationGate};
 use super::sweep::{self, ApplyOutcome, RetentionReport, SweepOptions};
+use crate::diarization::PassOutcome;
 use crate::state::AppState;
 
 /// Emitted on every `audio_state` write so an open meeting page updates without a refetch.
@@ -171,17 +172,31 @@ pub async fn finish_processing<R: Runtime>(
     FinishOutcome::Evaluated(reevaluate_and_apply(app, meeting_id, transcribed).await)
 }
 
-/// Diarization reached its terminal outcome (`diarization/launch.rs`).
-pub async fn on_diarization_outcome<R: Runtime>(app: &AppHandle<R>, meeting_id: &str, ok: bool) {
+/// Diarization reached its terminal outcome (`diarization/launch.rs`). Every pass ending is
+/// routed through here (specs/0084): each clears the crash-loop marker.
+///
+/// - [`PassOutcome::Ok`]: stamp speakers identified, then reevaluate.
+/// - [`PassOutcome::Failed`]: a pending, transcribed meeting becomes `failed` with the code.
+/// - [`PassOutcome::Cancelled`]: the same, with `cancelled`, so no automatic caller and no
+///   relaunch starts it again. No-op on a deleted meeting (its row is gone).
+pub async fn on_diarization_outcome<R: Runtime>(
+    app: &AppHandle<R>,
+    meeting_id: &str,
+    outcome: &PassOutcome,
+) {
     let Some(pool) = pool(app) else { return };
-    if ok {
-        if let Err(e) = state::mark_speakers_identified(&pool, meeting_id).await {
-            log::warn!("Audio lifecycle: {e:#}");
+    let failure = match outcome {
+        PassOutcome::Ok => {
+            if let Err(e) = state::mark_speakers_identified(&pool, meeting_id).await {
+                log::warn!("Audio lifecycle: {e:#}");
+            }
+            reevaluate_and_apply(app, meeting_id, false).await;
+            return;
         }
-        reevaluate_and_apply(app, meeting_id, false).await;
-        return;
-    }
-    match state::mark_failed_if_pending(&pool, meeting_id, state::SpeakerIdFailure::Error).await {
+        PassOutcome::Failed(f) => f.code,
+        PassOutcome::Cancelled => state::SpeakerIdFailure::Cancelled,
+    };
+    match state::mark_failed_if_pending(&pool, meeting_id, failure).await {
         Ok(true) => emit_state(app, meeting_id, AudioState::Failed),
         Ok(false) => {}
         Err(e) => log::warn!("Audio lifecycle: {e:#}"),
