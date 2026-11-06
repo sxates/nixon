@@ -61,6 +61,17 @@ fn start_pending_rerun<R: Runtime>(app: &AppHandle<R>, meeting_id: &str) -> bool
     true
 }
 
+/// The activity-queue label for a meeting's speaker-identification row.
+pub(crate) async fn queue_label<R: Runtime>(app: &AppHandle<R>, meeting_id: &str) -> String {
+    if let Some(app_state) = app.try_state::<AppState>() {
+        let pool = app_state.db_manager.pool();
+        if let Ok(Some(meta)) = MeetingsRepository::get_meeting_metadata(pool, meeting_id).await {
+            return format!("Identifying speakers — {}", meta.title);
+        }
+    }
+    "Identifying speakers".to_string()
+}
+
 /// Run offline diarization for a saved meeting on a background task, emitting
 /// `diarization-{progress,complete,error}`. Returns immediately after spawning.
 ///
@@ -86,29 +97,35 @@ pub fn diarize_meeting<R: Runtime>(app: AppHandle<R>, meeting_id: String) -> boo
         // of the meeting's title is available — mirrors `action_items::run_extraction` and
         // `summary::background`, which resolve the same metadata the same way.
         let task = match app.try_state::<crate::llm_activity::LlmActivityState>() {
-            Some(state) => {
-                let registry = std::sync::Arc::clone(&state.0);
-                let title = match app.try_state::<AppState>() {
-                    Some(app_state) => {
-                        let pool = app_state.db_manager.pool().clone();
-                        match MeetingsRepository::get_meeting_metadata(&pool, &meeting_id).await {
-                            Ok(Some(meta)) => format!("Identifying speakers — {}", meta.title),
-                            _ => "Identifying speakers".to_string(),
-                        }
-                    }
-                    None => "Identifying speakers".to_string(),
-                };
-                Some(registry.start_for(
-                    crate::llm_activity::registry::TaskKind::Diarization,
-                    crate::llm_activity::registry::Origin::Background,
-                    title,
-                    Some(meeting_id.clone()),
-                ))
-            }
+            Some(state) => Some(std::sync::Arc::clone(&state.0).start_for(
+                crate::llm_activity::registry::TaskKind::Diarization,
+                crate::llm_activity::registry::Origin::Background,
+                queue_label(&app, &meeting_id).await,
+                Some(meeting_id.clone()),
+            )),
             None => None,
         };
 
-        let outcome = run(app.clone(), meeting_id.clone()).await;
+        // specs/0084 W1: stamp the crash-loop marker before the pass touches audio. If the
+        // app dies mid-pass, the next launch finds it and fails the meeting instead of
+        // starting the same crash again. A counted crash runs this pass in safe mode.
+        let safe_mode = match app.try_state::<AppState>() {
+            Some(app_state) => {
+                let pool = app_state.db_manager.pool();
+                match crate::audio::lifecycle::state::mark_speaker_id_started(pool, &meeting_id)
+                    .await
+                {
+                    Ok(crashes) => crashes >= 1,
+                    Err(e) => {
+                        log::warn!("diarization for {meeting_id}: {e:#}");
+                        false
+                    }
+                }
+            }
+            None => false,
+        };
+
+        let outcome = run(app.clone(), meeting_id.clone(), safe_mode).await;
         crate::audio::lifecycle::on_diarization_outcome(&app, &meeting_id, outcome.is_ok()).await;
         if let Some(t) = task {
             t.finish(outcome.as_ref().map(|_| ()).map_err(|e| format!("{e:#}")));

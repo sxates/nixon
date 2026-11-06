@@ -173,10 +173,16 @@ impl ClusterEmbedder {
     /// [`crate::diarization::accel`]. Same model/dimensions either way, so vectors
     /// stay comparable.
     pub fn new(embedding_model: &std::path::Path) -> Result<Self> {
+        Self::new_for(embedding_model, false)
+    }
+
+    /// [`Self::new`], optionally in safe mode: one thread, CPU only (specs/0084 W1).
+    pub fn new_for(embedding_model: &std::path::Path, safe: bool) -> Result<Self> {
         let model = embedding_model.to_string_lossy().into_owned();
-        let num_threads = Some(crate::diarization::accel::embedding_threads());
-        let extractor = crate::diarization::accel::build_with_provider_fallback(
+        let num_threads = Some(crate::diarization::accel::embedding_threads_for(safe));
+        let extractor = crate::diarization::accel::build_with_provider_fallback_for(
             "embedding extractor",
+            safe,
             |provider| {
                 sherpa_rs::speaker_id::EmbeddingExtractor::new(
                     sherpa_rs::speaker_id::ExtractorConfig {

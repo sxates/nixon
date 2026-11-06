@@ -49,6 +49,12 @@ pub struct AudioRow {
     pub speakers_identified_at: Option<String>,
     pub processing_mode: Option<String>,
     pub awaiting: bool,
+    /// specs/0084 W1: set while a speaker-identification pass runs.
+    pub speaker_id_started_at: Option<String>,
+    /// specs/0084: why the last pass failed (`interrupted` | `crashed` | `cancelled` | `error`).
+    pub speaker_id_failure: Option<String>,
+    /// specs/0084 W1: passes that died mid-run; >= 1 selects safe mode.
+    pub speaker_id_crashes: i64,
 }
 
 impl AudioRow {
@@ -68,7 +74,8 @@ impl AudioRow {
 fn row_select(filter: &str) -> String {
     format!(
         "SELECT m.id, m.created_at, m.folder_path, m.audio_state, m.speakers_identified_at, \
-                m.processing_mode, {} AS awaiting \
+                m.processing_mode, {} AS awaiting, m.speaker_id_started_at, \
+                m.speaker_id_failure, m.speaker_id_crashes \
          FROM meetings m WHERE {filter}",
         lifecycle_awaiting_sql("m")
     )
@@ -308,21 +315,140 @@ pub async fn reevaluate(
     Ok((changed > 0).then_some(AudioState::Processed))
 }
 
-/// Speaker identification succeeded: stamp it. The caller reevaluates next.
+/// Why a speaker-identification pass failed (`meetings.speaker_id_failure`, specs/0084).
+/// The user-facing copy for each lives in the frontend.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SpeakerIdFailure {
+    /// The app died mid-pass (the marker was still set at launch).
+    Interrupted,
+    /// The helper process died on a signal (W3).
+    Crashed,
+    /// The user cancelled the pass (W2).
+    Cancelled,
+    /// An ordinary error from the pass.
+    Error,
+}
+
+impl SpeakerIdFailure {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Interrupted => "interrupted",
+            Self::Crashed => "crashed",
+            Self::Cancelled => "cancelled",
+            Self::Error => "error",
+        }
+    }
+}
+
+/// specs/0084 W1: a speaker-identification pass is about to touch audio. Stamps the
+/// crash-loop marker and clears the last failure reason. Returns the meeting's crash count
+/// (passes that died mid-run), which selects safe mode; 0 when the row is gone.
+pub async fn mark_speaker_id_started(pool: &SqlitePool, meeting_id: &str) -> Result<i64> {
+    let crashes: Option<i64> = sqlx::query_scalar(
+        "UPDATE meetings SET speaker_id_started_at = ?, speaker_id_failure = NULL \
+         WHERE id = ? RETURNING speaker_id_crashes",
+    )
+    .bind(Utc::now().to_rfc3339())
+    .bind(meeting_id)
+    .fetch_optional(pool)
+    .await
+    .map_err(|e| anyhow!("Could not record that speaker identification started: {e}"))?;
+    Ok(crashes.unwrap_or(0))
+}
+
+/// specs/0084 W1: a graceful quit ended these passes on purpose. Clears their markers so the
+/// next launch finishes them as plain pending meetings instead of reading them as crashes.
+pub async fn clear_speaker_id_markers(pool: &SqlitePool, meeting_ids: &[String]) -> Result<()> {
+    for id in meeting_ids {
+        sqlx::query("UPDATE meetings SET speaker_id_started_at = NULL WHERE id = ?")
+            .bind(id)
+            .execute(pool)
+            .await
+            .map_err(|e| anyhow!("Could not clear the speaker identification marker: {e}"))?;
+    }
+    Ok(())
+}
+
+/// A meeting whose speaker-identification pass died with the app (specs/0084 W1).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InterruptedPass {
+    pub meeting_id: String,
+    /// The crash count, this one included.
+    pub crashes: i64,
+    /// The meeting is now `failed`/`interrupted` (it was pending or failed). False for one
+    /// that was already processed (a re-run died): its state is kept, only the marker goes.
+    pub failed: bool,
+}
+
+/// specs/0084 W1, the startup breaker. Must run before anything at launch can start a pass:
+/// every meeting whose marker is still set died mid-pass. A pending (or already failed) one
+/// becomes `failed`/`interrupted`, so `list_unfinished` skips it and the crash can't loop.
+/// Any other state is kept. Each counts the crash (safe mode next time) and loses its marker.
+pub async fn fail_interrupted_speaker_id(pool: &SqlitePool) -> Result<Vec<InterruptedPass>> {
+    let err =
+        |e: sqlx::Error| anyhow!("Could not check for interrupted speaker identification: {e}");
+    let failed: Vec<(String, i64)> = sqlx::query_as(
+        "UPDATE meetings \
+            SET audio_state = 'failed', speaker_id_failure = 'interrupted', \
+                speaker_id_crashes = speaker_id_crashes + 1, speaker_id_started_at = NULL \
+          WHERE speaker_id_started_at IS NOT NULL \
+            AND (audio_state IS NULL OR audio_state = 'failed') \
+         RETURNING id, speaker_id_crashes",
+    )
+    .fetch_all(pool)
+    .await
+    .map_err(err)?;
+    let kept: Vec<(String, i64)> = sqlx::query_as(
+        "UPDATE meetings \
+            SET speaker_id_crashes = speaker_id_crashes + 1, speaker_id_started_at = NULL \
+          WHERE speaker_id_started_at IS NOT NULL \
+         RETURNING id, speaker_id_crashes",
+    )
+    .fetch_all(pool)
+    .await
+    .map_err(err)?;
+    let pass = |failed| {
+        move |(meeting_id, crashes)| InterruptedPass {
+            meeting_id,
+            crashes,
+            failed,
+        }
+    };
+    Ok(failed
+        .into_iter()
+        .map(pass(true))
+        .chain(kept.into_iter().map(pass(false)))
+        .collect())
+}
+
+/// Speaker identification succeeded: stamp it, clear the marker and any failure reason, and
+/// reset the crash count. The caller reevaluates next.
 pub async fn mark_speakers_identified(pool: &SqlitePool, meeting_id: &str) -> Result<()> {
-    sqlx::query("UPDATE meetings SET speakers_identified_at = ? WHERE id = ?")
-        .bind(Utc::now().to_rfc3339())
-        .bind(meeting_id)
-        .execute(pool)
-        .await
-        .map_err(|e| anyhow!("Could not record speaker identification for {meeting_id}: {e}"))?;
+    sqlx::query(
+        "UPDATE meetings SET speakers_identified_at = ?, speaker_id_started_at = NULL, \
+                speaker_id_failure = NULL, speaker_id_crashes = 0 \
+         WHERE id = ?",
+    )
+    .bind(Utc::now().to_rfc3339())
+    .bind(meeting_id)
+    .execute(pool)
+    .await
+    .map_err(|e| anyhow!("Could not record speaker identification for {meeting_id}: {e}"))?;
     Ok(())
 }
 
 /// Speaker identification errored. A pending meeting whose transcription is done becomes
 /// `failed` (audio kept for a retry, then the grace rule). One still awaiting transcription
 /// stays pending: the backlog runs speaker identification again after transcribing it.
-pub async fn mark_failed_if_pending(pool: &SqlitePool, meeting_id: &str) -> Result<bool> {
+/// Either way the pass is over, so the crash-loop marker is cleared (specs/0084), and a
+/// failed meeting records `failure`. Returns whether the state changed to `failed`.
+pub async fn mark_failed_if_pending(
+    pool: &SqlitePool,
+    meeting_id: &str,
+    failure: SpeakerIdFailure,
+) -> Result<bool> {
+    let err = |e: sqlx::Error| anyhow!("Could not mark meeting {meeting_id} failed: {e}");
+    let mut tx = pool.begin().await.map_err(err)?;
     let sql = format!(
         "UPDATE meetings SET audio_state = 'failed' \
          WHERE id = ? AND audio_state IS NULL AND NOT {}",
@@ -330,20 +456,35 @@ pub async fn mark_failed_if_pending(pool: &SqlitePool, meeting_id: &str) -> Resu
     );
     let changed = sqlx::query(&sql)
         .bind(meeting_id)
-        .execute(pool)
+        .execute(&mut *tx)
         .await
-        .map_err(|e| anyhow!("Could not mark meeting {meeting_id} failed: {e}"))?
+        .map_err(err)?
         .rows_affected();
+    sqlx::query(
+        "UPDATE meetings SET speaker_id_started_at = NULL, speaker_id_failure = \
+                CASE WHEN audio_state = 'failed' THEN ? ELSE speaker_id_failure END \
+         WHERE id = ?",
+    )
+    .bind(failure.as_str())
+    .bind(meeting_id)
+    .execute(&mut *tx)
+    .await
+    .map_err(err)?;
+    tx.commit().await.map_err(err)?;
     Ok(changed > 0)
 }
 
-/// The transcript rows were replaced: the old speaker labels no longer describe them.
+/// The transcript rows were replaced: the old speaker labels no longer describe them, and the
+/// last failure reason is history (specs/0084: a new transcript is a fresh start).
 pub async fn clear_speakers_identified(pool: &SqlitePool, meeting_id: &str) -> Result<()> {
-    sqlx::query("UPDATE meetings SET speakers_identified_at = NULL WHERE id = ?")
-        .bind(meeting_id)
-        .execute(pool)
-        .await
-        .map_err(|e| anyhow!("Could not reset speaker identification for {meeting_id}: {e}"))?;
+    sqlx::query(
+        "UPDATE meetings SET speakers_identified_at = NULL, speaker_id_failure = NULL \
+         WHERE id = ?",
+    )
+    .bind(meeting_id)
+    .execute(pool)
+    .await
+    .map_err(|e| anyhow!("Could not reset speaker identification for {meeting_id}: {e}"))?;
     Ok(())
 }
 
@@ -352,7 +493,9 @@ pub async fn clear_speakers_identified(pool: &SqlitePool, meeting_id: &str) -> R
 pub async fn reset_for_resume(pool: &SqlitePool, meeting_id: &str) -> Result<bool> {
     let before = load_row(pool, meeting_id).await?.map(|r| r.state());
     sqlx::query(
-        "UPDATE meetings SET audio_state = NULL, speakers_identified_at = NULL WHERE id = ?",
+        "UPDATE meetings SET audio_state = NULL, speakers_identified_at = NULL, \
+                speaker_id_failure = NULL \
+         WHERE id = ?",
     )
     .bind(meeting_id)
     .execute(pool)

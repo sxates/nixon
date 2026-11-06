@@ -276,6 +276,8 @@ pub struct SherpaDiarizer {
     /// don't retry every pass). Separate from `inner` so the offline `diarize()` path
     /// is untouched and never loads it.
     embedder: Mutex<Option<Option<crate::diarization::embedding::ClusterEmbedder>>>,
+    /// specs/0084 W1: one ONNX thread on CPU for the diarizer and the re-embed extractor.
+    safe_mode: bool,
 }
 
 impl SherpaDiarizer {
@@ -308,6 +310,18 @@ impl SherpaDiarizer {
         speakers: SpeakerCount,
         tuning: DiarizeTuning,
     ) -> Result<Self> {
+        Self::with_config_mode(segmentation_model, embedding_model, speakers, tuning, false)
+    }
+
+    /// [`Self::with_config`], optionally in safe mode (specs/0084 W1: after a pass crashed,
+    /// one ONNX thread on the CPU provider; slower, and the least native machinery).
+    pub fn with_config_mode(
+        segmentation_model: &Path,
+        embedding_model: &Path,
+        speakers: SpeakerCount,
+        tuning: DiarizeTuning,
+        safe_mode: bool,
+    ) -> Result<Self> {
         if !segmentation_model.exists() {
             return Err(anyhow!(
                 "segmentation model not found: {}",
@@ -333,15 +347,17 @@ impl SherpaDiarizer {
         // CPU path is always a guaranteed fallback. Accuracy semantics are
         // unchanged: same models, same thresholds/clustering — only the ONNX
         // execution backend differs.
-        let diarize = crate::diarization::accel::build_with_provider_fallback(
+        let diarize = crate::diarization::accel::build_with_provider_fallback_for(
             "diarizer (segmentation+embedding)",
+            safe_mode,
             |provider| {
-                let config = ThreadedDiarizeConfig::with_defaults(
+                let config = ThreadedDiarizeConfig::for_mode(
                     num_clusters,
                     tuning.threshold,
                     tuning.min_duration_on,
                     tuning.min_duration_off,
                     provider.to_string(),
+                    safe_mode,
                 );
                 ThreadedDiarize::new(segmentation_model, embedding_model, config)
             },
@@ -356,6 +372,7 @@ impl SherpaDiarizer {
             consolidate_floor: CONSOLIDATE_FLOOR,
             consolidate_enabled: true,
             embedder: Mutex::new(None),
+            safe_mode,
         })
     }
 
@@ -1059,7 +1076,10 @@ impl Diarizer for SherpaDiarizer {
         // re-attempt (and re-log) every pass.
         if guard.is_none() {
             *guard = Some(
-                match crate::diarization::embedding::ClusterEmbedder::new(&self.embedding_path) {
+                match crate::diarization::embedding::ClusterEmbedder::new_for(
+                    &self.embedding_path,
+                    self.safe_mode,
+                ) {
                     Ok(e) => Some(e),
                     Err(e) => {
                         log::warn!(

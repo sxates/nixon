@@ -18,7 +18,7 @@ import { useBacklog } from '@/contexts/DeferredBacklogProvider';
 import { isUnprocessedRecording } from '@/lib/processing-mode';
 import { isMeetingInFlight } from '@/lib/deferred-backlog';
 import {
-  AUDIO_FAILED_NOTE,
+  speakerIdFailureNote,
   canTranscribe,
   useMeetingAudioStatus,
 } from '@/hooks/useMeetingAudioStatus';
@@ -434,7 +434,9 @@ export function TranscriptPanel({
           className="mt-2 flex items-center gap-2 rounded-[3px] border border-border bg-muted/40 px-3 py-2"
         >
           <AlertCircle size={14} aria-hidden="true" className="shrink-0 text-muted-foreground" />
-          <p className="text-xs text-muted-foreground">{AUDIO_FAILED_NOTE}</p>
+          <p className="text-xs text-muted-foreground">
+            {speakerIdFailureNote(audio.speakerIdFailure)}
+          </p>
         </div>
       )}
 
