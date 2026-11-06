@@ -76,6 +76,14 @@ pub struct RecordingPreferences {
     /// are kept in step so an older file and an older settings screen still make sense).
     #[serde(default)]
     pub audio_retention: Option<super::lifecycle::policy::AudioRetention>,
+    /// Summarize a meeting when its wrap-up finishes (specs/0083 W2a). Unset = on. Owned by
+    /// `api_set_wrap_up_preferences`; [`set_recording_preferences`] carries it over.
+    #[serde(default)]
+    pub auto_summary_after_recording: Option<bool>,
+    /// The pinned summary language applied to every new meeting (specs/0083 W2a); unset =
+    /// detect it. Backend-owned like `auto_summary_after_recording`.
+    #[serde(default)]
+    pub summary_language_default: Option<String>,
 }
 
 impl RecordingPreferences {
@@ -116,6 +124,8 @@ impl Default for RecordingPreferences {
             previous_save_folders: Vec::new(),
             recordings_gathered_once: false,
             audio_retention: None,
+            auto_summary_after_recording: None,
+            summary_language_default: None,
         }
     }
 }
@@ -433,6 +443,7 @@ pub async fn load_recording_preferences<R: Runtime>(
     let mut prefs = prefs;
     prefs.audio_retention = Some(prefs.effective_audio_retention());
     crate::power::set_low_power_preference(prefs.low_power_on_battery);
+    super::wrap_up::prefs::mirror(&prefs);
 
     info!(
         "Loaded recording preferences: save_folder={:?}, auto_save={}, mic={:?}, system={:?}",
@@ -476,6 +487,7 @@ pub async fn save_recording_preferences<R: Runtime>(
 
     info!("Successfully persisted recording preferences to disk");
     crate::power::set_low_power_preference(preferences.low_power_on_battery);
+    super::wrap_up::prefs::mirror(preferences);
 
     // specs/0057 Plan 2 — keep the active write root in lockstep with the persisted
     // preference, so writers land where `fs_guard` and the meetings commands look.
@@ -529,6 +541,8 @@ fn carry_backend_fields(
     previous.retain(|p| *p != incoming.save_folder);
     incoming.previous_save_folders = previous;
     incoming.recordings_gathered_once = stored.recordings_gathered_once;
+    incoming.auto_summary_after_recording = stored.auto_summary_after_recording;
+    incoming.summary_language_default = stored.summary_language_default.clone();
     // specs/0072: the retention field the sender changed wins; the legacy pair follows it.
     let policy = super::lifecycle::policy::reconcile_saved_retention(
         stored.audio_retention,

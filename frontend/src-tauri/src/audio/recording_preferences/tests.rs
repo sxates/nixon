@@ -359,3 +359,17 @@ fn an_older_settings_screen_still_changes_retention_and_the_pair_follows_the_pol
     assert!(merged.auto_save);
     assert_eq!(merged.retention_days, None);
 }
+
+#[test]
+fn a_settings_save_keeps_the_wrap_up_preferences() {
+    // specs/0083 W2a: the frontend's settings object predates these fields, so a save of it
+    // deserializes them as None; the stored values must survive.
+    let stored = RecordingPreferences {
+        auto_summary_after_recording: Some(false),
+        summary_language_default: Some("de".into()),
+        ..prefs_at("/r/now", &[])
+    };
+    let merged = carry_backend_fields(&stored, prefs_at("/r/now", &[]));
+    assert_eq!(merged.auto_summary_after_recording, Some(false));
+    assert_eq!(merged.summary_language_default.as_deref(), Some("de"));
+}

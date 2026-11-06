@@ -60,6 +60,7 @@ pub mod system_audio_commands;
 pub mod system_detector; // NEW: Playback device detection for BT warnings
 pub mod transcript_sink; // specs/0083 W2a: the saver's segment store for the transcript listener
 pub mod volume_check; // specs/0073: recordings stay on an internal, local drive
+pub mod wrap_up; // specs/0083 W2a: the Rust-owned stop → save → process → summarize
 
 // Transcription module (provider abstraction, engine management, worker pool)
 pub mod transcription;
@@ -120,8 +121,7 @@ pub use hardware_detector::{AdaptiveWhisperConfig, GpuType, HardwareProfile, Per
 pub use level_monitor::{AudioLevelData, AudioLevelMonitor, AudioLevelUpdate};
 pub use post_processor::{PostProcessRequest, PostProcessResponse, PostProcessor};
 pub use recording_commands::{
-    get_transcription_status, is_recording, start_recording, start_recording_with_devices,
-    stop_recording, RecordingArgs, TranscriptUpdate, TranscriptionStatus,
+    is_recording, start_recording, start_recording_with_devices, stop_recording, TranscriptUpdate,
 };
 pub use recording_manager::RecordingManager;
 pub use recording_preferences::{init_recordings_root, recordings_root, RecordingPreferences};

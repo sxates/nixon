@@ -58,9 +58,51 @@ pub fn set_session_flag(flag: Arc<AtomicBool>) {
 /// as the active session flag (so the mid-meeting toggle can flip it). Returns the
 /// `Arc` to hand to the pipeline. Called from both recording start paths.
 pub fn register_session_flag(initial: bool) -> Arc<AtomicBool> {
+    // specs/0083 W2a: a fresh session resets both deferral flags (the JS
+    // `markSessionDeferred(!live)` on the start-time `processing-mode-changed`).
+    DEFERRAL.start(initial);
     let flag = Arc::new(AtomicBool::new(initial));
     set_session_flag(flag.clone());
     flag
+}
+
+/// Whether the session started deferred, and whether it was deferred at ANY point (sticky
+/// until the next session starts). specs/0083 W2a: was the frontend's sessionStorage pair.
+struct SessionDeferral {
+    started: AtomicBool,
+    ever: AtomicBool,
+}
+
+impl SessionDeferral {
+    const fn new() -> Self {
+        Self {
+            started: AtomicBool::new(false),
+            ever: AtomicBool::new(false),
+        }
+    }
+
+    fn start(&self, live: bool) {
+        self.started.store(!live, Ordering::SeqCst);
+        self.ever.store(!live, Ordering::SeqCst);
+    }
+
+    fn paused(&self) {
+        self.ever.store(true, Ordering::SeqCst);
+    }
+
+    fn take(&self) -> (bool, bool) {
+        (
+            self.started.swap(false, Ordering::SeqCst),
+            self.ever.swap(false, Ordering::SeqCst),
+        )
+    }
+}
+
+static DEFERRAL: SessionDeferral = SessionDeferral::new();
+
+/// Read and reset `(started_deferred, ever_deferred)` for the session being stopped.
+pub fn take_session_deferral() -> (bool, bool) {
+    DEFERRAL.take()
 }
 
 pub fn session_flag() -> Option<Arc<AtomicBool>> {
@@ -144,6 +186,7 @@ pub async fn api_apply_live_transcription_now<R: Runtime>(
         flag.store(true, Ordering::SeqCst);
     } else {
         flag.store(false, Ordering::SeqCst);
+        DEFERRAL.paused();
     }
     let _ = app.emit(
         "processing-mode-changed",
@@ -211,5 +254,29 @@ mod tests {
 
         clear_session();
         assert!(session_flag().is_none());
+
+        clear_session();
+    }
+}
+
+#[cfg(test)]
+mod deferral_tests {
+    use super::SessionDeferral;
+
+    /// A local instance: the process-wide one is shared with every test that starts a session.
+    #[test]
+    fn a_session_start_sets_and_a_stop_reads_and_resets() {
+        let d = SessionDeferral::new();
+        d.start(true);
+        assert_eq!(d.take(), (false, false), "live start");
+        d.start(false);
+        assert_eq!(d.take(), (true, true), "deferred start");
+        assert_eq!(d.take(), (false, false), "read-and-reset");
+        d.start(true);
+        d.paused();
+        assert_eq!(d.take(), (false, true), "paused mid-meeting");
+        d.paused();
+        d.start(true);
+        assert_eq!(d.take(), (false, false), "a new session resets");
     }
 }

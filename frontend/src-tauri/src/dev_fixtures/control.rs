@@ -324,22 +324,13 @@ async fn start_recording(app: &AppHandle, title: String) -> Reply {
 /// the stopped recording's `meeting_name` matches the title `start_recording` most recently
 /// used (`STARTED_TITLE`); otherwise leave it alone.
 async fn stop_recording_and_discard(app: &AppHandle) -> Reply {
-    let args = crate::audio::recording_commands::RecordingArgs {
-        save_path: String::new(),
-    };
-    let stop_info = match crate::audio::recording_commands::stop_recording(app.clone(), args).await
-    {
+    // The bare stop body, not `wrap_up::request_stop`: a throwaway take is never saved.
+    let stopped = match crate::audio::recording_commands::stop_recording(app.clone()).await {
         Ok(v) => v,
         Err(e) => return Reply::err(e),
     };
-    let folder_path = stop_info
-        .get("folder_path")
-        .and_then(|v| v.as_str())
-        .map(str::to_string);
-    let meeting_name = stop_info
-        .get("meeting_name")
-        .and_then(|v| v.as_str())
-        .map(str::to_string);
+    let folder_path = stopped.folder_path;
+    let meeting_name = stopped.meeting_name;
 
     let started_title = STARTED_TITLE.lock().unwrap().take();
     let started_here = matches!(

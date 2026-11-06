@@ -301,6 +301,8 @@ pub async fn sweep_now<R: Runtime>(
 async fn startup_reconcile<R: Runtime>(app: &AppHandle<R>) {
     let Some(pool) = pool(app) else { return };
     super::breaker::break_interrupted_passes(app).await;
+    // specs/0083 W2a: a crash between stop and save left rows unwritten; import, start nothing.
+    crate::audio::wrap_up::reconcile::startup_pre_pass(app).await;
     let ids = match state::list_unfinished(&pool).await {
         Ok(ids) => ids,
         Err(e) => return log::warn!("Audio lifecycle reconcile: {e:#}"),
