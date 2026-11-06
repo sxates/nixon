@@ -20,18 +20,28 @@ interface DayGroup {
 }
 
 /**
- * Group meetings by calendar day (specs/0038 feedback #5). The backend returns
- * newest-first, so first-seen day order is already newest-day-first and each day's rows
- * stay newest-time-first — no extra sort needed. Undated rows (unparseable timestamp)
- * collect into a trailing "Undated" group.
+ * Group meetings by calendar day (specs/0038 feedback #5): days newest first, and within a
+ * day the meetings in the order they happened — the order the Agenda and Week views use.
+ * Sorted here rather than trusted from the caller: this used to rely on the input already
+ * being newest-first, and drew days out of place whenever it wasn't (the screenshot mock's
+ * wasn't). Undated rows (unparseable timestamp) collect into a trailing "Undated" group.
  */
-function groupByDay(meetings: DashboardMeeting[]): DayGroup[] {
-  const now = new Date();
+export function groupByDay(meetings: DashboardMeeting[], now: Date = new Date()): DayGroup[] {
   const order: string[] = [];
   const byKey = new Map<string, Omit<DayGroup, 'key'>>();
   const undated: DashboardMeeting[] = [];
+  const time = (m: DashboardMeeting) => new Date(m.createdAt).getTime();
+  const sorted = [...meetings].sort((a, b) => {
+    const ta = time(a);
+    const tb = time(b);
+    if (Number.isNaN(ta) || Number.isNaN(tb)) return 0;
+    const da = dayKey(new Date(ta));
+    const db = dayKey(new Date(tb));
+    if (da !== db) return da < db ? 1 : -1; // newer day first
+    return ta - tb; // earlier in the day first
+  });
 
-  for (const m of meetings) {
+  for (const m of sorted) {
     const created = new Date(m.createdAt);
     if (Number.isNaN(created.getTime())) {
       undated.push(m);

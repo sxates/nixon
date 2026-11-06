@@ -278,7 +278,7 @@
     notif_remove: () => undefined,
 
     // meetings/commands.rs `api_get_meetings` -> Vec<Meeting>.
-    api_get_meetings: () => MEETINGS.map(meetingRow),
+    api_get_meetings: () => MEETINGS.map(meetingRow).sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
 
     // meetings/commands.rs `api_get_meeting` -> MeetingDetails. Args: { meetingId }.
     api_get_meeting: ({ meetingId }) => {

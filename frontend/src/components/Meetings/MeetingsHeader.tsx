@@ -1,6 +1,6 @@
 'use client';
 
-import { CalendarDays, FileAudio, List, Plus } from 'lucide-react';
+import { CalendarClock, CalendarDays, CalendarRange, FileAudio, List, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/page-header';
 import { SegmentedControl, type SegmentedOption } from '@/components/ui/segmented-control';
@@ -9,6 +9,17 @@ import { ProcessMeetingsButton } from '@/components/DeferredBacklog/ProcessMeeti
 import { useImportDialog } from '@/contexts/ImportDialogContext';
 import { isMeetingsView, type MeetingsView } from '@/lib/meetings-view';
 
+// Every option carries an icon at the same size, so the four read as one control.
+const AGENDA: SegmentedOption = {
+  value: 'agenda',
+  label: 'Agenda',
+  icon: <CalendarClock className="h-3.5 w-3.5" aria-hidden="true" />,
+};
+const WEEK: SegmentedOption = {
+  value: 'week',
+  label: 'Week',
+  icon: <CalendarRange className="h-3.5 w-3.5" aria-hidden="true" />,
+};
 const MONTH: SegmentedOption = {
   value: 'month',
   label: 'Month',
@@ -26,7 +37,7 @@ const LIST: SegmentedOption = {
  */
 export function viewOptions(calendarConnected: boolean): SegmentedOption[] {
   return calendarConnected
-    ? [{ value: 'agenda', label: 'Agenda' }, { value: 'week', label: 'Week' }, MONTH, LIST]
+    ? [AGENDA, WEEK, MONTH, LIST]
     : [MONTH, LIST];
 }
 
