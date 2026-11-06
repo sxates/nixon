@@ -1,3 +1,4 @@
+import { PAGE_CONTENT_WIDTH } from '@/lib/page-width';
 /**
  * The Meetings page's view choice (Today and All meetings merged into one page).
  *
@@ -107,6 +108,5 @@ export function meetingsRedirectTarget(search: string): string {
   return `/?${params.toString()}`;
 }
 
-/** One content width for every Meetings view (the month grid's), so switching views never
- *  moves the edges. Action items uses it too, so the two list pages line up. A literal class string so Tailwind's scan of src/lib keeps it. */
-export const MEETINGS_CONTENT_WIDTH = 'max-w-[1080px]';
+/** The Meetings views' content width: the shared page width (see lib/page-width). */
+export const MEETINGS_CONTENT_WIDTH = PAGE_CONTENT_WIDTH;

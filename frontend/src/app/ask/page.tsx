@@ -66,6 +66,7 @@ import { safeListen } from '@/lib/safe-listen';
 import { cn } from '@/lib/utils';
 import type { Person } from '@/types';
 import { PageHeader } from '@/components/ui/page-header';
+import { PAGE_CONTENT_WIDTH } from '@/lib/page-width';
 
 const DATE_PRESETS: Array<{ value: DatePreset; label: string }> = [
   { value: '7d', label: '7d' },
@@ -425,7 +426,7 @@ function AskPageContent() {
       />
 
       <div className="flex-1 overflow-y-auto px-4 min-[900px]:px-7 pb-12">
-        <div className="mx-auto max-w-[840px]">
+        <div className={`mx-auto ${PAGE_CONTENT_WIDTH}`}>
           {/* Question + scope */}
           <div className="rounded-[3px] border border-border bg-card p-4 shadow-sm">
             <input
