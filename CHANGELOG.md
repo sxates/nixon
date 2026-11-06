@@ -19,6 +19,10 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 ## [Unreleased]
 
+_(nothing yet)_
+
+## [0.14.0] - 2026-11-05
+
 ### Added
 
 - Nixon keeps your Mac awake while it's recording, so a meeting on battery isn't cut short by sleep. The display can still turn off, and your Mac sleeps normally again as soon as you stop.
