@@ -6,6 +6,35 @@
 //! terminal, and are checked before any transient marker, so a copy edit can't make a plan
 //! limit retry.
 
+/// Terminal for the whole run, not just this request: the account, key or provider is
+/// unusable, so every later call would fail the same way. The map pass stops on these
+/// (`processor.rs`) instead of dropping one chunk and trying the next.
+const RUN_TERMINAL_MARKERS: [&str; 12] = [
+    "invalid api key",
+    "api key not found",
+    "authentication",
+    "unauthorized",
+    "not configured",
+    "unsupported llm provider",
+    "unknown model",
+    // Subscription CLIs (specs/0085, `cli_llm/errors.rs` copy, lowercased).
+    "couldn't reach", // NotSignedIn: "Nixon couldn't reach Claude with your account"
+    "usage limit is reached", // UsageLimit: the plan is spent until it resets
+    "wasn't found on this mac", // NotFound
+    "too old for nixon", // TooOld
+    "nixon stopped",  // IsolationFailed / OutputTooLarge
+];
+
+/// Terminal for this request only (a malformed or oversized request).
+const REQUEST_TERMINAL_MARKERS: [&str; 2] = ["invalid_request", "invalid request"];
+
+/// Whether `e` means every further call in this run would fail too (see
+/// [`RUN_TERMINAL_MARKERS`]). Never true for a cancellation, which callers handle first.
+pub(crate) fn is_run_terminal_llm_error(e: &str) -> bool {
+    let lower = e.to_lowercase();
+    RUN_TERMINAL_MARKERS.iter().any(|m| lower.contains(m))
+}
+
 /// Classifies an LLM error string as transient (worth retrying) vs terminal.
 ///
 /// Conservative on purpose: only clearly-transient conditions (timeouts, network
@@ -13,30 +42,13 @@
 /// else — auth failures, malformed requests, cancellation — is treated as terminal
 /// so we don't hammer a provider on a request that can never succeed. We only have
 /// the error *string* (no status code) here, so we match on well-known markers.
+/// Terminal markers are checked before transient ones.
 pub(crate) fn is_retryable_llm_error(e: &str) -> bool {
     if e.contains("cancelled") {
         return false;
     }
     let lower = e.to_lowercase();
-    // Terminal client-side conditions: never retry.
-    let terminal_markers = [
-        "invalid api key",
-        "api key not found",
-        "authentication",
-        "unauthorized",
-        "invalid_request",
-        "invalid request",
-        "not configured",
-        "unsupported llm provider",
-        "unknown model",
-        // Subscription CLIs (specs/0085, `cli_llm/errors.rs` copy, lowercased).
-        "couldn't reach", // NotSignedIn: "Nixon couldn't reach Claude with your account"
-        "usage limit is reached", // UsageLimit: the plan is spent until it resets
-        "wasn't found on this mac", // NotFound
-        "too old for nixon", // TooOld
-        "nixon stopped",  // IsolationFailed / OutputTooLarge
-    ];
-    if terminal_markers.iter().any(|m| lower.contains(m)) {
+    if is_run_terminal_llm_error(e) || REQUEST_TERMINAL_MARKERS.iter().any(|m| lower.contains(m)) {
         return false;
     }
     let transient_markers = [
@@ -191,5 +203,30 @@ mod tests {
             let copy = format!("{copy} (connection timeout)");
             assert!(!is_retryable_llm_error(&copy), "{copy}");
         }
+    }
+
+    #[test]
+    fn run_terminal_errors_are_the_account_and_config_ones() {
+        for kind in [CliKind::ClaudeCode, CliKind::CodexCli] {
+            for error in every_cli_error() {
+                let copy = CliFailure::new(kind, error.clone()).to_string();
+                let want = matches!(
+                    error,
+                    CliError::NotFound
+                        | CliError::TooOld { .. }
+                        | CliError::NotSignedIn
+                        | CliError::UsageLimit { .. }
+                        | CliError::IsolationFailed
+                        | CliError::OutputTooLarge
+                );
+                assert_eq!(is_run_terminal_llm_error(&copy), want, "{copy}");
+            }
+        }
+        assert!(is_run_terminal_llm_error("Invalid API key format"));
+        // Per-request failures still let the map pass go on to the next chunk.
+        assert!(!is_run_terminal_llm_error(
+            "LLM API request failed: invalid_request_error"
+        ));
+        assert!(!is_run_terminal_llm_error("Model returned an empty reply"));
     }
 }

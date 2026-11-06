@@ -46,7 +46,7 @@ async fn extract(fake: &FakeClaude, mode: &str) -> anyhow::Result<usize> {
 
 #[tokio::test]
 async fn schema_runs_yield_every_item_and_fail_without_structured_output() {
-    let fake = FakeClaude::install();
+    let fake = FakeClaude::install().await;
 
     assert_eq!(extract(&fake, "json-3").await.unwrap(), 3);
     assert_eq!(fake.calls(), 1, "parsed first time, no JSON-only retry");

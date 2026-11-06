@@ -1,5 +1,5 @@
 use crate::summary::llm_client::{generate_summary, LLMProvider};
-use crate::summary::llm_retry::is_retryable_llm_error;
+use crate::summary::llm_retry::{is_retryable_llm_error, is_run_terminal_llm_error};
 use crate::summary::prompts::{
     build_chunk_summary_user_prompt, build_combine_summary_user_prompt,
     build_final_synthesis_system_prompt, build_user_notes_block,
@@ -662,6 +662,7 @@ pub async fn generate_meeting_summary(
 
             let mut chunk_summaries = Vec::new();
             let mut failed_chunks: i64 = 0;
+            let mut last_error: Option<String> = None;
             let system_prompt_chunk = "You are an expert meeting summarizer.";
 
             for (i, chunk) in chunks.iter().enumerate() {
@@ -704,7 +705,9 @@ pub async fn generate_meeting_summary(
                     }
                     Err(e) => {
                         // Cancellation is terminal — propagate it, don't count as a drop.
-                        if e.contains("cancelled") {
+                        // specs/0085: so is an account-level error (signed out, plan
+                        // limit, no key): every later chunk would fail the same way.
+                        if e.contains("cancelled") || is_run_terminal_llm_error(&e) {
                             return Err(e);
                         }
                         // A failed chunk is NOT silently skipped: count it so the outcome
@@ -714,15 +717,17 @@ pub async fn generate_meeting_summary(
                             "Gave up on chunk {}/{} after retries: {} (this section will be missing from the summary)",
                             i + 1, num_chunks, e
                         );
+                        last_error = Some(e);
                     }
                 }
             }
 
             if chunk_summaries.is_empty() {
-                return Err(
+                // The last chunk's own copy is what the user can act on.
+                return Err(last_error.unwrap_or_else(|| {
                     "Multi-level summarization failed: No chunks were processed successfully."
-                        .to_string(),
-                );
+                        .to_string()
+                }));
             }
 
             let processed = chunk_summaries.len() as i64;

@@ -5,8 +5,8 @@
 //! `--version` (discovery), logs every other run's argv, and execs the fake in the mode
 //! named in a file the test rewrites between cases. Discovery finds the wrapper through
 //! `NIXON_CLI_CLAUDE_CODE`, and HOME points at an empty temp dir so no real install can be
-//! picked up. That state is process-wide, so each test binary using this runs its cases
-//! in one test, in order.
+//! picked up. That state is process-wide, so [`FakeClaude::install`] takes a binary-wide
+//! lock that the returned value holds: tests in one binary run one at a time.
 
 // Each test binary that includes this uses only part of it.
 #![allow(dead_code)]
@@ -14,14 +14,19 @@
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 
+static LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
 pub struct FakeClaude {
     dir: tempfile::TempDir,
     _home: tempfile::TempDir,
+    _lock: tokio::sync::MutexGuard<'static, ()>,
 }
 
 impl FakeClaude {
-    /// Writes the wrapper and points discovery (and HOME) at it for this process.
-    pub fn install() -> Self {
+    /// Writes the wrapper and points discovery (and HOME) at it for this process, holding
+    /// the binary-wide lock until dropped.
+    pub async fn install() -> Self {
+        let lock = LOCK.lock().await;
         let dir = tempfile::tempdir().unwrap();
         let home = tempfile::tempdir().unwrap();
         let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
@@ -44,7 +49,11 @@ FAKE_CLI_MODE="$(cat '{dir}/mode')" FAKE_CLI_FIXTURES='{fixtures}' exec '{fake}'
         // Edition 2021: set_var is safe. Only this test binary's process sees them.
         std::env::set_var("NIXON_CLI_CLAUDE_CODE", &wrapper);
         std::env::set_var("HOME", home.path());
-        Self { dir, _home: home }
+        Self {
+            dir,
+            _home: home,
+            _lock: lock,
+        }
     }
 
     /// Selects the fake's mode for the next runs and resets the run count.

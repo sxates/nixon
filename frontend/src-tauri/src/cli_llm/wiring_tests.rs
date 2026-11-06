@@ -102,18 +102,60 @@ async fn cli_providers_need_no_api_key_and_no_db_read() {
 }
 
 #[tokio::test]
-async fn saving_an_api_key_for_a_cli_provider_is_a_no_op() {
+async fn api_key_save_get_and_delete_are_no_ops_for_cli_providers() {
+    // The empty pool proves none of them touches the DB.
     let pool = empty_pool().await;
     for s in ["claude-code", "codex-cli"] {
         assert!(SettingsRepository::save_api_key(&pool, s, "sk-not-used")
             .await
             .is_ok());
+        assert_eq!(
+            SettingsRepository::get_api_key(&pool, s).await.unwrap(),
+            None,
+            "{s}"
+        );
+        assert!(
+            SettingsRepository::delete_api_key(&pool, s).await.is_ok(),
+            "{s}"
+        );
     }
     assert!(
         SettingsRepository::save_api_key(&pool, "gemini-cli", "sk-x")
             .await
             .is_err()
     );
+    assert!(SettingsRepository::get_api_key(&pool, "gemini-cli")
+        .await
+        .is_err());
+}
+
+/// Review fix: `api_get_model_config` (Settings → Summary, meeting details) reads the API
+/// key of the saved provider, which errored for a CLI provider.
+#[tokio::test]
+async fn api_get_model_config_works_with_a_saved_cli_provider() {
+    use crate::database::manager::DatabaseManager;
+    use crate::state::AppState;
+    use tauri::Manager;
+    let dir = tempfile::tempdir().unwrap();
+    let db = DatabaseManager::new(
+        dir.path().join("t.sqlite").to_str().unwrap(),
+        dir.path().join("none.db").to_str().unwrap(),
+    )
+    .await
+    .unwrap();
+    SettingsRepository::save_model_config(db.pool(), "claude-code", "sonnet", "large-v3", None)
+        .await
+        .unwrap();
+    let app = tauri::test::mock_app();
+    app.manage(AppState { db_manager: db });
+    let config = crate::settings::api_get_model_config(app.handle().clone(), app.state())
+        .await
+        .expect("a saved CLI provider must load")
+        .expect("the saved config");
+    assert_eq!(config.provider, "claude-code");
+    assert_eq!(config.model, "sonnet");
+    assert!(!config.api_key_configured);
+    assert_eq!(config.api_key_masked, None);
 }
 
 #[tokio::test]
