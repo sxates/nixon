@@ -11,6 +11,9 @@
 #   success  print a fixed reply
 #   echo     stream stdin straight back to stdout (large-input round trip)
 #   hang     start a `sleep 3600` grandchild, then sleep (kill tests)
+#   hang-ignore-term  like hang, but the grandchild ignores SIGTERM (SIGKILL fallback)
+#   orphan   start a grandchild that keeps stdout open, print a reply, exit 0
+#   linger   start a grandchild detached from the pipes, print a reply, exit 0
 #   crash    exit 2
 #   flood    write 20 MiB to stdout (output cap)
 #
@@ -88,6 +91,27 @@ case "$mode" in
     sleep 3600 &
     echo "GRANDCHILD:$!" >>"$log"
     sleep 3600
+    ;;
+  hang-ignore-term)
+    consume_stdin
+    # An ignored signal stays ignored across exec, so the sleep itself ignores SIGTERM.
+    (trap '' TERM; exec sleep 3600) &
+    echo "GRANDCHILD:$!" >>"$log"
+    sleep 3600
+    ;;
+  orphan)
+    consume_stdin
+    sleep 3600 &
+    echo "GRANDCHILD:$!" >>"$log"
+    echo "fake reply"
+    exit 0
+    ;;
+  linger)
+    consume_stdin
+    sleep 3600 </dev/null >/dev/null 2>&1 &
+    echo "GRANDCHILD:$!" >>"$log"
+    echo "fake reply"
+    exit 0
     ;;
   crash)
     consume_stdin

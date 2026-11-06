@@ -423,6 +423,9 @@ pub fn run() {
                     #[cfg(debug_assertions)]
                     crate::dev_fixtures::control::cleanup_port_file();
                     tauri::async_runtime::block_on(async {
+                        // specs/0085: no subscription-CLI process survives a quit. First,
+                        // and synchronous, so no slow await below (DB, sidecar) can delay it.
+                        cli_llm::runner::kill_all();
                         // specs/0084 W1: a quit ends running speaker-ID passes on purpose;
                         // clear their crash markers before the database closes.
                         audio::lifecycle::breaker::clear_markers_on_quit(_app_handle).await;
@@ -443,8 +446,6 @@ pub fn run() {
                         if let Err(e) = summary::summary_engine::force_shutdown_sidecar().await {
                             log::error!("Failed to force shutdown sidecar: {}", e);
                         }
-                        // specs/0085: no subscription-CLI process survives a quit.
-                        cli_llm::runner::kill_all();
                     });
                     log::info!("Application cleanup complete");
                 }

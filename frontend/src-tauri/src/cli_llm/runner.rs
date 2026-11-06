@@ -41,6 +41,11 @@ pub const STDOUT_CAP: usize = 16 * 1024 * 1024;
 pub const STDERR_CAP: usize = 1024 * 1024;
 /// SIGTERM → SIGKILL grace on timeout / cancel / overflow.
 const KILL_GRACE: Duration = Duration::from_secs(2);
+/// Once the CLI itself has exited, how long its pipes get to drain before a leftover
+/// child still holding them is killed (rather than the run waiting out its timeout).
+const DRAIN_GRACE: Duration = Duration::from_millis(500);
+/// `nice`'s exit code when it couldn't exec the binary (gone, or a broken shebang).
+const NICE_EXEC_FAILED: i32 = 127;
 
 /// Appended to the binary's own directory (which resolves `node` for nvm, Volta and
 /// Homebrew installs) to form the child's `PATH`.
@@ -122,6 +127,7 @@ pub async fn run(inv: Invocation<'_>) -> Result<RunOutput, CliError> {
 }
 
 async fn run_inner(inv: Invocation<'_>) -> Result<RunOutput, CliError> {
+    let kind = inv.kind;
     if !inv.binary.is_file() {
         log::warn!("cli_llm: binary not found at {}", inv.binary.display());
         return Err(CliError::NotFound);
@@ -191,13 +197,38 @@ async fn run_inner(inv: Invocation<'_>) -> Result<RunOutput, CliError> {
         let io = async {
             // Concurrently: a prompt bigger than the pipe buffer would otherwise deadlock
             // against a child that writes before it has read all of stdin.
-            let (out, err, ()) = tokio::try_join!(
-                read_capped(stdout, STDOUT_CAP),
-                read_capped(stderr, STDERR_CAP),
-                write_stdin(stdin, &inv.stdin),
-            )?;
-            let status = child.wait().await.map_err(io_failure("wait for the CLI"))?;
-            Ok::<_, CliError>((status, out, err))
+            let pipes = async {
+                tokio::try_join!(
+                    read_capped(stdout, STDOUT_CAP),
+                    read_capped(stderr, STDERR_CAP),
+                    write_stdin(stdin, &inv.stdin),
+                )
+            };
+            tokio::pin!(pipes);
+            let status = tokio::select! {
+                r = &mut pipes => {
+                    let (out, err, ()) = r?;
+                    let status = child.wait().await.map_err(io_failure("wait for the CLI"))?;
+                    return Ok::<_, CliError>((status, out, err));
+                }
+                s = child.wait() => s.map_err(io_failure("wait for the CLI"))?,
+            };
+            // The CLI exited but its pipes are still open. Give them a moment to drain; a
+            // leftover child still holding them after that is killed, so a finished run
+            // doesn't wait out its timeout. The group outlives the reaped leader only
+            // while a member exists, so its pgid can't have been reused.
+            let (out, err, ()) = match tokio::time::timeout(DRAIN_GRACE, &mut pipes).await {
+                Ok(r) => r?,
+                Err(_) => {
+                    log::warn!(
+                        "cli_llm: {:?} exited but a child kept its output open",
+                        kind
+                    );
+                    signal_group(pgid, Signal::Kill);
+                    pipes.await?
+                }
+            };
+            Ok((status, out, err))
         };
         let cancelled = async {
             match inv.cancel {
@@ -214,7 +245,19 @@ async fn run_inner(inv: Invocation<'_>) -> Result<RunOutput, CliError> {
 
     match outcome {
         Ok((status, stdout, stderr)) => {
+            // The leader is reaped. Anything left in its group (a CLI's background helper)
+            // dies with the call; a pgid is never reused while its group still exists.
+            if group_exists(pgid) {
+                signal_group(pgid, Signal::Kill);
+            }
             group.reaped();
+            if exit_code(&status) == NICE_EXEC_FAILED && stderr.starts_with(b"nice:") {
+                log::warn!(
+                    "cli_llm: {} could not be started (gone or not runnable)",
+                    inv.binary.display()
+                );
+                return Err(CliError::NotFound);
+            }
             let duration = started.elapsed();
             log::info!(
                 "cli_llm: {:?} exited with code {} after {:?}",

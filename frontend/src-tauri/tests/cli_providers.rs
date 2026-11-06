@@ -9,6 +9,10 @@
 //! 3 (5 MB through stdin in < 5 s), 4 (timeout / cancel / kill_all take the grandchild
 //! down within 3 s), the output cap, and a crash exit code.
 //!
+//! Needs a debug build (the default for `cargo test`): the fake's mode and log reach it
+//! through the runner's `extra_env`, which only exists under `cfg(any(test,
+//! debug_assertions))`. `cargo test --release` does not compile this file.
+//!
 //! Run with:
 //!   cargo test --features metal --test cli_providers
 
@@ -28,7 +32,7 @@ use tokio_util::sync::CancellationToken;
 /// and every other spawning test takes it shared.
 static KILL_ALL_LOCK: Lazy<RwLock<()>> = Lazy::new(|| RwLock::new(()));
 
-const PROMPT_SENTINEL: &str = "SENTINEL-PROMPT-7f3a: the quarterly numbers for Larkspur";
+const PROMPT_SENTINEL: &str = "SENTINEL-PROMPT-7f3a synthetic prompt body";
 
 fn fake_cli() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/cli/fake-ai-cli.sh")
@@ -229,8 +233,11 @@ async fn temp_dir_is_removed_on_failure_too() {
     let scratch = tempfile::tempdir().unwrap();
     let log = log_path(&scratch);
     let binary = fake_cli();
-    let inv = invocation(&binary, "hang", &log, vec![], Duration::from_millis(300));
+    // 2 s, not a few hundred ms: the fake must have started (and logged its cwd) before
+    // the timeout, even on a loaded CI machine.
+    let inv = invocation(&binary, "hang", &log, vec![], Duration::from_secs(2));
     assert_eq!(runner::run(inv).await.unwrap_err(), CliError::Timeout);
+    wait_for_grandchild(&log).await;
     let pwd = PathBuf::from(&log_values(&read_log(&log), "PWD")[0]);
     assert!(!pwd.parent().unwrap().exists());
 }
@@ -271,7 +278,8 @@ async fn timeout_kills_the_whole_group() {
     let scratch = tempfile::tempdir().unwrap();
     let log = log_path(&scratch);
     let binary = fake_cli();
-    let timeout = Duration::from_millis(500);
+    // Long enough that the fake has started its grandchild before the timeout fires.
+    let timeout = Duration::from_secs(2);
     let inv = invocation(&binary, "hang", &log, vec![], timeout);
 
     let started = Instant::now();
@@ -281,7 +289,7 @@ async fn timeout_kills_the_whole_group() {
     assert!(took < timeout + Duration::from_secs(3), "took {took:?}");
     let grandchild = wait_for_grandchild(&log).await;
     assert!(
-        wait_gone(grandchild, Duration::from_millis(200)).await,
+        wait_gone(grandchild, Duration::from_secs(1)).await,
         "grandchild {grandchild} survived the timeout"
     );
 }
@@ -305,7 +313,7 @@ async fn cancel_kills_the_whole_group() {
     assert!(cancelled_at.elapsed() < Duration::from_secs(3));
     let grandchild = wait_for_grandchild(&log).await;
     assert!(
-        wait_gone(grandchild, Duration::from_millis(200)).await,
+        wait_gone(grandchild, Duration::from_secs(1)).await,
         "grandchild {grandchild} survived cancel"
     );
 }
@@ -335,6 +343,87 @@ async fn kill_all_leaves_no_registered_group_alive() {
         assert!(!group_alive, "group {pgid} survived kill_all");
     }
     assert!(runner::live_pgids().is_empty());
+}
+
+#[tokio::test]
+async fn sigkill_fallback_removes_a_grandchild_that_ignores_sigterm() {
+    let _guard = KILL_ALL_LOCK.read().await;
+    let scratch = tempfile::tempdir().unwrap();
+    let log = log_path(&scratch);
+    let binary = fake_cli();
+    let cancel = CancellationToken::new();
+    let mut inv = invocation(
+        &binary,
+        "hang-ignore-term",
+        &log,
+        vec![],
+        Duration::from_secs(60),
+    );
+    inv.cancel = Some(&cancel);
+
+    let (result, (grandchild, cancelled_at)) = tokio::join!(runner::run(inv), async {
+        let grandchild = wait_for_grandchild(&log).await;
+        cancel.cancel();
+        (grandchild, Instant::now())
+    });
+    assert_eq!(result.unwrap_err(), CliError::Cancelled);
+    let took = cancelled_at.elapsed();
+    // SIGTERM did nothing to it, so the run waited out the grace and sent SIGKILL.
+    assert!(took >= Duration::from_millis(1500), "took {took:?}");
+    assert!(
+        wait_gone(grandchild, Duration::from_millis(2500).saturating_sub(took)).await,
+        "TERM-ignoring grandchild {grandchild} survived the SIGKILL fallback"
+    );
+}
+
+#[tokio::test]
+async fn a_grandchild_holding_stdout_does_not_hold_up_a_finished_run() {
+    let _guard = KILL_ALL_LOCK.read().await;
+    let scratch = tempfile::tempdir().unwrap();
+    let log = log_path(&scratch);
+    let binary = fake_cli();
+    let inv = invocation(&binary, "orphan", &log, vec![], Duration::from_secs(30));
+
+    let started = Instant::now();
+    let out = ok(runner::run(inv).await);
+    let took = started.elapsed();
+    assert!(out.status.success());
+    assert_eq!(out.stdout, b"fake reply\n");
+    assert!(took < Duration::from_secs(3), "took {took:?}");
+    let grandchild = wait_for_grandchild(&log).await;
+    assert!(
+        wait_gone(grandchild, Duration::from_secs(1)).await,
+        "grandchild {grandchild} outlived the finished run"
+    );
+}
+
+#[tokio::test]
+async fn leftover_group_members_are_killed_after_a_normal_exit() {
+    let _guard = KILL_ALL_LOCK.read().await;
+    let scratch = tempfile::tempdir().unwrap();
+    let log = log_path(&scratch);
+    let binary = fake_cli();
+    let inv = invocation(&binary, "linger", &log, vec![], Duration::from_secs(30));
+
+    let out = ok(runner::run(inv).await);
+    assert!(out.status.success());
+    let grandchild = wait_for_grandchild(&log).await;
+    assert!(
+        wait_gone(grandchild, Duration::from_secs(1)).await,
+        "grandchild {grandchild} outlived the finished run"
+    );
+}
+
+#[tokio::test]
+async fn an_unexecutable_binary_is_not_found_not_a_crash() {
+    // Passes the runner's is_file check, but `nice` can't exec it and exits 127: the same
+    // thing a CLI that vanished between discovery and spawn does.
+    let scratch = tempfile::tempdir().unwrap();
+    let binary = scratch.path().join("claude");
+    std::fs::write(&binary, "#!/nonexistent/nixon-test/interpreter\n").unwrap();
+    std::fs::set_permissions(&binary, std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
+    let inv = Invocation::new(CliKind::ClaudeCode, &binary, Duration::from_secs(5));
+    assert_eq!(runner::run(inv).await.unwrap_err(), CliError::NotFound);
 }
 
 #[tokio::test]
