@@ -16,6 +16,7 @@ import { ModelConfig, ModelSettingsModal } from '@/components/ModelSettingsModal
 import { SummaryModelName } from '@/components/SummaryModelRow';
 import { ResolvedSettingRow } from '@/components/ResolvedSettingRow';
 import { SettingsSection } from '@/components/ui/settings';
+import { cliModelLabel, isCliProvider, isKeylessProvider, providerLabel } from '@/lib/llm-providers';
 
 interface SummaryModelSectionProps {
   refetchTrigger?: number; // Change this to trigger refetch
@@ -60,7 +61,7 @@ export function SummaryModelSection({ refetchTrigger }: SummaryModelSectionProps
       if (data && data.provider !== null) {
         // The backend returns configured/masked key status, never the raw key
         // (spec 0030 WS2). Surface the masked hint via the write-only apiKey field.
-        if (data.provider !== 'ollama' && data.provider !== 'builtin-ai') {
+        if (!isKeylessProvider(data.provider)) {
           data.apiKey = data.apiKeyConfigured ? (data.apiKeyMasked ?? '••••') : null;
         }
         // Fetch Custom OpenAI config if that's the active provider
@@ -140,6 +141,14 @@ export function SummaryModelSection({ refetchTrigger }: SummaryModelSectionProps
         title="Summary model"
         description="The AI model that writes your meeting summaries. A local model keeps everything on this Mac."
       >
+        {isCliProvider(modelConfig.provider) && (
+          // specs/0085: a subscription CLI is a choice the user made, never Nixon's pick, so
+          // this states what is in use instead of the "chosen for this Mac" resolved row.
+          <p className="text-sm" data-testid="cli-resolved">
+            {providerLabel(modelConfig.provider)} · {cliModelLabel(modelConfig.model)} · your{' '}
+            {modelConfig.provider === 'claude-code' ? 'Claude' : 'ChatGPT'} subscription
+          </p>
+        )}
         <ResolvedSettingRow
           label="Summary model"
           description="Chosen to suit this Mac's memory. Summaries are written here, on your machine — nothing is sent anywhere."

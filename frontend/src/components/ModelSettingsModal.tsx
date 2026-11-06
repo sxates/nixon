@@ -28,9 +28,11 @@ import {
 } from '@/components/ui/command';
 import { cn, isMaskedApiKey, isOllamaNotInstalledError, maskApiKey } from '@/lib/utils';
 import { toast } from 'sonner';
+import { CliProviderPanel, CliProviderSelectItems } from '@/components/CliProviderPanel';
+import { isCliProvider, isKeylessProvider } from '@/lib/llm-providers';
 
 export interface ModelConfig {
-  provider: 'ollama' | 'groq' | 'claude' | 'openai' | 'openrouter' | 'builtin-ai' | 'custom-openai';
+  provider: 'ollama' | 'groq' | 'claude' | 'openai' | 'openrouter' | 'builtin-ai' | 'custom-openai' | 'claude-code' | 'codex-cli';
   model: string;
   whisperModel: string;
   /**
@@ -227,6 +229,8 @@ export function ModelSettingsModal({
     openrouter: openRouterModels.map((m) => m.id),
     'builtin-ai': builtinAiModels.map((m) => m.name),
     'custom-openai': customOpenAIModel ? [customOpenAIModel] : [], // User specifies model manually
+    'claude-code': ['sonnet'], // pinned (specs/0085)
+    'codex-cli': [],
   };
 
   const requiresApiKey =
@@ -263,7 +267,7 @@ export function ModelSettingsModal({
         if (data && data.provider !== null) {
           // The backend returns configured/masked key status, never the raw
           // key (spec 0030 WS2). Show the masked hint; typing replaces it.
-          if (data.provider !== 'ollama') {
+          if (!isKeylessProvider(data.provider)) {
             data.apiKey = data.apiKeyConfigured ? (data.apiKeyMasked ?? '••••') : null;
             setApiKey(data.apiKey);
             setIsApiKeyLocked(!!data.apiKey);
@@ -628,7 +632,7 @@ export function ModelSettingsModal({
 
     const updatedConfig = {
       ...modelConfig,
-      apiKey: typeof apiKey === 'string' ? apiKey.trim() || null : null,
+      apiKey: !isCliProvider(modelConfig.provider) && typeof apiKey === 'string' ? apiKey.trim() || null : null,
       ollamaEndpoint: modelConfig.provider === 'ollama'
         ? (ollamaEndpoint.trim() || null)
         : (modelConfig.ollamaEndpoint || null),
@@ -640,7 +644,9 @@ export function ModelSettingsModal({
       temperature: modelConfig.provider === 'custom-openai' && customTemperature ? parseFloat(customTemperature) : null,
       topP: modelConfig.provider === 'custom-openai' && customTopP ? parseFloat(customTopP) : null,
       // For custom-openai, use the customOpenAIModel as the model field
-      model: modelConfig.provider === 'custom-openai' ? customOpenAIModel.trim() : modelConfig.model,
+      model: modelConfig.provider === 'custom-openai' ? customOpenAIModel.trim()
+        : modelConfig.provider === 'claude-code' ? 'sonnet' // pinned (specs/0085)
+        : modelConfig.model,
     };
     setModelConfig(updatedConfig);
     console.log('ModelSettingsModal - handleSave - Updated ModelConfig:', updatedConfig);
@@ -857,10 +863,11 @@ export function ModelSettingsModal({
                 <SelectItem value="ollama">Ollama</SelectItem>
                 <SelectItem value="openai">OpenAI</SelectItem>
                 <SelectItem value="openrouter">OpenRouter</SelectItem>
+                <CliProviderSelectItems />
               </SelectContent>
             </Select>
 
-            {modelConfig.provider !== 'builtin-ai' && modelConfig.provider !== 'custom-openai' && (
+            {modelConfig.provider !== 'builtin-ai' && modelConfig.provider !== 'custom-openai' && !isCliProvider(modelConfig.provider) && (
               <Popover open={modelComboboxOpen} onOpenChange={setModelComboboxOpen} modal={true}>
                 <PopoverTrigger asChild>
                   <Button
@@ -919,6 +926,11 @@ export function ModelSettingsModal({
             )}
           </div>
         </div>
+
+        {/* Subscription CLI (Claude Code): status, privacy, its own Save (specs/0085) */}
+        {isCliProvider(modelConfig.provider) && (
+          <CliProviderPanel provider={modelConfig.provider} onSave={handleSave} />
+        )}
 
         {/* Custom OpenAI Configuration Section */}
         {modelConfig.provider === 'custom-openai' && (
@@ -1381,6 +1393,7 @@ export function ModelSettingsModal({
         </div>
       </div> */}
 
+      {!isCliProvider(modelConfig.provider) && (
       <div className="mt-6 flex justify-end">
         <Button
           className={cn(
@@ -1393,6 +1406,7 @@ export function ModelSettingsModal({
           Save
         </Button>
       </div>
+      )}
     </div>
   );
 }

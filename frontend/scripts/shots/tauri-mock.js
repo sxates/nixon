@@ -41,6 +41,10 @@
 //     normal "nothing is moving" case.
 //   retention=once|days30|never — answer get_recording_preferences with that audio
 //     retention policy (specs/0072), so Settings → Recording shows its copy.
+//   cli=ready|needsSignIn — Settings → Summary with the Claude Code subscription provider
+//     selected (specs/0085): answers api_get_model_config with provider 'claude-code' and
+//     api_cli_providers_status with a ready / needs-sign-in Claude Code. Fictional path and
+//     version. Omit for the normal local-model case.
 //   processing=1 — a summary is running for demo-01 in the background-activity snapshot,
 //     so Today and All Meetings show that meeting's "Processing" status (and the queue
 //     row is lit). It also adds a joinable calendar meeting happening NOW (this hour) with a
@@ -69,6 +73,7 @@
   const moveParam = q.get('move');
   const retentionParam = q.get('retention');
   const processingParam = q.get('processing');
+  const cliParam = q.get('cli');
   const RETENTION = {
     once: { mode: 'after_processing' },
     days30: { mode: 'days', days: 30 },
@@ -624,6 +629,30 @@
     // fallback's [] and read that as ready, showing the summary card as already
     // downloaded during the step-3 preview.
     builtin_ai_get_recommended_model: () => 'qwen3.5:2b',
+
+    // cli_llm/commands.rs `api_cli_providers_status` -> CliProviderStatus[] (specs/0085).
+    // Always answered (Claude Code only; Codex is drawn statically by the UI). The `cli=`
+    // route flag picks ready vs needs-sign-in; every other route sees a ready one but never
+    // renders it, because no other route selects the provider.
+    api_cli_providers_status: () => [
+      {
+        id: 'claude-code',
+        displayName: 'Claude Code',
+        state: cliParam === 'needsSignIn' ? 'needsSignIn' : 'ready',
+        path: '/usr/local/bin/claude',
+        version: '2.1.301',
+        minVersion: '2.1.290',
+        models: [{ id: 'sonnet', label: 'Sonnet' }],
+      },
+    ],
+    api_cli_provider_set_path: () => Promise.reject('Not available in the screenshot mock.'),
+    api_cli_provider_test: () => ({ ok: true, latencyMs: 1800 }),
+    // database/commands.rs `api_get_model_config`: only the cli= routes pin an answer
+    // (provider 'claude-code'); everywhere else keeps the generic fallback its baseline
+    // screenshots were taken with.
+    ...(cliParam
+      ? { api_get_model_config: () => ({ provider: 'claude-code', model: 'sonnet', whisperModel: 'large-v3', apiKeyConfigured: false }) }
+      : {}),
 
     // onboarding_disk.rs `get_models_disk_check` -> DiskCheck { free_bytes, required_bytes,
     // ok, models_dir }. Args: { summaryModel }. SetupOverviewStep (specs/0061 W1 Task 1)

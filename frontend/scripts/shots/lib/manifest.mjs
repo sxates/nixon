@@ -9,6 +9,7 @@ const THEMES = new Set(['faceplate', 'deck']);
 const UPDATE_STATES = new Set(['ready', 'downloading']);
 const CALENDAR_STATES = new Set(['none']);
 const MOVE_STATES = new Set(['running', 'gather']);
+const CLI_STATES = new Set(['ready', 'needsSignIn']);
 
 export function loadManifest(path = join(here, '..', 'routes.json')) {
   const raw = JSON.parse(readFileSync(path, 'utf8'));
@@ -24,6 +25,7 @@ export function loadManifest(path = join(here, '..', 'routes.json')) {
     if (e.onboardingStep !== undefined && !(e.onboardingStep >= 1 && e.onboardingStep <= 5)) throw new Error(`${e.name}: onboardingStep 1..5`);
     if (e.update !== undefined && !UPDATE_STATES.has(e.update)) throw new Error(`${e.name}: unknown update state ${e.update}`);
     if (e.calendar !== undefined && !CALENDAR_STATES.has(e.calendar)) throw new Error(`${e.name}: unknown calendar state ${e.calendar}`);
+    if (e.cli !== undefined && !CLI_STATES.has(e.cli)) throw new Error(`${e.name}: unknown cli state ${e.cli}`);
     if (e.move !== undefined && !MOVE_STATES.has(e.move)) throw new Error(`${e.name}: unknown move state ${e.move}`);
     // `scroll` scrolls one element (a CSS selector) to `top` px after the ready signal, for
     // a scrolled-state capture. Headless only: `real.mjs` drives a real window it can't script.
@@ -60,6 +62,8 @@ export function expand(entries, { headless = false } = {}) {
           if (entry.calendar) u.searchParams.set('calendar', entry.calendar);
           // specs/0073 W3 — seeds a recordings move (build-mock.mjs answers the mover).
           if (entry.move) u.searchParams.set('move', entry.move);
+          // specs/0085 — stages the Claude Code provider (ready | needsSignIn) on Settings → Summary.
+          if (entry.cli) u.searchParams.set('cli', entry.cli);
           return u.toString();
         },
       });

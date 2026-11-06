@@ -108,4 +108,17 @@ describe('Summary model — resolved, and last on the tab (specs/0067)', () => {
     // controls rather than hide a setting we cannot vouch for.
     await waitFor(() => expect(screen.getByTestId('model-picker')).toBeInTheDocument());
   });
+
+  // specs/0085 — a subscription CLI provider is a deliberate choice: the controls stay open,
+  // the row names the provider, model and plan, and "Recommended" is never claimed.
+  it('names Claude Code, its model and the plan, and never says Recommended', async () => {
+    arrange({ provider: 'claude-code', model: 'sonnet' });
+    const { container } = render(<SummaryModelSection />);
+
+    expect(await screen.findByTestId('cli-resolved')).toHaveTextContent(
+      'Claude Code · Sonnet · your Claude subscription',
+    );
+    expect(screen.getByTestId('model-picker')).toBeInTheDocument();
+    expect(container.textContent).not.toMatch(/recommended/i);
+  });
 });
