@@ -172,6 +172,14 @@ export function MonthCalendar({
 
   const nav = (
     <>
+        {/* Spinner and Today sit LEFT of the arrows, so neither moves them (the nav is
+            right-aligned in the view-tab row). */}
+        <div className="flex items-center gap-2">
+          {isLoading && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
+          <Button variant="outline" size="xs" onClick={goToday}>
+            Today
+          </Button>
+        </div>
         <div className="flex items-center gap-1">
           <Button
             variant="ghost"
@@ -193,12 +201,6 @@ export function MonthCalendar({
             className="h-7 w-7"
           >
             <ChevronRight className="h-4 w-4" />
-          </Button>
-        </div>
-        <div className="flex items-center gap-2">
-          {isLoading && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
-          <Button variant="outline" size="xs" onClick={goToday}>
-            Today
           </Button>
         </div>
     </>
