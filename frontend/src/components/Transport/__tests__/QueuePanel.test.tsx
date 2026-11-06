@@ -7,7 +7,7 @@ const { backlog, llm, invokeMock, toastMock } = vi.hoisted(() => ({
   // so the fixture mirrors that shape rather than nesting a `view`.
   llm: { queued: [] as unknown[], running: [] as unknown[], history: [] as unknown[], hasFailure: false, dismiss: vi.fn(), retry: vi.fn() },
   invokeMock: vi.fn(),
-  toastMock: { error: vi.fn(), success: vi.fn(), warning: vi.fn() },
+  toastMock: { error: vi.fn(), success: vi.fn(), warning: vi.fn(), info: vi.fn() },
 }));
 vi.mock('@/contexts/DeferredBacklogProvider', () => ({ useBacklog: () => backlog }));
 vi.mock('@/contexts/LlmActivityProvider', () => ({ useOptionalLlmActivity: () => llm }));
@@ -178,6 +178,18 @@ describe('QueuePanel — a refused retry says so (specs/0066 W2)', () => {
         description: 'Speaker identification is already running for this meeting.',
       }),
     );
+  });
+
+  // specs/0084: Retry right after a Cancel, while the cancelled pass still finishes unseen.
+  it('shows "still stopping" as a plain notice, not a failure', async () => {
+    const stopping = 'Still stopping the previous run — try again in a moment.';
+    invokeMock.mockRejectedValueOnce(stopping);
+    render(<QueuePanel view={summaryFailure()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+
+    await waitFor(() => expect(toastMock.info).toHaveBeenCalledWith(stopping));
+    expect(toastMock.error).not.toHaveBeenCalled();
   });
 
   it('says nothing when the retry is accepted', async () => {

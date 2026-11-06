@@ -513,16 +513,18 @@ fn diarize_audio_blocking<R: Runtime>(
     let progress = move |stage: models::DownloadStage, downloaded: u64, total: u64| {
         let label = models::progress_label(stage, downloaded, total);
         registry_update(&mid, &label, None);
-        let _ = app_for_progress.emit(
-            EVENT_PROGRESS,
+        super::detach::emit_progress(
+            &app_for_progress,
+            &mid,
             serde_json::json!({ "meeting_id": mid, "stage": label }),
         );
     };
     let paths = models::ensure_models(Some(&progress)).context("ensure diarization models")?;
 
     registry_update(&meeting_id, "loading audio", None);
-    let _ = app.emit(
-        EVENT_PROGRESS,
+    super::detach::emit_progress(
+        &app,
+        &meeting_id,
         serde_json::json!({ "meeting_id": meeting_id, "stage": "loading audio" }),
     );
 
@@ -552,8 +554,9 @@ fn diarize_audio_blocking<R: Runtime>(
     let samples = decoded.to_whisper_format();
 
     registry_update(&meeting_id, "diarizing", Some(0));
-    let _ = app.emit(
-        EVENT_PROGRESS,
+    super::detach::emit_progress(
+        &app,
+        &meeting_id,
         serde_json::json!({ "meeting_id": meeting_id, "stage": "diarizing", "pct": 0 }),
     );
 
@@ -615,8 +618,10 @@ fn diarize_audio_blocking<R: Runtime>(
         if pct != last_pct {
             last_pct = pct;
             registry_update(&mid_for_pct, "diarizing", Some(pct.clamp(0, 100) as u8));
-            let _ = app_for_pct.emit(
-                EVENT_PROGRESS,
+            // specs/0084: silent once cancelled; the hidden compute call keeps calling this.
+            super::detach::emit_progress(
+                &app_for_pct,
+                &mid_for_pct,
                 serde_json::json!({ "meeting_id": mid_for_pct, "stage": "diarizing", "pct": pct }),
             );
         }
@@ -767,8 +772,9 @@ pub(super) async fn run<R: Runtime>(
     // Out of sherpa, into the DB work. Reported with no percentage (`registry_update` treats
     // `None` as indeterminate) so the button shows a named stage instead of a stuck 100%.
     registry_update(&meeting_id, STAGE_ATTRIBUTING, None);
-    let _ = app.emit(
-        EVENT_PROGRESS,
+    super::detach::emit_progress(
+        &app,
+        &meeting_id,
         serde_json::json!({ "meeting_id": meeting_id, "stage": STAGE_ATTRIBUTING }),
     );
 
@@ -832,8 +838,9 @@ pub(super) async fn run<R: Runtime>(
     // persisted) diarization pass.
     super::cancel::check(&meeting_id)?;
     registry_update(&meeting_id, STAGE_MATCHING, None);
-    let _ = app.emit(
-        EVENT_PROGRESS,
+    super::detach::emit_progress(
+        &app,
+        &meeting_id,
         serde_json::json!({ "meeting_id": meeting_id, "stage": STAGE_MATCHING }),
     );
     let suggestions = compute_suggestions_with_emails(pool, &meeting_id, &corroborating_emails)
@@ -850,8 +857,9 @@ pub(super) async fn run<R: Runtime>(
     // them too: the gallery grows after the meetings that taught it, so a pass run before a
     // person was well-trained can only be corrected later (specs/0064 W2).
     registry_update(&meeting_id, STAGE_LABELLING, None);
-    let _ = app.emit(
-        EVENT_PROGRESS,
+    super::detach::emit_progress(
+        &app,
+        &meeting_id,
         serde_json::json!({ "meeting_id": meeting_id, "stage": STAGE_LABELLING }),
     );
     let auto_labeled = crate::diarization::auto_label::apply(pool, &meeting_id, &suggestions).await;

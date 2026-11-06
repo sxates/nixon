@@ -1360,8 +1360,10 @@ async fn wait_for_pass_end(meeting_id: &str) {
 }
 
 /// specs/0084 W2: Cancel ends the pass quietly. The pass is held at its first stage by the
-/// folder lease (as a long compute would hold it), cancelled, then released: it stops at the
-/// next boundary. The meeting ends `failed`/`cancelled` with the marker cleared, the queue row
+/// folder lease (as sherpa's uninterruptible compute call would hold it) and cancelled: it
+/// ends for the user at once (the detach) while it is still held, refuses a new request
+/// meanwhile, then is released and stops at the next boundary, adding nothing visible. The
+/// meeting ends `failed`/`cancelled` with the marker cleared only then, the queue row
 /// is a skip (no red lamp), `diarization-error` says `cancelled`, the queued re-run is
 /// dropped, and a relaunch neither restarts it nor reads it as a crash.
 #[tokio::test]
@@ -1388,23 +1390,82 @@ async fn a_cancelled_pass_ends_quietly_and_stays_cancelled() {
         app.handle().clone(),
         id.into()
     ));
-    let cancelled = app_lib::diarization::cancel::api_cancel_diarization(id.into())
-        .await
-        .unwrap();
-    assert!(cancelled.cancelled, "a running pass is cancellable");
     // A follow-up asked for while it runs is queued, and the cancel must drop it.
     assert!(!app_lib::diarization::launch::diarize_meeting_or_queue(
         app.handle().clone(),
         id.into()
     ));
+    // Let the pass stamp its marker and reach the held lease (a long compute step).
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    while speaker_id_cols(&pool, id)
+        .await
+        .speaker_id_started_at
+        .is_none()
+        && std::time::Instant::now() < deadline
+    {
+        tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+    }
+    let cancelled =
+        app_lib::diarization::cancel::api_cancel_diarization(app.handle().clone(), id.into())
+            .await
+            .unwrap();
+    assert!(cancelled.cancelled, "a running pass is cancellable");
+
+    // specs/0084 detach: the pass is still held, yet it is over for the user the moment
+    // the command returns, exactly as a completed cancelled pass looks.
+    let assert_visibly_cancelled = |when: &str| {
+        let status = app_lib::diarization::pipeline::run_status(id).unwrap();
+        assert!(!status.running, "{when}: no running pass shown");
+        assert_eq!(status.stage, "cancelled", "{when}");
+        let events = errors.lock().unwrap().clone();
+        assert_eq!(events.len(), 1, "{when}: one quiet ending, {events:?}");
+        assert_eq!(events[0]["cancelled"], serde_json::json!(true));
+        let view = activity.view();
+        assert!(view.running.is_empty(), "{when}: the queue row is finished");
+        assert_eq!(view.history.len(), 1, "{when}: finished once");
+        assert!(
+            !view.has_failure,
+            "{when}: a cancel never lights the failure lamp"
+        );
+        assert!(
+            matches!(&view.history[0].outcome, TaskOutcome::Skipped { .. }),
+            "{when}: {:?}",
+            view.history[0].outcome
+        );
+    };
+    assert_visibly_cancelled("on the Cancel click");
+    let detached = speaker_id_cols(&pool, id).await;
+    assert_eq!(detached.audio_state.as_deref(), Some("failed"));
+    assert_eq!(detached.speaker_id_failure.as_deref(), Some("cancelled"));
+    assert!(
+        detached.speaker_id_started_at.is_some(),
+        "the marker stays while the hidden pass runs: a crash in it is still caught"
+    );
+    // While it finishes unseen, a new request says so instead of stacking a second pass.
+    let again =
+        app_lib::diarization::commands::api_diarize_meeting(app.handle().clone(), id.into(), None)
+            .await
+            .unwrap_err();
+    assert_eq!(again, app_lib::diarization::detach::STILL_STOPPING);
+    assert!(!app_lib::diarization::launch::diarize_meeting(
+        app.handle().clone(),
+        id.into()
+    ));
+
     tokio::time::sleep(std::time::Duration::from_millis(200)).await;
     drop(held);
-    wait_for_pass_end(id).await;
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
+    while app_lib::diarization::cancel::is_stopping(id) && std::time::Instant::now() < deadline {
+        tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+    }
+    assert!(
+        !app_lib::diarization::cancel::is_stopping(id),
+        "the hidden pass ended"
+    );
     tokio::time::sleep(std::time::Duration::from_millis(200)).await;
 
-    let status = app_lib::diarization::pipeline::run_status(id).unwrap();
-    assert!(!status.running, "no re-run started after the cancel");
-    assert_eq!(status.stage, "cancelled");
+    // Its late ending added nothing the user sees, and only now clears the marker.
+    assert_visibly_cancelled("after the hidden pass returned");
     assert_eq!(
         speaker_id_cols(&pool, id).await,
         SpeakerIdCols {
@@ -1413,16 +1474,6 @@ async fn a_cancelled_pass_ends_quietly_and_stays_cancelled() {
             speaker_id_failure: Some("cancelled".into()),
             speaker_id_crashes: 0,
         }
-    );
-    let events = errors.lock().unwrap().clone();
-    assert_eq!(events.len(), 1, "{events:?}");
-    assert_eq!(events[0]["cancelled"], serde_json::json!(true));
-    let view = activity.view();
-    assert!(!view.has_failure, "a cancel never lights the failure lamp");
-    assert!(
-        matches!(&view.history[0].outcome, TaskOutcome::Skipped { .. }),
-        "{:?}",
-        view.history[0].outcome
     );
 
     // Relaunch: not a crash, not unfinished.
@@ -1435,7 +1486,7 @@ async fn a_cancelled_pass_ends_quietly_and_stays_cancelled() {
         .unwrap()
         .contains(&id.to_string()));
     assert!(
-        !app_lib::diarization::cancel::api_cancel_diarization(id.into())
+        !app_lib::diarization::cancel::api_cancel_diarization(app.handle().clone(), id.into())
             .await
             .unwrap()
             .cancelled,
