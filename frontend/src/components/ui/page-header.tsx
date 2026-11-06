@@ -11,8 +11,8 @@ export interface PageHeaderProps {
   subtitle?: React.ReactNode;
   /** Right-hand cluster (search, primary action, overflow menu). */
   actions?: React.ReactNode;
-  /** Optional control placed directly after the title, left-aligned (e.g. the Meetings
-   *  view switch). When set, the title no longer claims the free space; a spacer does. */
+  /** Optional control centred in the header between the title and the actions (e.g. the
+   *  Meetings view switch). */
   afterTitle?: React.ReactNode;
   /** Never children — the header owns its own layout. */
   children?: never;
@@ -26,6 +26,35 @@ export interface PageHeaderProps {
  * actions cluster are identical everywhere instead of eight near-copies.
  */
 export function PageHeader({ title, subtitle, actions, afterTitle, className }: PageHeaderProps) {
+  const titleBlock = (
+    <>
+      <h1 className="font-display text-[22px] font-semibold leading-[1.1] tracking-[-0.011em] text-foreground">
+        {title}
+      </h1>
+      {subtitle ? <p className="u-meta mt-1 truncate">{subtitle}</p> : null}
+    </>
+  );
+  const actionsBlock = actions ? (
+    <div className="flex flex-shrink-0 items-center gap-2.5">{actions}</div>
+  ) : null;
+
+  if (afterTitle) {
+    // Three columns: title left, the control centred on the header, actions right. The
+    // two `1fr` sides keep the centre column truly centred whatever their widths.
+    return (
+      <header
+        className={cn(
+          'grid flex-shrink-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-start gap-4 px-4 min-[900px]:px-7 pb-4 pt-7',
+          className
+        )}
+      >
+        <div className="min-w-0">{titleBlock}</div>
+        <div className="flex items-center self-center">{afterTitle}</div>
+        <div className="flex justify-end">{actionsBlock}</div>
+      </header>
+    );
+  }
+
   return (
     <header
       className={cn(
@@ -37,19 +66,8 @@ export function PageHeader({ title, subtitle, actions, afterTitle, className }: 
           then shrinks, so a two-word name wraps while the rest of the row sits empty
           (owner report on the person page, specs/0067). Actions stay `flex-shrink-0`, so
           the title claims the free space and wraps only when there genuinely is none. */}
-      <div className={cn('min-w-0', afterTitle ? 'flex-shrink' : 'flex-1')}>
-        <h1 className="font-display text-[22px] font-semibold leading-[1.1] tracking-[-0.011em] text-foreground">
-          {title}
-        </h1>
-        {subtitle ? <p className="u-meta mt-1 truncate">{subtitle}</p> : null}
-      </div>
-      {afterTitle ? (
-        <>
-          <div className="ml-4 flex flex-shrink-0 items-center self-center">{afterTitle}</div>
-          <div className="flex-1" aria-hidden="true" />
-        </>
-      ) : null}
-      {actions ? <div className="flex flex-shrink-0 items-center gap-2.5">{actions}</div> : null}
+      <div className="min-w-0 flex-1">{titleBlock}</div>
+      {actionsBlock}
     </header>
   );
 }
