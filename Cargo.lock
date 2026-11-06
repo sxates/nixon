@@ -3859,6 +3859,7 @@ dependencies = [
  "infer 0.15.0",
  "keyring",
  "lazy_static",
+ "libc",
  "log",
  "memory-stats",
  "ndarray",

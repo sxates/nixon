@@ -33,6 +33,7 @@ pub mod api_response;
 pub mod app_paths;
 pub mod audio;
 pub mod calendar;
+pub mod cli_llm;
 pub mod config;
 pub mod diagnostics;
 pub mod data_migration;
@@ -442,6 +443,8 @@ pub fn run() {
                         if let Err(e) = summary::summary_engine::force_shutdown_sidecar().await {
                             log::error!("Failed to force shutdown sidecar: {}", e);
                         }
+                        // specs/0085: no subscription-CLI process survives a quit.
+                        cli_llm::runner::kill_all();
                     });
                     log::info!("Application cleanup complete");
                 }
