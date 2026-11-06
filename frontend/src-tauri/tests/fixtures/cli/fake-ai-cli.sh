@@ -29,6 +29,8 @@
 #   orphan   start a grandchild that keeps stdout open, print a reply, exit 0
 #   linger   start a grandchild detached from the pipes, print a reply, exit 0
 #   crash    exit 2
+#   exec-fail  what a CLI's `#!/usr/bin/env node` wrapper does when node is gone: an
+#              `env:` error on stderr, exit 127, stdin never read
 #   flood    write 20 MiB to stdout (output cap)
 #
 # Probe modes (discovery and auth checks, which never send a prompt). `--version` answers
@@ -191,6 +193,10 @@ case "$mode" in
     echo "GRANDCHILD:$!" >>"$log"
     echo "fake reply"
     exit 0
+    ;;
+  exec-fail)
+    echo "env: node: No such file or directory" >&2
+    exit 127
     ;;
   crash)
     consume_stdin

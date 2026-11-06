@@ -777,3 +777,11 @@ async fn claude_missing_binary_is_not_found_copy() {
         "Claude Code wasn't found on this Mac. Install it, or choose it in Settings → Summary."
     );
 }
+
+#[tokio::test]
+async fn claude_exit_127_from_its_wrapper_is_not_found() {
+    // `env: node: No such file`: the binary is there but can't run, so discovery must
+    // forget it. NotFound (not Crashed) is what makes cli_llm::generate invalidate.
+    let _guard = KILL_ALL_LOCK.read().await;
+    assert_eq!(claude_mode("exec-fail", None).await, Err(CliError::NotFound));
+}
