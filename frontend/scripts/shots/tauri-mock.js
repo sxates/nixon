@@ -646,6 +646,7 @@
       },
     ],
     api_cli_provider_set_path: () => Promise.reject('Not available in the screenshot mock.'),
+    api_cli_provider_pick_binary: () => null,
     api_cli_provider_test: () => ({ ok: true, latencyMs: 1800 }),
     // database/commands.rs `api_get_model_config`: only the cli= routes pin an answer
     // (provider 'claude-code'); everywhere else keeps the generic fallback its baseline

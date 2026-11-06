@@ -114,34 +114,50 @@ describe('CliProviderPanel (specs/0085)', () => {
     expect(calls('api_cli_providers_status')).toHaveLength(2);
   });
 
-  it('Locate saves a chosen program and shows a rejection inline', async () => {
+  it('Locate opens the native picker, saves the chosen program, and shows a rejection inline', async () => {
     arrange({ ...BASE, state: 'notFound' }, {
+      api_cli_provider_pick_binary: '/opt/tools/not-claude',
       api_cli_provider_set_path: () =>
         Promise.reject("That file can't be run as Claude Code. Choose the `claude` program itself."),
     });
     render(<CliProviderPanel provider="claude-code" onSave={vi.fn()} />);
 
     fireEvent.click(await screen.findByRole('button', { name: /Locate/ }));
-    fireEvent.change(screen.getByLabelText(/Path to the claude program/), {
-      target: { value: '/opt/tools/not-claude' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: 'Use this program' }));
 
     expect(await screen.findByText(/can't be run as Claude Code/)).toBeInTheDocument();
+    expect(calls('api_cli_provider_pick_binary')).toHaveLength(1);
     expect(calls('api_cli_provider_set_path')[0][1]).toEqual({ id: 'claude-code', path: '/opt/tools/not-claude' });
   });
 
   it('Locate adopts the returned status on success', async () => {
-    arrange({ ...BASE, state: 'notFound' }, { api_cli_provider_set_path: READY });
+    arrange({ ...BASE, state: 'notFound' }, {
+      api_cli_provider_pick_binary: '/usr/local/bin/claude',
+      api_cli_provider_set_path: READY,
+    });
     render(<CliProviderPanel provider="claude-code" onSave={vi.fn()} />);
 
     fireEvent.click(await screen.findByRole('button', { name: /Locate/ }));
-    fireEvent.change(screen.getByLabelText(/Path to the claude program/), {
-      target: { value: '/usr/local/bin/claude' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: 'Use this program' }));
 
     await waitFor(() => expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled());
+  });
+
+  it('cancelling the picker changes nothing', async () => {
+    arrange({ ...BASE, state: 'notFound' }, { api_cli_provider_pick_binary: null });
+    render(<CliProviderPanel provider="claude-code" onSave={vi.fn()} />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /Locate/ }));
+    await waitFor(() => expect(calls('api_cli_provider_pick_binary')).toHaveLength(1));
+    expect(calls('api_cli_provider_set_path')).toHaveLength(0);
+  });
+
+  it('Use default clears a saved location', async () => {
+    arrange(READY, { api_cli_provider_set_path: READY });
+    render(<CliProviderPanel provider="claude-code" onSave={vi.fn()} />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /Use default/ }));
+
+    await waitFor(() => expect(calls('api_cli_provider_set_path')).toHaveLength(1));
+    expect(calls('api_cli_provider_set_path')[0][1]).toEqual({ id: 'claude-code', path: null });
   });
 
   it('Send a test reports the result and says it uses a little of the plan', async () => {

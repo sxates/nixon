@@ -14,8 +14,6 @@ import { invoke } from '@tauri-apps/api/core';
 import * as SelectPrimitive from '@radix-ui/react-select';
 import { AlertTriangle, CheckCircle2, Loader2, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import {
   Dialog,
   DialogContent,
@@ -186,8 +184,6 @@ function ClaudeCodePanel({ onSave }: { onSave: () => void }) {
   const { statuses, setStatuses, error, checking, refresh } = useCliStatuses();
   const status = statuses?.find((s) => s.id === 'claude-code') ?? null;
 
-  const [locating, setLocating] = useState(false);
-  const [pathInput, setPathInput] = useState('');
   const [pathError, setPathError] = useState<string | null>(null);
   const [applyingPath, setApplyingPath] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -204,12 +200,21 @@ function ClaudeCodePanel({ onSave }: { onSave: () => void }) {
     try {
       const next = await invoke<CliProviderStatus>('api_cli_provider_set_path', { id: 'claude-code', path });
       setStatuses([next]);
-      setLocating(false);
-      setPathInput('');
     } catch (e) {
       setPathError(errText(e));
     } finally {
       setApplyingPath(false);
+    }
+  };
+
+  // Locate…: the native file chooser picks, set_path validates and saves. A cancel is not an error.
+  const locate = async () => {
+    setPathError(null);
+    try {
+      const picked = await invoke<string | null>('api_cli_provider_pick_binary');
+      if (picked) await applyPath(picked);
+    } catch (e) {
+      setPathError(errText(e));
     }
   };
 
@@ -265,7 +270,8 @@ function ClaudeCodePanel({ onSave }: { onSave: () => void }) {
           <Button type="button" variant="outline" size="sm" onClick={() => void refresh()} disabled={checking}>
             {checking ? 'Checking…' : 'Check again'}
           </Button>
-          <Button type="button" variant="outline" size="sm" onClick={() => setLocating((v) => !v)}>
+          <Button type="button" variant="outline" size="sm" onClick={() => void locate()}
+            disabled={applyingPath}>
             Locate…
           </Button>
           {showInstall && (
@@ -282,35 +288,15 @@ function ClaudeCodePanel({ onSave }: { onSave: () => void }) {
         <p className="text-xs text-muted-foreground">
           Signed in somewhere else? Choose the program you use with Locate…
         </p>
-        {locating && (
-          <div className="space-y-2 pt-1">
-            <Label htmlFor="cli-claude-path">Path to the claude program</Label>
-            <div className="flex gap-2">
-              <Input
-                id="cli-claude-path"
-                value={pathInput}
-                onChange={(e) => setPathInput(e.target.value)}
-                placeholder="/opt/homebrew/bin/claude"
-              />
-              <Button
-                type="button"
-                size="sm"
-                onClick={() => void applyPath(pathInput.trim())}
-                disabled={applyingPath || !pathInput.trim()}
-              >
-                Use this program
-              </Button>
-            </div>
-            {status?.path && (
-              <button
-                type="button"
-                className="text-xs text-muted-foreground underline"
-                onClick={() => void applyPath(null)}
-              >
-                Go back to the one Nixon finds
-              </button>
-            )}
-          </div>
+        {status?.path && (
+          <button
+            type="button"
+            className="text-xs text-muted-foreground underline"
+            onClick={() => void applyPath(null)}
+            disabled={applyingPath}
+          >
+            Use default
+          </button>
         )}
         {pathError && <p className="text-sm text-record">{pathError}</p>}
       </div>

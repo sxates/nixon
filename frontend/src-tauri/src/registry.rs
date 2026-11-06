@@ -146,6 +146,7 @@ pub fn invoke_handler() -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Sen
         // Subscription CLI providers: detection, Locate... override, Test (specs/0085)
         cli_llm::commands::api_cli_providers_status,
         cli_llm::commands::api_cli_provider_set_path,
+        cli_llm::commands::api_cli_provider_pick_binary,
         cli_llm::commands::api_cli_provider_test,
         settings::custom_openai::api_test_custom_openai_connection,
         // Summary commands

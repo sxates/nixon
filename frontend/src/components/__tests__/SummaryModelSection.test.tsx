@@ -121,4 +121,22 @@ describe('Summary model — resolved, and last on the tab (specs/0067)', () => {
     expect(screen.getByTestId('model-picker')).toBeInTheDocument();
     expect(container.textContent).not.toMatch(/recommended/i);
   });
+
+  it('does not say a local model keeps everything on this Mac when Claude Code is chosen', async () => {
+    arrange({ provider: 'claude-code', model: 'sonnet' });
+    const { container } = render(<SummaryModelSection />);
+
+    await screen.findByTestId('cli-resolved');
+    expect(container.textContent).toContain(
+      'The AI model that writes your meeting summaries. Claude Code sends meeting text to Anthropic under your Claude plan.',
+    );
+    expect(container.textContent).not.toMatch(/keeps everything on this Mac/);
+  });
+
+  it('keeps the local-model blurb for other providers', async () => {
+    arrange({ provider: 'builtin-ai', model: 'qwen3.5:4b' });
+    const { container } = render(<SummaryModelSection />);
+    await screen.findByTestId('resolved-value');
+    expect(container.textContent).toMatch(/A local model keeps everything on this Mac/);
+  });
 });

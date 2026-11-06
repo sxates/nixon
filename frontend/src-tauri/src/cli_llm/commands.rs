@@ -12,7 +12,7 @@ use crate::state::AppState;
 use serde::Serialize;
 use std::path::PathBuf;
 use std::time::Instant;
-use tauri::State;
+use tauri::{AppHandle, State};
 
 /// The providers Settings lists. Codex joins in W2, when its adapter lands.
 const LISTED: [CliKind; 1] = [CliKind::ClaudeCode];
@@ -198,6 +198,21 @@ pub async fn api_cli_provider_set_path(
         .await
         .map_err(|e| format!("Couldn't save that location: {e}"))?;
     Ok(probe_status(pool, kind).await)
+}
+
+/// Locate...: opens the native file chooser and returns the chosen program's absolute path,
+/// or `None` if the user cancelled. It only picks; `api_cli_provider_set_path` validates.
+#[tauri::command]
+pub async fn api_cli_provider_pick_binary(app: AppHandle) -> Result<Option<String>, String> {
+    use tauri_plugin_dialog::DialogExt;
+
+    // blocking_pick_file is a synchronous native dialog: keep it off the async executor.
+    let picked = tokio::task::spawn_blocking(move || app.dialog().file().blocking_pick_file())
+        .await
+        .map_err(|e| format!("File picker task panicked: {e}"))?;
+    Ok(picked
+        .and_then(|p| p.into_path().ok())
+        .map(|p| p.to_string_lossy().into_owned()))
 }
 
 /// The Test button: one real, user-initiated call through the full runner + isolation
