@@ -7,6 +7,7 @@ import { TodayToolbar } from '@/components/Today/TodayToolbar';
 import { DayTimeline } from '@/components/Today/DayTimeline';
 import { WeekView } from '@/components/Today/WeekView';
 import { GoogleReconnectRow } from '@/components/Today/GoogleReconnectRow';
+import { MEETINGS_CONTENT_WIDTH } from '@/lib/meetings-view';
 
 type Agenda = ReturnType<typeof useDayAgenda>;
 
@@ -56,7 +57,7 @@ export function AgendaPane({
       />
 
       <div className="flex-1 overflow-y-auto px-4 min-[900px]:px-7 pb-12">
-        <div className="mx-auto max-w-[840px]">
+        <div className={`mx-auto ${MEETINGS_CONTENT_WIDTH}`}>
           {/* specs/0074 W2 — Google connected but its grant lapsed: nothing syncs until
               reconnect. Renders nothing otherwise, so its bottom margin lives on the row. */}
           <GoogleReconnectRow />

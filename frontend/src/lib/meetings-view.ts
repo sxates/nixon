@@ -106,3 +106,7 @@ export function meetingsRedirectTarget(search: string): string {
   if (!viewFromParam(params.get('view'))) params.set('view', 'list');
   return `/?${params.toString()}`;
 }
+
+/** One content width for every Meetings view (the month grid's), so switching views never
+ *  moves the edges. A literal class string so Tailwind's scan of src/lib keeps it. */
+export const MEETINGS_CONTENT_WIDTH = 'max-w-[1080px]';

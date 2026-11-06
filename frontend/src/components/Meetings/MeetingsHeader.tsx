@@ -7,7 +7,8 @@ import { SegmentedControl, type SegmentedOption } from '@/components/ui/segmente
 import { SearchMeetingsButton } from '@/components/CommandPalette/SearchMeetingsButton';
 import { ProcessMeetingsButton } from '@/components/DeferredBacklog/ProcessMeetingsButton';
 import { useImportDialog } from '@/contexts/ImportDialogContext';
-import { isMeetingsView, type MeetingsView } from '@/lib/meetings-view';
+import { isMeetingsView, MEETINGS_CONTENT_WIDTH, type MeetingsView } from '@/lib/meetings-view';
+import { cn } from '@/lib/utils';
 
 // Every option carries an icon at the same size, so the four read as one control.
 const AGENDA: SegmentedOption = {
@@ -42,21 +43,17 @@ export function viewOptions(calendarConnected: boolean): SegmentedOption[] {
 }
 
 /**
- * The Meetings page header: the title, a line about what's in view, and one view switch
- * for every view — so switching never moves the control you just used.
+ * The Meetings page header: the title, a line about what's in view, and the page actions on
+ * the right (the Action items / People pattern). The view switch is its own row,
+ * `MeetingsViewTabs`, right above the content.
  */
 export function MeetingsHeader({
   subtitle,
-  view,
   calendarConnected,
-  onChooseView,
   onAddMeeting,
 }: {
   subtitle: string;
-  /** The view that's showing (after the no-calendar fallback). */
-  view: MeetingsView;
   calendarConnected: boolean;
-  onChooseView: (view: MeetingsView) => void;
   onAddMeeting: () => void;
 }) {
   const { openImportDialog } = useImportDialog();
@@ -64,14 +61,6 @@ export function MeetingsHeader({
     <PageHeader
       title="Meetings"
       subtitle={subtitle}
-      afterTitle={
-        <SegmentedControl
-          aria-label="Meeting view"
-          options={viewOptions(calendarConnected)}
-          value={view}
-          onChange={(next) => isMeetingsView(next) && onChooseView(next)}
-        />
-      }
       actions={
         <>
           <SearchMeetingsButton />
@@ -98,5 +87,41 @@ export function MeetingsHeader({
         </>
       }
     />
+  );
+}
+
+/**
+ * The view switch, in its own row right above the content, like the Action items filter
+ * bar: same gutters, centred on the shared Meetings content width.
+ */
+export function MeetingsViewTabs({
+  view,
+  calendarConnected,
+  onChooseView,
+  navSlotRef,
+}: {
+  view: MeetingsView;
+  calendarConnected: boolean;
+  onChooseView: (view: MeetingsView) => void;
+  /** Receives the right-hand slot that each view's date navigation portals into. */
+  navSlotRef?: (el: HTMLDivElement | null) => void;
+}) {
+  return (
+    <div className="flex-shrink-0 px-4 min-[900px]:px-7 pb-3">
+      <div
+        className={cn(
+          'mx-auto flex w-full flex-wrap items-center justify-between gap-x-4 gap-y-2',
+          MEETINGS_CONTENT_WIDTH,
+        )}
+      >
+        <SegmentedControl
+          aria-label="Meeting view"
+          options={viewOptions(calendarConnected)}
+          value={view}
+          onChange={(next) => isMeetingsView(next) && onChooseView(next)}
+        />
+        <div ref={navSlotRef} className="flex items-center gap-2" />
+      </div>
+    </div>
   );
 }
