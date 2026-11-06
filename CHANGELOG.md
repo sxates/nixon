@@ -22,19 +22,19 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 ### Added
 
 - Nixon keeps your Mac awake while it's recording, so a meeting on battery isn't cut short by sleep. The display can still turn off, and your Mac sleeps normally again as soon as you stop.
-- You can cancel speaker identification from the queue or the meeting page, and deleting a meeting no longer waits for it to finish.
 - When a meeting ends, Nixon saves and processes it in the background, even with its window hidden, and leaves you where you were. A "Meeting saved — processing" notice with a View button takes you to it when you're ready.
+- You can cancel speaker identification from the queue or the meeting page; it stops right away. Deleting a meeting doesn't wait for speaker identification to finish.
 
 ### Changed
 
-- Today and All meetings are now one Meetings page. With a calendar connected, switch between Agenda, Week, Month and List; it remembers the view you used last. The Month view now shows your upcoming meetings, and past ones you didn't record, alongside your recordings. To add a to-do, use Action items in the sidebar.
+- Today and All meetings are now one Meetings page, with a refreshed look. With a calendar connected, switch between Agenda, Week, Month and List; it remembers the view you used last. The Month view now shows your upcoming meetings, and past ones you didn't record, alongside your recordings. To add a to-do, use Action items in the sidebar.
 - Stopping from the menu bar no longer brings Nixon's window forward, and stopping from any screen, the recorder included, keeps you on it.
 - Nixon starts each meeting's summary as soon as the meeting is saved, so opening the meeting later shows it already written or on its way.
 - The back button and meeting title stay at the top of the page while you scroll a long transcript, summary or notes, with the tabs pinned just below them.
 
 ### Fixed
 
-- If identifying speakers ever stops Nixon unexpectedly, Nixon no longer starts it again on its own the next time it opens. The meeting shows what happened, your transcript is kept, and you can retry speaker identification whenever you choose, in a slower, more careful mode.
+- If identifying speakers ever stops Nixon unexpectedly, Nixon doesn't start it again on its own the next time it opens. The meeting shows what happened, your transcript is kept, and you can retry speaker identification whenever you choose, in a slower, more careful mode.
 - The last few seconds of a meeting are always kept in its recording folder's transcript, so a meeting Nixon recovers after an unexpected quit ends where you stopped.
 
 ### Internal
