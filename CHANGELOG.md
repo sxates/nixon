@@ -27,7 +27,7 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 ### Changed
 
-- Today and All meetings are now one Meetings page. With a calendar connected, switch between Agenda, Week, Month and List; it remembers the view you used last. The Month view now shows your upcoming meetings, and past ones you didn't record, alongside your recordings.
+- Today and All meetings are now one Meetings page. With a calendar connected, switch between Agenda, Week, Month and List; it remembers the view you used last. The Month view now shows your upcoming meetings, and past ones you didn't record, alongside your recordings. To add a to-do, use Action items in the sidebar.
 - Stopping from the menu bar no longer brings Nixon's window forward, and stopping from any screen, the recorder included, keeps you on it.
 - Nixon starts each meeting's summary as soon as the meeting is saved, so opening the meeting later shows it already written or on its way.
 - The back button and meeting title stay at the top of the page while you scroll a long transcript, summary or notes, with the tabs pinned just below them.

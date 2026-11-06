@@ -64,6 +64,19 @@ describe('MeetingsHeader', () => {
     expect(screen.queryByRole('button', { name: /new note/i })).toBeNull();
   });
 
+  it.each([
+    ['agenda', true],
+    ['week', true],
+    ['month', true],
+    ['list', true],
+    ['month', false],
+    ['list', false],
+  ] as const)('carries no All meetings or to-do link (%s, calendar %s)', (view, connected) => {
+    renderHeader(view, connected);
+    expect(screen.queryByRole('button', { name: /all meetings/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /to-do/i })).toBeNull();
+  });
+
   it('offers Import audio on List and Month, where an import lands', () => {
     renderHeader('list', false);
     fireEvent.click(screen.getByRole('button', { name: /import audio/i }));

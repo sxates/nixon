@@ -1,12 +1,6 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { CalendarDays, ChevronLeft, ChevronRight, ListPlus } from 'lucide-react';
-import { toast } from 'sonner';
-import { AddActionItemRow } from '@/components/ActionItems/AddActionItemRow';
-import { useActionItemMutations } from '@/hooks/useActionItemMutations';
-import type { ActionItem } from '@/types';
+import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
 import type { AgendaMode } from '@/hooks/useDayAgenda';
 
 interface TodayToolbarProps {
@@ -22,11 +16,12 @@ interface TodayToolbarProps {
 }
 
 /**
- * The Agenda / Week toolbar — date nav + Add to-do. A fixed flex sibling of the scroll
- * region (same treatment as the page header) so it stays put while the agenda scrolls
- * (specs/0041 WS6). The view switch itself lives in the Meetings header, the same place
- * for all four views. The inner wrapper mirrors the scroll region's max-w-[840px]
- * centering so nothing shifts.
+ * The Agenda / Week toolbar — date nav only. A fixed flex sibling of the scroll region
+ * (same treatment as the page header) so it stays put while the agenda scrolls
+ * (specs/0041 WS6). The view switch lives in the Meetings header, the same place for all
+ * four views. The old "Add to-do" and "All meetings" links are gone (owner request):
+ * List is a view on this page, and Action items has its own sidebar entry. The inner
+ * wrapper mirrors the scroll region's max-w-[840px] centering so nothing shifts.
  */
 export function TodayToolbar({
   viewMode,
@@ -38,25 +33,6 @@ export function TodayToolbar({
   onToday,
   onGoToDate,
 }: TodayToolbarProps) {
-  const router = useRouter();
-
-  // WS1.d — lightweight "add a to-do" affordance. Creates a STANDALONE manual action
-  // item (no meetingId) via the shared create mutation, then toasts a link to the hub.
-  // The list itself lives on /tasks, so we don't render created items here (scratch state
-  // + appendCreated:false); the mutation is reused, not duplicated.
-  const [showTodo, setShowTodo] = useState(false);
-  const [, setTodoScratch] = useState<ActionItem[]>([]);
-  const { add: addTodo } = useActionItemMutations<ActionItem>({
-    setItems: setTodoScratch,
-    meetingId: null,
-    appendCreated: () => false,
-    onAdded: () =>
-      toast.success('To-do added', {
-        description: 'Find it in Action items.',
-        action: { label: 'Open', onClick: () => router.push('/tasks') },
-      }),
-  });
-
   return (
     <div className="flex-shrink-0 px-7 pt-1.5">
       <div className="mx-auto max-w-[840px]">
@@ -109,30 +85,7 @@ export function TodayToolbar({
               </button>
             )}
           </div>
-
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={() => setShowTodo((v) => !v)}
-              aria-expanded={showTodo}
-              className="inline-flex items-center gap-1 rounded text-[12.5px] font-semibold text-muted-foreground hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <ListPlus className="h-3.5 w-3.5" aria-hidden="true" />
-              Add to-do
-            </button>
-          </div>
         </div>
-
-        {/* The Add-to-do input belongs to the toolbar's action, so it lives in the
-            fixed region too — toggling it while scrolled must not open it off-screen. */}
-        {showTodo && (
-          <div className="mb-3 px-1">
-            <AddActionItemRow
-              placeholder="Add a to-do — it lands in Action items…"
-              onAdd={addTodo}
-            />
-          </div>
-        )}
       </div>
     </div>
   );
