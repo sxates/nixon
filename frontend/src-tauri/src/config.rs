@@ -15,6 +15,10 @@ pub fn shared_http_client() -> reqwest::Client {
     CLIENT.clone()
 }
 
+/// The summary provider a fresh install and onboarding save (Built-in AI, local). Never a
+/// cloud or subscription-CLI provider (specs/0085 acceptance 9).
+pub const DEFAULT_SUMMARY_PROVIDER: &str = "builtin-ai";
+
 /// Default Whisper model for transcription when no preference is configured.
 /// This is the recommended balance of accuracy and speed.
 pub const DEFAULT_WHISPER_MODEL: &str = "large-v3-turbo";

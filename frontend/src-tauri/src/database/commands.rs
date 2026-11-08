@@ -167,6 +167,7 @@ pub async fn import_and_initialize_database(
 
     // Update app state with the new manager
     crate::summary::prompt_migration::spawn_conversion(db_manager.pool().clone());
+    crate::cli_llm::config::load(db_manager.pool()).await;
     app.manage(AppState { db_manager });
 
     info!("Legacy database imported and initialized successfully");
@@ -208,7 +209,7 @@ pub async fn initialize_fresh_database(app: AppHandle) -> Result<(), String> {
     // Default Summary Model: Built-in AI (Qwen recommendation for this system)
     if let Err(e) = crate::database::repositories::setting::SettingsRepository::save_model_config(
         pool,
-        "builtin-ai",
+        crate::config::DEFAULT_SUMMARY_PROVIDER,
         default_summary_model,
         "large-v3", // Default whisper model (unused for builtin but required)
         None,

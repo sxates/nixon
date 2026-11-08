@@ -33,6 +33,7 @@ pub mod api_response;
 pub mod app_paths;
 pub mod audio;
 pub mod calendar;
+pub mod cli_llm;
 pub mod config;
 pub mod diagnostics;
 pub mod data_migration;
@@ -266,6 +267,9 @@ pub fn run() {
             // restarts by itself; dev builds set NIXON_DISABLE_UPDATER=1.
             updater::spawn_update_loop(_app.handle().clone());
 
+            // specs/0085: remove `nixon-cli-*` run dirs a crash or force quit left behind.
+            cli_llm::temp_sweep::spawn_startup_sweep();
+
             // Set models directory to use app_data_dir (unified storage location)
             whisper_engine::commands::set_models_directory(_app.handle());
 
@@ -422,6 +426,9 @@ pub fn run() {
                     #[cfg(debug_assertions)]
                     crate::dev_fixtures::control::cleanup_port_file();
                     tauri::async_runtime::block_on(async {
+                        // specs/0085: no subscription-CLI process survives a quit. First,
+                        // and synchronous, so no slow await below (DB, sidecar) can delay it.
+                        cli_llm::runner::kill_all();
                         // specs/0084 W1: a quit ends running speaker-ID passes on purpose;
                         // clear their crash markers before the database closes.
                         audio::lifecycle::breaker::clear_markers_on_quit(_app_handle).await;

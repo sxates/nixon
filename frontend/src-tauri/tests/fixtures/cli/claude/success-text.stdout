@@ -1,0 +1,13 @@
+**Summary**
+
+The team reviewed Q4 firmware scope for the Vantage line. Four items were in scope: low-power sleep mode (Tomas), the calibration table patch for humidity drift (Maya), the BLE diagnostic mode (Inès, hardware side), and cloud connectivity retry logic (unassigned). Tomas and Inès argued to defer the connectivity work, since units still upload eventually and the code touches the same buffer management path as the BLE diagnostic mode. Tomas noted that outages beyond about six minutes cause the oldest buffered readings to be dropped, a buffer-size problem (also seen at Northfield) that exponential backoff alone won't fix; backoff mainly reduces server load and battery use. The group decided to defer cloud connectivity to the point release after freeze and scope it jointly with the buffer work in Q1. Tomas reported sleep mode is mostly done: the state machine rewrite is in and tested against six wake scenarios, including during firmware updates. Rev B units show about 40 µA in deep sleep versus roughly 300 µA today (about 7x better). Temperature characterization is blocked on rev C boards. The transcript ends mid-discussion, before the remaining agenda items.
+
+**Action items**
+
+- **Decision recorded (You):** Note the deferral of cloud connectivity retry logic to the post-freeze point release, to be scoped with buffer work in Q1.
+- **Tomas:** Finish sleep mode, including current draw characterization across temperature once rev C boards are available.
+- **Maya:** Continue the calibration table patch for humidity drift.
+- **Inès:** Continue supporting the BLE diagnostic mode.
+- **Unassigned/open:** Q1 scoping session for connectivity retry and buffer size; no owner named.
+
+Note: the transcript is cut off, so bug backlog, field feedback, and rev C status items are not covered.

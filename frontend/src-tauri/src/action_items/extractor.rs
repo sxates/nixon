@@ -472,8 +472,9 @@ pub async fn extract_candidates(
             // specs/0053 task 4: the GBNF grammar is NOT wired (it crashes the BuiltInAI
             // sidecar — see grammar.rs's doc comment). `deterministic_json` still forces
             // greedy decoding + neutral penalties + response_format on hosted providers;
-            // `parse_candidates` is the primary defence for well-formed output.
-            &crate::summary::summary_engine::options::GenerationOptions::deterministic_json(),
+            // `parse_candidates` is the primary defence for well-formed output. specs/0085:
+            // plus the strict schema, which the subscription CLIs enforce.
+            &super::schema::extraction_options(),
         )
         .await
     };

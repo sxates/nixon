@@ -1,0 +1,9 @@
+{
+  "loggedIn": false,
+  "authMethod": "none",
+  "apiProvider": "firstParty",
+  "analyticsDisabled": true,
+  "projectsDirectory": "/private/tmp/empty-claude-config/projects",
+  "configDirectory": "/private/tmp/empty-claude-config",
+  "loginExpiresAt": null
+}

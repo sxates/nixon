@@ -1,4 +1,5 @@
 use crate::summary::llm_client::{generate_summary, LLMProvider};
+use crate::summary::llm_retry::{is_retryable_llm_error, is_run_terminal_llm_error};
 use crate::summary::prompts::{
     build_chunk_summary_user_prompt, build_combine_summary_user_prompt,
     build_final_synthesis_system_prompt, build_user_notes_block,
@@ -59,58 +60,6 @@ impl ChunkAccounting {
     }
 }
 
-/// Classifies an LLM error string as transient (worth retrying) vs terminal.
-///
-/// Conservative on purpose: only clearly-transient conditions (timeouts, network
-/// send failures, provider overload / rate-limit / 5xx) are retried. Everything
-/// else — auth failures, malformed requests, cancellation — is treated as terminal
-/// so we don't hammer a provider on a request that can never succeed. We only have
-/// the error *string* (no status code) here, so we match on well-known markers.
-fn is_retryable_llm_error(e: &str) -> bool {
-    if e.contains("cancelled") {
-        return false;
-    }
-    let lower = e.to_lowercase();
-    // Terminal client-side conditions: never retry.
-    let terminal_markers = [
-        "invalid api key",
-        "api key not found",
-        "authentication",
-        "unauthorized",
-        "invalid_request",
-        "invalid request",
-        "not configured",
-        "unsupported llm provider",
-        "unknown model",
-    ];
-    if terminal_markers.iter().any(|m| lower.contains(m)) {
-        return false;
-    }
-    let transient_markers = [
-        "timed out",
-        "timeout",
-        "failed to send request",
-        "error sending request",
-        "connection",
-        "connect",
-        "reset by peer",
-        "overloaded",
-        "rate limit",
-        "rate_limit",
-        "too many requests",
-        "429",
-        "500",
-        "502",
-        "503",
-        "504",
-        "server_error",
-        "internal server error",
-        "temporarily unavailable",
-        "service unavailable",
-    ];
-    transient_markers.iter().any(|m| lower.contains(m))
-}
-
 /// Sleeps for `delay`, but returns early (`false`) if the cancellation token fires
 /// during the wait. Returns `true` if the full delay elapsed.
 async fn backoff_sleep(delay: Duration, cancellation_token: Option<&CancellationToken>) -> bool {
@@ -139,10 +88,11 @@ fn backoff_for_attempt(attempt: u32) -> Duration {
 /// Cancellation and terminal errors return immediately. Only the pass content is
 /// retried — never logged (privacy: we log attempt counts, not transcript text).
 ///
-/// `pub(crate)`: also used by the aggregation engine's LLM closure (specs/0035) so
-/// map/reduce calls get the same bounded-retry behavior summaries get.
+/// Also used by the aggregation engine's LLM closure (specs/0035) so map/reduce calls get
+/// the same bounded-retry behavior summaries get. `pub` for the specs/0085 retry-count
+/// integration test (`tests/cli_summary_retry.rs`).
 #[allow(clippy::too_many_arguments)]
-pub(crate) async fn generate_summary_with_retry(
+pub async fn generate_summary_with_retry(
     client: &Client,
     provider: &LLMProvider,
     model_name: &str,
@@ -712,6 +662,7 @@ pub async fn generate_meeting_summary(
 
             let mut chunk_summaries = Vec::new();
             let mut failed_chunks: i64 = 0;
+            let mut last_error: Option<String> = None;
             let system_prompt_chunk = "You are an expert meeting summarizer.";
 
             for (i, chunk) in chunks.iter().enumerate() {
@@ -754,7 +705,9 @@ pub async fn generate_meeting_summary(
                     }
                     Err(e) => {
                         // Cancellation is terminal — propagate it, don't count as a drop.
-                        if e.contains("cancelled") {
+                        // specs/0085: so is an account-level error (signed out, plan
+                        // limit, no key): every later chunk would fail the same way.
+                        if e.contains("cancelled") || is_run_terminal_llm_error(&e) {
                             return Err(e);
                         }
                         // A failed chunk is NOT silently skipped: count it so the outcome
@@ -764,15 +717,17 @@ pub async fn generate_meeting_summary(
                             "Gave up on chunk {}/{} after retries: {} (this section will be missing from the summary)",
                             i + 1, num_chunks, e
                         );
+                        last_error = Some(e);
                     }
                 }
             }
 
             if chunk_summaries.is_empty() {
-                return Err(
+                // The last chunk's own copy is what the user can act on.
+                return Err(last_error.unwrap_or_else(|| {
                     "Multi-level summarization failed: No chunks were processed successfully."
-                        .to_string(),
-                );
+                        .to_string()
+                }));
             }
 
             let processed = chunk_summaries.len() as i64;
@@ -1610,33 +1565,7 @@ mod tests {
         );
     }
 
-    // Retry classification + backoff (spec 0028) ------------------------------
-
-    #[test]
-    fn retryable_errors_are_transient_only() {
-        assert!(is_retryable_llm_error(
-            "LLM request timed out after 300 seconds"
-        ));
-        assert!(is_retryable_llm_error(
-            "Failed to send request to LLM: connection refused"
-        ));
-        assert!(is_retryable_llm_error(
-            "LLM API request failed: overloaded_error"
-        ));
-        assert!(is_retryable_llm_error(
-            "LLM API request failed: 503 Service Unavailable"
-        ));
-    }
-
-    #[test]
-    fn terminal_errors_are_not_retried() {
-        assert!(!is_retryable_llm_error("Summary generation was cancelled"));
-        assert!(!is_retryable_llm_error("Invalid API key format"));
-        assert!(!is_retryable_llm_error(
-            "LLM API request failed: invalid_request_error"
-        ));
-        assert!(!is_retryable_llm_error("Unsupported LLM provider: foo"));
-    }
+    // Retry backoff (spec 0028; classification is in llm_retry.rs) ------------------------------
 
     #[test]
     fn backoff_grows_and_caps() {

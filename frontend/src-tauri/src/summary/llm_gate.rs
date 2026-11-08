@@ -1,4 +1,4 @@
-//! LLM scheduling for the local providers (specs/0056 W2).
+//! LLM scheduling for the local providers and subscription CLIs (specs/0056 W2, 0085).
 //!
 //! One local model serves every LLM call Nixon makes — summaries, background action-item
 //! extraction, prep briefs, person roll-ups, Ask AI. Before this module there was no
@@ -21,7 +21,11 @@
 //!   ([`MAX_PREEMPTIONS`]) so a stream of questions cannot starve background work forever.
 //! - The BuiltInAI sidecar cannot cancel a request short of killing the process, so it gets
 //!   priority-wait but no preemption.
-//! - Cloud providers are remote and parallel: they bypass the gate entirely.
+//! - The subscription CLIs (Claude Code, Codex; specs/0085) are scheduled the same way:
+//!   priority-wait, no preemption. Not because a GPU is shared: each call is a heavyweight
+//!   process that spends the user's plan, so background calls run one at a time, and a
+//!   preempted call re-issued from scratch would spend the plan twice.
+//! - Cloud HTTP providers are remote and parallel: they bypass the gate entirely.
 //!
 //! Infallible by construction; the only await while holding state is the semaphore permit.
 
@@ -60,9 +64,16 @@ pub fn current_priority() -> Priority {
     PRIORITY.try_with(|p| *p).unwrap_or(Priority::Background)
 }
 
-/// Whether the provider is a local model the gate schedules. Cloud providers bypass it.
-fn is_local(provider: &LLMProvider) -> bool {
-    matches!(provider, LLMProvider::Ollama | LLMProvider::BuiltInAI)
+/// Whether the gate schedules this provider: the local models, and the subscription CLIs
+/// (specs/0085). Cloud HTTP providers bypass it.
+fn is_scheduled(provider: &LLMProvider) -> bool {
+    matches!(
+        provider,
+        LLMProvider::Ollama
+            | LLMProvider::BuiltInAI
+            | LLMProvider::ClaudeCode
+            | LLMProvider::CodexCli
+    )
 }
 
 /// Whether dropping the request future actually stops generation for this provider.
@@ -139,7 +150,7 @@ impl LlmGate {
         F: FnMut() -> Fut,
         Fut: Future<Output = Result<T, E>>,
     {
-        if !is_local(provider) {
+        if !is_scheduled(provider) {
             return make_request().await;
         }
 
@@ -496,6 +507,66 @@ mod tests {
             timeout(Duration::from_secs(1), b).await.unwrap().unwrap(),
             Ok(())
         );
+    }
+
+    /// specs/0085 acceptance 8: a subscription CLI call is scheduled like BuiltInAI. A
+    /// background call waits for in-flight interactive work and, once running, is never
+    /// preempted (killing it would spend the user's plan twice); interactive calls never
+    /// wait for background ones.
+    #[tokio::test]
+    async fn cli_background_waits_for_interactive_and_is_never_preempted() {
+        for provider in [LLMProvider::ClaudeCode, LLMProvider::CodexCli] {
+            let gate = Arc::new(LlmGate::new());
+            let busy = gate.enter_interactive();
+            let starts = Arc::new(AtomicUsize::new(0));
+            let (req, releases) = controllable(Arc::clone(&starts));
+            let g = Arc::clone(&gate);
+            let p = provider.clone();
+            let bg = tokio::spawn(async move {
+                g.run(&p, Priority::Background, None, || (), req).await
+            });
+
+            sleep(Duration::from_millis(50)).await;
+            assert_eq!(
+                starts.load(Ordering::SeqCst),
+                0,
+                "{provider:?}: background must not start while interactive is in flight"
+            );
+            drop(busy);
+            sleep(Duration::from_millis(50)).await;
+            assert_eq!(starts.load(Ordering::SeqCst), 1, "{provider:?}: starts after");
+
+            // Interactive work arrives mid-call: it runs at once, and the background call
+            // is not dropped and re-issued.
+            let fg = timeout(
+                Duration::from_secs(1),
+                gate.run(
+                    &provider,
+                    Priority::Interactive,
+                    None,
+                    || (),
+                    || async {
+                        sleep(Duration::from_millis(20)).await;
+                        Ok::<_, ()>(())
+                    },
+                ),
+            )
+            .await
+            .expect("interactive must not wait for the background call");
+            assert_eq!(fg, Ok(()));
+            sleep(Duration::from_millis(50)).await;
+            assert_eq!(
+                starts.load(Ordering::SeqCst),
+                1,
+                "{provider:?}: never preempted"
+            );
+
+            release_all(&releases).await;
+            assert_eq!(
+                timeout(Duration::from_secs(1), bg).await.unwrap().unwrap(),
+                Ok(())
+            );
+        }
     }
 
     /// Review finding (specs/0056 W2): a background call cancelled while it is still QUEUED

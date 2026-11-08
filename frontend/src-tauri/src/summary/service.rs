@@ -42,6 +42,10 @@ fn cloud_context_threshold(provider: &LLMProvider) -> usize {
         LLMProvider::Groq => 32_000,       // hosted models vary 8k–128k; stay conservative
         LLMProvider::OpenRouter => 32_000, // routes to many models; conservative
         LLMProvider::CustomOpenAI => 32_000, // unknown self-hosted server; conservative
+        // specs/0085: same window as the Claude API. Most meetings stay single-pass, which
+        // matters because every chunk pays the CLI's cold start.
+        LLMProvider::ClaudeCode => 180_000,
+        LLMProvider::CodexCli => 120_000,
         // Local providers are sized from model metadata before this is reached.
         LLMProvider::Ollama | LLMProvider::BuiltInAI => 8_000,
     }

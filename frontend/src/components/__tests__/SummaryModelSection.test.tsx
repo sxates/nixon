@@ -108,4 +108,35 @@ describe('Summary model — resolved, and last on the tab (specs/0067)', () => {
     // controls rather than hide a setting we cannot vouch for.
     await waitFor(() => expect(screen.getByTestId('model-picker')).toBeInTheDocument());
   });
+
+  // specs/0085 — a subscription CLI provider is a deliberate choice: the controls stay open,
+  // the row names the provider, model and plan, and "Recommended" is never claimed.
+  it('names Claude Code, its model and the plan, and never says Recommended', async () => {
+    arrange({ provider: 'claude-code', model: 'sonnet' });
+    const { container } = render(<SummaryModelSection />);
+
+    expect(await screen.findByTestId('cli-resolved')).toHaveTextContent(
+      'Claude Code · Sonnet · your Claude subscription',
+    );
+    expect(screen.getByTestId('model-picker')).toBeInTheDocument();
+    expect(container.textContent).not.toMatch(/recommended/i);
+  });
+
+  it('does not say a local model keeps everything on this Mac when Claude Code is chosen', async () => {
+    arrange({ provider: 'claude-code', model: 'sonnet' });
+    const { container } = render(<SummaryModelSection />);
+
+    await screen.findByTestId('cli-resolved');
+    expect(container.textContent).toContain(
+      'The AI model that writes your meeting summaries. Claude Code sends meeting text to Anthropic under your Claude plan.',
+    );
+    expect(container.textContent).not.toMatch(/keeps everything on this Mac/);
+  });
+
+  it('keeps the local-model blurb for other providers', async () => {
+    arrange({ provider: 'builtin-ai', model: 'qwen3.5:4b' });
+    const { container } = render(<SummaryModelSection />);
+    await screen.findByTestId('resolved-value');
+    expect(container.textContent).toMatch(/A local model keeps everything on this Mac/);
+  });
 });

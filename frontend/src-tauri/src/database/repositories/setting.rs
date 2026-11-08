@@ -106,7 +106,7 @@ impl SettingsRepository {
             "ollama" => "ollamaApiKey",
             "groq" => "groqApiKey",
             "openrouter" => "openRouterApiKey",
-            "builtin-ai" => return Ok(()), // No API key needed
+            "builtin-ai" | "claude-code" | "codex-cli" => return Ok(()), // No API key needed
             _ => {
                 return Err(sqlx::Error::Protocol(format!(
                     "Invalid provider: {}",
@@ -153,7 +153,7 @@ impl SettingsRepository {
             "groq" => "groqApiKey",
             "claude" => "anthropicApiKey",
             "openrouter" => "openRouterApiKey",
-            "builtin-ai" => return Ok(None), // No API key needed
+            "builtin-ai" | "claude-code" | "codex-cli" => return Ok(None), // No API key needed
             _ => {
                 return Err(sqlx::Error::Protocol(format!(
                     "Invalid provider: {}",
@@ -312,7 +312,7 @@ impl SettingsRepository {
             "groq" => "groqApiKey",
             "claude" => "anthropicApiKey",
             "openrouter" => "openRouterApiKey",
-            "builtin-ai" => return Ok(()), // No API key needed
+            "builtin-ai" | "claude-code" | "codex-cli" => return Ok(()), // No API key needed
             _ => {
                 return Err(sqlx::Error::Protocol(format!(
                     "Invalid provider: {}",

@@ -47,6 +47,10 @@ pub struct GenerationOptions {
     /// Zero the repetition penalties. Required for any format that must repeat
     /// tokens — every JSON array does.
     pub neutral_penalties: bool,
+    /// A JSON schema the reply must match, for providers that can enforce one (the
+    /// subscription CLIs, specs/0085: Claude Code's `--json-schema`). HTTP providers
+    /// ignore it and keep `json_mode`. `None` = no schema, today's behaviour.
+    pub json_schema: Option<serde_json::Value>,
 }
 
 impl GenerationOptions {
@@ -60,6 +64,7 @@ impl GenerationOptions {
             grammar: None,
             json_mode: true,
             neutral_penalties: true,
+            json_schema: None,
         }
     }
 
@@ -138,5 +143,12 @@ mod tests {
             "grammar must stay unset: LlamaSampler::grammar crashes the sidecar (llama-grammar.cpp:940)"
         );
         assert!(opts.json_mode, "JSON mode must still be requested");
+    }
+
+    /// specs/0085: no existing caller gets a schema unless it asks for one.
+    #[test]
+    fn no_schema_by_default() {
+        assert_eq!(GenerationOptions::default().json_schema, None);
+        assert_eq!(GenerationOptions::deterministic_json().json_schema, None);
     }
 }
