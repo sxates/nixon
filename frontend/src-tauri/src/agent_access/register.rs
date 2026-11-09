@@ -3,6 +3,7 @@
 
 use super::settings::{self, AgentAccessSettings};
 use serde::Serialize;
+use std::ffi::{OsStr, OsString};
 use std::path::Path;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -75,6 +76,23 @@ pub fn needs_reregister(s: &AgentAccessSettings, current_exe: &Path, name: &str)
     s.enabled
         && (s.registered_exe.as_deref() != Some(&*current_exe.to_string_lossy())
             || s.registered_name.as_deref() != Some(name))
+}
+
+/// PATH for the `claude` child: its own directory first (resolves `node` for npm, nvm and
+/// Volta installs), then the inherited PATH, then the 0085 base PATH. A Finder-launched app
+/// inherits only `/usr/bin:/bin:...`, which cannot find `node`.
+pub fn child_path(claude: &Path, inherited: Option<&OsStr>) -> OsString {
+    let mut path = OsString::new();
+    if let Some(dir) = claude.parent().filter(|d| !d.as_os_str().is_empty()) {
+        path.push(dir.as_os_str());
+        path.push(":");
+    }
+    if let Some(p) = inherited.filter(|p| !p.is_empty()) {
+        path.push(p);
+        path.push(":");
+    }
+    path.push(crate::cli_llm::runner::BASE_PATH);
+    path
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -213,6 +231,21 @@ mod tests {
         // The server must accept exactly what we register.
         let rest: Vec<String> = v[6..].to_vec();
         assert!(super::super::entry::parse_mcp_args(&rest).unwrap().is_ok());
+    }
+
+    #[test]
+    fn child_path_puts_claude_dir_first_and_appends_base_path() {
+        let base = crate::cli_llm::runner::BASE_PATH;
+        let p = child_path(
+            Path::new("/u/.npm/bin/claude"),
+            Some(OsStr::new("/usr/bin:/bin")),
+        );
+        assert_eq!(
+            p,
+            OsString::from(format!("/u/.npm/bin:/usr/bin:/bin:{base}"))
+        );
+        let p = child_path(Path::new("/u/.npm/bin/claude"), None);
+        assert_eq!(p, OsString::from(format!("/u/.npm/bin:{base}")));
     }
 
     #[test]

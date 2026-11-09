@@ -33,6 +33,10 @@ fn last_error() -> Option<String> {
 fn run_claude(bin: &std::path::Path, args: &[String]) -> Result<(), String> {
     let mut child = Command::new(bin)
         .args(args)
+        .env(
+            "PATH",
+            register::child_path(bin, std::env::var_os("PATH").as_deref()),
+        )
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
