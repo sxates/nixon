@@ -187,6 +187,8 @@ tauri-plugin-single-instance = "=2.3.7"
 tauri-plugin-global-shortcut = "2.3.0"
 # specs/0058 in-app updates — Rust drives check/download/install; no JS package needed.
 tauri-plugin-updater = "2.11"
+# specs/0087 — nixon:// meeting links. Exact pin: 2.5+ needs tauri ^2.12 and re-resolves the lock.
+tauri-plugin-deep-link = "=2.4.10"
 
 # macOS-specific dependencies with Metal GPU acceleration
 [target.'cfg(target_os = "macos")'.dependencies]

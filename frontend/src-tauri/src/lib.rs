@@ -130,6 +130,9 @@ pub fn run() {
         // driver's `updater_builder()` needs this plugin's state to be registered.
         builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
 
+        // specs/0087 — nixon:// links (scheme comes from tauri.conf.json; dev uses nixon-dev).
+        builder = builder.plugin(tauri_plugin_deep_link::init());
+
         if let Some(plugin) = window_state::plugin() {
             builder = builder.plugin(plugin);
         }
