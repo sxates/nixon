@@ -5,6 +5,13 @@
   "build": {
     "runner": "scripts/cargo-dev-sign.sh"
   },
+  "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": ["nixon-dev"]
+      }
+    }
+  },
   "app": {
     "windows": [
       {

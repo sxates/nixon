@@ -19,6 +19,7 @@ import { TranscriptProvider } from '@/contexts/TranscriptContext'
 import { ConfigProvider } from '@/contexts/ConfigContext'
 import { OnboardingProvider } from '@/contexts/OnboardingContext'
 import { WrapUpEffects } from '@/hooks/useWrapUpEffects'
+import { DeepLinkListener } from '@/components/DeepLinkListener'
 import { ImportAudioDialog, ImportDropOverlay } from '@/components/ImportAudio'
 import { DeferredBacklogProvider } from '@/contexts/DeferredBacklogProvider'
 import { QueueOpenProvider } from '@/contexts/QueueOpenContext'
@@ -302,6 +303,8 @@ export default function RootLayout({
                             <DeferredBacklogProvider>
                             {/* specs/0083 W2b: reflects the Rust-owned wrap-up after a stop. */}
                             <WrapUpEffects />
+                            {/* specs/0087: nixon://meeting links open that meeting. Navigation only. */}
+                            <DeepLinkListener />
                               <PermissionsModalProvider>
                               <ImportDialogProvider onOpen={handleOpenImportDialog}>
                                 {/* specs/0061 W1 Task 2 — AppShell owns the showOnboarding ternary

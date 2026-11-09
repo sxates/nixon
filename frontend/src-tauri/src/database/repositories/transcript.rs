@@ -105,6 +105,43 @@ async fn folder_path_write_lease(
 }
 
 impl TranscriptsRepository {
+    /// The segment a `?t=` meeting link points at (specs/0087): the one with the
+    /// greatest `audio_start_time < t + 0.1` (ties go to the earliest `timestamp`). Links
+    /// floor `t` to tenths (`links::moment_link`), so a segment starting inside the
+    /// link's 0.1 s precision (754.29 -> t=754.2) must still count as at-or-before `t`;
+    /// where two segments share one tenth the later one wins, which is inherent to that
+    /// precision (the earlier segment's own link resolves to the later one). A `t`
+    /// before the first timed segment resolves to that first segment. `None` when
+    /// the meeting has no timed segments.
+    pub async fn segment_id_at_time(
+        pool: &SqlitePool,
+        meeting_id: &str,
+        t: f64,
+    ) -> Result<Option<String>, SqlxError> {
+        let at = sqlx::query_scalar::<_, String>(
+            "SELECT id FROM transcripts
+             WHERE meeting_id = ? AND audio_start_time IS NOT NULL AND audio_start_time < ?
+             ORDER BY audio_start_time DESC, timestamp ASC
+             LIMIT 1",
+        )
+        .bind(meeting_id)
+        .bind(t + 0.1)
+        .fetch_optional(pool)
+        .await?;
+        if at.is_some() {
+            return Ok(at);
+        }
+        sqlx::query_scalar::<_, String>(
+            "SELECT id FROM transcripts
+             WHERE meeting_id = ? AND audio_start_time IS NOT NULL
+             ORDER BY audio_start_time ASC, timestamp ASC
+             LIMIT 1",
+        )
+        .bind(meeting_id)
+        .fetch_optional(pool)
+        .await
+    }
+
     /// Saves a new meeting and its associated transcript segments.
     /// This function uses a transaction to ensure that either both the meeting
     /// and all its transcripts are saved, or none of them are.

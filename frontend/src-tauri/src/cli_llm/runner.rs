@@ -52,7 +52,7 @@ const NICE_EXEC_FAILED: i32 = 127;
 
 /// Appended to the binary's own directory (which resolves `node` for nvm, Volta and
 /// Homebrew installs) to form the child's `PATH`.
-const BASE_PATH: &str = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin";
+pub(crate) const BASE_PATH: &str = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin";
 
 /// Process groups of runs still in flight, for [`kill_all`] at app quit.
 static LIVE: Lazy<Mutex<HashSet<i32>>> = Lazy::new(|| Mutex::new(HashSet::new()));

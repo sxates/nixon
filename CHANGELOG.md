@@ -19,7 +19,14 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 ## [Unreleased]
 
-_(nothing yet)_
+### Added
+
+- **Ask Claude Code about your meetings.** Turn on Settings › General › Agent access and Claude Code can search your meetings and read transcripts, summaries and notes, with links that open Nixon at the exact moment something was said.
+- Links like nixon://meeting/… open Nixon on that meeting, scrolled to the moment.
+
+### Internal
+
+- `nixon --mcp` read-only stdio server (`agent_access/`), ADR-0018.
 
 ## [0.15.0] - 2026-11-08
 

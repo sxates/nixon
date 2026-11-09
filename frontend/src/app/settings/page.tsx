@@ -11,6 +11,7 @@ import { AppearanceSettings } from '@/components/AppearanceSettings';
 import { PreferenceSettings } from '@/components/PreferenceSettings';
 import { AudioSettings } from '@/components/AudioSettings';
 import { CalendarSettings } from '@/components/CalendarSettings';
+import { AgentAccessSection } from '@/components/AgentAccessSection';
 import { OwnerEmailSettings } from '@/components/OwnerEmailSettings';
 import { SummaryModelSettings } from '@/components/SummaryModelSettings';
 import { SummaryModelSection } from '@/components/SummaryModelSection';
@@ -154,6 +155,8 @@ function SettingsPageContent() {
             {/* Appearance (specs/0057 decision 1) — Faceplate / Deck / System. */}
             <AppearanceSettings />
             <PreferenceSettings />
+            {/* Claude Code read access (specs/0087) — anchor #agent-access. */}
+            <AgentAccessSection />
           </TabsContent>
           <TabsContent value="audio" className="space-y-8">
             {/* Permission AND device per input, one row each (owner, specs/0067). When the

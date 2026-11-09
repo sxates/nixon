@@ -27,6 +27,7 @@ macro_rules! perf_trace {
 
 // Declare audio module
 pub mod action_items;
+pub mod agent_access;
 pub mod aggregation;
 pub mod anthropic;
 pub mod api_response;
@@ -129,6 +130,9 @@ pub fn run() {
         // specs/0058 — in-app updates. Desktop-only like the plugins above; the
         // driver's `updater_builder()` needs this plugin's state to be registered.
         builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
+
+        // specs/0087 — nixon:// links (scheme comes from tauri.conf.json; dev uses nixon-dev).
+        builder = builder.plugin(tauri_plugin_deep_link::init());
 
         if let Some(plugin) = window_state::plugin() {
             builder = builder.plugin(plugin);
@@ -269,6 +273,9 @@ pub fn run() {
 
             // specs/0085: remove `nixon-cli-*` run dirs a crash or force quit left behind.
             cli_llm::temp_sweep::spawn_startup_sweep();
+
+            // specs/0087: re-register agent access if the app moved. Best effort, silent.
+            agent_access::commands::refresh_registration_on_startup();
 
             // Set models directory to use app_data_dir (unified storage location)
             whisper_engine::commands::set_models_directory(_app.handle());

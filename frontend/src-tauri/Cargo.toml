@@ -171,7 +171,12 @@ whatlang = "0.16.4"
 
 ffmpeg-sidecar = { git = "https://github.com/nathanbabcock/ffmpeg-sidecar", branch = "main" }
 
+percent-encoding = "=2.3.2"
 sqlx = { version = "0.8", features = [ "runtime-tokio", "sqlite", "chrono"] }
+# specs/0087: `nixon --mcp` stdio server (agent access). rmcp-macros is pinned to 3.8.0 in
+# the lock (`cargo update -p rmcp-macros --precise 3.8.0`).
+rmcp = { version = "=3.8.0", features = ["server", "transport-io", "macros"] }
+schemars = "=1.2.1"
 
 # Common Tauri configuration
 tauri = { version = "2.6.2", features = [ "macos-private-api", "protocol-asset", "tray-icon", "image-png"] }
@@ -187,6 +192,8 @@ tauri-plugin-single-instance = "=2.3.7"
 tauri-plugin-global-shortcut = "2.3.0"
 # specs/0058 in-app updates — Rust drives check/download/install; no JS package needed.
 tauri-plugin-updater = "2.11"
+# specs/0087 — nixon:// meeting links. Exact pin: 2.5+ needs tauri ^2.12 and re-resolves the lock.
+tauri-plugin-deep-link = "=2.4.10"
 
 # macOS-specific dependencies with Metal GPU acceleration
 [target.'cfg(target_os = "macos")'.dependencies]
