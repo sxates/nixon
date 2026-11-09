@@ -178,10 +178,53 @@ pre-flight if missing, unless `--no-release`):
     CLOUDFLARE_ACCOUNT_ID="…"
     NIXON_SITE_DIR="/path/to/nixonapp"   # site repo checkout; wrangler is run from its pinned install
 
-Upload order is artifacts, then `updates/current.json`, then `updates/latest.json` last, so an
-interrupted release never advertises a version whose files are missing. It then verifies the
-live feed, and commits + pushes `public/release.json` to the site repo. `gh` must be
-authenticated on the build machine unless you pass `--no-github` or `--no-release`.
+Upload order is artifacts, then `updates/current.json`, then `updates/early.json` (only if it
+moves forward), then `updates/latest.json` last, so an interrupted release never advertises a
+version whose files are missing. It then verifies the live feed, and commits + pushes
+`public/release.json` to the site repo. `gh` must be authenticated on the build machine unless
+you pass `--no-github` or `--no-release`.
+
+#### Early access, then promote (specs/0086)
+
+To try a version on your own Macs before everyone gets it:
+
+```bash
+./release.sh patch --early --dry-run   # preview: plans updates/early.json only
+./release.sh patch --early             # full release (bump, changelog, signed build, tag, push),
+                                       # advertised ONLY on updates/early.json; GitHub pre-release
+./release.sh promote 0.15.1 --dry-run  # read-only preflight + the plan
+./release.sh promote 0.15.1            # same signed build to everyone; nothing is rebuilt
+```
+
+- `--early` writes only `updates/early.json`. `updates/latest.json`, `updates/current.json` and
+  the site's `release.json` are untouched, and the GitHub release is a pre-release, so legacy
+  installs on the GitHub endpoint never see it. It cannot be combined with `--skip-build` or
+  `--no-release`, and it aborts before the build if the site Worker does not serve
+  `/updates/early.json`.
+- `promote X.Y.Z` needs no clean tree and makes no commit. It needs the Cloudflare credentials,
+  `NIXON_SITE_DIR` and `gh`, but no Apple or updater signing keys. It refuses (listing every
+  reason) unless tag `vX.Y.Z` exists, the DMG, tarball and `.sig` are on R2, X.Y.Z is newer than
+  the live `updates/latest.json`, the `.sig`'s key id matches `plugins.updater.pubkey`, and,
+  unless `--no-github`, the GitHub release is a published pre-release whose `.sig` and tarball
+  match R2. With `minisign` on PATH it also verifies the tarball cryptographically. It then
+  writes `updates/current.json`, then `updates/latest.json` last, verifies, pushes
+  `release.json`, uploads the GitHub `latest.json` and flips the pre-release to the latest
+  release. Until `latest.json` is written, re-running a failed promote is safe.
+- Notes: each feed gets every changelog section newer than the version it advertised, newest
+  first, `### Internal` stripped. If 0.15.0 went early and only 0.15.1 is promoted, everyone
+  sees both sections. Promote reads the changelog at the tag, never the working tree.
+- Both live feeds are read before anything changes. A 404/503 on either is treated as a fault
+  and stops the run, never as "not published" (the Worker serves `latest.json` whenever
+  `early.json` is absent), so a bad read can't move a feed backwards. Only for the very first
+  release into an empty bucket, run a normal release with `NIXON_RELEASE_EMPTY_FEED=1`.
+- Turning the switch off on a Mac never downgrades it; it stays put until the everyone track
+  passes it.
+
+**Bootstrap.** A Mac only gets the early feed once it runs a build that has the Early access
+updates switch (Settings › General › Updates). The first such build reaches a Mac either through
+a normal release or by installing the DMG by hand (from nixonapp.com/download, or the GitHub
+pre-release's DMG for an early build). After that, turn the switch on and later early releases
+arrive through the feed.
 
 ## Google Calendar OAuth client (per build machine)
 

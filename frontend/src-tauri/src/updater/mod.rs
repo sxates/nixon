@@ -1,19 +1,21 @@
 //! specs/0058 — in-app updates.
 //!
 //! `state` is the pure state machine (unit-tested, no Tauri), `verify` the pure
-//! digest check, `settings` the one persisted preference, `driver` the only file that
+//! digest check, `settings` the persisted preferences, `feed` which manifest a check
+//! polls (specs/0086), `driver` the only file that
 //! *calls* `tauri_plugin_updater`, and `commands` the IPC surface. The unattended loop
 //! lives here.
 
 pub mod commands;
 pub mod driver;
+pub mod feed;
 pub mod receipt;
 pub mod settings;
 pub mod state;
 pub mod verify;
 
 use std::ffi::OsString;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Mutex;
 use std::time::Duration;
 
@@ -49,10 +51,15 @@ const CHECK_INTERVAL: Duration = Duration::from_secs(6 * 60 * 60);
 /// check kicked by turning the preference on can all fire at once, and two concurrent
 /// runs would interleave progress counters and let one wipe the other's staged tarball
 /// out from under a `Ready` status. Only one check runs at a time; the losers are no-ops.
+///
+/// `early_opt_outs` counts how often early access was switched off (specs/0086). A check
+/// on the early feed reads it when it starts and again under the `core` lock just before
+/// staging, so a switch-off that lands mid-download is seen even if it raced the check.
 pub struct UpdaterState {
     pub core: Mutex<UpdaterCore>,
     pub pending: Mutex<Option<tauri_plugin_updater::Update>>,
     in_flight: AtomicBool,
+    early_opt_outs: AtomicU64,
 }
 
 impl Default for UpdaterState {
@@ -61,6 +68,7 @@ impl Default for UpdaterState {
             core: Mutex::new(UpdaterCore::default()),
             pending: Mutex::new(None),
             in_flight: AtomicBool::new(false),
+            early_opt_outs: AtomicU64::new(0),
         }
     }
 }
@@ -76,6 +84,15 @@ impl UpdaterState {
             .map(|_| CheckGuard {
                 flag: &self.in_flight,
             })
+    }
+
+    /// Record that early access was just switched off (see `feed::discard_late_flip`).
+    pub fn note_early_opt_out(&self) {
+        self.early_opt_outs.fetch_add(1, Ordering::AcqRel);
+    }
+
+    pub fn early_opt_outs(&self) -> u64 {
+        self.early_opt_outs.load(Ordering::Acquire)
     }
 }
 

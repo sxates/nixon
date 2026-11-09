@@ -19,6 +19,10 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 ## [Unreleased]
 
+_(nothing yet)_
+
+## [0.15.0] - 2026-11-08
+
 ### Added
 
 - **Summarize with your Claude subscription.** If you have Claude Code installed and signed in
@@ -27,11 +31,18 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
   or stores a key. Nixon runs Claude Code with its tools turned off, so it can't read or change
   files on your Mac. Meeting text is sent to Anthropic under your plan's terms, so a local
   model stays the default.
+- **Early access updates.** Turn on Settings → General → Updates → Early access updates to get
+  new versions before everyone else. They may have more bugs. Turning it off keeps the version
+  you have until the next regular update catches up, so nothing is ever rolled back.
 
 ### Internal
 
 - New subprocess provider class for AI CLIs (`cli_llm/`), ADR-0017, a fake-CLI test harness
   and an opt-in real-CLI test.
+- `release.sh` gains `--early` (publish to `updates/early.json` only, GitHub pre-release) and
+  `promote X.Y.Z` (the same signed build to everyone, nothing rebuilt), plus a guarded
+  `early.json` write on normal releases and cumulative notes per feed. The feed logic moves
+  into `scripts/release_feed.py`, whose `--self-test` now runs in CI (specs/0086).
 
 ## [0.14.0] - 2026-11-05
 

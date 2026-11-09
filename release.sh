@@ -13,8 +13,9 @@
 #   5. Merge the current branch into main, tag it vX.Y.Z, and push both
 #      (main + tag) to origin.
 #   6. Publish to Cloudflare R2 (nixonapp.com, specs/0080): DMG + updater tarball +
-#      signature, then updates/current.json, then updates/latest.json LAST (the
-#      only object installed apps poll), then verify the live feed and push
+#      signature, then updates/current.json, then updates/early.json (only if it
+#      would move forward, specs/0086), then updates/latest.json LAST (the feed
+#      every install polls), then verify the live feed and push
 #      public/release.json to the site repo. Needs CLOUDFLARE_API_TOKEN,
 #      CLOUDFLARE_ACCOUNT_ID, NIXON_SITE_DIR (see SETUP.md) and
 #      TAURI_SIGNING_PRIVATE_KEY (specs/0058).
@@ -23,14 +24,33 @@
 #      still on the GitHub updater endpoint. Skip with --no-github.
 #      --no-release skips both 6 and 7.
 #
-# Usage:
-#   ./release.sh <major|minor|patch|X.Y.Z> [--skip-build] [--no-release] [--no-github] [--yes] [--dry-run] [--allow-degraded]
+# Release notes (every feed write): each changelog section newer than the version
+# that feed advertises now, up to this one, newest first, with "### Internal"
+# stripped. Usually that is just this version's section (specs/0086 DECIDED-2).
 #
+# Usage:
+#   ./release.sh <major|minor|patch|X.Y.Z> [--early] [--skip-build] [--no-release] [--no-github] [--yes] [--dry-run] [--allow-degraded]
+#   ./release.sh promote X.Y.Z [--no-github] [--yes] [--dry-run]
+#
+#   --early           specs/0086: the full release above, but advertised ONLY on
+#                     updates/early.json (installs with Settings > Updates >
+#                     Early access updates on). updates/latest.json,
+#                     updates/current.json and the site's release.json are not
+#                     touched; the GitHub release is a pre-release. Cannot be
+#                     combined with --skip-build or --no-release.
+#   promote X.Y.Z     specs/0086: give an early build to everyone. Nothing is
+#                     rebuilt or committed: it checks that vX.Y.Z's files are on
+#                     R2, that X.Y.Z is newer than updates/latest.json, that the
+#                     signature matches the app's key (and the GitHub
+#                     pre-release's), then writes updates/current.json, then
+#                     updates/latest.json LAST, pushes release.json, and turns the
+#                     GitHub pre-release into the latest full release.
 #   --skip-build      bump + changelog + merge/push, but don't build the DMG
 #   --no-release      do everything except publish (R2 and GitHub)
 #   --no-github       publish to R2 but skip the GitHub release
-#   --yes             don't prompt before the merge/tag/push (remote) step
-#   --dry-run         print what would happen; make no changes
+#   --yes             don't prompt before the remote steps
+#   --dry-run         print what would happen; make no changes. The read-only
+#                     checks (live feeds, R2 HEADs, gh release view) still run.
 #   --allow-degraded  override the safety preflight: build even without the
 #                     Google client id (inert Calendar) and/or publish without
 #                     Developer ID + notarization. For local/test builds only —
@@ -52,6 +72,8 @@ NO_RELEASE=0
 ALSO_GITHUB=1
 ASSUME_YES=0
 ALLOW_DEGRADED=0
+EARLY=0
+MODE="release"
 BUMP=""
 
 for arg in "$@"; do
@@ -62,15 +84,32 @@ for arg in "$@"; do
     --no-github) ALSO_GITHUB=0 ;;
     --yes|-y) ASSUME_YES=1 ;;
     --allow-degraded) ALLOW_DEGRADED=1 ;;
+    --early) EARLY=1 ;;
+    promote) MODE="promote" ;;
     major|minor|patch) BUMP="$arg" ;;
     [0-9]*.[0-9]*.[0-9]*) BUMP="$arg" ;;
     -h|--help)
-      sed -n '3,40p' "$0"; exit 0 ;;
-    *) die "Unknown argument: $arg (expected major|minor|patch|X.Y.Z and optional flags)" ;;
+      # the header comment, from line 3 to the first non-comment line
+      awk 'NR<3{next} /^#/{print; next} {exit}' "$0"; exit 0 ;;
+    *) die "Unknown argument: $arg (expected major|minor|patch|X.Y.Z, or promote X.Y.Z, and optional flags)" ;;
   esac
 done
 
-[ -n "$BUMP" ] || die "Specify the bump: major | minor | patch | X.Y.Z  (see --help)"
+PROMOTE_VER=""
+if [ "$MODE" = "promote" ]; then
+  [[ "$BUMP" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || die "promote needs an exact version: ./release.sh promote X.Y.Z"
+  PROMOTE_VER="$BUMP"; BUMP=""
+  [ "$EARLY" -eq 0 ] || die "--early and promote are opposites; pick one."
+  [ "$SKIP_BUILD" -eq 0 ] && [ "$NO_RELEASE" -eq 0 ] || die "promote publishes an existing build; --skip-build and --no-release do not apply."
+  [ "$ALLOW_DEGRADED" -eq 0 ] || die "promote builds nothing, so --allow-degraded does not apply."
+else
+  [ -n "$BUMP" ] || die "Specify the bump: major | minor | patch | X.Y.Z, or promote X.Y.Z  (see --help)"
+  if [ "$EARLY" -eq 1 ]; then
+    # the point of --early is to publish a build that installs can receive
+    [ "$NO_RELEASE" -eq 0 ] || die "--early publishes a build to the early feed; it cannot be combined with --no-release."
+    [ "$SKIP_BUILD" -eq 0 ] || die "--early publishes a build to the early feed; it cannot be combined with --skip-build."
+  fi
+fi
 
 run() {
   if [ "$DRY_RUN" -eq 1 ]; then echo "  [dry-run] $*"; else eval "$@"; fi
@@ -90,15 +129,19 @@ for f in "$PKG_JSON" "$TAURI_CONF" "$CARGO_TOML" "$CARGO_LOCK" "$CHANGELOG"; do
 done
 
 # ---- pre-flight ------------------------------------------------------------
-BRANCH="$(git rev-parse --abbrev-ref HEAD)"
-[ "$BRANCH" != "HEAD" ] || die "Detached HEAD — checkout a branch to release from."
+# promote changes nothing in this repo (no bump, no commit, no tag), so it needs neither a
+# branch nor a clean tree; it fetches tags itself, for real even in --dry-run (read-only).
+if [ "$MODE" = "release" ]; then
+  BRANCH="$(git rev-parse --abbrev-ref HEAD)"
+  [ "$BRANCH" != "HEAD" ] || die "Detached HEAD — checkout a branch to release from."
 
-if [ -n "$(git status --porcelain)" ]; then
-  die "Working tree is not clean. Commit or stash changes before releasing."
+  if [ -n "$(git status --porcelain)" ]; then
+    die "Working tree is not clean. Commit or stash changes before releasing."
+  fi
+
+  c_blue "🔄 Fetching origin…"
+  run "git fetch --quiet origin"
 fi
-
-c_blue "🔄 Fetching origin…"
-run "git fetch --quiet origin"
 
 # gh is needed for the GitHub release step — check now so we fail fast (before build)
 if [ "$NO_RELEASE" -eq 0 ] && [ "$ALSO_GITHUB" -eq 1 ]; then
@@ -148,6 +191,124 @@ if [ "$NO_RELEASE" -eq 0 ]; then
       }
     fi
   fi
+fi
+
+# ---- shared publish helpers (specs/0086) ----------------------------------
+# The pure manifest / notes / version / key-id logic lives in scripts/release_feed.py
+# (CI runs its --self-test). What is here is the I/O around it, shared by a normal
+# release, --early and promote.
+feed() { python3 "$REPO_ROOT/scripts/release_feed.py" "$@"; }
+# wrangler runs with cwd = the site repo (pnpm --dir), so every --file must be absolute.
+abs_path() { case "$1" in /*) printf '%s' "$1" ;; *) printf '%s/%s' "$REPO_ROOT" "$1" ;; esac; }
+CURL_RETRY=( --retry 3 --retry-delay 2 --retry-connrefused --max-time 30 )
+
+# read_live <latest|early>: GET updates/<feed>.json through the Worker (no-cache) and
+# classify it with release_feed.py feed-read. Sets LIVE_STATE (ok | missing | unknown |
+# refuse), LIVE_VER and LIVE_MSG. The Worker serves latest.json whenever early.json is
+# absent, so a 404/503 on early.json is a fault, and so is one on latest.json unless
+# NIXON_RELEASE_EMPTY_FEED=1 says this is the first release into an empty bucket (normal
+# releases only). A fault is "refuse" in a real run (the caller stops or collects it) and
+# "unknown" in a dry run, which continues with <unknown>. A feed is never moved backwards
+# because of a bad read.
+read_live() {
+  local body code out opts=()
+  body="$(mktemp)"
+  code="$(curl -sS --retry 2 --retry-delay 1 --max-time 20 -o "$body" -w '%{http_code}' \
+    "${SITE_BASE}/updates/$1.json?current_version=0.0.0&target=verify" 2>/dev/null)" || true
+  [ "$DRY_RUN" -eq 1 ] && opts+=( --dry-run )
+  if [ "$1" = "latest" ] && [ "$MODE" = "release" ] && [ "${NIXON_RELEASE_EMPTY_FEED:-0}" = "1" ]; then
+    opts+=( --allow-missing )
+  fi
+  out="$(feed feed-read --feed "$1" --http "${code:-000}" --body "$body" ${opts[@]+"${opts[@]}"})" \
+    || { rm -f "$body"; die "Could not classify the read of updates/$1.json (is python3 working?)."; }
+  rm -f "$body"
+  { IFS= read -r LIVE_STATE; IFS= read -r LIVE_MSG; } <<<"$out" || true
+  LIVE_VER=""
+  case "$LIVE_STATE" in
+    ok) LIVE_VER="$LIVE_MSG"; c_green "   Live updates/$1.json: ${LIVE_VER}" ;;
+    missing) c_yellow "   Live updates/$1.json: not published (NIXON_RELEASE_EMPTY_FEED=1) — treated as older than any version." ;;
+    unknown) LIVE_VER="<unknown>"; c_yellow "   ⚠️  ${LIVE_MSG} [dry-run] continuing with <unknown>; a real run would stop here." ;;
+    *) LIVE_STATE="refuse" ;;
+  esac
+}
+
+# R2 uploads, in R2_PLAN order ("key|file|content-type"). The caller sets R2_PLAN and the
+# R2_FAIL_* text so a failed upload names the state and the remaining steps for its mode.
+r2_manual_steps() {
+  local e k f t
+  for e in "${R2_PLAN[@]}"; do
+    IFS='|' read -r k f t <<<"$e"
+    echo "     pnpm --dir '$NIXON_SITE_DIR' exec wrangler r2 object put '$R2_BUCKET/$k' --file '$f' --content-type '$t' --remote"
+  done
+}
+r2_put() { # key file content-type
+  local f; f="$(abs_path "$2")"
+  if [ "$DRY_RUN" -eq 1 ]; then echo "  [dry-run] r2 put $R2_BUCKET/$1 <- $f ($3)"; return 0; fi
+  pnpm --dir "$NIXON_SITE_DIR" exec wrangler r2 object put "$R2_BUCKET/$1" \
+    --file "$f" --content-type "$3" --remote >/dev/null \
+    || die "R2 upload failed for $1.
+   State: ${R2_FAIL_STATE}
+   Recovery — run these in order (${R2_FAIL_LAST} last), then ${R2_FAIL_NEXT}:
+$(r2_manual_steps)
+${R2_FAIL_TAIL}"
+}
+r2_upload_plan() {
+  local e k f t
+  c_blue "☁️  Uploading to R2 (${R2_BUCKET})…"
+  for e in "${R2_PLAN[@]}"; do
+    IFS='|' read -r k f t <<<"$e"
+    r2_put "$k" "$f" "$t"
+  done
+}
+
+# verify_live <updates/NAME.json> <version> <dmg name> <dmg bytes> <tarball bytes>: the
+# feed serves <version> and both files are served at the expected size. Failures go to
+# the caller's verify_die, which says what was skipped and how to finish.
+verify_live() {
+  local live got got_t
+  c_blue "🔎 Verifying the live feed at ${SITE_BASE}…"
+  live="$(curl -fsS "${CURL_RETRY[@]}" "${SITE_BASE}/$1?current_version=0.0.0&target=verify" | feed version)" \
+    || verify_die "Uploaded, but ${SITE_BASE}/$1 did not respond. Investigate before announcing."
+  [ "$live" = "$2" ] || verify_die "Feed serves $live, expected $2."
+  got="$(curl -fsSI "${CURL_RETRY[@]}" "${SITE_BASE}/releases/$2/$3" | awk 'tolower($1)=="content-length:"{print $2+0}')" \
+    || verify_die "Could not HEAD ${SITE_BASE}/releases/$2/$3."
+  [ "$4" = "$got" ] || verify_die "DMG size mismatch on ${SITE_BASE}: expected $4, served ${got:-none}."
+  got_t="$(curl -fsSI "${CURL_RETRY[@]}" "${SITE_BASE}/releases/$2/Nixon.app.tar.gz" | awk 'tolower($1)=="content-length:"{print $2+0}')" \
+    || verify_die "Could not HEAD ${SITE_BASE}/releases/$2/Nixon.app.tar.gz."
+  [ "$5" = "$got_t" ] || verify_die "Updater tarball size mismatch on ${SITE_BASE}: expected $5, served ${got_t:-none}."
+  c_green "   ✅ $1 serves $2; DMG and updater tarball sizes match."
+}
+
+# ---- site release.json (page shows the current version; warn, never fail) ----
+# NOTE: called as `f || warn`, where errexit is ignored — so every step is chained
+# explicitly and the first failure returns non-zero (no invalid JSON, no partial push).
+#RELEASE_JSON_FN_BEGIN
+publish_release_json() { # version dmg-bytes
+  local ver="$1" size="$2" tmp rj="${NIXON_SITE_DIR}/public/release.json"
+  [ "$(git -C "$NIXON_SITE_DIR" rev-parse --abbrev-ref HEAD)" = main ] || return 1
+  [[ "$size" =~ ^[0-9]+$ ]] || return 1
+  tmp="${rj}.tmp.$$"
+  printf '{"version":"%s","size":%s,"date":"%s"}\n' "$ver" "$size" "$(date -u +%F)" > "$tmp" \
+    && mv -f "$tmp" "$rj" || { rm -f "$tmp"; return 1; }
+  git -C "$NIXON_SITE_DIR" add -- public/release.json || return 1
+  if ! git -C "$NIXON_SITE_DIR" diff --cached --quiet -- public/release.json; then
+    git -C "$NIXON_SITE_DIR" commit -qm "release: v${ver}" -- public/release.json || return 1
+  fi
+  git -C "$NIXON_SITE_DIR" push -q origin main
+}
+#RELEASE_JSON_FN_END
+RELEASE_JSON_WARN="⚠️  Could not push release.json to the site repo (it must be checked out on branch main); the page will show the old version until you do."
+
+# ---- promote X.Y.Z (specs/0086) -------------------------------------------
+# Gives an existing early build to everyone. Builds, signs and commits nothing; every
+# preflight check is read-only and runs in --dry-run too. Writes, in order:
+# updates/current.json, updates/early.json (only if it is somehow older), then
+# updates/latest.json LAST; verify; site release.json; GitHub latest.json asset; and
+# finally the GitHub pre-release -> latest flip (what legacy GitHub-endpoint installs see).
+if [ "$MODE" = "promote" ]; then
+  # shellcheck source=scripts/release-promote.sh
+  . "$REPO_ROOT/scripts/release-promote.sh"
+  exit 0
 fi
 
 # ---- Google Calendar OAuth client (optional, specs/0032) -------------------
@@ -251,7 +412,47 @@ fi
 DMG="target/release/bundle/dmg/Nixon_${NEW}_aarch64.dmg"
 
 TODAY="$(date +%F)"
-c_blue "📦 Releasing ${CUR} → ${NEW}  (branch: ${BRANCH}, tag: ${TAG}, date: ${TODAY})"
+if [ "$EARLY" -eq 1 ]; then
+  c_blue "📦 Releasing ${CUR} → ${NEW} EARLY  (branch: ${BRANCH}, tag: ${TAG}, date: ${TODAY}; advertised on updates/early.json only)"
+else
+  c_blue "📦 Releasing ${CUR} → ${NEW}  (branch: ${BRANCH}, tag: ${TAG}, date: ${TODAY})"
+fi
+
+# ---- live feeds (specs/0086) ------------------------------------------------
+# A feed is only ever rewritten forward, and updates/latest.json is always written last.
+# Read both live feeds now, before anything changes: they decide the notes (each feed's
+# notes are every changelog section after the version it advertises) and whether
+# updates/early.json is written at all.
+LIVE_LATEST=""
+LIVE_EARLY=""
+EARLY_WRITE=0
+if [ "$NO_RELEASE" -eq 0 ]; then
+  c_blue "📡 Reading the live feeds at ${SITE_BASE}…"
+  read_live latest
+  [ "$LIVE_STATE" != "refuse" ] || die "${LIVE_MSG} Nothing has been changed yet."
+  LIVE_LATEST="$LIVE_VER"
+  # --early: this is also the preflight that the Worker serves /updates/early.json
+  # (specs/0086 W0), before the build. A normal release needs it for the forward guard.
+  read_live early
+  [ "$LIVE_STATE" != "refuse" ] || die "${LIVE_MSG} Nothing has been changed yet."
+  LIVE_EARLY="$LIVE_VER"
+  if [ "$EARLY" -eq 1 ]; then
+    feed newer "$NEW" "$LIVE_EARLY" \
+      || die "${NEW} is not newer than the live early feed (${LIVE_EARLY}); a feed is only ever moved forward."
+    EARLY_WRITE=1
+  else
+    feed newer "$NEW" "$LIVE_LATEST" \
+      || die "${NEW} is not newer than the live everyone feed (${LIVE_LATEST}); a feed is only ever moved forward."
+    # specs/0086: early.json always advertises the newer of the early and everyone builds.
+    # A normal release is newest in practice (versions bump from package.json), but the
+    # guard means a re-run or a hand-edited bucket can never move early.json backwards.
+    if feed newer "$NEW" "$LIVE_EARLY"; then
+      EARLY_WRITE=1
+    else
+      c_yellow "   updates/early.json already advertises ${LIVE_EARLY} (≥ ${NEW}); it will not be rewritten."
+    fi
+  fi
+fi
 
 # ---- verify [Unreleased] has content --------------------------------------
 UNRELEASED_BODY="$(awk '/^## \[Unreleased\]/{f=1;next} f&&/^## \[/{f=0} f' "$CHANGELOG")"
@@ -406,20 +607,7 @@ if [ "$SKIP_BUILD" -eq 0 ] && [ "$DRY_RUN" -eq 0 ]; then
     # line's payload. A mismatch means installed apps would reject this release.
     # Exit 2 = couldn't parse either blob (not a mismatch); exit 1 = ids differ; 0 = match.
     keyid_status=0
-    python3 - "$UPDATER_PUBKEY" "$UPD_SIG" <<'PY' || keyid_status=$?
-import base64, sys
-def keyid(b64):
-    text = base64.b64decode(b64).decode()
-    line = [l for l in text.splitlines() if l and not l.startswith("untrusted comment")][0]
-    return base64.b64decode(line)[2:10]
-try:
-    pub = keyid(sys.argv[1])
-    sig = keyid(open(sys.argv[2]).read().strip())
-except Exception as e:
-    print(f"could not parse pubkey/.sig: {e}", file=sys.stderr)
-    sys.exit(2)
-sys.exit(0 if pub == sig else 1)
-PY
+    feed keyid-match --pubkey "$UPDATER_PUBKEY" --sig "$UPD_SIG" || keyid_status=$?
     case "$keyid_status" in
       0) c_green "   ✅ Updater artefacts present; signature key id matches the app's pubkey." ;;
       2) die "Could not parse plugins.updater.pubkey or ${UPD_SIG} as minisign blobs. Check TAURI_CONF and TAURI_SIGNING_PRIVATE_KEY." ;;
@@ -463,8 +651,10 @@ if [ "$NO_RELEASE" -eq 1 ]; then
   c_yellow "⏭️  --no-release: not publishing. Installed apps won't see this update until it's published (R2 uploads + updates/latest.json, and optionally a GitHub release; see release.sh's publish step)."
   echo "     GitHub-only fallback: gh release create '$TAG' '$DMG' '$UPD_TGZ' '$UPD_SIG' --title 'Nixon v${NEW}' --generate-notes"
 else
-  # release notes = this version's changelog section (anchored heading match,
-  # so no regex escaping of the [brackets]), MINUS its "### Internal" section.
+  # Release notes come from the changelog (scripts/release_feed.py notes): every section
+  # newer than the version the feed advertises now, up to this one, newest first, MINUS
+  # each section's "### Internal". Usually that is just this version's section; it grows
+  # only when an early build was never promoted (specs/0086 DECIDED-2).
   #
   # This text is read by users twice: as the release body and as the `notes` the
   # in-app updater renders in its update dialog (see the manifests built just below). CI
@@ -472,134 +662,98 @@ else
   # them under "### Internal" and they are dropped here. Dropping at publish time rather
   # than asking the author to remember keeps the changelog complete while keeping the
   # release notes about the app.
-  NOTES_FILE="$(mktemp)"
-  awk -v ver="$NEW" '
-    index($0, "## [" ver "]") == 1 { f=1; next }
-    f && /^## \[/ { f=0 }
-    f && /^### Internal[[:space:]]*$/ { skip=1; next }
-    f && skip && /^### / { skip=0 }
-    f && !skip { print }
-  ' "$CHANGELOG" > "$NOTES_FILE"
-  [ -s "$NOTES_FILE" ] || printf 'Nixon v%s\n' "$NEW" > "$NOTES_FILE"
+  NOTES_LATEST="$(mktemp)"   # for updates/latest.json (everyone)
+  NOTES_EARLY="$(mktemp)"    # for updates/early.json
+  feed notes --changelog "$CHANGELOG" --upto "$NEW" --after "$LIVE_LATEST" --out "$NOTES_LATEST" \
+    || die "Could not build the release notes from $CHANGELOG."
+  feed notes --changelog "$CHANGELOG" --upto "$NEW" --after "$LIVE_EARLY" --out "$NOTES_EARLY" \
+    || die "Could not build the release notes from $CHANGELOG."
+  # the GitHub release body: an early release is announced to early installs
+  if [ "$EARLY" -eq 1 ]; then NOTES_FILE="$NOTES_EARLY"; else NOTES_FILE="$NOTES_LATEST"; fi
 
   MANIFEST_DIR="$(mktemp -d)"
   MANIFEST_GH="${MANIFEST_DIR}/latest.json"        # the GitHub-hosted feed (legacy installs)
   MANIFEST_R2="${MANIFEST_DIR}/latest.r2.json"     # the nixonapp.com feed
+  MANIFEST_EARLY="${MANIFEST_DIR}/early.r2.json"   # the nixonapp.com early feed (specs/0086)
+  GH_PRE=""
+  [ "$EARLY" -eq 1 ] && GH_PRE=" --prerelease --latest=false"
   if [ "$SKIP_BUILD" -eq 0 ]; then
     # specs/0058: the manifest the installed app polls. Versioned asset URL so an
-    # older manifest can never point at a newer tarball. Emitted twice (specs/0080):
-    # once pointing at GitHub, once at nixonapp.com/R2.
-    build_manifest() { # out url
-      python3 - "$NEW" "$NOTES_FILE" "$UPD_SIG" "$TAG" "$1" "$DRY_RUN" "$2" <<'PY'
-import json, sys, datetime, os
-ver, notes_file, sig_file, tag, out, dry, url = sys.argv[1:8]
-sig = open(sig_file).read().strip() if os.path.exists(sig_file) else ("<signature>" if dry == "1" else "")
-if not sig: sys.exit("missing updater signature")
-manifest = {
-  "version": ver,
-  "notes": open(notes_file).read().strip(),
-  "pub_date": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-  "platforms": {"darwin-aarch64": {
-    "signature": sig,
-    "url": url}},
-}
-json.dump(manifest, open(out, "w"), indent=2)
-PY
+    # older manifest can never point at a newer tarball. Emitted per feed (specs/0080,
+    # specs/0086): GitHub, nixonapp.com latest, nixonapp.com early.
+    build_manifest() { # out url notes
+      local dry=()
+      [ "$DRY_RUN" -eq 1 ] && dry=( --dry-run )
+      feed manifest --version "$NEW" --notes "$3" --sig "$UPD_SIG" --url "$2" --out "$1" ${dry[@]+"${dry[@]}"} \
+        || die "Could not build $1 (missing updater signature?)"
     }
-    build_manifest "$MANIFEST_GH" "https://github.com/sxates/nixon/releases/download/${TAG}/Nixon.app.tar.gz"
-    build_manifest "$MANIFEST_R2" "${SITE_BASE}/releases/${NEW}/Nixon.app.tar.gz"
+    build_manifest "$MANIFEST_GH" "https://github.com/sxates/nixon/releases/download/${TAG}/Nixon.app.tar.gz" "$NOTES_FILE"
+    [ "$EARLY" -eq 1 ] || build_manifest "$MANIFEST_R2" "${SITE_BASE}/releases/${NEW}/Nixon.app.tar.gz" "$NOTES_LATEST"
+    [ "$EARLY_WRITE" -eq 1 ] && build_manifest "$MANIFEST_EARLY" "${SITE_BASE}/releases/${NEW}/Nixon.app.tar.gz" "$NOTES_EARLY"
 
-    # ---- R2 (specs/0080) -----------------------------------------------------
+    # ---- R2 (specs/0080, specs/0086) -------------------------------------------
     # Interrupted-release safety: immutable, versioned artifacts go up FIRST; then
-    # updates/current.json (download page pointer); updates/latest.json goes LAST,
-    # because that is the only object installed apps poll. Any failure before it
-    # leaves nothing advertised.
-    # wrangler runs with cwd = the site repo (pnpm --dir), so every --file must be absolute.
-    abs_path() { case "$1" in /*) printf '%s' "$1" ;; *) printf '%s/%s' "$REPO_ROOT" "$1" ;; esac; }
+    # updates/current.json (download page pointer); then updates/early.json (only if it
+    # moves forward); updates/latest.json goes LAST, because it is the feed every install
+    # polls. Any failure before it leaves nothing new advertised to everyone.
+    # --early stops at updates/early.json: latest.json and current.json are not touched.
     DMG_NAME="Nixon_${NEW}_aarch64.dmg"
     CURRENT_JSON="${MANIFEST_DIR}/current.json"
     printf '{"version":"%s","dmg":"releases/%s/%s"}\n' "$NEW" "$NEW" "$DMG_NAME" > "$CURRENT_JSON"
-    # key|file|content-type — in upload order; latest.json LAST: it is what installed apps see.
+    # key|file|content-type — in upload order; the advertised feed LAST.
     R2_PLAN=(
       "releases/${NEW}/${DMG_NAME}|$(abs_path "$DMG")|application/x-apple-diskimage"
       "releases/${NEW}/Nixon.app.tar.gz|$(abs_path "$UPD_TGZ")|application/gzip"
       "releases/${NEW}/Nixon.app.tar.gz.sig|$(abs_path "$UPD_SIG")|text/plain"
-      "updates/current.json|${CURRENT_JSON}|application/json"
-      "updates/latest.json|${MANIFEST_R2}|application/json"
     )
-    GH_RETRY="gh release create '$TAG' '$(abs_path "$DMG")' '$(abs_path "$UPD_TGZ")' '$(abs_path "$UPD_SIG")' '$MANIFEST_GH' --title 'Nixon v${NEW}' --notes-file '$NOTES_FILE'"
-    r2_manual_steps() {
-      local e k f t
-      for e in "${R2_PLAN[@]}"; do
-        IFS='|' read -r k f t <<<"$e"
-        echo "     pnpm --dir '$NIXON_SITE_DIR' exec wrangler r2 object put '$R2_BUCKET/$k' --file '$f' --content-type '$t' --remote"
-      done
-    }
-    r2_put() { # key file content-type
-      local f; f="$(abs_path "$2")"
-      if [ "$DRY_RUN" -eq 1 ]; then echo "  [dry-run] r2 put $R2_BUCKET/$1 <- $f ($3)"; return 0; fi
-      pnpm --dir "$NIXON_SITE_DIR" exec wrangler r2 object put "$R2_BUCKET/$1" \
-        --file "$f" --content-type "$3" --remote >/dev/null \
-        || die "R2 upload failed for $1.
-   State: tag ${TAG} and main are ALREADY pushed; the GitHub release has NOT been created; nothing new is advertised on the R2 feed unless updates/latest.json was already uploaded.
-   Recovery — run these in order (latest.json last), then the GitHub step:
-$(r2_manual_steps)
-     ${GH_RETRY}"
-    }
+    [ "$EARLY" -eq 1 ] || R2_PLAN+=( "updates/current.json|${CURRENT_JSON}|application/json" )
+    [ "$EARLY_WRITE" -eq 1 ] && R2_PLAN+=( "updates/early.json|${MANIFEST_EARLY}|application/json" )
+    [ "$EARLY" -eq 1 ] || R2_PLAN+=( "updates/latest.json|${MANIFEST_R2}|application/json" )
+    GH_RETRY="gh release create '$TAG' '$(abs_path "$DMG")' '$(abs_path "$UPD_TGZ")' '$(abs_path "$UPD_SIG")' '$MANIFEST_GH' --title 'Nixon v${NEW}' --notes-file '$NOTES_FILE'${GH_PRE}"
+    if [ "$EARLY" -eq 1 ]; then
+      ADVERTISED="updates/early.json"
+      R2_FAIL_STATE="tag ${TAG} and main are ALREADY pushed; the GitHub pre-release has NOT been created; nothing reached the everyone track (updates/latest.json, updates/current.json and release.json are untouched), and nothing new is on the early feed unless updates/early.json was already uploaded."
+      R2_FAIL_LAST="early.json"
+    else
+      ADVERTISED="updates/latest.json"
+      R2_FAIL_STATE="tag ${TAG} and main are ALREADY pushed; the GitHub release has NOT been created; nothing new is advertised on the R2 feed unless updates/latest.json was already uploaded."
+      R2_FAIL_LAST="latest.json"
+    fi
+    R2_FAIL_NEXT="the GitHub step"
+    R2_FAIL_TAIL="     ${GH_RETRY}"
 
-    c_blue "☁️  Uploading to R2 (${R2_BUCKET})…"
-    for e in "${R2_PLAN[@]}"; do
-      IFS='|' read -r k f t <<<"$e"
-      r2_put "$k" "$f" "$t"
-    done
+    r2_upload_plan
+    if [ "$DRY_RUN" -eq 1 ] && [ "$EARLY" -eq 1 ]; then
+      echo "  [dry-run] not touched: updates/latest.json, updates/current.json, public/release.json"
+    fi
 
     if [ "$DRY_RUN" -eq 0 ]; then
-      c_blue "🔎 Verifying the live feed at ${SITE_BASE}…"
-      CURL_RETRY=( --retry 3 --retry-delay 2 --retry-connrefused --max-time 30 )
-      verify_die() {
-        die "$1
+      if [ "$EARLY" -eq 1 ]; then
+        verify_die() {
+          die "$1
+   Skipped because of this: the GitHub pre-release. Artifacts and updates/early.json are already uploaded. Nothing reached the everyone track.
+   To finish: re-check ${SITE_BASE}/updates/early.json, then run:
+     ${GH_RETRY}"
+        }
+      else
+        verify_die() {
+          die "$1
    Skipped because of this: the GitHub release and the site release.json push. Artifacts and the feed are already uploaded.
    To finish: re-check ${SITE_BASE}/updates/latest.json, then run:
      ${GH_RETRY}
    and update ${NIXON_SITE_DIR}/public/release.json by hand."
-      }
-      live="$(curl -fsS "${CURL_RETRY[@]}" "${SITE_BASE}/updates/latest.json?current_version=0.0.0&target=verify" | python3 -c 'import json,sys;print(json.load(sys.stdin)["version"])')" \
-        || verify_die "Uploaded, but ${SITE_BASE}/updates/latest.json did not respond. Investigate before announcing."
-      [ "$live" = "$NEW" ] || verify_die "Feed serves $live, expected $NEW."
-      want="$(stat -f%z "$DMG")"
-      got="$(curl -fsSI "${CURL_RETRY[@]}" "${SITE_BASE}/releases/${NEW}/${DMG_NAME}" | awk 'tolower($1)=="content-length:"{print $2+0}')" \
-        || verify_die "Could not HEAD ${SITE_BASE}/releases/${NEW}/${DMG_NAME}."
-      [ "$want" = "$got" ] || verify_die "DMG size mismatch on ${SITE_BASE}: local $want, served ${got:-none}."
-      want_t="$(stat -f%z "$UPD_TGZ")"
-      got_t="$(curl -fsSI "${CURL_RETRY[@]}" "${SITE_BASE}/releases/${NEW}/Nixon.app.tar.gz" | awk 'tolower($1)=="content-length:"{print $2+0}')" \
-        || verify_die "Could not HEAD ${SITE_BASE}/releases/${NEW}/Nixon.app.tar.gz."
-      [ "$want_t" = "$got_t" ] || verify_die "Updater tarball size mismatch on ${SITE_BASE}: local $want_t, served ${got_t:-none}."
-      c_green "   ✅ Feed serves ${NEW}; DMG and updater tarball sizes match."
+        }
+      fi
+      verify_live "$ADVERTISED" "$NEW" "$DMG_NAME" "$(stat -f%z "$DMG")" "$(stat -f%z "$UPD_TGZ")"
     fi
 
-    # ---- site release.json (page shows the current version; warn, never fail) ----
-    if [ "$DRY_RUN" -eq 1 ]; then
+    # ---- site release.json (the download page shows the everyone version) ----------
+    if [ "$EARLY" -eq 1 ]; then
+      c_yellow "   --early: public/release.json not touched (the download page keeps the everyone version)."
+    elif [ "$DRY_RUN" -eq 1 ]; then
       echo "  [dry-run] write ${NIXON_SITE_DIR}/public/release.json and push"
     else
-      # NOTE: called as `f || warn`, where errexit is ignored — so every step is chained
-      # explicitly and the first failure returns non-zero (no invalid JSON, no partial push).
-      #RELEASE_JSON_FN_BEGIN
-      publish_release_json() {
-        local size tmp rj="${NIXON_SITE_DIR}/public/release.json"
-        [ "$(git -C "$NIXON_SITE_DIR" rev-parse --abbrev-ref HEAD)" = main ] || return 1
-        size="$(stat -f%z "$DMG")" || return 1
-        [[ "$size" =~ ^[0-9]+$ ]] || return 1
-        tmp="${rj}.tmp.$$"
-        printf '{"version":"%s","size":%s,"date":"%s"}\n' "$NEW" "$size" "$(date -u +%F)" > "$tmp" \
-          && mv -f "$tmp" "$rj" || { rm -f "$tmp"; return 1; }
-        git -C "$NIXON_SITE_DIR" add -- public/release.json || return 1
-        if ! git -C "$NIXON_SITE_DIR" diff --cached --quiet -- public/release.json; then
-          git -C "$NIXON_SITE_DIR" commit -qm "release: v${NEW}" -- public/release.json || return 1
-        fi
-        git -C "$NIXON_SITE_DIR" push -q origin main
-      }
-      #RELEASE_JSON_FN_END
-      publish_release_json || c_yellow "⚠️  Could not push release.json to the site repo (it must be checked out on branch main); the page will show the old version until you do."
+      { dmg_size="$(stat -f%z "$DMG")" && publish_release_json "$NEW" "$dmg_size"; } || c_yellow "$RELEASE_JSON_WARN"
     fi
   else
     c_yellow "   (--skip-build: no build artefacts — nothing uploaded to R2; installed apps will NOT see this release)"
@@ -607,8 +761,15 @@ $(r2_manual_steps)
 
   # ---- GitHub release (optional; --no-github skips) ---------------------------
   if [ "$ALSO_GITHUB" -eq 1 ]; then
-    c_blue "🚀 Publishing GitHub release ${TAG}…"
+    if [ "$EARLY" -eq 1 ]; then
+      c_blue "🚀 Publishing GitHub pre-release ${TAG}…"
+    else
+      c_blue "🚀 Publishing GitHub release ${TAG}…"
+    fi
     rel_args=( "$TAG" --title "Nixon v${NEW}" --notes-file "$NOTES_FILE" )
+    # specs/0086: GitHub's releases/latest/download/latest.json never resolves to a
+    # pre-release, so legacy installs on the GitHub endpoint never see an early build.
+    [ "$EARLY" -eq 1 ] && rel_args+=( --prerelease --latest=false )
     if [ "$SKIP_BUILD" -eq 0 ]; then
       rel_args+=( "$DMG" "$UPD_TGZ" "$UPD_SIG" "$MANIFEST_GH" )
     else
@@ -627,7 +788,7 @@ $(r2_manual_steps)
       fi
     else
       gh release create "${rel_args[@]}" \
-        || { rm -f "$NOTES_FILE"; die "gh release create failed. Tag ${TAG} is already pushed — retry with: gh release create '$TAG' '$DMG' '$UPD_TGZ' '$UPD_SIG' '$MANIFEST_GH' --title 'Nixon v${NEW}' --generate-notes"; }
+        || { rm -f "$NOTES_LATEST" "$NOTES_EARLY"; die "gh release create failed. Tag ${TAG} is already pushed — retry with: gh release create '$TAG' '$DMG' '$UPD_TGZ' '$UPD_SIG' '$MANIFEST_GH' --title 'Nixon v${NEW}' --generate-notes${GH_PRE}"; }
     fi
   else
     c_yellow "⏭️  --no-github: skipping the GitHub release. Installs still on the GitHub endpoint will not see this release."
@@ -637,17 +798,31 @@ $(r2_manual_steps)
     sed 's/^/    /' "$MANIFEST_R2"
     echo
   fi
-  rm -f "$NOTES_FILE"
+  if [ "$DRY_RUN" -eq 1 ] && [ -f "$MANIFEST_EARLY" ]; then
+    echo "  [dry-run] updates/early.json (R2):"
+    sed 's/^/    /' "$MANIFEST_EARLY"
+    echo
+  fi
+  rm -f "$NOTES_LATEST" "$NOTES_EARLY"
 fi
 
-c_green "✅ Released v${NEW}."
+if [ "$EARLY" -eq 1 ]; then
+  c_green "✅ Released v${NEW} early. Promote with ./release.sh promote ${NEW}"
+else
+  c_green "✅ Released v${NEW}."
+fi
 if [ "$SKIP_BUILD" -eq 0 ] && [ "$DRY_RUN" -eq 0 ]; then
   echo "   DMG: ${REPO_ROOT}/target/release/bundle/dmg/Nixon_${NEW}_aarch64.dmg"
 fi
 echo "   Tag: ${TAG} (pushed to origin)"
 if [ "$NO_RELEASE" -eq 0 ] && [ "$DRY_RUN" -eq 0 ]; then
-  echo "   Installed apps will pick this update up on their own (in-app updater, specs/0058)."
-  echo "   Download page / install on another Mac: ${SITE_BASE}/download/"
+  if [ "$EARLY" -eq 1 ]; then
+    echo "   Installs with Early access updates on will pick this up on their own; everyone else stays on ${LIVE_LATEST:-their version}."
+    echo "   Install on another Mac by hand: the DMG on the GitHub pre-release ${TAG}."
+  else
+    echo "   Installed apps will pick this update up on their own (in-app updater, specs/0058)."
+    echo "   Download page / install on another Mac: ${SITE_BASE}/download/"
+  fi
   if [ "$ALSO_GITHUB" -eq 1 ]; then
     echo "   GitHub: gh release download '$TAG' -R sxates/nixon && open Nixon_${NEW}_aarch64.dmg"
   fi
