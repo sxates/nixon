@@ -4,4 +4,6 @@
 
 pub mod links;
 pub mod log;
+pub mod queries;
+mod queries_search;
 pub mod settings;
