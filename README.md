@@ -83,6 +83,9 @@ personal data is sent (just the app version and operating system), and you can t
 If you turn on Early access updates in Settings, it asks the same site about early versions
 instead, which get new features first and may have more bugs.
 
+If you turn on Agent access in Settings, Claude Code can read your meetings on request, and
+what it reads goes to its provider; it is off by default and every access is logged.
+
 Full detail in [`PRIVACY_POLICY.md`](PRIVACY_POLICY.md).
 
 ---
