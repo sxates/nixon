@@ -105,6 +105,41 @@ mod tests {
         assert_eq!(r.segment_id.as_deref(), Some("b"));
     }
 
+    /// Parse `t` out of a real `moment_link` and resolve it, as the app does.
+    async fn round_trip(pool: &SqlitePool, m: &str, start: f64) -> Option<String> {
+        let link = crate::agent_access::links::moment_link("nixon", m, Some(start));
+        let t: f64 = link.split("?t=").nth(1).expect("t param").parse().unwrap();
+        resolve_meeting_link(pool, m, Some(t)).await.unwrap().segment_id
+    }
+
+    #[tokio::test]
+    async fn moment_link_round_trips_to_the_cited_segment() {
+        let pool = test_pool().await;
+        let m = meeting(&pool).await;
+        seg(&pool, &m, "a", Some(10.05)).await;
+        seg(&pool, &m, "b", Some(500.0)).await;
+        seg(&pool, &m, "c", Some(754.29)).await; // floors to t=754.2
+        seg(&pool, &m, "d", Some(800.5)).await;
+        assert_eq!(round_trip(&pool, &m, 10.05).await.as_deref(), Some("a"));
+        assert_eq!(round_trip(&pool, &m, 500.0).await.as_deref(), Some("b"));
+        assert_eq!(round_trip(&pool, &m, 754.29).await.as_deref(), Some("c"));
+        assert_eq!(round_trip(&pool, &m, 800.5).await.as_deref(), Some("d"));
+    }
+
+    /// Two segments inside one tenth share a link (t=754.2): the later one wins. That
+    /// ambiguity is inherent to the link's 0.1 s precision; it must never resolve to a
+    /// segment that starts a full line before.
+    #[tokio::test]
+    async fn segments_within_one_tenth_resolve_to_the_later_one() {
+        let pool = test_pool().await;
+        let m = meeting(&pool).await;
+        seg(&pool, &m, "prev", Some(700.0)).await;
+        seg(&pool, &m, "x", Some(754.21)).await;
+        seg(&pool, &m, "y", Some(754.29)).await;
+        assert_eq!(round_trip(&pool, &m, 754.29).await.as_deref(), Some("y"));
+        assert_eq!(round_trip(&pool, &m, 754.21).await.as_deref(), Some("y"));
+    }
+
     #[tokio::test]
     async fn t_past_end_resolves_last_segment() {
         let pool = test_pool().await;

@@ -77,7 +77,7 @@ describe('AgentAccessSection', () => {
     await waitFor(() => expect(sw).not.toBeDisabled());
     fireEvent.click(sw);
     expect(
-      await screen.findByText(/Nixon couldn.t add itself to Claude Code\. Run this in Terminal:/),
+      await screen.findByText(/Nixon couldn.t add itself to Claude Code\. If you haven.t already, run this in Terminal:/),
     ).toBeInTheDocument();
     expect(screen.getByText(off.manualCommand)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Copy' }));
@@ -104,6 +104,15 @@ describe('AgentAccessSection', () => {
     );
     const deleted = screen.getByText('Deleted meeting');
     expect(deleted.closest('a')).toBeNull();
+  });
+
+  it('log_meeting_link_encodes_the_id', async () => {
+    log = [entry({ meetingIds: ['a&b=c'], meetings: [{ id: 'a&b=c', title: 'Odd id' }] })];
+    render(<AgentAccessSection />);
+    expect(await screen.findByRole('link', { name: 'Odd id' })).toHaveAttribute(
+      'href',
+      '/meeting-details?id=a%26b%3Dc',
+    );
   });
 
   it('log_rows_show_real_snake_case_filters_for_each_tool', async () => {

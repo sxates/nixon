@@ -116,7 +116,7 @@ async fn search_date_filter_is_inclusive() {
 }
 
 #[tokio::test]
-async fn search_bad_date_is_plain_text_naming_the_format() {
+async fn search_bad_date_is_an_error_naming_the_format() {
     let (_d, db) = setup().await;
     let mut args = search_args("pricing");
     args.from_date = Some("last tuesday".into());
@@ -314,7 +314,7 @@ async fn get_meeting_first_page_has_summary_notes_actions() {
 }
 
 #[tokio::test]
-async fn get_meeting_unknown_include_is_plain_text() {
+async fn get_meeting_unknown_include_is_an_error() {
     let (_d, db) = setup().await;
     let mut args = get_args("m-pricing");
     args.include = Some(vec!["audio".into()]);

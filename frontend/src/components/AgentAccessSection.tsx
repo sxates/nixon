@@ -157,7 +157,7 @@ export function AgentAccessSection() {
           {failed ? (
             <div className="space-y-2">
               <p className="text-sm text-foreground">
-                Nixon couldn&rsquo;t add itself to Claude Code. Run this in Terminal:
+                Nixon couldn&rsquo;t add itself to Claude Code. If you haven&rsquo;t already, run this in Terminal:
               </p>
               <div className="flex items-start gap-2">
                 <code className="min-w-0 flex-1 break-all rounded-md border border-border bg-muted px-3 py-2 font-mono text-xs text-foreground">
@@ -207,7 +207,7 @@ export function AgentAccessSection() {
                           m.title ? (
                             <Link
                               key={m.id}
-                              href={`/meeting-details?id=${m.id}`}
+                              href={`/meeting-details?id=${encodeURIComponent(m.id)}`}
                               className="text-primary hover:underline"
                             >
                               {m.title}
