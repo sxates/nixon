@@ -1,8 +1,9 @@
 //! specs/0058 — the only file that touches `tauri_plugin_updater`.
 //!
-//! One check = fetch `latest.json`, and if it offers a strictly newer version than what
-//! is staged, stream the tarball to `<app-data-dir>/updates/`, let the plugin verify the
-//! minisign signature, and mark Ready. Install re-hashes the staged file against the
+//! One check = fetch `latest.json` (or `early.json` with early access on, specs/0086),
+//! and if it offers a strictly newer version than what is staged, stream the tarball to
+//! `<app-data-dir>/updates/`, let the plugin verify the minisign signature, and mark
+//! Ready. Install re-hashes the staged file against the
 //! digest taken of those verified bytes, then extracts and restarts — offline.
 
 use std::path::PathBuf;
@@ -12,7 +13,7 @@ use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, Runtime};
 use tauri_plugin_updater::UpdaterExt;
 
-use super::{emit_status, verify, InstallRefusal, UpdateStatus, UpdaterState};
+use super::{emit_status, feed, verify, InstallRefusal, UpdateStatus, UpdaterState};
 
 const HTTP_TIMEOUT: Duration = Duration::from_secs(30);
 /// Fallback emit cadence while the server sends no Content-Length (no percent to track).
@@ -30,7 +31,7 @@ fn staged_path(version: &str) -> PathBuf {
 /// disk or the manifest has moved on: without this the core keeps believing the version
 /// is staged, `should_download` keeps returning false for it, and it is never
 /// re-downloaded.
-fn forget_staged<R: Runtime>(app: &AppHandle<R>, why: &str) {
+pub(super) fn forget_staged<R: Runtime>(app: &AppHandle<R>, why: &str) {
     log::warn!("updater: forgetting the staged payload ({why})");
     {
         let state = app.state::<UpdaterState>();
@@ -82,6 +83,23 @@ pub async fn check_and_download<R: Runtime>(app: &AppHandle<R>) {
         log::debug!("updater: a check is already running; skipping this one");
         return;
     };
+    // specs/0086 DECIDED-1 — a pass whose early download was discarded because early
+    // access was switched off mid-check runs once more, now against the everyone feed.
+    // The switch-off's own check was a no-op against our latch, so this is that check.
+    if check_once(app, &state).await {
+        log::info!("updater: early access was switched off mid-check; checking again");
+        check_once(app, &state).await;
+    }
+}
+
+/// One pass of [`check_and_download`], with the single-flight slot already held.
+/// Returns true when it discarded an early download (the late-flip discard).
+async fn check_once<R: Runtime>(app: &AppHandle<R>, state: &UpdaterState) -> bool {
+    // Read the opt-out count BEFORE the setting. The switch-off saves the setting and
+    // then bumps the count, so either we read the saved "off" here, or the bump lands
+    // after our first read and the comparison before staging sees it.
+    let opt_outs_at_start = state.early_opt_outs();
+    let early_access = super::settings::load_settings().await.early_access;
     // Self-heal before anything else: the staging record is only meaningful while its
     // file exists. If someone cleaned it out between ticks, forget it here so
     // `should_download` offers the same version again instead of skipping it forever.
@@ -108,7 +126,12 @@ pub async fn check_and_download<R: Runtime>(app: &AppHandle<R>) {
     emit_status(app);
 
     let result = async {
-        let updater = app.updater_builder().timeout(HTTP_TIMEOUT).build()?;
+        let mut builder = app.updater_builder().timeout(HTTP_TIMEOUT);
+        // specs/0086 — None keeps the tauri.conf.json endpoint (the everyone feed).
+        if let Some(endpoints) = feed::endpoints(early_access)? {
+            builder = builder.endpoints(endpoints)?;
+        }
+        let updater = builder.build()?;
         let Some(update) = updater.check().await? else {
             return Ok::<_, tauri_plugin_updater::Error>(None);
         };
@@ -178,9 +201,24 @@ pub async fn check_and_download<R: Runtime>(app: &AppHandle<R>) {
     .await;
 
     let now = chrono::Utc::now();
+    let mut discarded = None;
     {
         let mut core = state.core.lock().unwrap();
         match result {
+            // The late-flip discard, decided under the `core` lock: the switch-off bumps
+            // the count before it forgets what is staged, so whichever side takes the
+            // lock second still sees the other's work.
+            Ok(Some((version, ..)))
+                if feed::discard_late_flip(
+                    early_access,
+                    opt_outs_at_start,
+                    state.early_opt_outs(),
+                ) =>
+            {
+                log::info!("updater: discarding early build {version}; early access is off");
+                core.found_none(now);
+                discarded = Some(version);
+            }
             Ok(Some((version, notes, digest, update))) => {
                 log::info!("updater: {version} downloaded and verified; waiting for restart");
                 core.ready(&version, &notes, digest, now);
@@ -194,8 +232,12 @@ pub async fn check_and_download<R: Runtime>(app: &AppHandle<R>) {
             }
         }
     }
+    if let Some(version) = &discarded {
+        let _ = tokio::fs::remove_file(staged_path(version)).await;
+    }
     emit_status(app);
     crate::tray::update_tray_menu(app);
+    discarded.is_some()
 }
 
 /// Payload of `update-install-refused`.
