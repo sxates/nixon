@@ -5,7 +5,7 @@
 # Sourced by release.sh after its argument parsing, .env.signing load and the Cloudflare
 # credential preflight; never run directly. It relies on release.sh's variables
 # (PROMOTE_VER, DRY_RUN, ASSUME_YES, ALSO_GITHUB, SITE_BASE, R2_BUCKET, TAURI_CONF,
-# NIXON_SITE_DIR) and helpers (feed, read_live, live_feed_version, r2_upload_plan,
+# NIXON_SITE_DIR) and helpers (feed, read_live, r2_upload_plan,
 # verify_live, publish_release_json, c_*, die).
 #
 # It promotes the exact signed build that went out with --early: nothing is rebuilt,
@@ -49,7 +49,17 @@ c_blue "🚚 Promoting ${PTAG} to everyone (nothing is rebuilt)…"
 
 # ---- 1. the tag exists ------------------------------------------------------
 c_blue "🏷️  Checking tag ${PTAG}…"
-git fetch --quiet --tags origin 2>/dev/null || unknown "git fetch --tags origin failed."
+# Runs for real in --dry-run too (it only updates local tag refs). A local tag that differs
+# from origin's is not a connection problem: name it, because notes are read at the tag.
+fetch_err="${PWORK}/fetch.err"
+if ! git fetch --quiet --tags origin 2>"$fetch_err"; then
+  if grep -qiE 'would clobber existing tag|\[rejected\]' "$fetch_err"; then
+    conflicts="$(grep -iE 'would clobber existing tag|\[rejected\]' "$fetch_err" | sed -E 's/^[[:space:]]*//' | tr '\n' ';' | sed 's/;$//')"
+    refuse "Local tag(s) differ from origin's: ${conflicts}. Inspect with 'git show-ref --tags ${PTAG}' and 'git ls-remote --tags origin ${PTAG}'; if origin is right, 'git tag -d <tag>' and re-run."
+  else
+    unknown "git fetch --tags origin failed ($(head -1 "$fetch_err"))."
+  fi
+fi
 if git rev-parse -q --verify "refs/tags/${PTAG}" >/dev/null; then
   c_green "   Tag ${PTAG} exists."
 else
@@ -80,22 +90,20 @@ done
 
 # ---- 3. it is newer than everyone's -------------------------------------------
 c_blue "📡 Reading the live feeds at ${SITE_BASE}…"
-live_feed_version "updates/latest.json"
+# promote never treats a 404/503 as "not published": that is how a transient fault could
+# move a feed backwards (release_feed.py feed-read; NIXON_RELEASE_EMPTY_FEED is ignored here).
+read_live latest
+LIVE_LATEST="$LIVE_VER"
 case "$LIVE_STATE" in
   ok)
-    LIVE_LATEST="$LIVE_VER"
-    c_green "   Live updates/latest.json: ${LIVE_LATEST}"
     feed newer "$P" "$LIVE_LATEST" \
       || refuse "${P} is not newer than the everyone feed (updates/latest.json serves ${LIVE_LATEST}). A feed only moves forward, so a version is promoted at most once."
     ;;
-  *)
-    # Missing included: a 503 can be transient, and promoting blind could move latest.json back.
-    LIVE_LATEST="<unknown>"
-    unknown "Could not read ${SITE_BASE}/updates/latest.json, so ${P} can't be checked against it."
-    ;;
+  refuse) refuse "${LIVE_MSG}" ;;
 esac
-read_live "updates/early.json" "needed for the early feed's forward-only guard"
+read_live early
 LIVE_EARLY="$LIVE_VER"
+[ "$LIVE_STATE" != "refuse" ] || refuse "${LIVE_MSG}"
 
 # ---- 4. the signature matches -----------------------------------------------
 c_blue "🔏 Checking the signature…"
@@ -293,8 +301,10 @@ if [ "$DRY_RUN" -eq 1 ]; then
   fi
 fi
 
-c_green "✅ Promoted ${PTAG} to everyone. Nothing was rebuilt."
-if [ "$DRY_RUN" -eq 0 ]; then
+if [ "$DRY_RUN" -eq 1 ]; then
+  c_green "✅ Dry run: ${PTAG} would be promoted to everyone. Nothing was uploaded, edited or rebuilt."
+else
+  c_green "✅ Promoted ${PTAG} to everyone. Nothing was rebuilt."
   echo "   Installed apps will pick this update up on their own (in-app updater, specs/0058)."
   echo "   Download page: ${SITE_BASE}/download/"
 fi

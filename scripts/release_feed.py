@@ -21,6 +21,11 @@ Subcommands:
   keyid-match --pubkey P --sig F
       Exit 0 if the minisign key id in the .sig file F matches the base64 pubkey P,
       1 if they differ, 2 if either cannot be parsed.
+  feed-read --feed latest|early --http CODE --body F [--allow-missing] [--dry-run]
+      Classify one live feed read (the Worker's HTTP status and body). Prints two lines:
+      a state (ok | missing | unknown | refuse) and the version or a message. Only
+      latest.json with --allow-missing may be "missing"; anything else that is not a
+      manifest is a fault: refuse, or unknown with --dry-run.
   version [--file F]
       Print the "version" field of a manifest read from F (default stdin). Exit 2 if it is
       not a manifest with an X.Y.Z version.
@@ -153,6 +158,43 @@ def manifest_version(text):
     return v if isinstance(v, str) and parse_semver(v) else None
 
 
+EMPTY_FEED_ENV = "NIXON_RELEASE_EMPTY_FEED"
+
+
+def classify_feed_read(feed, http, body, allow_missing=False, dry_run=False):
+    """(state, value) for one live read of updates/<feed>.json through the Worker.
+
+    The Worker serves latest.json whenever the early.json object is absent, so a 404/503
+    on early.json is a fault, never "not published". On latest.json it is either a fault
+    or a brand-new empty bucket, which cannot be told apart from here: it only counts as
+    missing when the caller says so (allow_missing). A fault refuses a real run and is
+    "unknown" in a dry run, so a feed can never be moved backwards on a bad read.
+    """
+    name = f"updates/{feed}.json"
+    if http == "200":
+        v = manifest_version(body)
+        if v is not None:
+            return "ok", v
+        msg = f"{name} answered HTTP 200 but not with an updater manifest."
+    elif http in ("404", "503"):
+        if feed == "latest" and allow_missing:
+            return "missing", ""
+        if feed == "early":
+            msg = (f"{name} answered HTTP {http}. The site Worker serves latest.json whenever "
+                   "early.json is absent, so this is a fault, not an unpublished feed; treating "
+                   "it as missing could move early.json backwards. Check the Worker's "
+                   "/updates/early.json route (specs/0086 W0) and re-run.")
+        else:
+            msg = (f"{name} answered HTTP {http}. That is a fault or a brand-new empty bucket; "
+                   "treating it as missing would drop the cumulative release notes and the "
+                   "forward-only check. Check the Worker and the bucket, and re-run. Only if "
+                   f"this really is the first release ever, re-run with {EMPTY_FEED_ENV}=1.")
+    else:
+        got = "no response" if http in ("", "000") else f"HTTP {http}"
+        msg = f"Could not read {name} ({got}). Check the connection and re-run."
+    return ("unknown" if dry_run else "refuse"), msg
+
+
 # ---- CLI --------------------------------------------------------------------------------
 
 def cmd_notes(a):
@@ -197,6 +239,18 @@ def cmd_keyid(a):
         print(f"could not parse pubkey/.sig: {e}", file=sys.stderr)
         return 2
     return keyid_status(a.pubkey, sig)
+
+
+def cmd_feed_read(a):
+    try:
+        with open(a.body) as fh:
+            body = fh.read()
+    except OSError:
+        body = ""
+    state, value = classify_feed_read(a.feed, a.http, body, a.allow_missing, a.dry_run)
+    print(state)
+    print(value)
+    return 0
 
 
 def cmd_version(a):
@@ -316,6 +370,25 @@ def self_test():
     check("version: rejects non-manifests",
           manifest_version("<html>") is None and manifest_version('{"version":"x"}') is None)
 
+    good = '{"version": "0.15.1"}'
+    c = classify_feed_read
+    check("feed-read: 200 manifest is ok", c("early", "200", good) == ("ok", "0.15.1"))
+    check("feed-read: 200 non-manifest refuses", c("latest", "200", "<html>")[0] == "refuse")
+    for code in ("404", "503"):
+        check(f"feed-read: early {code} refuses (Worker falls back, so it's a fault)",
+              c("early", code, "")[0] == "refuse" and "backwards" in c("early", code, "")[1])
+        check(f"feed-read: early {code} refuses even with --allow-missing",
+              c("early", code, "", allow_missing=True)[0] == "refuse")
+        check(f"feed-read: latest {code} refuses and names the override",
+              c("latest", code, "")[0] == "refuse" and EMPTY_FEED_ENV in c("latest", code, "")[1])
+        check(f"feed-read: latest {code} is missing only with --allow-missing",
+              c("latest", code, "", allow_missing=True) == ("missing", ""))
+    check("feed-read: no response refuses", c("latest", "000", "")[0] == "refuse")
+    check("feed-read: dry run turns a fault into unknown",
+          c("early", "503", "", dry_run=True)[0] == "unknown"
+          and c("latest", "000", "", dry_run=True)[0] == "unknown")
+    check("feed-read: dry run never invents missing", c("latest", "404", "", dry_run=True)[0] == "unknown")
+
     print(f"\n{'FAILED' if failures else 'passed'}: {len(failures)} failure(s)")
     return 1 if failures else 0
 
@@ -352,6 +425,14 @@ def main(argv):
     k.add_argument("--pubkey", required=True)
     k.add_argument("--sig", required=True)
     k.set_defaults(fn=cmd_keyid)
+
+    r = sub.add_parser("feed-read")
+    r.add_argument("--feed", required=True, choices=["latest", "early"])
+    r.add_argument("--http", required=True)
+    r.add_argument("--body", required=True)
+    r.add_argument("--allow-missing", action="store_true")
+    r.add_argument("--dry-run", action="store_true")
+    r.set_defaults(fn=cmd_feed_read)
 
     v = sub.add_parser("version")
     v.add_argument("--file")

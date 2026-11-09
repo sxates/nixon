@@ -202,37 +202,33 @@ feed() { python3 "$REPO_ROOT/scripts/release_feed.py" "$@"; }
 abs_path() { case "$1" in /*) printf '%s' "$1" ;; *) printf '%s/%s' "$REPO_ROOT" "$1" ;; esac; }
 CURL_RETRY=( --retry 3 --retry-delay 2 --retry-connrefused --max-time 30 )
 
-# live_feed_version <updates/NAME.json>: GET the live feed through the Worker (no-cache).
-# Sets LIVE_STATE to ok (and LIVE_VER), missing (404/503: nothing published) or error.
-live_feed_version() {
-  local body code
+# read_live <latest|early>: GET updates/<feed>.json through the Worker (no-cache) and
+# classify it with release_feed.py feed-read. Sets LIVE_STATE (ok | missing | unknown |
+# refuse), LIVE_VER and LIVE_MSG. The Worker serves latest.json whenever early.json is
+# absent, so a 404/503 on early.json is a fault, and so is one on latest.json unless
+# NIXON_RELEASE_EMPTY_FEED=1 says this is the first release into an empty bucket (normal
+# releases only). A fault is "refuse" in a real run (the caller stops or collects it) and
+# "unknown" in a dry run, which continues with <unknown>. A feed is never moved backwards
+# because of a bad read.
+read_live() {
+  local body code out opts=()
   body="$(mktemp)"
   code="$(curl -sS --retry 2 --retry-delay 1 --max-time 20 -o "$body" -w '%{http_code}' \
-    "${SITE_BASE}/$1?current_version=0.0.0&target=verify" 2>/dev/null)" || true
-  LIVE_VER=""
-  case "$code" in
-    200) if LIVE_VER="$(feed version --file "$body")"; then LIVE_STATE="ok"; else LIVE_STATE="error"; LIVE_VER=""; fi ;;
-    404|503) LIVE_STATE="missing" ;;
-    *) LIVE_STATE="error" ;;
-  esac
+    "${SITE_BASE}/updates/$1.json?current_version=0.0.0&target=verify" 2>/dev/null)" || true
+  [ "$DRY_RUN" -eq 1 ] && opts+=( --dry-run )
+  if [ "$1" = "latest" ] && [ "$MODE" = "release" ] && [ "${NIXON_RELEASE_EMPTY_FEED:-0}" = "1" ]; then
+    opts+=( --allow-missing )
+  fi
+  out="$(feed feed-read --feed "$1" --http "${code:-000}" --body "$body" ${opts[@]+"${opts[@]}"})" \
+    || { rm -f "$body"; die "Could not classify the read of updates/$1.json (is python3 working?)."; }
   rm -f "$body"
-}
-
-# read_live <updates/NAME.json> <why>: LIVE_VER for a feed the plan depends on. A feed that
-# is not published yet is "" (older than any version). An unreadable one stops a real run
-# before anything changes; a dry run warns and continues with <unknown>.
-read_live() {
-  live_feed_version "$1"
+  { IFS= read -r LIVE_STATE; IFS= read -r LIVE_MSG; } <<<"$out" || true
+  LIVE_VER=""
   case "$LIVE_STATE" in
-    ok) c_green "   Live $1: ${LIVE_VER}" ;;
-    missing) c_yellow "   Live $1: not published — treated as older than any version." ;;
-    *)
-      if [ "$DRY_RUN" -eq 1 ]; then
-        c_yellow "   ⚠️  Could not read ${SITE_BASE}/$1 ($2) — [dry-run] continuing with <unknown>; a real run would stop here."
-        LIVE_VER="<unknown>"
-      else
-        die "Could not read ${SITE_BASE}/$1 ($2). Nothing has been changed yet — check the connection and re-run."
-      fi ;;
+    ok) LIVE_VER="$LIVE_MSG"; c_green "   Live updates/$1.json: ${LIVE_VER}" ;;
+    missing) c_yellow "   Live updates/$1.json: not published (NIXON_RELEASE_EMPTY_FEED=1) — treated as older than any version." ;;
+    unknown) LIVE_VER="<unknown>"; c_yellow "   ⚠️  ${LIVE_MSG} [dry-run] continuing with <unknown>; a real run would stop here." ;;
+    *) LIVE_STATE="refuse" ;;
   esac
 }
 
@@ -432,35 +428,19 @@ LIVE_EARLY=""
 EARLY_WRITE=0
 if [ "$NO_RELEASE" -eq 0 ]; then
   c_blue "📡 Reading the live feeds at ${SITE_BASE}…"
-  read_live "updates/latest.json" "needed for the release notes and the forward-only check"
+  read_live latest
+  [ "$LIVE_STATE" != "refuse" ] || die "${LIVE_MSG} Nothing has been changed yet."
   LIVE_LATEST="$LIVE_VER"
+  # --early: this is also the preflight that the Worker serves /updates/early.json
+  # (specs/0086 W0), before the build. A normal release needs it for the forward guard.
+  read_live early
+  [ "$LIVE_STATE" != "refuse" ] || die "${LIVE_MSG} Nothing has been changed yet."
+  LIVE_EARLY="$LIVE_VER"
   if [ "$EARLY" -eq 1 ]; then
-    # Preflight for --early: the Worker must serve /updates/early.json (specs/0086 W0),
-    # or installs with the switch on would never see this build. Fail before the build.
-    live_feed_version "updates/early.json"
-    case "$LIVE_STATE" in
-      ok) LIVE_EARLY="$LIVE_VER"; c_green "   Live updates/early.json: ${LIVE_EARLY}" ;;
-      error)
-        if [ "$DRY_RUN" -eq 1 ]; then
-          c_yellow "   ⚠️  Could not read ${SITE_BASE}/updates/early.json — [dry-run] continuing with <unknown>; a real run would stop here."
-          LIVE_EARLY="<unknown>"
-        else
-          die "Could not read ${SITE_BASE}/updates/early.json. Nothing has been changed yet — check the connection and re-run."
-        fi ;;
-      *)
-        if [ "$DRY_RUN" -eq 1 ]; then
-          c_yellow "   ⚠️  ${SITE_BASE}/updates/early.json is not served (the site Worker's early route, specs/0086 W0) — [dry-run] a real --early run would ABORT here."
-          LIVE_EARLY=""
-        else
-          die "${SITE_BASE}/updates/early.json is not served. Deploy the site Worker's /updates/early.json route (specs/0086 W0) before an --early release. Nothing has been changed yet."
-        fi ;;
-    esac
     feed newer "$NEW" "$LIVE_EARLY" \
       || die "${NEW} is not newer than the live early feed (${LIVE_EARLY}); a feed is only ever moved forward."
     EARLY_WRITE=1
   else
-    read_live "updates/early.json" "needed for the early feed's forward-only guard"
-    LIVE_EARLY="$LIVE_VER"
     feed newer "$NEW" "$LIVE_LATEST" \
       || die "${NEW} is not newer than the live everyone feed (${LIVE_LATEST}); a feed is only ever moved forward."
     # specs/0086: early.json always advertises the newer of the early and everyone builds.

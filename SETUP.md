@@ -213,6 +213,10 @@ To try a version on your own Macs before everyone gets it:
 - Notes: each feed gets every changelog section newer than the version it advertised, newest
   first, `### Internal` stripped. If 0.15.0 went early and only 0.15.1 is promoted, everyone
   sees both sections. Promote reads the changelog at the tag, never the working tree.
+- Both live feeds are read before anything changes. A 404/503 on either is treated as a fault
+  and stops the run, never as "not published" (the Worker serves `latest.json` whenever
+  `early.json` is absent), so a bad read can't move a feed backwards. Only for the very first
+  release into an empty bucket, run a normal release with `NIXON_RELEASE_EMPTY_FEED=1`.
 - Turning the switch off on a Mac never downgrades it; it stays put until the everyone track
   passes it.
 
