@@ -7,6 +7,8 @@ pub mod commands;
 /// Deleting a meeting and its folder without waiting on speaker identification (specs/0084).
 pub mod delete;
 pub mod discard;
+/// Which transcript segment a `nixon://meeting/<id>?t=<s>` link points at (specs/0087).
+pub mod link_target;
 pub mod manual_commands;
 /// Whether a recording folder's meeting is already saved (transcript recovery, specs/0083).
 pub mod recovery;

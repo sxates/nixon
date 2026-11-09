@@ -126,6 +126,7 @@ pub fn invoke_handler() -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Sen
         meetings::discard::api_recording_is_safe_to_discard,
         meetings::recovery::api_folder_has_saved_transcript,
         meetings::commands::api_get_meeting,
+        meetings::link_target::api_resolve_meeting_link,
         meetings::commands::api_get_meeting_metadata,
         meetings::commands::api_get_meeting_processing_mode,
         meetings::commands::api_set_meeting_processing_mode,
