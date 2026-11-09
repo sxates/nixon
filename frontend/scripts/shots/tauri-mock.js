@@ -459,6 +459,30 @@
         hasSummary: !!m.summary_markdown,
       })),
 
+    // agent_access/commands.rs (#[serde(rename_all = "camelCase")], entry fields flattened):
+    // status -> AgentAccessStatus, log -> AccessEntryView[]. Enabled + a few rows so the
+    // Settings shot shows the populated section; setters echo the status / resolve.
+    api_agent_access_status: () => ({
+      enabled: true,
+      registered: true,
+      serverName: 'nixon',
+      manualCommand: 'claude mcp add nixon -- /Applications/Nixon.app/Contents/MacOS/nixon --mcp',
+      lastError: null,
+    }),
+    api_agent_access_set_enabled: (a) => ({
+      enabled: !!a.enabled,
+      registered: !!a.enabled,
+      serverName: 'nixon',
+      manualCommand: 'claude mcp add nixon -- /Applications/Nixon.app/Contents/MacOS/nixon --mcp',
+      lastError: null,
+    }),
+    api_agent_access_log: () => [
+      { at: '2026-10-30T16:20:00Z', client: 'claude-code', tool: 'search_meetings', args: { query: 'onboarding' }, meetingIds: [MEETINGS[0].id], outcome: 'ok', meetings: [{ id: MEETINGS[0].id, title: MEETINGS[0].title }] },
+      { at: '2026-10-30T16:21:00Z', client: 'claude-code', tool: 'get_meeting', args: { meetingId: MEETINGS[0].id }, meetingIds: [MEETINGS[0].id], outcome: 'ok', meetings: [{ id: MEETINGS[0].id, title: MEETINGS[0].title }] },
+      { at: '2026-10-28T09:05:00Z', client: 'claude-code', tool: 'list_meetings', args: {}, meetingIds: [], outcome: 'off', meetings: [] },
+    ],
+    api_agent_access_clear_log: () => null,
+
     // calendar/commands.rs `api_get_calendar_access_status` -> String. No args. The
     // `calendar=none` route flag (see the URL-params doc above) forces "not determined"
     // so a route can capture the genuine no-calendar-connected state.

@@ -494,6 +494,21 @@
     ]
   },
   {
+    "name": "settings-agent-access",
+    "headless_only": true,
+    "route": "/settings?tab=general",
+    "viewport": [1280, 1500],
+    "ignore": [
+      {
+        "x": 338,
+        "y": 1456,
+        "w": 106,
+        "h": 22,
+        "why": "footer TapeCounter roller digits, same box as settings-general but at the taller viewport's footer. Tall viewport so Agent access (below the fold at 860) is captured (specs/0087)."
+      }
+    ]
+  },
+  {
     "name": "settings-recordings",
     "route": "/settings?tab=recording&retention=days30",
     "viewport": [1280, 1100],
