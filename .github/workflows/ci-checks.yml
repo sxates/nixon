@@ -116,6 +116,15 @@ jobs:
       - name: File-size ratchet
         run: scripts/check-file-size.sh
 
+      # Release tooling (specs/0086): the feed notes / manifest / version / key-id
+      # logic release.sh publishes with, plus a syntax check of the script itself
+      # and the promote mode it sources.
+      - name: Release tooling self-test
+        run: |
+          python3 scripts/release_feed.py --self-test
+          bash -n release.sh
+          bash -n scripts/release-promote.sh
+
   rust:
     name: Rust clippy + lifecycle tests (macOS/Metal)
     runs-on: macos-latest
