@@ -35,6 +35,10 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 - New subprocess provider class for AI CLIs (`cli_llm/`), ADR-0017, a fake-CLI test harness
   and an opt-in real-CLI test.
+- `release.sh` gains `--early` (publish to `updates/early.json` only, GitHub pre-release) and
+  `promote X.Y.Z` (the same signed build to everyone, nothing rebuilt), plus a guarded
+  `early.json` write on normal releases and cumulative notes per feed. The feed logic moves
+  into `scripts/release_feed.py`, whose `--self-test` now runs in CI (specs/0086).
 
 ## [0.14.0] - 2026-11-05
 

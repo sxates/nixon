@@ -91,9 +91,11 @@ never hand-roll the bump/tag/`gh release` steps.** It sources the gitignored `.e
 (Developer ID + notarization creds; see ADR-0008 + SETUP.md) so the DMG is signed,
 notarized, and stapled — a DMG built any other way ships ad-hoc-signed and Gatekeeper
 blocks it on download (this has shipped twice: v1.3.0, v1.10.0). It also rolls the
-changelog ([Unreleased] must be non-empty), merges/tags (`nixon-vX.Y.Z`), pushes, and
+changelog ([Unreleased] must be non-empty), merges/tags (`vX.Y.Z`), pushes, and
 publishes the GitHub release with the DMG attached. `tauri.conf.json`'s
 `signingIdentity: "-"` (ad-hoc) is the deliberate fallback — don't hardcode an identity there.
+To test on your own Macs first: `./release.sh <bump> --early`, then `./release.sh promote X.Y.Z`
+(specs/0086) — both always through `release.sh`, never by hand-editing the R2 feeds.
 
 **Dev vs production are separate apps with separate data (ADR-0004).** The production app is the
 bundled **`Nixon.app`** (identifier `ai.vinyl.app`) — the user's real meetings. The **dev** build
