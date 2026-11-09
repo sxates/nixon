@@ -27,6 +27,7 @@ macro_rules! perf_trace {
 
 // Declare audio module
 pub mod action_items;
+pub mod agent_access;
 pub mod aggregation;
 pub mod anthropic;
 pub mod api_response;
