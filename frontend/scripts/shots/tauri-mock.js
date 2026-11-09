@@ -479,7 +479,7 @@
     api_agent_access_log: () => [
       { at: '2026-10-30T16:20:00Z', client: 'claude-code', tool: 'search_meetings', args: { query: 'onboarding' }, meetingIds: [MEETINGS[0].id], outcome: 'ok', meetings: [{ id: MEETINGS[0].id, title: MEETINGS[0].title }] },
       { at: '2026-10-30T16:21:00Z', client: 'claude-code', tool: 'get_meeting', args: { meetingId: MEETINGS[0].id }, meetingIds: [MEETINGS[0].id], outcome: 'ok', meetings: [{ id: MEETINGS[0].id, title: MEETINGS[0].title }] },
-      { at: '2026-10-28T09:05:00Z', client: 'claude-code', tool: 'list_meetings', args: {}, meetingIds: [], outcome: 'off', meetings: [] },
+      { at: '2026-10-28T09:05:00Z', client: 'claude-code', tool: 'list_meetings', args: { person: 'maya', from_date: '2026-10-01', to_date: '2026-10-31' }, meetingIds: [], outcome: 'off', meetings: [] },
     ],
     api_agent_access_clear_log: () => null,
 

@@ -106,6 +106,28 @@ describe('AgentAccessSection', () => {
     expect(deleted.closest('a')).toBeNull();
   });
 
+  it('log_rows_show_real_snake_case_filters_for_each_tool', async () => {
+    log = [
+      entry({ args: { query: 'budget', from_date: '2026-10-01', to_date: '2026-10-31', limit: 5 } }),
+      entry({
+        tool: 'list_meetings',
+        args: { person: 'dana', title_contains: 'standup', from_date: '2026-09-01' },
+      }),
+      entry({
+        tool: 'get_meeting',
+        args: { meeting_id: 'm1', from_seconds: 120, to_seconds: 300.5, cursor: 2 },
+      }),
+    ];
+    render(<AgentAccessSection />);
+    expect(await screen.findByText(/budget/)).toHaveTextContent(
+      '\u201Cbudget\u201D \u00B7 2026-10-01 \u2192 2026-10-31',
+    );
+    expect(screen.getByText(/dana/)).toHaveTextContent(
+      'title \u201Cstandup\u201D \u00B7 dana \u00B7 from 2026-09-01',
+    );
+    expect(screen.getByText(/120s/)).toHaveTextContent('120s \u2192 300.5s');
+  });
+
   it('refused_calls_are_labelled', async () => {
     log = [entry({ outcome: 'off', meetingIds: [], meetings: [] })];
     render(<AgentAccessSection />);

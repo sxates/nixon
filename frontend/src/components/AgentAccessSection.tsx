@@ -45,22 +45,28 @@ const REFUSALS: Record<string, string> = {
   error: 'Error',
 };
 
-/** The search terms and filters, compactly: `"onboarding" · 2026-10-01 → 2026-10-31`. */
+/** The search terms and filters, compactly. Keys are the snake_case MCP tool args (queries.rs). */
 function describeArgs(args: AccessEntry['args']): string {
   if (!args || typeof args !== 'object') return '';
   const parts: string[] = [];
   const str = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : null);
   const query = str(args.query);
   if (query) parts.push(`“${query}”`);
-  const title = str(args.titleContains);
+  const title = str(args.title_contains);
   if (title) parts.push(`title “${title}”`);
   const person = str(args.person);
   if (person) parts.push(person);
-  const from = str(args.fromDate);
-  const to = str(args.toDate);
+  const from = str(args.from_date);
+  const to = str(args.to_date);
   if (from && to) parts.push(`${from} → ${to}`);
   else if (from) parts.push(`from ${from}`);
   else if (to) parts.push(`until ${to}`);
+  const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+  const fromS = num(args.from_seconds);
+  const toS = num(args.to_seconds);
+  if (fromS !== null && toS !== null) parts.push(`${fromS}s \u2192 ${toS}s`);
+  else if (fromS !== null) parts.push(`from ${fromS}s`);
+  else if (toS !== null) parts.push(`until ${toS}s`);
   return parts.join(' · ');
 }
 
