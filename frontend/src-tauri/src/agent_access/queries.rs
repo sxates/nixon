@@ -17,7 +17,9 @@
 
 use anyhow::{Context, Result};
 use chrono::NaiveDate;
+use regex::Regex;
 use sqlx::SqlitePool;
+use std::sync::LazyLock;
 
 use super::links::{clock, meeting_link, moment_link};
 use crate::database::repositories::action_item::{ActionItem, ActionItemsRepository};
@@ -129,12 +131,16 @@ fn parse_date(name: &str, value: Option<&str>) -> std::result::Result<Option<Str
         .map_err(|_| format!("Invalid {name} \"{raw}\": use YYYY-MM-DD, for example 2026-03-14."))
 }
 
+/// "meeting content" in any case and with any whitespace between the words. Both markers
+/// contain it, so once every occurrence is rewritten no marker can survive, however many
+/// dashes surround it. The replacement has no whitespace, so one pass is a fixpoint.
+static MARKER_PHRASE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?i)meeting\s+content").expect("valid marker regex"));
+
 /// Wraps meeting-derived text in the untrusted-content markers, defusing any copy of the
-/// markers inside it first.
+/// marker phrase inside it first.
 pub(crate) fn wrap_content(body: &str) -> String {
-    let defused = body
-        .replace(CONTENT_END, "-- end meeting content --")
-        .replace(CONTENT_START, "-- meeting content (untrusted) --");
+    let defused = MARKER_PHRASE.replace_all(body, "meeting-content");
     format!("{CONTENT_START}\n{}\n{CONTENT_END}", defused.trim_end())
 }
 
@@ -296,7 +302,10 @@ pub async fn get_meeting(pool: &SqlitePool, scheme: &str, args: GetArgs) -> Resu
     .await
     .context("Couldn't read the meeting")?;
     let Some((title, date_label)) = meeting else {
-        return Ok(ToolOutput::plain(format!("No meeting with id {id}.")));
+        return Ok(ToolOutput::plain(format!(
+            "No meeting with id {}.",
+            one_line(id)
+        )));
     };
 
     let attendees = MeetingParticipantsRepository::list(pool, id)
@@ -484,7 +493,7 @@ async fn transcript_page(
          FROM transcripts t
          LEFT JOIN speakers s ON s.meeting_id = t.meeting_id AND s.speaker_key = t.speaker
          WHERE t.meeting_id = ?{filter}
-         ORDER BY t.audio_start_time IS NULL, t.audio_start_time, t.timestamp
+         ORDER BY t.audio_start_time IS NULL, t.audio_start_time, t.timestamp, t.rowid
          LIMIT ? OFFSET ?"
     );
     let mut rows = sqlx::query_as::<_, TranscriptRow>(&rows_sql).bind(id);

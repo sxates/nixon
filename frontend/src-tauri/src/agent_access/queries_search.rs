@@ -91,7 +91,7 @@ pub async fn search_meetings(
     scheme: &str,
     args: SearchArgs,
 ) -> Result<ToolOutput> {
-    let no_match = || ToolOutput::plain(format!("No matches for \"{}\".", args.query));
+    let no_match = || ToolOutput::plain(format!("No matches for \"{}\".", one_line(&args.query)));
     let dates = match DateRange::parse(args.from_date.as_deref(), args.to_date.as_deref()) {
         Ok(d) => d,
         Err(text) => return Ok(ToolOutput::plain(text)),
@@ -190,12 +190,13 @@ fn render(scheme: &str, query: &str, hits: Vec<HitRow>) -> ToolOutput {
         }
     }
     let header = format!(
-        "{total} hit{} in {} meeting{} for \"{query}\", grouped by meeting, best first. \
+        "{total} hit{} in {} meeting{} for \"{}\", grouped by meeting, best first. \
          Matched words are in **bold**. Cite the links; read around a hit with get_meeting \
          and from_seconds/to_seconds.",
         if total == 1 { "" } else { "s" },
         order.len(),
         if order.len() == 1 { "" } else { "s" },
+        one_line(query),
     );
     ToolOutput {
         text: format!("{header}\n{}", wrap_content(&body)),
