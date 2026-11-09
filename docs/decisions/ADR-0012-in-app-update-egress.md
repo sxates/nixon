@@ -1,6 +1,6 @@
-# ADR-0012: In-app updates (second sanctioned non-LLM egress) — amended 2026-10-04: now served from nixonapp.com
+# ADR-0012: In-app updates (second sanctioned non-LLM egress) — amended 2026-10-04: now served from nixonapp.com; 2026-11-08: early access feed
 
-Status: Accepted (amended 2026-10-04, see Amendment)
+Status: Accepted (amended 2026-10-04 and 2026-11-08, see Amendments)
 Date: 2026-09-16
 
 ## Context
@@ -53,3 +53,24 @@ can eventually go private without breaking updates.
   cutover; they hop to the new feed on their next update. Release publishing continues to
   mirror to GitHub until those have drained.
 - Verification (minisign), cadence, the opt-out and the never-automatic install are unchanged.
+
+## Amendment 2026-11-08 (specs/0086)
+
+A second manifest on the same host, chosen by a user setting.
+
+- **Destination:** unchanged host. With **Early access updates** (Settings > General >
+  Updates, off by default) turned on, the manifest request goes to `nixonapp.com/updates/early.json`
+  instead of `/updates/latest.json`. The payload URLs it advertises are the same
+  `nixonapp.com/releases/…` paths. With it off, the app uses the endpoint in
+  `tauri.conf.json` exactly as before. The URL lives in `updater/feed.rs` (`EARLY_FEED`),
+  and a unit test pins it to the configured endpoint so the two cannot drift apart.
+- **What is sent:** unchanged — the same GET with the same version and platform query. The
+  Worker counts early-feed checks under their own event name; no new fields are recorded.
+- **When:** unchanged. The switch does not add network activity of its own: turning it on
+  checks right away only if "Download updates automatically" is on, mirroring that toggle.
+- **Verification:** unchanged. Early builds are signed with the same minisign key and
+  notarized like any release.
+- **Turning it off never downgrades:** the plugin only offers versions strictly newer than
+  the installed one. An update already downloaded, which may be an early build, is
+  discarded and the regular feed is checked again, so an opted-out machine never installs an
+  early build at its next restart.

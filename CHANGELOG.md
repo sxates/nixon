@@ -27,6 +27,9 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
   or stores a key. Nixon runs Claude Code with its tools turned off, so it can't read or change
   files on your Mac. Meeting text is sent to Anthropic under your plan's terms, so a local
   model stays the default.
+- **Early access updates.** Turn on Settings → General → Updates → Early access updates to get
+  new versions before everyone else. They may have more bugs. Turning it off keeps the version
+  you have until the next regular update catches up, so nothing is ever rolled back.
 
 ### Internal
 
