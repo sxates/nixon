@@ -123,6 +123,7 @@ async fn search_bad_date_is_plain_text_naming_the_format() {
     let out = search_meetings(db.pool(), SCHEME, args).await.unwrap();
     assert!(out.text.contains("YYYY-MM-DD"), "{}", out.text);
     assert!(out.meeting_ids.is_empty());
+    assert!(out.is_error);
 }
 
 #[tokio::test]
@@ -325,6 +326,7 @@ async fn get_meeting_unknown_include_is_plain_text() {
         out.text
     );
     assert!(out.meeting_ids.is_empty());
+    assert!(out.is_error);
 }
 
 #[tokio::test]
@@ -418,6 +420,7 @@ async fn get_meeting_unknown_id_is_plain_text() {
         .unwrap();
     assert_eq!(out.text, "No meeting with id nope.");
     assert!(out.meeting_ids.is_empty());
+    assert!(!out.is_error);
 }
 
 #[tokio::test]

@@ -94,7 +94,7 @@ pub async fn search_meetings(
     let no_match = || ToolOutput::plain(format!("No matches for \"{}\".", one_line(&args.query)));
     let dates = match DateRange::parse(args.from_date.as_deref(), args.to_date.as_deref()) {
         Ok(d) => d,
-        Err(text) => return Ok(ToolOutput::plain(text)),
+        Err(text) => return Ok(ToolOutput::bad_argument(text)),
     };
     let Some(expr) = SearchRepository::build_recall_match_expr(&args.query) else {
         return Ok(no_match());
@@ -201,6 +201,7 @@ fn render(scheme: &str, query: &str, hits: Vec<HitRow>) -> ToolOutput {
     ToolOutput {
         text: format!("{header}\n{}", wrap_content(&body)),
         meeting_ids: order,
+        is_error: false,
     }
 }
 

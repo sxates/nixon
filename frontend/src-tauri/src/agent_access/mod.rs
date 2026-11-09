@@ -2,8 +2,10 @@
 //! log shared by the app and the `nixon --mcp` stdio server. Deliberately free of Tauri
 //! types (the MCP server runs outside the app); every function takes the data dir.
 
+pub mod entry;
 pub mod links;
 pub mod log;
 pub mod queries;
 mod queries_search;
+mod server;
 pub mod settings;

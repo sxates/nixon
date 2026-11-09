@@ -18,6 +18,8 @@
 use anyhow::{Context, Result};
 use chrono::NaiveDate;
 use regex::Regex;
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 use std::sync::LazyLock;
 
@@ -37,49 +39,86 @@ const LIST_DEFAULT_LIMIT: u32 = 25;
 const LIST_MAX_LIMIT: u32 = 100;
 const INCLUDE_PARTS: [&str; 4] = ["summary", "notes", "action_items", "transcript"];
 
-/// One tool call's result: the text the agent reads, and the meetings it touched (for the
-/// access log).
+/// One tool call's result: the text the agent reads, the meetings it touched (for the
+/// access log), and whether the call's arguments were bad (an MCP `isError` result).
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct ToolOutput {
     pub text: String,
     pub meeting_ids: Vec<String>,
+    pub is_error: bool,
 }
 
 impl ToolOutput {
-    /// Plain text with no meetings (no match, bad argument, unknown id).
+    /// Plain text with no meetings (no match, unknown id).
     pub(crate) fn plain(text: impl Into<String>) -> Self {
         Self {
             text: text.into(),
-            meeting_ids: Vec::new(),
+            ..Self::default()
+        }
+    }
+
+    /// A bad argument (unparseable date, unknown `include` part): the text says how to fix it.
+    pub(crate) fn bad_argument(text: impl Into<String>) -> Self {
+        Self {
+            is_error: true,
+            ..Self::plain(text)
         }
     }
 }
 
-#[derive(Debug, Clone, Default)]
+// The arg structs double as the MCP tools' input schemas (`nixon --mcp`), so their doc
+// comments are what the agent reads.
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
 pub struct SearchArgs {
+    /// What to look for, in plain words (a topic, decision, name or phrase).
     pub query: String,
+    /// Only meetings on or after this local date, YYYY-MM-DD.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub from_date: Option<String>,
+    /// Only meetings on or before this local date, YYYY-MM-DD.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub to_date: Option<String>,
+    /// Maximum number of hits to return.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub limit: Option<u32>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
 pub struct ListArgs {
+    /// Only meetings on or after this local date, YYYY-MM-DD.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub from_date: Option<String>,
+    /// Only meetings on or before this local date, YYYY-MM-DD.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub to_date: Option<String>,
+    /// Part of the name or email of someone who attended or spoke.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub person: Option<String>,
+    /// Words that appear in the meeting title.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub title_contains: Option<String>,
+    /// Maximum number of meetings to return (default 25, at most 100).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub limit: Option<u32>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
 pub struct GetArgs {
+    /// The meeting's id, as shown by search_meetings or list_meetings.
     pub meeting_id: String,
-    /// Any of "summary" | "notes" | "action_items" | "transcript"; `None` = all.
+    /// Which parts to return: any of "summary", "notes", "action_items", "transcript".
+    /// Leave out for all of them.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub include: Option<Vec<String>>,
+    /// Only transcript lines from this many seconds into the recording.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub from_seconds: Option<f64>,
+    /// Only transcript lines up to this many seconds into the recording.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub to_seconds: Option<f64>,
-    /// Transcript line offset; absent or 0 = first page.
+    /// The cursor from the previous page, to read the next page of transcript lines.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cursor: Option<u32>,
 }
 
@@ -176,7 +215,7 @@ struct ListRow {
 pub async fn list_meetings(pool: &SqlitePool, scheme: &str, args: ListArgs) -> Result<ToolOutput> {
     let dates = match DateRange::parse(args.from_date.as_deref(), args.to_date.as_deref()) {
         Ok(d) => d,
-        Err(text) => return Ok(ToolOutput::plain(text)),
+        Err(text) => return Ok(ToolOutput::bad_argument(text)),
     };
     let limit = args
         .limit
@@ -257,6 +296,7 @@ pub async fn list_meetings(pool: &SqlitePool, scheme: &str, args: ListArgs) -> R
     Ok(ToolOutput {
         text: format!("{header}\n{}", wrap_content(&body)),
         meeting_ids: rows.into_iter().map(|r| r.id).collect(),
+        is_error: false,
     })
 }
 
@@ -283,7 +323,7 @@ pub async fn get_meeting(pool: &SqlitePool, scheme: &str, args: GetArgs) -> Resu
         Some(list) => {
             let parts: Vec<String> = list.iter().map(|p| p.trim().to_lowercase()).collect();
             if let Some(bad) = parts.iter().find(|p| !INCLUDE_PARTS.contains(&p.as_str())) {
-                return Ok(ToolOutput::plain(format!(
+                return Ok(ToolOutput::bad_argument(format!(
                     "Unknown include \"{bad}\". Use any of: {}.",
                     INCLUDE_PARTS.join(", ")
                 )));
@@ -368,6 +408,7 @@ pub async fn get_meeting(pool: &SqlitePool, scheme: &str, args: GetArgs) -> Resu
     Ok(ToolOutput {
         text,
         meeting_ids: vec![id.to_string()],
+        is_error: false,
     })
 }
 
