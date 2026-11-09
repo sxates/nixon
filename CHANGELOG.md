@@ -19,6 +19,10 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 ## [Unreleased]
 
+_(nothing yet)_
+
+## [0.15.0] - 2026-11-08
+
 ### Added
 
 - **Summarize with your Claude subscription.** If you have Claude Code installed and signed in
