@@ -40,6 +40,13 @@ pub struct TranscriptSegment {
     /// save payload → `transcripts.channel`). Defaulted for older transcripts.json.
     #[serde(default)]
     pub channel: Option<String>,
+    /// specs/0055 Stage 2: Parakeet's per-word stamps for this segment, as the compact
+    /// recording-relative JSON the diarization splits read (`[{"w","s","e"}, ..]`).
+    /// `None` for Whisper/provider engines. In memory only: never written to
+    /// `transcripts.json`, which is rewritten in full on every update and would grow
+    /// several-fold (the save at stop reads the in-memory copy).
+    #[serde(default, skip_serializing)]
+    pub word_timestamps: Option<String>,
 }
 
 /// One recording session inside a meeting folder (specs/0037). Session #0 is the
@@ -323,6 +330,7 @@ impl RecordingSaver {
             confidence: 1.0,
             sequence_id: 0,
             channel: None,
+            word_timestamps: None,
         };
         self.add_transcript_segment(segment);
     }

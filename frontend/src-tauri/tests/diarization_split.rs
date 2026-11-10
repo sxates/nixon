@@ -509,3 +509,92 @@ async fn room_mode_splits_a_mic_row_between_two_clusters_and_keeps_its_channel()
         vec!["spk_0".to_string(), "spk_1".to_string()]
     );
 }
+
+// ---------------------------------------------------------------------------
+// specs/0055 Stage 2 — the channel split, end to end through the call pass.
+// ---------------------------------------------------------------------------
+
+/// 600 ms windows from `t0` seconds, one tag each.
+fn timeline(
+    t0: f64,
+    tags: &[app_lib::diarization::channel_split::ChannelTag],
+) -> app_lib::diarization::channel_split::ChannelTimeline {
+    app_lib::diarization::channel_split::ChannelTimeline::from_windows(
+        tags.iter()
+            .enumerate()
+            .map(|(i, &t)| {
+                let s = (t0 + i as f64 * 0.6) * 1000.0;
+                (s, s + 600.0, t)
+            })
+            .collect(),
+    )
+}
+
+/// The reported bug: a `mixed` row holding a remote speaker's tail and the owner's
+/// opening sentence. Before Stage 2 the whole row went to the remote speaker; now it
+/// is cut on the channel timeline and the owner's sentence is "You".
+#[tokio::test]
+async fn mixed_row_with_owner_onset_is_cut_and_the_onset_is_you() {
+    use app_lib::diarization::channel_split::ChannelTag::{Microphone as M, Mixed as X};
+    use app_lib::diarization::pipeline::attribute_and_persist_with_timeline;
+    use app_lib::diarization::room_types::AudioSetup;
+
+    let (_dir, db) = fresh_db().await;
+    let pool = db.pool();
+    let words = r#"[{"w":"that's","s":0.2,"e":0.6},{"w":"the","s":0.7,"e":0.9},{"w":"plan.","s":1.0,"e":1.8},{"w":"I","s":2.5,"e":2.6},{"w":"disagree","s":2.7,"e":3.3},{"w":"though.","s":3.4,"e":4.2}]"#;
+    let (meeting, _) =
+        seed_meeting_with_row(pool, "that's the plan. I disagree though.", 0.0, 4.8).await;
+    sqlx::query(
+        "UPDATE transcripts SET channel = 'mixed', word_timestamps = ? WHERE meeting_id = ?",
+    )
+    .bind(words)
+    .bind(&meeting)
+    .execute(pool)
+    .await
+    .unwrap();
+
+    // The remote speaker's turn runs to 2.4 s; the owner's mic-VAD turn follows.
+    let turns = vec![turn(0.0, 2.4, "spk_0"), turn(2.4, 4.8, LOCAL_SPEAKER_KEY)];
+    let tl = timeline(0.0, &[X, X, X, X, M, M, M, M]);
+    let (_, segments) = attribute_and_persist_with_timeline(
+        pool,
+        &meeting,
+        &turns,
+        &std::collections::HashMap::new(),
+        AudioSetup::Call,
+        Some(&tl),
+    )
+    .await
+    .expect("call pass");
+    assert_eq!(segments, 2);
+
+    type Row = (String, Option<String>, Option<String>, Option<String>);
+    let rows: Vec<Row> = sqlx::query_as(
+        "SELECT transcript, speaker, channel, word_timestamps FROM transcripts
+         WHERE meeting_id = ? ORDER BY audio_start_time",
+    )
+    .bind(&meeting)
+    .fetch_all(pool)
+    .await
+    .unwrap();
+    assert_eq!(rows[0].0, "that's the plan.");
+    assert_eq!(rows[0].1.as_deref(), Some("spk_0"));
+    assert_eq!(rows[1].0, "I disagree though.");
+    assert_eq!(rows[1].1.as_deref(), Some(LOCAL_SPEAKER_KEY));
+    assert_eq!(rows[1].2.as_deref(), Some("microphone"));
+    // The parts keep their own word stamps (a re-run stays word-exact).
+    assert!(rows[1].3.as_deref().is_some_and(|w| w.contains("disagree")));
+
+    // A re-run with the same inputs changes nothing.
+    let (_, again) = attribute_and_persist_with_timeline(
+        pool,
+        &meeting,
+        &turns,
+        &std::collections::HashMap::new(),
+        AudioSetup::Call,
+        Some(&tl),
+    )
+    .await
+    .unwrap();
+    assert_eq!(again, 2);
+}

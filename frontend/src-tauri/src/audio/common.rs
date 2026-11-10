@@ -174,7 +174,7 @@ pub(crate) fn create_transcript_segments_with_words(
 /// JSON shape the diarization split reads back, offsetting each word's
 /// segment-relative `start`/`end` by `offset_secs` (the row's recording-relative
 /// `audio_start_time`) so the stored times are recording-relative too.
-fn serialize_word_timestamps(words: &[WordStamp], offset_secs: f32) -> String {
+pub(crate) fn serialize_word_timestamps(words: &[WordStamp], offset_secs: f32) -> String {
     #[derive(serde::Serialize)]
     struct WordEntry<'a> {
         w: &'a str,

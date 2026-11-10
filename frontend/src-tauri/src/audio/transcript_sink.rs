@@ -184,6 +184,7 @@ pub(crate) fn segment_from_update(update: &TranscriptUpdate) -> TranscriptSegmen
         sequence_id: update.sequence_id,
         // specs/0029 WS3.4: keep the capture-channel tag in the rehydration copy.
         channel: update.channel.clone(),
+        word_timestamps: update.word_timestamps.clone(), // specs/0055 Stage 2
     }
 }
 

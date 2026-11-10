@@ -280,3 +280,19 @@ fn system_only_split_parts_are_all_system() {
     let parts = plan_split(0.0, 6.7, TEXT, &turns, None).expect("should split");
     assert!(parts.iter().all(|p| channel_of(p) == "system"));
 }
+
+/// specs/0055 Stage 2 review: stamps that don't line up 1:1 with the text's words
+/// must not place the cut (it would land a word off) — the char fallback is used.
+#[test]
+fn misaligned_word_stamps_fall_back_to_char_proportional() {
+    let turns = vec![turn(0.0, 3.0, "spk_0"), turn(3.4, 6.3, "spk_1")];
+    let words = vec![WordStamp {
+        text: "so".into(),
+        start: 0.0,
+        end: 0.2,
+    }];
+    let with = plan_split(0.0, 6.7, TEXT, &turns, Some(&words)).expect("split");
+    let without = plan_split(0.0, 6.7, TEXT, &turns, None).expect("split");
+    assert_eq!(with, without);
+    assert!(with.iter().all(|p| p.words.is_none()));
+}

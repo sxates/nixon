@@ -15,6 +15,25 @@ pub struct TranscriptsRepository;
 /// `audio_start_time`/`audio_end_time` so a resumed session's clock (which
 /// restarts at 0) lands after the prior audio on the meeting's continuous
 /// timeline. It is `0.0` for a first/only session.
+/// Shift a row's stored per-word JSON by `offset` seconds. Unparseable JSON is kept
+/// verbatim (the splitters already ignore it), and a zero offset is a no-op.
+fn offset_word_timestamps(json: Option<&str>, offset: f64) -> Option<String> {
+    let json = json?;
+    if offset == 0.0 {
+        return Some(json.to_string());
+    }
+    match serde_json::from_str::<Vec<crate::diarization::split::WordStamp>>(json) {
+        Ok(mut words) => {
+            for w in &mut words {
+                w.start += offset as f32;
+                w.end += offset as f32;
+            }
+            serde_json::to_string(&words).ok()
+        }
+        Err(_) => Some(json.to_string()),
+    }
+}
+
 async fn insert_segments(
     transaction: &mut SqliteConnection,
     meeting_id: &str,
@@ -46,8 +65,13 @@ async fn insert_segments(
         // value the caller supplied (e.g. re-import).
         .bind(&segment.speaker)
         .bind(channel)
-        // specs/0046 WS2: per-word JSON, NULL for Whisper/legacy segments.
-        .bind(&segment.word_timestamps)
+        // specs/0046 WS2: per-word JSON, NULL for Whisper/legacy segments. Shifted by
+        // the same offset as the row so a resumed session's words share its clock
+        // (specs/0055 Stage 2 review).
+        .bind(offset_word_timestamps(
+            segment.word_timestamps.as_deref(),
+            audio_offset,
+        ))
         .execute(&mut *transaction)
         .await
         .inspect_err(|e| {
@@ -692,5 +716,20 @@ mod resume_append_tests {
             !appended,
             "appending to a non-existent meeting is a no-op false"
         );
+    }
+
+    /// specs/0055 Stage 2 review: a resumed session's word stamps move with its row.
+    #[test]
+    fn word_timestamps_shift_with_the_resume_offset() {
+        let json = r#"[{"w":"hi","s":1.0,"e":1.5}]"#;
+        let shifted = super::offset_word_timestamps(Some(json), 600.0).unwrap();
+        let words: Vec<crate::diarization::split::WordStamp> =
+            serde_json::from_str(&shifted).unwrap();
+        assert!((words[0].start - 601.0).abs() < 1e-3 && (words[0].end - 601.5).abs() < 1e-3);
+        assert_eq!(
+            super::offset_word_timestamps(Some(json), 0.0).as_deref(),
+            Some(json)
+        );
+        assert_eq!(super::offset_word_timestamps(None, 600.0), None);
     }
 }
