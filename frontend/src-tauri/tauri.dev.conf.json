@@ -5,6 +5,9 @@
   "build": {
     "runner": "scripts/cargo-dev-sign.sh"
   },
+  "bundle": {
+    "createUpdaterArtifacts": false
+  },
   "plugins": {
     "deep-link": {
       "desktop": {
