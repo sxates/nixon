@@ -19,11 +19,14 @@ decision is mostly about making the access deliberate, narrow, visible and rever
 Add a **read-only MCP server** that is a mode of the app binary itself, spoken over stdio.
 
 - **Invocation.** `<app exe> --mcp --data-dir <dir> --link-scheme <nixon|nixon-dev>`,
-  launched by Claude Code, not by Nixon. The code is `frontend/src-tauri/src/agent_access/`.
+  launched by Claude Code or the Claude desktop app, not by Nixon. The code is `frontend/src-tauri/src/agent_access/`.
   Production registers as `nixon` with link scheme `nixon`; the dev build (`ai.vinyl.app.debug`)
   registers as `nixon-dev` with `nixon-dev`, so the two never read each other's data (ADR-0004).
-- **Registration.** The Settings switch (off by default) runs `claude mcp add --scope user`.
-  Switching it off removes the registration.
+- **Registration.** The Settings switch (off by default) runs `claude mcp add --scope user`,
+  and, when the Claude desktop app is installed, adds the same command to its chat side's
+  `claude_desktop_config.json` (`mcpServers`). That file belongs to another app, so Nixon keeps
+  every other key, writes via temp file + rename, and leaves a file it can't parse untouched.
+  Switching it off removes both entries; while on, startup re-ensures them.
 - **Gate per call.** `agent_access.json` in the data directory is re-read on every tool call.
   When it says off, the call is refused, so turning the switch off takes effect mid-session
   without restarting the assistant.
@@ -32,7 +35,8 @@ Add a **read-only MCP server** that is a mode of the app binary itself, spoken o
   app's, the tool says to open Nixon once to finish updating.
 - **Access log.** Every call that reaches the gate is recorded (tool, arguments, meetings read)
   in a separate store, `agent_access_log.sqlite`, kept 90 days (pruned when the mode starts).
-  Settings shows it.
+  Settings shows the newest ten; "Open full log" writes the rest to `agent_access_log.txt` in
+  the data directory and opens it.
 - **stdout discipline.** In this mode stdout carries only MCP JSON-RPC. Diagnostics go to stderr.
 - **Prompt-injection hygiene.** Meeting text is wrapped in explicit untrusted-content markers,
   and any copy of the marker phrase inside the text is rewritten first, so meeting text cannot
@@ -59,7 +63,8 @@ Add a **read-only MCP server** that is a mode of the app binary itself, spoken o
   a hostile transcript cannot make Nixon change anything, only mislead the assistant.
 - **No new network surface** in Nixon: the transport is a pipe to a process the assistant starts.
 - Known gaps at ship time:
-  - Visibility of the registration in the Claude Code desktop app is not yet verified (owner
-    smoke pending); the command-line client is the tested path.
+  - Claude desktop only reads its config at launch, so a desktop chat sees the switch's
+    registration change after the user quits and reopens it (the per-call gate still refuses
+    immediately).
   - Tool calls that fail the MCP layer's schema validation are rejected before the gate runs, so
     they are not in the access log. They return an error and read no data.

@@ -3,9 +3,11 @@
 //! types (the MCP server runs outside the app); every function takes the data dir.
 
 pub mod commands;
+pub mod desktop_config;
 pub mod entry;
 pub mod links;
 pub mod log;
+pub mod log_export;
 pub mod queries;
 mod queries_search;
 pub mod register;

@@ -1,4 +1,5 @@
-//! Registering `nixon --mcp` with Claude Code (specs/0087). Everything here is pure or takes
+//! Registering `nixon --mcp` with Claude Code (specs/0087; the desktop chat side is
+//! `desktop_config`). Everything here is pure or takes
 //! an injected runner so tests never call the real `claude`.
 
 use super::settings::{self, AgentAccessSettings};
@@ -103,6 +104,10 @@ pub struct AgentAccessStatus {
     pub server_name: String,
     pub manual_command: String,
     pub last_error: Option<String>,
+    /// Claude desktop's chat side (Amendment A); filled in by `commands`, false/None here.
+    pub desktop_installed: bool,
+    pub desktop_registered: bool,
+    pub desktop_error: Option<String>,
 }
 
 /// Runs `claude` with the given args; `Err` carries a user-readable reason.
@@ -121,6 +126,9 @@ fn status_of(
         server_name: p.server_name.to_string(),
         manual_command: manual_command(p, exe, data_dir),
         last_error: err,
+        desktop_installed: false,
+        desktop_registered: false,
+        desktop_error: None,
     }
 }
 

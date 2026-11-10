@@ -13,6 +13,9 @@ const off = {
   serverName: 'nixon',
   manualCommand: 'claude mcp add nixon -- /Applications/Nixon.app/Contents/MacOS/nixon --mcp',
   lastError: null,
+  desktopInstalled: true,
+  desktopRegistered: false,
+  desktopError: null,
 };
 
 let log: unknown[] = [];
@@ -20,7 +23,7 @@ let setEnabledResult: unknown = { ...off, enabled: true, registered: true };
 
 beforeEach(() => {
   log = [];
-  setEnabledResult = { ...off, enabled: true, registered: true };
+  setEnabledResult = { ...off, enabled: true, registered: true, desktopRegistered: true };
   invoke.mockReset();
   invoke.mockImplementation(async (cmd: string) => {
     if (cmd === 'api_agent_access_status') return off;
@@ -49,7 +52,7 @@ describe('AgentAccessSection', () => {
   it('renders_off_by_default', async () => {
     render(<AgentAccessSection />);
     expect(screen.getByText('Agent access')).toBeInTheDocument();
-    const sw = await screen.findByRole('switch', { name: 'Let Claude Code read your meetings' });
+    const sw = await screen.findByRole('switch', { name: 'Let Claude read your meetings' });
     await waitFor(() => expect(sw).not.toBeDisabled());
     expect(sw).not.toBeChecked();
     expect(screen.getByText(/sent to Anthropic/)).toBeInTheDocument();
@@ -149,5 +152,56 @@ describe('AgentAccessSection', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Clear log' }));
     expect(await screen.findByText('Nothing has read your meetings yet.')).toBeInTheDocument();
     expect(invoke).toHaveBeenCalledWith('api_agent_access_clear_log');
+  });
+
+  it('asks_only_for_the_newest_ten_rows_and_offers_the_full_log', async () => {
+    log = [entry({})];
+    render(<AgentAccessSection />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Open full log' }));
+    expect(invoke).toHaveBeenCalledWith('api_agent_access_log', { limit: 10 });
+    await waitFor(() => expect(invoke).toHaveBeenCalledWith('api_agent_access_open_full_log'));
+  });
+
+  it('no_full_log_link_when_the_log_is_empty', async () => {
+    render(<AgentAccessSection />);
+    await screen.findByText('Nothing has read your meetings yet.');
+    expect(screen.queryByRole('button', { name: 'Open full log' })).not.toBeInTheDocument();
+  });
+
+  it('toggling_tells_you_to_restart_claude_desktop', async () => {
+    render(<AgentAccessSection />);
+    const sw = await screen.findByRole('switch');
+    await waitFor(() => expect(sw).not.toBeDisabled());
+    expect(screen.queryByText(/quit and reopen it/)).not.toBeInTheDocument();
+    fireEvent.click(sw);
+    expect(await screen.findByText(/quit and reopen it/)).toBeInTheDocument();
+  });
+
+  it('no_restart_note_without_claude_desktop', async () => {
+    setEnabledResult = { ...off, enabled: true, registered: true, desktopInstalled: false };
+    render(<AgentAccessSection />);
+    const sw = await screen.findByRole('switch');
+    await waitFor(() => expect(sw).not.toBeDisabled());
+    fireEvent.click(sw);
+    await waitFor(() => expect(screen.getByRole('switch')).toBeChecked());
+    expect(screen.queryByText(/quit and reopen it/)).not.toBeInTheDocument();
+  });
+
+  it('desktop_failure_is_shown_without_blocking_claude_code', async () => {
+    setEnabledResult = {
+      ...off,
+      enabled: true,
+      registered: true,
+      desktopError: 'Claude’s settings file isn’t in a format Nixon understands.',
+    };
+    render(<AgentAccessSection />);
+    const sw = await screen.findByRole('switch');
+    await waitFor(() => expect(sw).not.toBeDisabled());
+    fireEvent.click(sw);
+    expect(
+      await screen.findByText(/Nixon couldn.t add itself to Claude desktop chats\. Claude.s settings file/),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/run this in Terminal/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/quit and reopen it/)).not.toBeInTheDocument();
   });
 });

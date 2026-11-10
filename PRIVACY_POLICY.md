@@ -54,7 +54,7 @@ If you choose to use external LLM providers for summarization:
 - No transmission of sensitive meeting data
 
 ### Agent access (off by default)
-- If you turn on Agent access in Settings, an AI assistant you use, such as Claude Code, can search
+- If you turn on Agent access in Settings, an AI assistant you use (Claude Code or the Claude desktop app) can search
   and read your meetings on request. Whatever it reads is sent to that assistant's provider under
   your own plan. Nixon logs each access, shows the log in Settings, and stops serving the
   assistant the moment you turn the switch off. Access is read-only. See ADR-0018.
