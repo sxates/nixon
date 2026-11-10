@@ -63,6 +63,9 @@ Add a **read-only MCP server** that is a mode of the app binary itself, spoken o
   a hostile transcript cannot make Nixon change anything, only mislead the assistant.
 - **No new network surface** in Nixon: the transport is a pipe to a process the assistant starts.
 - Known gaps at ship time:
+  - Claude desktop chats only make `https://` links clickable, so `nixon://` citations show
+    there as plain text (copy one into the browser's address bar to open it). Claude Code in
+    the terminal is unaffected.
   - Claude desktop only reads its config at launch, so a desktop chat sees the switch's
     registration change after the user quits and reopens it (the per-call gate still refuses
     immediately).
