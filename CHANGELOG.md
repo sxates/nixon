@@ -19,6 +19,10 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 ## [Unreleased]
 
+_(nothing yet)_
+
+## [0.16.1] - 2026-11-10
+
 ### Changed
 
 - **Speaker labels follow who is actually talking.** When you speak right after someone on a call, your first sentence is now credited to you instead of to them, and their words are no longer labelled as yours. Summaries pick up the same attribution, so "who said what" stays right. Run Identify speakers again on an earlier meeting to apply it there.
