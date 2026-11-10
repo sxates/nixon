@@ -147,6 +147,7 @@ pub fn invoke_handler() -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Sen
         agent_access::commands::api_agent_access_set_enabled,
         agent_access::commands::api_agent_access_log,
         agent_access::commands::api_agent_access_clear_log,
+        agent_access::commands::api_agent_access_open_full_log,
         // Subscription CLI providers: detection, Locate... override, Test (specs/0085)
         cli_llm::commands::api_cli_providers_status,
         cli_llm::commands::api_cli_provider_set_path,

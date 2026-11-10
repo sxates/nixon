@@ -2,8 +2,9 @@
 
 /**
  * Settings > General > Agent access (specs/0087). Off by default. When on, Nixon registers
- * itself with Claude Code as a read-only MCP server; every call it answers is listed in
- * the log below so the user can see exactly what was read.
+ * itself as a read-only MCP server with Claude Code and, when it is installed, the Claude
+ * desktop app's chats (Amendment A). The newest calls are listed below; the full 90-day log
+ * opens as a text file.
  */
 
 import { useCallback, useEffect, useState } from 'react';
@@ -20,7 +21,13 @@ interface AgentAccessStatus {
   serverName: string;
   manualCommand: string;
   lastError: string | null;
+  desktopInstalled: boolean;
+  desktopRegistered: boolean;
+  desktopError: string | null;
 }
+
+/** Settings shows only the newest calls; the rest are in the full log file. */
+const RECENT_LIMIT = 10;
 
 interface AccessEntry {
   at: string;
@@ -80,10 +87,12 @@ export function AgentAccessSection() {
   const [status, setStatus] = useState<AgentAccessStatus | null>(null);
   const [log, setLog] = useState<AccessEntry[]>([]);
   const [busy, setBusy] = useState(false);
+  // Claude desktop reads its MCP list at launch, so a change made here needs a restart.
+  const [desktopChanged, setDesktopChanged] = useState(false);
 
   const loadLog = useCallback(async () => {
     try {
-      const rows = await invoke<AccessEntry[]>('api_agent_access_log', { limit: 50 });
+      const rows = await invoke<AccessEntry[]>('api_agent_access_log', { limit: RECENT_LIMIT });
       setLog(Array.isArray(rows) ? rows : []);
     } catch (error) {
       console.error('Failed to load agent access log:', error);
@@ -108,7 +117,9 @@ export function AgentAccessSection() {
   const onToggle = async (next: boolean) => {
     setBusy(true);
     try {
-      setStatus(await invoke<AgentAccessStatus>('api_agent_access_set_enabled', { enabled: next }));
+      const st = await invoke<AgentAccessStatus>('api_agent_access_set_enabled', { enabled: next });
+      setStatus(st);
+      setDesktopChanged(!!st?.desktopInstalled && !st?.desktopError);
     } catch (error) {
       console.error('Failed to change agent access:', error);
       toast.error('Failed to change agent access');
@@ -123,6 +134,15 @@ export function AgentAccessSection() {
       toast.success('Copied');
     } catch {
       toast.error('Could not copy');
+    }
+  };
+
+  const onOpenFullLog = async () => {
+    try {
+      await invoke('api_agent_access_open_full_log');
+    } catch (error) {
+      console.error('Failed to open the full agent access log:', error);
+      toast.error('Could not open the full log');
     }
   };
 
@@ -143,14 +163,14 @@ export function AgentAccessSection() {
     <SettingsSection id="agent-access" title="Agent access">
       <SettingsGroup>
         <SettingsRow
-          label="Let Claude Code read your meetings"
-          description="Claude Code can search and read all of your meetings — transcripts, summaries, notes and action items. It can't change anything. Whatever Claude reads becomes part of your Claude conversation and is sent to Anthropic, like anything else you show Claude."
+          label="Let Claude read your meetings"
+          description="Claude Code and the Claude desktop app can search and read all of your meetings — transcripts, summaries, notes and action items. It can't change anything. Whatever Claude reads becomes part of your Claude conversation and is sent to Anthropic, like anything else you show Claude."
           control={
             <Switch
               checked={enabled}
               disabled={busy || !status}
               onCheckedChange={onToggle}
-              aria-label="Let Claude Code read your meetings"
+              aria-label="Let Claude read your meetings"
             />
           }
         >
@@ -171,6 +191,15 @@ export function AgentAccessSection() {
                 <p className="text-xs text-muted-foreground">{status.lastError}</p>
               ) : null}
             </div>
+          ) : null}
+          {status?.desktopError ? (
+            <p className="text-sm text-foreground">
+              Nixon couldn&rsquo;t add itself to Claude desktop chats. {status.desktopError}
+            </p>
+          ) : desktopChanged ? (
+            <p className="text-sm text-muted-foreground">
+              If the Claude desktop app is open, quit and reopen it so its chats pick up the change.
+            </p>
           ) : null}
         </SettingsRow>
         <div className="py-3">
@@ -225,6 +254,15 @@ export function AgentAccessSection() {
               })}
             </ul>
           )}
+          {log.length > 0 ? (
+            <button
+              type="button"
+              onClick={onOpenFullLog}
+              className="mt-2 text-sm text-primary hover:underline"
+            >
+              Open full log
+            </button>
+          ) : null}
         </div>
       </SettingsGroup>
     </SettingsSection>

@@ -311,6 +311,16 @@ async fn get_meeting_first_page_has_summary_notes_actions() {
     assert!(out.text.contains("Raise pricing for the pro tier"));
     assert!(!out.text.contains("Ask finance"));
     assert!(transcript_lines(&out).is_empty(), "{}", out.text);
+    // Even a summary-only read ends with a citation line, outside the untrusted markers.
+    let (_, after) = out
+        .text
+        .split_once("--- end meeting content ---")
+        .expect("end marker");
+    assert!(
+        after.contains("Cite this meeting as a markdown link to nixon://meeting/m-pricing"),
+        "{}",
+        out.text
+    );
 }
 
 #[tokio::test]

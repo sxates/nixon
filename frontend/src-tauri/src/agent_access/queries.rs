@@ -397,6 +397,11 @@ pub async fn get_meeting(pool: &SqlitePool, scheme: &str, args: GetArgs) -> Resu
     }
 
     let mut text = wrap_content(&body);
+    text.push_str(&format!(
+        "\nCite this meeting as a markdown link to {} when you use it; for an exact moment, \
+         link the ?t= link on the transcript line or search hit instead.",
+        meeting_link(scheme, id)
+    ));
     if let Some(next) = more {
         text.push_str(&format!(
             "\nMore transcript: call get_meeting again with cursor={next}."

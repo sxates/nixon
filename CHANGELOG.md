@@ -21,7 +21,7 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 ### Added
 
-- **Ask Claude Code about your meetings.** Turn on Settings › General › Agent access and Claude Code can search your meetings and read transcripts, summaries and notes, with links that open Nixon at the exact moment something was said.
+- **Ask Claude about your meetings.** Turn on Settings › General › Agent access and Claude Code, or a chat in the Claude desktop app, can search your meetings and read transcripts, summaries and notes, with links that open Nixon at the exact moment something was said. Settings lists the latest ten reads, and the full log is one click away.
 - Links like nixon://meeting/… open Nixon on that meeting, scrolled to the moment.
 
 ### Internal

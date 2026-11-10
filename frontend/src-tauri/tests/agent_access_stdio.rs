@@ -224,6 +224,10 @@ async fn initialize_then_list_tools() {
     let mut s = Server::spawn(dir.path());
     let init = s.handshake();
     assert_eq!(init["result"]["serverInfo"]["name"], "nixon-dev", "{init}");
+    // Clients are told up front to cite meetings as clickable links (desktop chats dropped them).
+    let instr = init["result"]["instructions"].as_str().unwrap_or_default();
+    assert!(instr.contains("markdown link"), "{init}");
+    assert!(instr.contains("nixon-dev://meeting/<id>?t="), "{init}");
     let r = s.request("tools/list", json!({}));
     let tools = r["result"]["tools"].as_array().expect("tools array");
     let mut names: Vec<&str> = tools.iter().map(|t| t["name"].as_str().unwrap()).collect();
