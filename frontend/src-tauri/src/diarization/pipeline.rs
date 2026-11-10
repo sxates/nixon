@@ -43,7 +43,7 @@ use crate::diarization::align::{
 use crate::diarization::models;
 use crate::diarization::room_types::AudioSetup;
 use crate::diarization::segments::load_segments;
-use crate::diarization::split::{split_straddling_rows, SplitMode};
+use crate::diarization::split::SplitMode;
 use crate::diarization::{Diarizer, SherpaDiarizer};
 use crate::state::AppState;
 
@@ -651,6 +651,22 @@ pub async fn attribute_and_persist(
     embeddings: &std::collections::HashMap<String, Vec<f32>>,
     setup: AudioSetup,
 ) -> Result<(usize, usize)> {
+    attribute_and_persist_with_timeline(pool, meeting_id, turns, embeddings, setup, None).await
+}
+
+/// [`attribute_and_persist`] with the call's channel timeline (specs/0055 Stage 2).
+/// With a timeline, rows are first cut at owner<->remote handoffs on it; the turn
+/// split then runs exactly as before (owner turns still cut mic rows the channel
+/// split left whole), and parts it already cut plan no further owner split. Without
+/// one (no channel files, room mode) only the turn split runs.
+pub async fn attribute_and_persist_with_timeline(
+    pool: &sqlx::SqlitePool,
+    meeting_id: &str,
+    turns: &[crate::diarization::SpeakerTurn],
+    embeddings: &std::collections::HashMap<String, Vec<f32>>,
+    setup: AudioSetup,
+    timeline: Option<&crate::diarization::channel_split::ChannelTimeline>,
+) -> Result<(usize, usize)> {
     super::cancel::ensure_live(pool, meeting_id).await?; // specs/0084 W2: before any write
     let room = setup.owner_is_clustered();
     let (split_mode, align_mode) = if room {
@@ -658,7 +674,24 @@ pub async fn attribute_and_persist(
     } else {
         (SplitMode::Call, AlignMode::Call)
     };
-    if let Err(e) = split_straddling_rows(pool, meeting_id, turns, split_mode).await {
+    if let Some(timeline) = timeline.filter(|_| !room) {
+        if let Err(e) =
+            crate::diarization::channel_split::split_rows_by_channel(pool, meeting_id, timeline)
+                .await
+        {
+            log::warn!("diarization channel split failed for {meeting_id} (continuing): {e:#}");
+        }
+    }
+    let call_timeline = timeline.filter(|_| !room);
+    if let Err(e) = crate::diarization::split::split_straddling_rows_with_timeline(
+        pool,
+        meeting_id,
+        turns,
+        split_mode,
+        call_timeline,
+    )
+    .await
+    {
         log::warn!("diarization split failed for {meeting_id} (continuing unsplit): {e:#}");
     }
 
@@ -791,7 +824,7 @@ pub(super) async fn run<R: Runtime>(
     // Call: the owner is the mic channel; inject its turns so split can cut owner<->remote
     // rows. Room (specs/0078): the owner is one of the clusters; find it and re-key it to
     // `local` before split/align.
-    let (owner, owner_clip) = if setup.owner_is_clustered() {
+    let (owner, owner_clip, timeline) = if setup.owner_is_clustered() {
         let owner = crate::diarization::room::label_owner_cluster(
             pool,
             &meeting_id,
@@ -800,18 +833,25 @@ pub(super) async fn run<R: Runtime>(
             &corroborating_emails,
         )
         .await;
-        (owner, None)
+        (owner, None, None)
     } else {
-        let clip =
+        let (clip, timeline) =
             crate::diarization::owner_turns::inject_owner_turns(pool, &meeting_id, &mut turns)
                 .await;
-        (None, clip)
+        (None, clip, timeline)
     };
     drop(folder_lease); // the last audio read is done
     super::cancel::check(&meeting_id)?;
 
-    let (persisted_count, segment_count) =
-        attribute_and_persist(pool, &meeting_id, &turns, &embeddings, setup).await?;
+    let (persisted_count, segment_count) = attribute_and_persist_with_timeline(
+        pool,
+        &meeting_id,
+        &turns,
+        &embeddings,
+        setup,
+        timeline.as_ref(),
+    )
+    .await?;
     log::info!(
         "Diarization complete for meeting {meeting_id}: {persisted_count} speakers across \
          {segment_count} segments ({} pass)",

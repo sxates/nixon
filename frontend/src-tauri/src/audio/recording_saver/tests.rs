@@ -91,6 +91,7 @@ fn tseg(sequence_id: u64, text: &str) -> TranscriptSegment {
         confidence: 1.0,
         sequence_id,
         channel: Some("microphone".to_string()),
+        word_timestamps: None,
     }
 }
 

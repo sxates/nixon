@@ -34,7 +34,7 @@ pub fn session_segments(stored: &[StoredSegment]) -> Vec<TranscriptSegment> {
             duration: Some(s.duration),
             speaker: (s.channel.as_deref() == Some("microphone")).then(|| "local".to_string()),
             channel: s.channel.clone(),
-            word_timestamps: None,
+            word_timestamps: s.word_timestamps.clone(),
         })
         .collect()
 }
@@ -209,6 +209,7 @@ mod tests {
             confidence: 0.9,
             sequence_id: seq,
             channel: channel.map(str::to_string),
+            word_timestamps: None,
         }
     }
 
@@ -227,5 +228,17 @@ mod tests {
         assert_eq!(out[0].speaker.as_deref(), Some("local"));
         assert_eq!(out[0].channel.as_deref(), Some("microphone"));
         assert_eq!(out[2].speaker, None);
+    }
+
+    /// specs/0055 Stage 2: the live per-word stamps reach the saved row, so the offline
+    /// pass can cut it word-exactly instead of by character proportion.
+    #[test]
+    fn segments_carry_live_word_timestamps() {
+        let words = r#"[{"w":"hi","s":0.1,"e":0.3}]"#.to_string();
+        let out = session_segments(&[StoredSegment {
+            word_timestamps: Some(words.clone()),
+            ..stored(1, 0.0, "hi there", Some("mixed"))
+        }]);
+        assert_eq!(out[0].word_timestamps, Some(words));
     }
 }

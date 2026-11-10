@@ -21,6 +21,16 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 _(nothing yet)_
 
+## [0.16.1] - 2026-11-10
+
+### Changed
+
+- **Speaker labels follow who is actually talking.** When you speak right after someone on a call, your first sentence is now credited to you instead of to them, and their words are no longer labelled as yours. Summaries pick up the same attribution, so "who said what" stays right. Run Identify speakers again on an earlier meeting to apply it there.
+
+### Internal
+
+- specs/0055 Stage 2: stored rows are cut on the mic/system channel timeline before speaker attribution (`diarization/channel_split.rs`); live Parakeet rows now keep word timestamps (offset on resume); `tests/attribution_onset_eval.rs` onset eval.
+
 ## [0.16.0] - 2026-11-09
 
 ### Added

@@ -207,6 +207,9 @@ struct FolderSegment {
     display_time: Option<String>,
     #[serde(default)]
     channel: Option<String>,
+    /// Live per-word stamps (specs/0055 Stage 2), recording-relative.
+    #[serde(default)]
+    word_timestamps: Option<String>,
 }
 
 /// Read + map a folder's `transcripts.json` segments into API transcript segments
@@ -242,8 +245,9 @@ pub(crate) fn load_folder_transcript_segments(
             duration: s.duration,
             speaker: None,
             channel: s.channel,
-            // transcripts.json (write_transcripts_json) never carries word_timestamps.
-            word_timestamps: None,
+            // Live recordings carry per-word stamps since specs/0055 Stage 2; older
+            // folders (and write_transcripts_json) leave this None.
+            word_timestamps: s.word_timestamps,
         })
         .collect()
 }

@@ -199,7 +199,7 @@ pub fn start_transcription_task<R: Runtime>(
                             match transcribe_chunk_with_provider(&engine_clone, chunk, &app_clone)
                                 .await
                             {
-                                Ok((transcript, confidence_opt, is_partial)) => {
+                                Ok((transcript, confidence_opt, is_partial, words)) => {
                                     // Provider-aware confidence threshold
                                     let confidence_threshold = match &engine_clone {
                                         TranscriptionEngine::Whisper(_)
@@ -290,6 +290,13 @@ pub fn start_transcription_task<R: Runtime>(
                                             // pipeline's per-window RMS dominance.
                                             channel: channel.map(|c| c.as_str().to_string()),
                                             channel_runs: channel_runs.clone(), // specs/0055
+                                            // specs/0055 Stage 2: recording-relative stamps.
+                                            word_timestamps: words.as_deref().map(|w| {
+                                                crate::audio::common::serialize_word_timestamps(
+                                                    w,
+                                                    chunk_timestamp as f32,
+                                                )
+                                            }),
                                         };
 
                                         if let Err(e) = app_clone.emit("transcript-update", &update)
@@ -614,13 +621,21 @@ fn emit_chunk_skipped<R: Runtime>(
     }
 }
 
+/// One transcribed chunk: (text, confidence, is_partial, segment-relative word stamps).
+type ChunkTranscript = (
+    String,
+    Option<f32>,
+    bool,
+    Option<Vec<crate::parakeet_engine::WordStamp>>,
+);
+
 /// Transcribe audio chunk using the appropriate provider (Whisper, Parakeet, or trait-based)
-/// Returns: (text, confidence Option, is_partial)
+/// Returns: (text, confidence Option, is_partial, segment-relative word stamps — Parakeet only)
 async fn transcribe_chunk_with_provider<R: Runtime>(
     engine: &TranscriptionEngine,
     chunk: AudioChunk,
     app: &AppHandle<R>,
-) -> std::result::Result<(String, Option<f32>, bool), TranscriptionError> {
+) -> std::result::Result<ChunkTranscript, TranscriptionError> {
     // Convert to 16kHz mono for transcription
     let transcription_data = if chunk.sample_rate != 16000 {
         crate::audio::audio_processing::resample_audio(&chunk.data, chunk.sample_rate, 16000)
@@ -666,7 +681,7 @@ async fn transcribe_chunk_with_provider<R: Runtime>(
                 Ok((text, confidence, is_partial)) => {
                     let cleaned_text = text.trim().to_string();
                     if cleaned_text.is_empty() {
-                        return Ok((String::new(), Some(confidence), is_partial));
+                        return Ok((String::new(), Some(confidence), is_partial, None));
                     }
 
                     // PRIVACY (specs/0028): length only at info!; content dev-only.
@@ -676,7 +691,7 @@ async fn transcribe_chunk_with_provider<R: Runtime>(
                     );
                     perf_debug!("Whisper chunk {} text: '{}'", chunk.chunk_id, cleaned_text);
 
-                    Ok((cleaned_text, Some(confidence), is_partial))
+                    Ok((cleaned_text, Some(confidence), is_partial, None))
                 }
                 Err(e) => {
                     error!(
@@ -699,11 +714,16 @@ async fn transcribe_chunk_with_provider<R: Runtime>(
             }
         }
         TranscriptionEngine::Parakeet(parakeet_engine) => {
-            match parakeet_engine.transcribe_audio(speech_samples).await {
-                Ok(text) => {
-                    let cleaned_text = text.trim().to_string();
+            // specs/0055 Stage 2: the timestamped entry point is the same decode with
+            // the token timings kept, so the saved row can be cut word-exactly.
+            match parakeet_engine
+                .transcribe_audio_timestamped(speech_samples)
+                .await
+            {
+                Ok(transcribed) => {
+                    let cleaned_text = transcribed.text.trim().to_string();
                     if cleaned_text.is_empty() {
-                        return Ok((String::new(), None, false));
+                        return Ok((String::new(), None, false, None));
                     }
 
                     // PRIVACY (specs/0028): length only at info!; content dev-only.
@@ -715,7 +735,7 @@ async fn transcribe_chunk_with_provider<R: Runtime>(
                     perf_debug!("Parakeet chunk {} text: '{}'", chunk.chunk_id, cleaned_text);
 
                     // Parakeet doesn't provide confidence or partial results
-                    Ok((cleaned_text, None, false))
+                    Ok((cleaned_text, None, false, Some(transcribed.words)))
                 }
                 Err(e) => {
                     error!(
@@ -745,7 +765,7 @@ async fn transcribe_chunk_with_provider<R: Runtime>(
                 Ok(result) => {
                     let cleaned_text = result.text.trim().to_string();
                     if cleaned_text.is_empty() {
-                        return Ok((String::new(), result.confidence, result.is_partial));
+                        return Ok((String::new(), result.confidence, result.is_partial, None));
                     }
 
                     let confidence_str = match result.confidence {
@@ -769,7 +789,7 @@ async fn transcribe_chunk_with_provider<R: Runtime>(
                         cleaned_text
                     );
 
-                    Ok((cleaned_text, result.confidence, result.is_partial))
+                    Ok((cleaned_text, result.confidence, result.is_partial, None))
                 }
                 Err(e) => {
                     error!(

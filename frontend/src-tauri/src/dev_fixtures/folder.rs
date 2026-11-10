@@ -62,6 +62,7 @@ pub fn write_folder(m: &FixtureMeeting, root: &Path, start: DateTime<Utc>) -> Re
             confidence: 0.95,
             sequence_id: i as u64,
             channel: Some(s.channel.clone()),
+            word_timestamps: None,
         })
         .collect();
     let tj = serde_json::json!({

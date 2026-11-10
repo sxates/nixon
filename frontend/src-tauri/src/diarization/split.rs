@@ -60,6 +60,9 @@ pub struct SplitPart {
     /// which is what lets align.rs label both sides of an owner↔remote boundary
     /// correctly (spec 0046 W1.3).
     pub channel: Option<String>,
+    /// This part's own word stamps (recording-relative), so a later cut — the turn
+    /// split after the channel split, or a re-run — stays word-exact (specs/0055 Stage 2).
+    pub words: Option<Vec<WordStamp>>,
 }
 
 /// A single word's timing, deserialized from a row's `word_timestamps` JSON
@@ -68,7 +71,7 @@ pub struct SplitPart {
 /// wire shape `[{"w":"word","s":1.23,"e":1.45}, ...]`; the field renames here
 /// deserialize that shape symmetrically. `None` rows (Whisper-transcribed or
 /// legacy, no per-word timing) fall back to char-proportional apportioning.
-#[derive(Debug, Clone, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct WordStamp {
     #[serde(rename = "w")]
     pub text: String,
@@ -173,71 +176,111 @@ pub fn plan_split(
         boundaries.push(b);
     }
 
-    // Apportion text at each boundary: word-exact when `words` is available,
-    // else the original char-proportional whitespace-snap fallback.
-    let cut_bytes: Vec<(usize, usize)> = if let Some(words) = words {
-        let mut cuts: Vec<usize> = Vec::new();
-        for &b in &boundaries {
-            let cut = word_cut_byte(text, words, b);
-            if cuts.last().is_some_and(|&prev| cut <= prev) {
+    let pieces = cut_at_times(start, end, text, &boundaries, words)?;
+    let mut parts: Vec<SplitPart> = Vec::new();
+    let mut t_prev = start;
+    for (i, piece) in pieces.into_iter().enumerate() {
+        let t_next = boundaries.get(i).copied().unwrap_or(end);
+        parts.push(SplitPart {
+            start: t_prev,
+            end: t_next,
+            text: piece.text,
+            channel: part_channels[i].clone(),
+            words: piece.words,
+        });
+        t_prev = t_next;
+    }
+    Some(parts)
+}
+
+/// One text slice from [`cut_at_times`], with its own word stamps when known.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct TextPiece {
+    pub text: String,
+    /// The slice's word stamps; `None` when the row had none, or when its stamps
+    /// didn't line up 1:1 with its words (then a slice could misattribute timing).
+    pub words: Option<Vec<WordStamp>>,
+}
+
+/// Cut a row's `text` at the strictly increasing boundary TIMES `boundaries`
+/// (recording-relative seconds inside `[start, end]`), returning
+/// `boundaries.len() + 1` trimmed, non-empty pieces — or `None` when any piece would
+/// be empty or two boundaries snap to the same cut (conservative: keep the row whole).
+///
+/// Word-exact when `words` is available (cut before the first word starting at/after
+/// the boundary); otherwise char-proportional with a whitespace snap. Shared by the
+/// turn split here and the channel split (specs/0055 Stage 2).
+pub(crate) fn cut_at_times(
+    start: f32,
+    end: f32,
+    text: &str,
+    boundaries: &[f32],
+    words: Option<&[WordStamp]>,
+) -> Option<Vec<TextPiece>> {
+    // Word-exact cutting (and slicing) needs stamps that line up 1:1 with the text's
+    // words; otherwise every cut after a mismatch would land a word off, so fall back
+    // to char-proportional instead (specs/0055 Stage 2 review).
+    let words = words.filter(|w| w.len() == word_byte_ranges(text).len());
+    // (cut byte start, cut byte end, word index of the next piece's first word)
+    let cuts: Vec<(usize, usize, usize)> = if let Some(words) = words {
+        let mut cuts: Vec<(usize, usize, usize)> = Vec::new();
+        for &b in boundaries {
+            let (cut, idx) = word_cut(text, words, b);
+            if cuts.last().is_some_and(|&(prev, _, _)| cut <= prev) {
                 return None; // two boundaries snapped to the same word edge
             }
-            cuts.push(cut);
+            cuts.push((cut, cut, idx));
         }
-        cuts.into_iter().map(|c| (c, c)).collect()
+        cuts
     } else {
         // Whitespace candidates: (byte start, byte end) per whitespace run.
         let ws_runs: Vec<(usize, usize)> = whitespace_runs(text);
-        if ws_runs.len() < boundaries.len() {
+        if ws_runs.len() < boundaries.len() || end <= start {
             return None;
         }
         let total = end - start;
-        let mut cut_bytes: Vec<(usize, usize)> = Vec::new();
-        for &b in &boundaries {
+        let mut cuts: Vec<(usize, usize, usize)> = Vec::new();
+        for &b in boundaries {
             let frac = ((b - start) / total).clamp(0.0, 1.0);
             let target = (text.len() as f32 * frac) as usize;
             let &nearest = ws_runs
                 .iter()
                 .min_by_key(|(s, _)| s.abs_diff(target))
                 .expect("ws_runs non-empty");
-            if cut_bytes.last().is_some_and(|&prev| nearest.0 <= prev.0) {
+            if cuts.last().is_some_and(|&(prev, _, _)| nearest.0 <= prev) {
                 return None; // two boundaries snapped to the same gap — too dense
             }
-            cut_bytes.push(nearest);
+            cuts.push((nearest.0, nearest.1, 0));
         }
-        cut_bytes
+        cuts
     };
 
-    // Assemble parts; any empty text cancels the whole split (conservative).
-    let mut parts: Vec<SplitPart> = Vec::new();
-    let mut t_prev = start;
+    let aligned_words = words;
+
+    let mut pieces: Vec<TextPiece> = Vec::new();
     let mut b_prev = 0usize;
-    for (i, &(cut_s, cut_e)) in cut_bytes.iter().enumerate() {
-        let t_next = boundaries[i];
+    let mut w_prev = 0usize;
+    for &(cut_s, cut_e, w_next) in &cuts {
         let piece = text[b_prev..cut_s].trim();
         if piece.is_empty() {
             return None;
         }
-        parts.push(SplitPart {
-            start: t_prev,
-            end: t_next,
+        pieces.push(TextPiece {
             text: piece.to_string(),
-            channel: part_channels[i].clone(),
+            words: aligned_words.map(|w| w[w_prev..w_next.max(w_prev)].to_vec()),
         });
-        t_prev = t_next;
         b_prev = cut_e;
+        w_prev = w_next;
     }
     let tail = text[b_prev..].trim();
     if tail.is_empty() {
         return None;
     }
-    parts.push(SplitPart {
-        start: t_prev,
-        end,
+    pieces.push(TextPiece {
         text: tail.to_string(),
-        channel: part_channels[cut_bytes.len()].clone(),
+        words: aligned_words.map(|w| w[w_prev.min(w.len())..].to_vec()),
     });
-    Some(parts)
+    Some(pieces)
 }
 
 /// Byte ranges of each maximal whitespace run in `text` (UTF-8 safe: whitespace
@@ -296,14 +339,16 @@ fn word_byte_ranges(text: &str) -> Vec<(usize, usize)> {
 /// midpoint that lands mid-word): the whole word goes to the next part rather
 /// than being split or dropped. If no word starts at/after `b` (the boundary
 /// is at or beyond the last word), cut at the end of `text`; the caller's
-/// empty-tail check then conservatively cancels the split.
-fn word_cut_byte(text: &str, words: &[WordStamp], b: f32) -> usize {
+/// empty-tail check then conservatively cancels the split. Returns the cut byte and
+/// the index of the word the cut lands before.
+fn word_cut(text: &str, words: &[WordStamp], b: f32) -> (usize, usize) {
     word_byte_ranges(text)
         .iter()
         .zip(words.iter())
-        .find(|(_, w)| w.start >= b)
-        .map(|(&(s, _), _)| s)
-        .unwrap_or(text.len())
+        .enumerate()
+        .find(|(_, (_, w))| w.start >= b)
+        .map(|(i, (&(s, _), _))| (s, i))
+        .unwrap_or((text.len(), words.len()))
 }
 
 /// Where the owner's voice is, for [`split_straddling_rows`] (specs/0078).
@@ -325,6 +370,21 @@ pub async fn split_straddling_rows(
     meeting_id: &str,
     turns: &[SpeakerTurn],
     mode: SplitMode,
+) -> Result<usize> {
+    split_straddling_rows_with_timeline(pool, meeting_id, turns, mode, None).await
+}
+
+/// [`split_straddling_rows`], after the channel split (specs/0055 Stage 2): a mic row
+/// the `timeline` puts wholly on one side is left alone — the channel cut already
+/// decided it, and the owner turns (mic VAD, 2 s redemption) are too coarse to improve
+/// on it. Mic rows the channel split wanted to cut but couldn't still get the
+/// owner-turn split as a backstop.
+pub async fn split_straddling_rows_with_timeline(
+    pool: &sqlx::SqlitePool,
+    meeting_id: &str,
+    turns: &[SpeakerTurn],
+    mode: SplitMode,
+    timeline: Option<&crate::diarization::channel_split::ChannelTimeline>,
 ) -> Result<usize> {
     if turns.is_empty() {
         return Ok(0);
@@ -380,6 +440,14 @@ pub async fn split_straddling_rows(
             // rows are single-speaker by construction, stay whole).
             continue;
         }
+        if is_mic_row
+            && !room
+            && timeline.is_some_and(|tl| {
+                crate::diarization::channel_split::is_single_side(start as f32, end as f32, tl)
+            })
+        {
+            continue;
+        }
         // specs/0047 W2: owner turns refine only the owner's OWN (mic-tagged) rows.
         // For a system/mixed row, a "local" turn is either mic-bleed of the remote
         // voice (owner on speakers) or an RMS/turn disagreement; carving the row at
@@ -430,19 +498,45 @@ pub async fn split_straddling_rows(
         return Ok(0);
     }
 
+    apply_splits(pool, meeting_id, &planned).await?;
+    log::info!(
+        "diarization split: {} straddling row(s) split for meeting {meeting_id}",
+        planned.len()
+    );
+    Ok(planned.len())
+}
+
+/// Serialize a part's word stamps to the stored compact shape, `None` when absent.
+fn words_json(words: &Option<Vec<WordStamp>>) -> Option<String> {
+    words
+        .as_ref()
+        .filter(|w| !w.is_empty())
+        .and_then(|w| serde_json::to_string(w).ok())
+}
+
+/// Write planned splits in one transaction: each row's first part UPDATEs the original
+/// row (keeping its id, so FTS stays coherent via the `AFTER UPDATE OF transcript`
+/// trigger) and later parts INSERT new rows. `planned` is `(row id, row timestamp,
+/// parts)`. Shared by the turn split and the channel split (specs/0055 Stage 2).
+pub(crate) async fn apply_splits(
+    pool: &sqlx::SqlitePool,
+    meeting_id: &str,
+    planned: &[(String, String, Vec<SplitPart>)],
+) -> Result<()> {
     let mut tx = pool.begin().await.context("begin split transaction")?;
-    for (id, timestamp, parts) in &planned {
+    for (id, timestamp, parts) in planned {
         let first = &parts[0];
         sqlx::query(
             "UPDATE transcripts
              SET transcript = ?, audio_end_time = ?, duration = ?, channel = ?,
-                 word_timestamps = NULL
+                 word_timestamps = ?
              WHERE id = ?",
         )
         .bind(&first.text)
         .bind(first.end as f64)
         .bind((first.end - first.start) as f64)
         .bind(&first.channel)
+        .bind(words_json(&first.words))
         .bind(id)
         .execute(&mut *tx)
         .await
@@ -452,8 +546,8 @@ pub async fn split_straddling_rows(
             sqlx::query(
                 "INSERT INTO transcripts
                      (id, meeting_id, transcript, timestamp, audio_start_time,
-                      audio_end_time, duration, channel)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                      audio_end_time, duration, channel, word_timestamps)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
             )
             .bind(format!("transcript-{}", uuid::Uuid::new_v4()))
             .bind(meeting_id)
@@ -463,18 +557,14 @@ pub async fn split_straddling_rows(
             .bind(part.end as f64)
             .bind((part.end - part.start) as f64)
             .bind(&part.channel)
+            .bind(words_json(&part.words))
             .execute(&mut *tx)
             .await
             .context("insert split part")?;
         }
     }
     tx.commit().await.context("commit split transaction")?;
-
-    log::info!(
-        "diarization split: {} straddling row(s) split for meeting {meeting_id}",
-        planned.len()
-    );
-    Ok(planned.len())
+    Ok(())
 }
 
 #[cfg(test)]

@@ -41,4 +41,9 @@ pub struct TranscriptUpdate {
     // instead of taking `channel`'s lossy whole-row verdict.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub channel_runs: Vec<ChannelRun>,
+    // specs/0055 Stage 2: Parakeet's per-word stamps, recording-relative compact JSON
+    // (`[{"w","s","e"}, ..]`), carried into the saved row so the offline pass can cut
+    // it word-exactly. `None` for engines without word timings.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub word_timestamps: Option<String>,
 }
