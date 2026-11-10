@@ -299,6 +299,23 @@ publish_release_json() { # version dmg-bytes
 #RELEASE_JSON_FN_END
 RELEASE_JSON_WARN="⚠️  Could not push release.json to the site repo (it must be checked out on branch main); the page will show the old version until you do."
 
+# ---- screenshot_reminder <since-tag> (specs/0060) ---------------------------
+# Non-blocking nudge to refresh docs/screenshots/real when they are missing or older than
+# <since-tag>. Every substitution falls back with `|| true`/`:-0` so this can never trip
+# `set -euo pipefail` on a fresh repo with no prior tag or no screenshots yet.
+screenshot_reminder() {
+  local since="$1" newest_raw newest_ts since_ts
+  [ -n "$since" ] || return 0
+  git rev-parse -q --verify "refs/tags/$since" >/dev/null 2>&1 || return 0
+  newest_raw="$(find "$REPO_ROOT/docs/screenshots/real" -name '*.png' -exec stat -f %m {} \; 2>/dev/null | sort -rn | head -1 || true)"
+  newest_ts="${newest_raw:-0}"
+  since_ts="$(git log -1 --format=%ct "$since" 2>/dev/null || true)"
+  since_ts="${since_ts:-0}"
+  if [ -z "$newest_raw" ] || [ "$newest_ts" -le "$since_ts" ]; then
+    c_yellow "ℹ️  docs/screenshots/real is missing or older than ${since} — run pnpm shots:real to refresh the README images before this version reaches everyone."
+  fi
+}
+
 # ---- promote X.Y.Z (specs/0086) -------------------------------------------
 # Gives an existing early build to everyone. Builds, signs and commits nothing; every
 # preflight check is read-only and runs in --dry-run too. Writes, in order:
@@ -510,20 +527,13 @@ run "git add '$PKG_JSON' '$TAURI_CONF' '$CARGO_TOML' '$CARGO_LOCK' '$CHANGELOG'"
 run "git commit -m 'release: v${NEW}'"
 
 # ---- screenshot freshness reminder (specs/0060) ---------------------------
-# Non-blocking nudge to refresh docs/screenshots/real before cutting a release. This must
-# run BEFORE the new tag is created below: comparing against a tag this same run just cut
-# always looks "stale" (it's seconds old), so compare against the tag this release
-# supersedes instead. Every substitution falls back with `|| true`/`:-0` so this can never
-# trip `set -euo pipefail` on a fresh repo with no prior tag or no screenshots yet.
-PREV_TAG="$(git describe --tags --abbrev=0 HEAD 2>/dev/null || true)"
-if [ -n "$PREV_TAG" ]; then
-  NEWEST_PNG_RAW="$(find "$REPO_ROOT/docs/screenshots/real" -name '*.png' -exec stat -f %m {} \; 2>/dev/null | sort -rn | head -1 || true)"
-  NEWEST_PNG_TS="${NEWEST_PNG_RAW:-0}"
-  PREV_TAG_TS="$(git log -1 --format=%ct "$PREV_TAG" 2>/dev/null || true)"
-  PREV_TAG_TS="${PREV_TAG_TS:-0}"
-  if [ -z "$NEWEST_PNG_RAW" ] || [ "$NEWEST_PNG_TS" -le "$PREV_TAG_TS" ]; then
-    c_yellow "ℹ️  docs/screenshots/real is missing or older than ${PREV_TAG} — run pnpm shots:real to refresh the README images before releasing."
-  fi
+# Only when a version reaches everyone: a normal release here, and promote (which calls
+# screenshot_reminder itself). Early releases never nudge — README images track the
+# everyone track. It runs BEFORE the new tag is created below: comparing against a tag
+# this same run just cut always looks "stale" (it's seconds old), so compare against the
+# tag this release supersedes instead.
+if [ "$EARLY" -eq 0 ]; then
+  screenshot_reminder "$(git describe --tags --abbrev=0 HEAD 2>/dev/null || true)"
 fi
 
 # ---- build the production DMG ----------------------------------------------

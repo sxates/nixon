@@ -247,6 +247,10 @@ R2_FAIL_NEXT="the site release.json and the GitHub steps"
 R2_FAIL_TAIL="     update ${NIXON_SITE_DIR}/public/release.json (version ${P}, size ${DMG_BYTES:-<dmg bytes>})
 ${GH_STEPS}"
 
+# README images track the everyone track (specs/0060): nudge against the version everyone
+# has now, since early releases deliberately never did.
+screenshot_reminder "v${LIVE_LATEST}"   # no-op when that tag is unknown
+
 if [ "$ASSUME_YES" -eq 0 ] && [ "$DRY_RUN" -eq 0 ]; then
   printf '\nAbout to advertise %s to EVERYONE (updates/latest.json) and make it the latest GitHub release. Continue? [y/N] ' "$PTAG"
   read -r ans || true
