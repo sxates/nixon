@@ -23,6 +23,10 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 - When a meeting ends while you're watching its live transcript, Nixon now opens that meeting's summary. If you're on any other page, you stay where you are.
 
+### Fixed
+
+- **Open Settings** in the recording permissions dialog and in onboarding takes you straight to the right page of System Settings: Microphone, Screen & System Audio Recording, or Calendars.
+
 ### Internal
 
 - Releases and promotes now update nixonapp.com end to end via `scripts/publish-site.sh`: download-page version, site screenshots from `docs/screenshots/real`, push on `NIXON_SITE_BRANCH`, and deploy of production + staging. Re-runnable by hand.
