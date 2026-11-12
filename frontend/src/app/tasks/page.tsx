@@ -331,7 +331,9 @@ export default function TasksPage() {
           />
 
           {/* WS1.c — top-level view: Mine / Everyone, the same SegmentedControl as status
-              (one segmented style on the page). A person filter leaves neither pressed. */}
+              (one segmented style on the page). A person filter leaves neither pressed. A
+              hairline divides the two switches, or they read as one five-way control. */}
+          <span aria-hidden="true" className="mx-1 h-5 w-px bg-border" />
           <SegmentedControl
             aria-label="Whose items"
             options={WHOSE_SEGMENTS}
