@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { ListChecks } from 'lucide-react';
 import { AnswerMarkdown } from '@/components/AskAI/AnswerMarkdown';
 import { safeListen } from '@/lib/safe-listen';
 import type { PrepNotes } from '@/lib/prep';
@@ -38,10 +37,7 @@ export function RecordAgendaPanel({ meetingId }: { meetingId: string }) {
 
   return (
     <div className="flex max-h-[38%] flex-shrink-0 flex-col overflow-hidden border-b border-border bg-muted/40">
-      <div className="flex items-center gap-1.5 px-5 pt-3 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-        <ListChecks size={12} aria-hidden="true" />
-        Agenda — what you planned to cover
-      </div>
+      <h2 className="u-section-label px-5 pt-3">Agenda — what you planned to cover</h2>
       <div className="min-h-0 overflow-y-auto px-5 pb-3 pt-1.5">
         <AnswerMarkdown markdown={markdown} sources={[]} />
       </div>

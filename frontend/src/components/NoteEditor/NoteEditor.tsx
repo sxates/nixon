@@ -2,6 +2,7 @@
 
 import { useCallback, useRef } from 'react';
 
+import { Button } from '@/components/ui/button';
 import { sanitizeEditorHtml } from '@/lib/notes-html';
 
 /**
@@ -99,22 +100,20 @@ export function NoteEditor({
       {(label || showToolbar) && (
         <div className="flex items-center justify-between px-1 pb-2">
           {label ? (
-            <span className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-              {label}
-            </span>
+            <span className="u-section-label">{label}</span>
           ) : (
             <span />
           )}
           {showToolbar && (
             <div className="flex items-center gap-0.5">
               <ToolbarButton title="Bold" onMouseDown={cmd('bold')}>
-                <span className="text-[13px] font-bold">B</span>
+                <span className="text-meta font-bold">B</span>
               </ToolbarButton>
               <ToolbarButton title="Italic" onMouseDown={cmd('italic')}>
-                <span className="font-display text-[13px] italic">i</span>
+                <span className="font-display text-meta italic">i</span>
               </ToolbarButton>
               <ToolbarButton title="Heading" onMouseDown={cmd('formatBlock', 'h3')}>
-                <span className="text-[12px] font-bold">H</span>
+                <span className="text-xs font-bold">H</span>
               </ToolbarButton>
               <ToolbarButton title="Bulleted list" onMouseDown={cmd('insertUnorderedList')}>
                 <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden>
@@ -139,7 +138,7 @@ export function NoteEditor({
         role="textbox"
         aria-multiline="true"
         aria-label="Meeting notes"
-        className={`note-editor min-h-0 flex-1 overflow-y-auto text-[14px] leading-[1.65] text-foreground ${bodyClassName}`}
+        className={`note-editor min-h-0 flex-1 overflow-y-auto text-sm leading-[1.65] text-foreground ${bodyClassName}`}
       />
     </div>
   );
@@ -155,13 +154,15 @@ function ToolbarButton({
   children: React.ReactNode;
 }) {
   return (
-    <button
+    <Button
       type="button"
+      variant="ghost"
+      size="icon-sm"
       title={title}
       onMouseDown={onMouseDown}
-      className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+      className="text-muted-foreground hover:text-foreground"
     >
       {children}
-    </button>
+    </Button>
   );
 }
