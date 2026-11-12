@@ -23,7 +23,10 @@ use sqlx::{Error as SqlxError, FromRow, SqlitePool};
 use uuid::Uuid;
 
 use crate::action_items::diff::{ExtractionDiff, ResolvedCandidate};
+use crate::action_items::merge::SourceAttach;
 use crate::action_items::triage::triage_for;
+
+use super::action_item_todo::{apply_sources_in_tx, delete_or_detach_in_tx};
 
 /// One action item, serialized camelCase for the frontend.
 #[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
@@ -490,10 +493,12 @@ impl ActionItemsRepository {
     /// (`source = 'extracted' AND status = 'open' AND user_edited = 0`) in its WHERE
     /// clause: a row the user touched in that window is silently skipped (the user won
     /// the race), never overwritten.
+    #[allow(clippy::too_many_arguments)] // one atomic write-shape; a struct would just rename it
     pub async fn replace_extracted(
         pool: &SqlitePool,
         meeting_id: &str,
         diff: &ExtractionDiff,
+        attaches: &[SourceAttach],
         summary_fingerprint: &str,
         model_provider: &str,
         model_name: &str,
@@ -514,19 +519,13 @@ impl ActionItemsRepository {
         }
 
         for id in &diff.delete_ids {
-            // meeting_id guard: the diff was computed from this meeting's rows only, but
-            // never let a stale plan delete another meeting's item. Pristine guard: only
-            // machine-owned rows are deletable (see doc above).
-            sqlx::query(
-                "DELETE FROM action_items
-                 WHERE id = ? AND meeting_id = ?
-                   AND source = 'extracted' AND status = 'open' AND user_edited = 0",
-            )
-            .bind(id)
-            .bind(meeting_id)
-            .execute(&mut *tx)
-            .await?;
+            // Pristine-guarded; a multi-source item is handed to its oldest other source
+            // meeting instead of deleted (specs/0088, see `delete_or_detach_in_tx`).
+            delete_or_detach_in_tx(&mut tx, meeting_id, id).await?;
         }
+
+        // (item id, context, phrasing) for the primary source rows of this run.
+        let mut primaries: Vec<(String, Option<String>, String)> = Vec::new();
 
         for update in &diff.updates {
             // In-place rewrite: id, created_at, status, source, user_edited preserved.
@@ -553,6 +552,13 @@ impl ActionItemsRepository {
             .execute(&mut *tx)
             .await?;
             rows_written += res.rows_affected() as u32;
+            if res.rows_affected() > 0 {
+                primaries.push((
+                    update.id.clone(),
+                    update.candidate.context.clone(),
+                    update.candidate.description.clone(),
+                ));
+            }
         }
 
         for insert in &diff.inserts {
@@ -579,7 +585,14 @@ impl ActionItemsRepository {
             .execute(&mut *tx)
             .await?;
             rows_written += 1;
+            primaries.push((
+                id,
+                insert.candidate.context.clone(),
+                insert.candidate.description.clone(),
+            ));
         }
+
+        apply_sources_in_tx(&mut tx, meeting_id, &primaries, attaches).await?;
 
         sqlx::query(
             "INSERT INTO action_item_extractions
@@ -1091,6 +1104,7 @@ mod action_items_tests {
             &pool,
             &meeting_id,
             &plan,
+            &[],
             "fp-1",
             "ollama",
             "llama3.2:latest",
@@ -1136,6 +1150,7 @@ mod action_items_tests {
             &pool,
             &meeting_id,
             &ExtractionDiff::default(),
+            &[],
             "fp-2",
             "ollama",
             "llama3.2:latest",
@@ -1187,6 +1202,7 @@ mod action_items_tests {
             &pool,
             &meeting_id,
             &plan,
+            &[],
             "fp",
             "ollama",
             "m",
@@ -1277,6 +1293,7 @@ mod action_items_tests {
             &pool,
             &meeting_id,
             &plan,
+            &[],
             "fp-race",
             "ollama",
             "m",
@@ -1384,6 +1401,7 @@ mod action_items_tests {
             &pool,
             &meeting_id,
             &ExtractionDiff::default(),
+            &[],
             "fp",
             "ollama",
             "m",
@@ -1758,9 +1776,18 @@ mod action_items_tests {
             plan.is_empty(),
             "candidate absorbed by the protected dismissed row — no insert, no delete"
         );
-        ActionItemsRepository::replace_extracted(&pool, &meeting_id, &plan, "fp", "ollama", "m", 1)
-            .await
-            .unwrap();
+        ActionItemsRepository::replace_extracted(
+            &pool,
+            &meeting_id,
+            &plan,
+            &[],
+            "fp",
+            "ollama",
+            "m",
+            1,
+        )
+        .await
+        .unwrap();
 
         let rows = ActionItemsRepository::get_for_meeting(&pool, &meeting_id)
             .await

@@ -10,7 +10,7 @@ use sqlx::{FromRow, SqliteConnection, SqlitePool};
 
 use crate::action_items::extractor::ALREADY_TRACKED_CAP;
 use crate::action_items::mentions::{person_ids_in, plain_description};
-use crate::action_items::merge::TrackedItem;
+use crate::action_items::merge::{SourceAttach, TrackedItem};
 use crate::action_items::triage::ABSORB_COMPLETED_WITHIN_DAYS;
 
 use super::action_item::{ActionItem, ActionItemsRepository};
@@ -384,5 +384,128 @@ pub async fn cascade_meeting_delete(
         .bind(meeting_id)
         .execute(&mut *tx)
         .await?;
+    Ok(())
+}
+
+/// (item id, context, phrasing) of a primary source row.
+pub(crate) type PrimarySource = (String, Option<String>, String);
+
+/// Persist the source rows of one extraction run, inside its transaction (specs/0088).
+///
+/// 1. Drop this meeting's earlier ATTACHES: its source rows on items that belong to another
+///    meeting or to nobody (`IS NOT`, so standalone to-dos count). Attaches are rebuilt from
+///    the fresh routing below; the item's own primary row is never touched here.
+/// 2. Upsert the primary row of every item this run inserted or rewrote.
+/// 3. Insert each attach, only while its target still exists: the routing was computed
+///    before a slow LLM call and the target may have been deleted since. An attach never
+///    changes the target item itself (a dismissed or completed target stays as it is).
+pub(crate) async fn apply_sources_in_tx(
+    tx: &mut SqliteConnection,
+    meeting_id: &str,
+    primaries: &[PrimarySource],
+    attaches: &[SourceAttach],
+) -> Result<(), SqlxError> {
+    let now = Utc::now().to_rfc3339();
+    sqlx::query(
+        "DELETE FROM action_item_sources WHERE meeting_id = ?1 AND action_item_id IN \
+         (SELECT id FROM action_items WHERE meeting_id IS NOT ?1)",
+    )
+    .bind(meeting_id)
+    .execute(&mut *tx)
+    .await?;
+    for (item_id, context, phrasing) in primaries {
+        sqlx::query(
+            "INSERT INTO action_item_sources \
+                (action_item_id, meeting_id, context, phrasing, added_at) \
+             VALUES (?, ?, ?, ?, ?) \
+             ON CONFLICT(action_item_id, meeting_id) DO UPDATE SET \
+                context = excluded.context, phrasing = excluded.phrasing",
+        )
+        .bind(item_id)
+        .bind(meeting_id)
+        .bind(context.as_deref())
+        .bind(phrasing)
+        .bind(&now)
+        .execute(&mut *tx)
+        .await?;
+    }
+    for a in attaches {
+        sqlx::query(
+            "INSERT OR REPLACE INTO action_item_sources \
+                (action_item_id, meeting_id, context, phrasing, added_at) \
+             SELECT id, ?2, ?3, ?4, ?5 FROM action_items WHERE id = ?1",
+        )
+        .bind(&a.item_id)
+        .bind(meeting_id)
+        .bind(a.context.as_deref())
+        .bind(&a.phrasing)
+        .bind(&now)
+        .execute(&mut *tx)
+        .await?;
+    }
+    Ok(())
+}
+
+/// A pristine extracted row that the meeting's new summary no longer supports.
+///
+/// - Mentioned in another meeting too: hand it to the OLDEST other source meeting
+///   (`UPDATE OR IGNORE`, so a `(meeting_id, content_key)` clash there is a no-op) and drop
+///   this meeting's source row. On a refused repoint, or when the user touched the row
+///   since the diff snapshot, leave it fully intact, source row included.
+/// - Otherwise: the ordinary pristine-guarded delete, plus its source and mention rows.
+pub(crate) async fn delete_or_detach_in_tx(
+    tx: &mut SqliteConnection,
+    meeting_id: &str,
+    item_id: &str,
+) -> Result<(), SqlxError> {
+    const PRISTINE: &str = "source = 'extracted' AND status = 'open' AND user_edited = 0";
+    let other: Option<String> = sqlx::query_scalar(
+        "SELECT s.meeting_id FROM action_item_sources s \
+         JOIN meetings m ON m.id = s.meeting_id \
+         WHERE s.action_item_id = ?1 AND s.meeting_id != ?2 \
+         ORDER BY m.created_at ASC, s.meeting_id ASC LIMIT 1",
+    )
+    .bind(item_id)
+    .bind(meeting_id)
+    .fetch_optional(&mut *tx)
+    .await?;
+    if let Some(other) = other {
+        let moved = sqlx::query(&format!(
+            "UPDATE OR IGNORE action_items SET meeting_id = ?1 \
+             WHERE id = ?2 AND meeting_id = ?3 AND {PRISTINE}"
+        ))
+        .bind(&other)
+        .bind(item_id)
+        .bind(meeting_id)
+        .execute(&mut *tx)
+        .await?
+        .rows_affected();
+        if moved == 1 {
+            sqlx::query(
+                "DELETE FROM action_item_sources WHERE action_item_id = ? AND meeting_id = ?",
+            )
+            .bind(item_id)
+            .bind(meeting_id)
+            .execute(&mut *tx)
+            .await?;
+        }
+        return Ok(());
+    }
+    let deleted = sqlx::query(&format!(
+        "DELETE FROM action_items WHERE id = ? AND meeting_id = ? AND {PRISTINE}"
+    ))
+    .bind(item_id)
+    .bind(meeting_id)
+    .execute(&mut *tx)
+    .await?
+    .rows_affected();
+    if deleted == 1 {
+        for table in ["action_item_sources", "action_item_people"] {
+            sqlx::query(&format!("DELETE FROM {table} WHERE action_item_id = ?"))
+                .bind(item_id)
+                .execute(&mut *tx)
+                .await?;
+        }
+    }
     Ok(())
 }

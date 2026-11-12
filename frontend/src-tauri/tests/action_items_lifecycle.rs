@@ -71,6 +71,7 @@ async fn extract_pass(
         pool,
         meeting_id,
         &plan,
+        &[],
         &fingerprint,
         "ollama",
         "llama3.2:3b",

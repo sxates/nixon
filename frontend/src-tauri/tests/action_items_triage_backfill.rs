@@ -316,7 +316,7 @@ async fn replace_extracted_sets_triage_on_insert_and_pristine_update() {
         }],
         ..Default::default()
     };
-    ActionItemsRepository::replace_extracted(pool, &m, &first, "fp1", "p", "m", 1)
+    ActionItemsRepository::replace_extracted(pool, &m, &first, &[], "fp1", "p", "m", 1)
         .await
         .unwrap();
     let rows = ActionItemsRepository::get_for_meeting(pool, &m)
@@ -332,7 +332,7 @@ async fn replace_extracted_sets_triage_on_insert_and_pristine_update() {
         }],
         ..Default::default()
     };
-    ActionItemsRepository::replace_extracted(pool, &m, &second, "fp2", "p", "m", 1)
+    ActionItemsRepository::replace_extracted(pool, &m, &second, &[], "fp2", "p", "m", 1)
         .await
         .unwrap();
     let rows = ActionItemsRepository::get_for_meeting(pool, &m)
