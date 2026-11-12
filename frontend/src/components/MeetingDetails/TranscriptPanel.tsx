@@ -415,26 +415,25 @@ export function TranscriptPanel({
         <Callout
           tone="info"
           role="status"
-          className="mt-2 flex items-center gap-2 px-3 py-2"
+          size="compact"
+          className="mt-2"
+          lead={<Spinner className="text-brand" />}
         >
-          <Spinner className="text-brand" />
-          <p className="text-xs text-foreground">
-            {backlogStage === 'waiting'
-              ? 'Queued for processing — the transcript and summary will update when it runs.'
-              : backlogStage === 'summarizing'
-                ? 'Summarizing this meeting…'
-                : 'Re-transcribing this meeting — the transcript below will update when it finishes.'}
-          </p>
+          {backlogStage === 'waiting'
+            ? 'Queued for processing — the transcript and summary will update when it runs.'
+            : backlogStage === 'summarizing'
+              ? 'Summarizing this meeting…'
+              : 'Re-transcribing this meeting — the transcript below will update when it finishes.'}
         </Callout>
       )}
 
       {/* specs/0072 W3 — speaker identification failed; the audio stays for a retry (the
-          activity queue's Retry, or Identify speakers above). */}
+          activity queue's Retry, or Identify speakers above). No Retry action here: the
+          pass's run state lives in TranscriptButtonGroup's useDiarization, and a second
+          instance would double its error toasts — Identify speakers sits right above. */}
       {!isRecording && audio?.state === 'failed' && (
-        <Callout tone="warn" role="status" className="mt-2 px-3 py-2">
-          <p className="text-xs text-foreground">
-            {speakerIdFailureNote(audio.speakerIdFailure)}
-          </p>
+        <Callout tone="warn" role="status" size="compact" className="mt-2">
+          {speakerIdFailureNote(audio.speakerIdFailure)}
         </Callout>
       )}
 

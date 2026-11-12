@@ -156,7 +156,7 @@ export function TranscriptPanel({
             {/* Persistent backpressure hint (specs/0028 → 0030 WS4): the transcript has
                 gaps — one banner with a running count instead of a toast per event. */}
             {gapMessage && (
-              <Callout tone="warn" role="status" className="rounded-md px-3 py-2 text-xs">
+              <Callout tone="warn" role="status" size="compact">
                 {gapMessage}
               </Callout>
             )}

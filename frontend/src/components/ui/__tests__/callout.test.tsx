@@ -83,3 +83,36 @@ describe('Alert (shim over Callout)', () => {
     expect(screen.getByRole('alert').className).toContain('[&>svg]:absolute');
   });
 });
+
+describe('Callout size and lead', () => {
+  it('defaults to px-4 py-3 text-sm', () => {
+    render(<Callout>Body</Callout>);
+    const cls = screen.getByText('Body').className;
+    expect(cls).toContain('px-4');
+    expect(cls).toContain('py-3');
+    expect(cls).toContain('text-sm');
+  });
+
+  it('has a compact px-3 py-2 text-xs size', () => {
+    render(<Callout size="compact">Body</Callout>);
+    const cls = screen.getByText('Body').className;
+    expect(cls).toContain('px-3');
+    expect(cls).toContain('py-2');
+    expect(cls).toContain('text-xs');
+    expect(cls).not.toContain('px-4');
+    expect(cls).not.toContain('text-sm');
+  });
+
+  it('renders a lead before the content', () => {
+    const { container } = render(
+      <Callout size="compact" lead={<span data-testid="spin" />}>
+        Working
+      </Callout>,
+    );
+    const lead = container.querySelector('[data-callout-lead]');
+    expect(lead).not.toBeNull();
+    expect(lead?.contains(screen.getByTestId('spin'))).toBe(true);
+    // The lead comes first, then the body.
+    expect(lead?.nextElementSibling?.textContent).toBe('Working');
+  });
+});

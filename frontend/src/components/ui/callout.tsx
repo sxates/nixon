@@ -15,6 +15,10 @@
  * title), and an `action` slot on the right (primary action first, `Button size="sm"`).
  * With neither `title` nor `action` the children render straight into the box, so
  * `ui/alert`'s `[&>svg]` icon layout and `SettingsNote` keep working as thin wrappers.
+ *
+ * `size`: `default` (`px-4 py-3 text-sm`) or `compact` (`px-3 py-2 text-xs`) for a one-line
+ * status strip under a toolbar. `lead`: a spinner or a `StatusDot` before the text, centred
+ * on its first line — the Callout's tone carries the status, so never a warning glyph.
  */
 
 import * as React from 'react';
@@ -35,29 +39,49 @@ export interface CalloutProps extends Omit<React.HTMLAttributes<HTMLDivElement>,
   title?: React.ReactNode;
   /** Right-aligned controls (primary first). */
   action?: React.ReactNode;
+  /** `default` = `px-4 py-3 text-sm`; `compact` = `px-3 py-2 text-xs` (status strips). */
+  size?: CalloutSize;
+  /** A spinner or status dot before the content. */
+  lead?: React.ReactNode;
 }
 
+export const CALLOUT_SIZES = {
+  default: 'px-4 py-3 text-sm',
+  compact: 'px-3 py-2 text-xs',
+} as const;
+
+export type CalloutSize = keyof typeof CALLOUT_SIZES;
+
 export const Callout = React.forwardRef<HTMLDivElement, CalloutProps>(function Callout(
-  { tone = 'info', title, action, className, children, role, ...props },
+  { tone = 'info', title, action, size = 'default', lead, className, children, role, ...props },
   ref,
 ) {
-  const structured = title != null || action != null;
+  const structured = title != null || action != null || lead != null;
   return (
     <div
       ref={ref}
       // An error is announced; other tones are passive unless the caller asks (`status`).
       role={role ?? (tone === 'error' ? 'alert' : undefined)}
       data-tone={tone}
+      data-size={size}
       className={cn(
-        'relative w-full rounded-lg border px-4 py-3 text-sm text-foreground',
+        'relative w-full rounded-lg border text-foreground',
+        CALLOUT_SIZES[size],
         CALLOUT_TONES[tone],
-        structured && 'flex items-start gap-3',
+        structured && cn('flex items-start', size === 'compact' ? 'gap-2' : 'gap-3'),
         className,
       )}
       {...props}
     >
       {structured ? (
         <>
+          {lead != null ? (
+            // `h-[1lh]`: one line box of the Callout's own text size, so the lead centres on
+            // the first line whether the body wraps or not.
+            <div data-callout-lead="" className="flex h-[1lh] flex-none items-center">
+              {lead}
+            </div>
+          ) : null}
           <div className="min-w-0 flex-1">
             {title != null ? <div className="font-medium text-foreground">{title}</div> : null}
             {children != null ? (

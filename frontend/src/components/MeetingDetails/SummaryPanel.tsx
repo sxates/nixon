@@ -278,7 +278,7 @@ export function SummaryPanel({
             {/* Status is the Callout's tone, not a warning glyph (docs/design-system.md
                 §Icons); the preliminary note keeps its spinner — it IS in progress. */}
             {summaryStatus === 'error' && (
-              <Callout tone="error" className="mb-4 px-3 py-2">
+              <Callout tone="error" size="compact" className="mb-4 text-sm">
                 <p className="text-sm text-foreground">
                   <span className="font-semibold">Could not generate the summary</span>
                   {summaryError ? <> — {summaryError}</> : null}
@@ -286,8 +286,13 @@ export function SummaryPanel({
               </Callout>
             )}
             {preliminary && summaryStatus !== 'error' && (
-              <Callout tone="muted" role="status" className="mb-4 flex items-center gap-2 px-3 py-2">
-                <Spinner className="text-muted-foreground" />
+              <Callout
+                tone="muted"
+                role="status"
+                size="compact"
+                className="mb-4 text-sm"
+                lead={<Spinner className="text-muted-foreground" />}
+              >
                 <p className="text-sm text-muted-foreground">
                   <span className="font-semibold text-foreground">Preliminary summary</span> — speakers
                   will be added when available.
@@ -295,7 +300,7 @@ export function SummaryPanel({
               </Callout>
             )}
             {partialSummary && (
-              <Callout tone="warn" role="status" className="mb-4 px-3 py-2">
+              <Callout tone="warn" role="status" size="compact" className="mb-4 text-sm">
                 <p className="text-sm text-foreground">
                   <span className="font-semibold">Partial summary</span> — some sections may be
                   missing: {partialSummary.failed_chunks} of {partialSummary.total_chunks} transcript
