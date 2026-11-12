@@ -114,6 +114,110 @@
   const byId = (id) => MEETINGS.find((m) => m.id === id);
   const personById = (id) => PEOPLE.find((p) => p.id === id);
 
+  // ---- To-do list / Inbox / Done (specs/0088) -------------------------------------------
+  // Derived from MEETINGS[].action_items so every view renders: some suggested (two with
+  // 2 sources), some listed (one with a due date, one standalone), some record (someone
+  // else's), a few completed in the last 3 weeks, one dismissed. In-memory, so triage
+  // clicks in a route script behave.
+  let TODO_STORE = null;
+  function todoStore() {
+    if (TODO_STORE) return TODO_STORE;
+    const iso = (d) => d.toISOString();
+    const localDay = (offset) => {
+      const d = new Date();
+      d.setDate(d.getDate() + offset);
+      return localKey(d);
+    };
+    const rows = [];
+    let n = 0;
+    let twoSource = 0;
+    for (const m of MEETINGS) {
+      (m.action_items || []).forEach((a, i) => {
+        const created = dayStart(m);
+        const isSelf = a.assignee === 'self';
+        const slot = n % 6;
+        const row = {
+          id: 'ai-' + m.id + '-' + i,
+          meetingId: m.id,
+          description: a.description,
+          assigneePersonId: a.assignee && !isSelf ? a.assignee : null,
+          assigneeIsSelf: isSelf,
+          assigneeRaw: null,
+          dueHint: a.due_hint || null,
+          dueDate: null,
+          status: 'open',
+          source: 'extracted',
+          userEdited: false,
+          contentKey: 'ck-' + m.id + '-' + i,
+          createdAt: iso(created),
+          updatedAt: iso(created),
+          completedAt: null,
+          sortOrder: i,
+          triage: 'suggested',
+          adoptedAt: null,
+          notesMarkdown: null,
+          meetingTitle: m.title,
+          meetingCreatedAt: iso(created),
+          sourceCount: 1,
+          latestSourceAt: iso(created),
+          latestContext: null,
+        };
+        if (slot === 0 || slot === 4) {
+          row.triage = 'listed';
+          row.adoptedAt = iso(created);
+          if (slot === 0 && n === 0) row.dueDate = localDay(0);
+          if (slot === 4) {
+            row.status = 'completed';
+            row.completedAt = iso(new Date(Date.now() - (1 + (n % 20)) * 86400000));
+          }
+        } else if (slot === 3) {
+          row.triage = 'record';
+          if (!row.assigneePersonId) row.assigneePersonId = 'person-maya';
+        } else if (slot === 5 && n === 5) {
+          row.status = 'dismissed';
+        } else if (twoSource < 2) {
+          row.sourceCount = 2;
+          twoSource += 1;
+          row.latestContext = 'Raised again in the follow-up: still waiting on an owner.';
+        }
+        rows.push(row);
+        n += 1;
+      });
+    }
+    rows.push({
+      ...rows[0],
+      id: 'ai-standalone-1',
+      meetingId: null,
+      description: 'Renew the lab equipment calibration certificate',
+      assigneePersonId: null,
+      assigneeIsSelf: true,
+      dueHint: null,
+      dueDate: localDay(3),
+      source: 'manual',
+      userEdited: true,
+      contentKey: 'ck-standalone-1',
+      status: 'open',
+      completedAt: null,
+      triage: 'listed',
+      sortOrder: null,
+      meetingTitle: null,
+      meetingCreatedAt: null,
+      sourceCount: 0,
+      latestSourceAt: null,
+      latestContext: null,
+    });
+    TODO_STORE = rows;
+    return rows;
+  }
+  const todoById = (id) => todoStore().find((r) => r.id === id);
+  const inView = (r, view) => {
+    if (view === 'list') return r.triage === 'listed' && r.status === 'open';
+    if (view === 'inbox') return r.triage === 'suggested' && r.status === 'open';
+    if (view === 'done') return r.status === 'completed';
+    if (view === 'dismissed') return r.status === 'dismissed';
+    return false;
+  };
+
   // Re-bases fixture days_ago/time_of_day onto "now" so screenshots always show a
   // recent-looking dashboard, regardless of when they're taken (mirrors the dev-fixtures
   // seeder's own re-basing, src-tauri/src/dev_fixtures/dataset.rs).
@@ -394,28 +498,74 @@
     // action_items/commands.rs `api_get_action_items` -> Vec<ActionItem>
     // (database/repositories/action_item.rs, #[serde(rename_all = "camelCase")]).
     // Per-meeting, not global: args { meetingId } (ActionItemsSection.tsx).
-    api_get_action_items: ({ meetingId }) => {
-      const m = byId(meetingId);
-      if (!m) return [];
-      const created = dayStart(m).toISOString();
-      return (m.action_items || []).map((a, i) => ({
-        id: 'ai-' + meetingId + '-' + i,
-        meetingId,
-        description: a.description,
-        assigneePersonId: a.assignee && a.assignee !== 'self' ? a.assignee : null,
-        assigneeIsSelf: a.assignee === 'self',
-        assigneeRaw: null,
-        dueHint: a.due_hint || null,
-        dueDate: null,
-        status: 'open',
-        source: 'extracted',
-        userEdited: false,
-        contentKey: 'ck-' + meetingId + '-' + i,
-        createdAt: created,
-        updatedAt: created,
-        completedAt: null,
-        sortOrder: i,
-      }));
+    api_get_action_items: ({ meetingId }) =>
+      todoStore().filter((r) => r.meetingId === meetingId),
+
+    // action_items/commands.rs 0088 commands. camelCase args; `api_list_todo_view` rows are
+    // ActionItem + meeting join + source summary.
+    api_list_todo_view: ({ view }) => todoStore().filter((r) => inView(r, view)),
+    api_inbox_count: () => todoStore().filter((r) => inView(r, 'inbox')).length,
+    api_triage_action_item: ({ id, action }) => {
+      const r = todoById(id);
+      if (!r) throw new Error('Action item not found');
+      const now = new Date().toISOString();
+      if (action === 'add_to_list' || action === 'adopt') {
+        r.triage = 'listed';
+        r.adoptedAt = now;
+        if (r.status === 'dismissed') r.status = 'open';
+      } else if (action === 'dismiss') {
+        r.status = 'dismissed';
+      } else if (action === 'restore') {
+        r.status = 'open';
+      }
+      return r;
+    },
+    api_get_action_item_detail: ({ id }) => {
+      const r = todoById(id);
+      if (!r) throw new Error('Action item not found');
+      const sources = [];
+      if (r.meetingId) {
+        sources.push({
+          meetingId: r.meetingId,
+          meetingTitle: r.meetingTitle,
+          meetingCreatedAt: r.meetingCreatedAt,
+          context: r.latestContext,
+          phrasing: r.description,
+        });
+      }
+      if (r.sourceCount > 1) {
+        const other = MEETINGS.find((m) => m.id !== r.meetingId);
+        if (other) {
+          sources.push({
+            meetingId: other.id,
+            meetingTitle: other.title,
+            meetingCreatedAt: dayStart(other).toISOString(),
+            context: 'Came up again; nobody had picked it up yet.',
+            phrasing: r.description,
+          });
+        }
+      }
+      return {
+        item: r,
+        sources,
+        personIds: r.assigneePersonId ? [r.assigneePersonId] : [],
+      };
+    },
+    api_set_action_item_notes: ({ id, markdown }) => {
+      const r = todoById(id);
+      if (r) r.notesMarkdown = markdown || null;
+      return null;
+    },
+    api_dismiss_suggestions_older_than: ({ days }) => {
+      const cutoff = Date.now() - days * 86400000;
+      const ids = [];
+      for (const r of todoStore()) {
+        if (inView(r, 'inbox') && new Date(r.latestSourceAt || r.createdAt).getTime() < cutoff) {
+          r.status = 'dismissed';
+          ids.push(r.id);
+        }
+      }
+      return ids;
     },
 
     // llm_activity/commands.rs `api_llm_activity_snapshot` -> ActivitySnapshot

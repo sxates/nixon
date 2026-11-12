@@ -332,6 +332,32 @@ export interface ActionItemWithMeeting extends ActionItem {
   meetingCreatedAt: string | null;
 }
 
+/** Which list `api_list_todo_view` returns (specs/0088). */
+export type TodoView = 'list' | 'inbox' | 'done' | 'dismissed';
+
+/** One row of a to-do view: the item plus its meeting join and source summary. */
+export interface TodoRow extends ActionItemWithMeeting {
+  /** Number of meetings that mention this item. */
+  sourceCount: number;
+  latestSourceAt: string | null;
+  latestContext: string | null;
+}
+
+/** One meeting that mentions an item (`api_get_action_item_detail`). */
+export interface SourceRow {
+  meetingId: string;
+  meetingTitle: string | null;
+  meetingCreatedAt: string | null;
+  context: string | null;
+  phrasing: string | null;
+}
+
+export interface ActionItemDetail {
+  item: ActionItem;
+  sources: SourceRow[];
+  personIds: string[];
+}
+
 /** Payload of the `action-items-updated` Tauri event (specs/0034), emitted after a
  *  background extraction commits for a meeting. */
 export interface ActionItemsUpdatedPayload {
