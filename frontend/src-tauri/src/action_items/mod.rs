@@ -14,6 +14,7 @@
 
 pub mod commands;
 pub mod diff;
+pub mod due;
 pub mod extractor;
 pub mod grammar;
 pub mod mentions;
@@ -328,7 +329,14 @@ async fn run_extraction_inner<R: Runtime>(
     .context("Action-item extraction failed")?;
     let candidate_count = candidates.len() as u32;
 
-    let resolved = extractor::resolve_candidates(candidates, &roster, &owner);
+    // Due hints resolve against the meeting's local date, not today's (specs/0088).
+    let anchor = MeetingsRepository::get_meeting_metadata(pool, meeting_id)
+        .await
+        .ok()
+        .flatten()
+        .map(|m| m.created_at.0.with_timezone(&chrono::Local).date_naive())
+        .unwrap_or_else(|| chrono::Local::now().date_naive());
+    let resolved = extractor::resolve_candidates(candidates, &roster, &owner, anchor);
     let plan = diff::compute_diff(&existing, &resolved);
 
     info!(

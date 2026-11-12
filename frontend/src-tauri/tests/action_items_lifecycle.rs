@@ -147,7 +147,12 @@ async fn fresh_extraction_inserts_rows_and_ledger() {
             due: None,
         },
     ];
-    let candidates = resolve_candidates(raw, &roster, &OwnerIdentity::default());
+    let candidates = resolve_candidates(
+        raw,
+        &roster,
+        &OwnerIdentity::default(),
+        chrono::NaiveDate::from_ymd_opt(2026, 11, 12).unwrap(),
+    );
 
     let summary = "## Action Items\n- deck, announcement, room";
     assert!(extract_pass(pool, &meeting_id, summary, None, &candidates).await);

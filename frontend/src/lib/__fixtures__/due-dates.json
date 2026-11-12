@@ -1,0 +1,314 @@
+{
+  "_comment": "Contract shared by Rust (src/action_items/due.rs) and TypeScript (src/lib/todo-parse.ts). 2026-11-12 is a Thursday. Rules: weekday (full or 3-letter, any case) = next occurrence, same weekday means today; today; tomorrow; next week = the Monday after today; Mon D / Month D / M/D (US order) = this year, or next year if before today; YYYY-MM-DD; anything else null. 'titles' is TypeScript only: a trailing parenthesised phrase, optionally preceded by '*', is removed from the title when it resolves.",
+  "phrases": [
+    {
+      "text": "Thursday",
+      "today": "2026-11-12",
+      "expect": "2026-11-12"
+    },
+    {
+      "text": "thursday",
+      "today": "2026-11-12",
+      "expect": "2026-11-12"
+    },
+    {
+      "text": "Thu",
+      "today": "2026-11-12",
+      "expect": "2026-11-12"
+    },
+    {
+      "text": "Friday",
+      "today": "2026-11-12",
+      "expect": "2026-11-13"
+    },
+    {
+      "text": "Saturday",
+      "today": "2026-11-12",
+      "expect": "2026-11-14"
+    },
+    {
+      "text": "Sunday",
+      "today": "2026-11-12",
+      "expect": "2026-11-15"
+    },
+    {
+      "text": "Monday",
+      "today": "2026-11-12",
+      "expect": "2026-11-16"
+    },
+    {
+      "text": "mon",
+      "today": "2026-11-12",
+      "expect": "2026-11-16"
+    },
+    {
+      "text": "Tuesday",
+      "today": "2026-11-12",
+      "expect": "2026-11-17"
+    },
+    {
+      "text": "tue",
+      "today": "2026-11-12",
+      "expect": "2026-11-17"
+    },
+    {
+      "text": "TUE",
+      "today": "2026-11-12",
+      "expect": "2026-11-17"
+    },
+    {
+      "text": "Wednesday",
+      "today": "2026-11-12",
+      "expect": "2026-11-18"
+    },
+    {
+      "text": "wed",
+      "today": "2026-11-12",
+      "expect": "2026-11-18"
+    },
+    {
+      "text": "today",
+      "today": "2026-11-12",
+      "expect": "2026-11-12"
+    },
+    {
+      "text": "Today",
+      "today": "2026-11-12",
+      "expect": "2026-11-12"
+    },
+    {
+      "text": "tomorrow",
+      "today": "2026-11-12",
+      "expect": "2026-11-13"
+    },
+    {
+      "text": "tomorrow",
+      "today": "2026-12-31",
+      "expect": "2027-01-01"
+    },
+    {
+      "text": "next week",
+      "today": "2026-11-12",
+      "expect": "2026-11-16"
+    },
+    {
+      "text": "Next Week",
+      "today": "2026-11-15",
+      "expect": "2026-11-16"
+    },
+    {
+      "text": "next week",
+      "today": "2026-11-16",
+      "expect": "2026-11-23"
+    },
+    {
+      "text": "Nov 20",
+      "today": "2026-11-12",
+      "expect": "2026-11-20"
+    },
+    {
+      "text": "nov 20",
+      "today": "2026-11-12",
+      "expect": "2026-11-20"
+    },
+    {
+      "text": "November 20",
+      "today": "2026-11-12",
+      "expect": "2026-11-20"
+    },
+    {
+      "text": "11/20",
+      "today": "2026-11-12",
+      "expect": "2026-11-20"
+    },
+    {
+      "text": "Nov 12",
+      "today": "2026-11-12",
+      "expect": "2026-11-12"
+    },
+    {
+      "text": "Nov 11",
+      "today": "2026-11-12",
+      "expect": "2027-11-11"
+    },
+    {
+      "text": "11/11",
+      "today": "2026-11-12",
+      "expect": "2027-11-11"
+    },
+    {
+      "text": "Jan 5",
+      "today": "2026-11-12",
+      "expect": "2027-01-05"
+    },
+    {
+      "text": "January 5",
+      "today": "2026-11-12",
+      "expect": "2027-01-05"
+    },
+    {
+      "text": "1/5",
+      "today": "2026-11-12",
+      "expect": "2027-01-05"
+    },
+    {
+      "text": "Dec 1",
+      "today": "2026-11-12",
+      "expect": "2026-12-01"
+    },
+    {
+      "text": "  Nov  20 ",
+      "today": "2026-11-12",
+      "expect": "2026-11-20"
+    },
+    {
+      "text": "Feb 29",
+      "today": "2026-11-12",
+      "expect": null
+    },
+    {
+      "text": "Feb 29",
+      "today": "2027-11-01",
+      "expect": "2028-02-29"
+    },
+    {
+      "text": "2026-11-20",
+      "today": "2026-11-12",
+      "expect": "2026-11-20"
+    },
+    {
+      "text": "2027-01-05",
+      "today": "2026-11-12",
+      "expect": "2027-01-05"
+    },
+    {
+      "text": "2026-11-11",
+      "today": "2026-11-12",
+      "expect": "2026-11-11"
+    },
+    {
+      "text": "13/45",
+      "today": "2026-11-12",
+      "expect": null
+    },
+    {
+      "text": "13/1",
+      "today": "2026-11-12",
+      "expect": null
+    },
+    {
+      "text": "2026-13-01",
+      "today": "2026-11-12",
+      "expect": null
+    },
+    {
+      "text": "Nov 32",
+      "today": "2026-11-12",
+      "expect": null
+    },
+    {
+      "text": "Nov 0",
+      "today": "2026-11-12",
+      "expect": null
+    },
+    {
+      "text": "thing",
+      "today": "2026-11-12",
+      "expect": null
+    },
+    {
+      "text": "",
+      "today": "2026-11-12",
+      "expect": null
+    },
+    {
+      "text": "sometime",
+      "today": "2026-11-12",
+      "expect": null
+    },
+    {
+      "text": "next month",
+      "today": "2026-11-12",
+      "expect": null
+    },
+    {
+      "text": "end of Q3",
+      "today": "2026-11-12",
+      "expect": null
+    }
+  ],
+  "titles": [
+    {
+      "input": "Update tooling docs * (Nov 20)",
+      "today": "2026-11-12",
+      "title": "Update tooling docs",
+      "due": "2026-11-20"
+    },
+    {
+      "input": "Update docs * (Nov 20)",
+      "today": "2026-11-12",
+      "title": "Update docs",
+      "due": "2026-11-20"
+    },
+    {
+      "input": "Check in with team (Tuesday)",
+      "today": "2026-11-12",
+      "title": "Check in with team",
+      "due": "2026-11-17"
+    },
+    {
+      "input": "Check in with team (tue)",
+      "today": "2026-11-12",
+      "title": "Check in with team",
+      "due": "2026-11-17"
+    },
+    {
+      "input": "Do the thing (Thursday)",
+      "today": "2026-11-12",
+      "title": "Do the thing",
+      "due": "2026-11-12"
+    },
+    {
+      "input": "Plan offsite (Jan 5)",
+      "today": "2026-11-12",
+      "title": "Plan offsite",
+      "due": "2027-01-05"
+    },
+    {
+      "input": "Send notes (tomorrow)",
+      "today": "2026-11-12",
+      "title": "Send notes",
+      "due": "2026-11-13"
+    },
+    {
+      "input": "Send notes (11/20)",
+      "today": "2026-11-12",
+      "title": "Send notes",
+      "due": "2026-11-20"
+    },
+    {
+      "input": "Fix (thing)",
+      "today": "2026-11-12",
+      "title": "Fix (thing)",
+      "due": null
+    },
+    {
+      "input": "Fix (13/45)",
+      "today": "2026-11-12",
+      "title": "Fix (13/45)",
+      "due": null
+    },
+    {
+      "input": "Ship (Nov 20) build",
+      "today": "2026-11-12",
+      "title": "Ship (Nov 20) build",
+      "due": null
+    },
+    {
+      "input": "Write the report",
+      "today": "2026-11-12",
+      "title": "Write the report",
+      "due": null
+    }
+  ]
+}

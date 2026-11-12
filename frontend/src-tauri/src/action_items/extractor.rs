@@ -178,23 +178,14 @@ fn try_resolve(
     None
 }
 
-/// Parses a due hint into a structured ISO date (`YYYY-MM-DD`) IFF the whole trimmed hint
-/// is exactly that — a strict, unambiguous match (specs/0038 WS1.a). Returns `None` for
-/// fuzzy hints ("Friday", "next week") and for date-times; those stay hint-only.
-fn parse_iso_due_date(hint: &str) -> Option<String> {
-    let hint = hint.trim();
-    chrono::NaiveDate::parse_from_str(hint, "%Y-%m-%d")
-        .ok()
-        .map(|d| d.format("%Y-%m-%d").to_string())
-}
-
 /// Turns raw LLM candidates into the diff/persistence shape: trims and drops empty
 /// descriptions, resolves each assignee via [`resolve_assignee`], and carries the due
-/// hint through verbatim (plus a best-effort structured [`parse_iso_due_date`]).
+/// hint through verbatim (plus a best-effort structured date from [`super::due::resolve_due_hint`]).
 pub fn resolve_candidates(
     candidates: Vec<ActionItemCandidate>,
     roster: &[MeetingParticipant],
     owner: &OwnerIdentity,
+    anchor: chrono::NaiveDate,
 ) -> Vec<ResolvedCandidate> {
     candidates
         .into_iter()
@@ -209,10 +200,11 @@ pub fn resolve_candidates(
                 .due
                 .map(|d| d.trim().to_string())
                 .filter(|d| !d.is_empty());
-            // Best-effort structured date (specs/0038 WS1.a): only when the hint is an
-            // unambiguous full ISO date (YYYY-MM-DD). Anything fuzzy ("Friday", "next
-            // week") stays hint-only; the user sets the structured value from the UI.
-            let due_date = due_hint.as_deref().and_then(parse_iso_due_date);
+            // Resolved against the meeting's local date (specs/0088); unknown hints stay
+            // hint-only.
+            let due_date = due_hint
+                .as_deref()
+                .and_then(|h| super::due::resolve_due_hint(h, anchor));
             Some(ResolvedCandidate {
                 description,
                 assignee_person_id,
@@ -682,6 +674,7 @@ mod tests {
             ],
             &roster,
             &no_owner(),
+            chrono::NaiveDate::from_ymd_opt(2026, 11, 12).unwrap(), // a Thursday
         );
 
         assert_eq!(resolved.len(), 3);
@@ -689,32 +682,14 @@ mod tests {
         assert_eq!(resolved[0].assignee_person_id.as_deref(), Some("p-alice"));
         assert!(!resolved[0].assignee_is_self);
         assert_eq!(resolved[0].due_hint.as_deref(), Some("Friday"));
-        // A fuzzy hint stays hint-only — no structured date.
-        assert!(resolved[0].due_date.is_none());
+        // A weekday hint resolves against the anchor (specs/0088).
+        assert_eq!(resolved[0].due_date.as_deref(), Some("2026-11-13"));
         assert_eq!(resolved[1].description, "Book the room");
         assert!(resolved[1].assignee_is_self);
         assert!(resolved[1].due_hint.is_none());
         // WS1.a — an unambiguous ISO hint is best-effort promoted to due_date; the hint stays.
         assert_eq!(resolved[2].due_hint.as_deref(), Some("2026-07-10"));
         assert_eq!(resolved[2].due_date.as_deref(), Some("2026-07-10"));
-    }
-
-    #[test]
-    fn parse_iso_due_date_accepts_only_full_iso_dates() {
-        assert_eq!(
-            parse_iso_due_date("2026-07-10"),
-            Some("2026-07-10".to_string())
-        );
-        assert_eq!(
-            parse_iso_due_date("  2026-01-05  "),
-            Some("2026-01-05".to_string())
-        );
-        // Fuzzy or partial hints are rejected (hint-only).
-        assert!(parse_iso_due_date("Friday").is_none());
-        assert!(parse_iso_due_date("next week").is_none());
-        assert!(parse_iso_due_date("2026-07").is_none());
-        assert!(parse_iso_due_date("2026-13-01").is_none()); // invalid month
-        assert!(parse_iso_due_date("2026-07-10T09:00:00Z").is_none()); // date-time, not a date
     }
 
     #[test]
@@ -1140,7 +1115,12 @@ mod tests {
             .1
             .contains("deck goes out BEFORE"));
 
-        let resolved = resolve_candidates(candidates, &roster, &no_owner());
+        let resolved = resolve_candidates(
+            candidates,
+            &roster,
+            &no_owner(),
+            chrono::NaiveDate::from_ymd_opt(2026, 11, 12).unwrap(),
+        );
         assert_eq!(resolved.len(), 4);
         // Roster display name → person FK; verbatim due hint.
         assert_eq!(resolved[0].assignee_person_id.as_deref(), Some("p-alice"));
