@@ -125,7 +125,7 @@ pub enum BulkStatusFilter<'a> {
     Ids(&'a [String]),
 }
 
-const SELECT_ITEM: &str = "SELECT id, meeting_id, description, assignee_person_id, \
+pub(super) const SELECT_ITEM: &str = "SELECT id, meeting_id, description, assignee_person_id, \
      assignee_is_self, assignee_raw, due_hint, due_date, status, source, user_edited, \
      content_key, created_at, updated_at, completed_at, sort_order, triage, adopted_at, \
      notes_markdown FROM action_items";

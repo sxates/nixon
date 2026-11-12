@@ -13,7 +13,7 @@ use crate::action_items::mentions::{person_ids_in, plain_description};
 use crate::action_items::merge::{SourceAttach, TrackedItem};
 use crate::action_items::triage::ABSORB_COMPLETED_WITHIN_DAYS;
 
-use super::action_item::{ActionItem, ActionItemsRepository};
+use super::action_item::{ActionItem, ActionItemsRepository, SELECT_ITEM};
 
 type SqlxError = sqlx::Error;
 
@@ -87,6 +87,33 @@ fn latest_join() -> String {
 pub struct ActionItemTodoRepository;
 
 impl ActionItemTodoRepository {
+    /// Prep carryover (specs/0088): YOUR listed items open in the series (any source meeting
+    /// in `prior`), then only the PREVIOUS occurrence's (`prior[0]`, newest-first) open
+    /// `record` items. Mine-first within the result; empty `prior` -> empty.
+    pub async fn prep_items(
+        pool: &SqlitePool,
+        prior: &[String],
+    ) -> Result<Vec<ActionItem>, SqlxError> {
+        let Some(previous) = prior.first() else {
+            return Ok(Vec::new());
+        };
+        let ph = std::iter::repeat_n("?", prior.len())
+            .collect::<Vec<_>>()
+            .join(", ");
+        let sql = format!(
+            "{SELECT_ITEM} WHERE status = 'open' AND ( \
+               (triage = 'listed' AND (meeting_id IN ({ph}) OR id IN ( \
+                  SELECT action_item_id FROM action_item_sources WHERE meeting_id IN ({ph})))) \
+               OR (triage = 'record' AND meeting_id = ?)) \
+             ORDER BY (triage = 'listed') DESC, assignee_is_self DESC, created_at ASC, id ASC"
+        );
+        let mut q = sqlx::query_as::<_, ActionItem>(&sql);
+        for id in prior.iter().chain(prior.iter()) {
+            q = q.bind(id);
+        }
+        q.bind(previous).fetch_all(pool).await
+    }
+
     pub async fn list_view(pool: &SqlitePool, view: TodoView) -> Result<Vec<TodoRow>, SqlxError> {
         let (filter, order) = match view {
             TodoView::List => (

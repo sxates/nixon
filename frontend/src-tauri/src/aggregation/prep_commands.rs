@@ -8,7 +8,8 @@
 
 use crate::aggregation::engine::{SourceMeeting, Stage};
 use crate::aggregation::prep_jobs::{enqueue_brief, generate_brief_for_target, Slot};
-use crate::database::repositories::action_item::{ActionItem, ActionItemsRepository};
+use crate::database::repositories::action_item::ActionItem;
+use crate::database::repositories::action_item_todo::ActionItemTodoRepository;
 use crate::database::repositories::meeting::{
     is_per_occurrence_event_id, MeetingsRepository, ScheduledResolution, SeriesLinkedMeeting,
 };
@@ -329,7 +330,7 @@ pub async fn api_get_prep<R: Runtime>(
             .map_err(|e| format!("{e}"))?,
         None => Vec::new(),
     };
-    let open_items = ActionItemsRepository::get_open_for_meetings(pool, &prior)
+    let open_items = ActionItemTodoRepository::prep_items(pool, &prior)
         .await
         .map_err(|e| format!("{e}"))?;
 
