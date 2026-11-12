@@ -53,7 +53,9 @@ import { Callout } from '@/components/ui/callout';
 import { DeckIcon } from '@/components/ui/deck-icon';
 import { IconButton } from '@/components/ui/icon-button';
 import { ListRow } from '@/components/ui/list-row';
-import { Panel } from '@/components/ui/panel';
+import { PanelHeader } from '@/components/ui/panel';
+import { EmptyState } from '@/components/ui/empty-state';
+import { RunStatus } from '@/components/ui/run-status';
 import { Spinner } from '@/components/ui/spinner';
 import { ActionItemRow } from '@/components/ActionItems/ActionItemRow';
 import type { AssigneeCandidate } from '@/components/ActionItems/AssigneePicker';
@@ -282,63 +284,54 @@ export function PrepPanel({
 
   return (
     <div className="flex flex-col gap-8">
-      {/* ── Prep notes (agenda) ───────────────────────────────────────────── */}
-      <section aria-label="Agenda">
-        <PrepNotesEditor
-          meetingId={meetingId}
-          initialMarkdown={view.prepNotesMarkdown}
-          initialJson={view.prepNotesJson}
-        />
-      </section>
+      {/* ── Prep notes (agenda) — a titled Panel, so it is its own named region ── */}
+      <PrepNotesEditor
+        meetingId={meetingId}
+        initialMarkdown={view.prepNotesMarkdown}
+        initialJson={view.prepNotesJson}
+      />
 
       {/* ── Brief ─────────────────────────────────────────────────────────── */}
       <section aria-label="Pre-call brief">
-        <div className="mb-2 flex items-center justify-between gap-2">
-          <h2 className="u-section-label">Before this meeting</h2>
-          {/* specs/0063 W4 — icon-only; the full text lives in the tooltip and the
-              accessible name, so the header stops competing with the brief itself. */}
-          <div className="flex items-center gap-1.5">
-            {briefStatus !== 'none' && (
-              <IconButton
-                label="Link previous meeting…"
-                icon={<DeckIcon icon={Link2} />}
-                onClick={() => setLinkPickerOpen(true)}
-              />
-            )}
-            {(briefStatus === 'ready' || briefStatus === 'failed') && (
-              <IconButton
-                label="Regenerate the brief"
-                icon={<DeckIcon icon={RefreshCw} />}
-                onClick={() => void regenerate()}
-              />
-            )}
-          </div>
-        </div>
+        {/* The brief stays flat (specs/0063 W4) but its heading is the Panel header row, so
+            it has the Agenda panel's rhythm. specs/0063 W4 — the actions are icon-only; the
+            full text lives in the tooltip and the accessible name. */}
+        <PanelHeader
+          title="Before this meeting"
+          action={
+            <>
+              {briefStatus !== 'none' && (
+                <IconButton
+                  label="Link previous meeting…"
+                  icon={<DeckIcon icon={Link2} />}
+                  onClick={() => setLinkPickerOpen(true)}
+                />
+              )}
+              {(briefStatus === 'ready' || briefStatus === 'failed') && (
+                <IconButton
+                  label="Regenerate the brief"
+                  icon={<DeckIcon icon={RefreshCw} />}
+                  onClick={() => void regenerate()}
+                />
+              )}
+            </>
+          }
+        />
 
         {isBriefLoading(briefStatus) ? (
-          <div role="status" className="flex items-center gap-2 py-1 text-sm text-foreground">
-            <Spinner className="text-brand" />
-            <span className="truncate">
-              {stage ? prepStageLabel(stage) : 'Preparing your brief…'}
-            </span>
-          </div>
+          <RunStatus label={stage ? prepStageLabel(stage) : 'Preparing your brief…'} />
         ) : briefStatus === 'none' ? (
-          <Panel variant="dashed" className="py-6 text-center">
-            <p className="text-sm text-muted-foreground">
-              No previous meetings found for this series. If an earlier meeting belongs
-              here — recorded ad-hoc or under a different name — link it and a brief will
-              be generated from it.
-            </p>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setLinkPickerOpen(true)}
-              className="mt-3"
-            >
-              Link previous meeting…
-            </Button>
-          </Panel>
+          <EmptyState
+            variant="panel"
+            titleAs="h3"
+            title="No previous meetings found for this series"
+            body="If an earlier meeting belongs here — recorded ad-hoc or under a different name — link it and a brief will be generated from it."
+            action={
+              <Button type="button" variant="outline" size="sm" onClick={() => setLinkPickerOpen(true)}>
+                Link previous meeting…
+              </Button>
+            }
+          />
         ) : briefStatus === 'failed' ? (
           /* Flat, but the destructive tint stays — it is the only signal that this is an
              error rather than an unusually terse brief. */
@@ -378,9 +371,7 @@ export function PrepPanel({
             )}
           </div>
         ) : (
-          <Panel variant="dashed" className="py-6 text-center">
-            <p className="text-sm text-muted-foreground">No brief available.</p>
-          </Panel>
+          <EmptyState variant="panel" titleAs="h3" title="No brief available" />
         )}
 
         {/* Manually linked meetings (specs/0041 WS4), with an unlink affordance. */}

@@ -70,24 +70,45 @@ export const Panel = React.forwardRef<HTMLElement, PanelProps>(function Panel(
       {...props}
     >
       {hasHeader ? (
-        <div className="mb-2 flex min-h-6 items-center gap-2" data-panel-header="">
-          {title != null ? (
-            <Heading id={titleId} className="u-section-label min-w-0 truncate">
-              {title}
-            </Heading>
-          ) : null}
-          {count != null ? (
-            <span
-              data-panel-count=""
-              className="flex-none rounded-sm bg-muted px-1 text-caption font-medium tabular-nums text-muted-foreground"
-            >
-              {count}
-            </span>
-          ) : null}
-          {action != null ? <div className="ml-auto flex flex-none items-center gap-1">{action}</div> : null}
-        </div>
+        <PanelHeader title={title} titleId={titleId} titleAs={Heading} count={count} action={action} />
       ) : null}
       {children}
     </Root>
   );
 });
+
+export interface PanelHeaderProps {
+  title?: React.ReactNode;
+  /** Id for the heading, so a surrounding region can be named by it. */
+  titleId?: string;
+  titleAs?: 'h2' | 'h3' | 'h4';
+  count?: number | null;
+  action?: React.ReactNode;
+  className?: string;
+}
+
+/**
+ * The Panel's header row on its own: engraved heading, count chip, right-aligned action.
+ * For a section that is deliberately flat (the Prep tab's brief has no card) but must
+ * share the heading rhythm of the panels beside it.
+ */
+export function PanelHeader({ title, titleId, titleAs: Heading = 'h2', count, action, className }: PanelHeaderProps) {
+  return (
+    <div className={cn('mb-2 flex min-h-6 items-center gap-2', className)} data-panel-header="">
+      {title != null ? (
+        <Heading id={titleId} className="u-section-label min-w-0 truncate">
+          {title}
+        </Heading>
+      ) : null}
+      {count != null ? (
+        <span
+          data-panel-count=""
+          className="flex-none rounded-sm bg-muted px-1 text-caption font-medium tabular-nums text-muted-foreground"
+        >
+          {count}
+        </span>
+      ) : null}
+      {action != null ? <div className="ml-auto flex flex-none items-center gap-1">{action}</div> : null}
+    </div>
+  );
+}

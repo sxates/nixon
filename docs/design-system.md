@@ -164,7 +164,7 @@ without a visible ring.
 | Inline editable text | `EditableText` | the click-to-edit title or field, with the hover pencil |
 | View switch | `Tabs` | underline tabs: a hairline rule with a 2px brand underline on the active tab; optional `badge` slot; roving focus built in. Use it whenever the control changes **which view** is on screen (meeting tabs, Settings tabs, Meetings Agenda / Week / Month / List), with or without `TabsContent` (drop `aria-controls` when the panels live elsewhere) |
 | Filter | `SegmentedControl` | a boxed key group: recessed `bg-muted` track, the active option a raised `bg-card` cell, `rounded-md`; `size` default (28px) / `compact` (24px); one Tab stop (with no active option, the first holds it). Use it when the control **narrows what a view shows** (Action items status / whose, Ask's date scope) |
-| Card | `Panel` | `title` (makes it a `<section>` named by the heading), `count` chip, `action` slot, `variant` `solid` / `dashed`, `size` `default` (`px-4 py-3`) / `document` (`p-6`), `titleAs`; header is a `.u-section-label`, no icons |
+| Card | `Panel` | `title` (makes it a `<section>` named by the heading), `count` chip, `action` slot, `variant` `solid` / `dashed`, `size` `default` (`px-4 py-3`) / `document` (`p-6`), `titleAs`; header is a `.u-section-label`, no icons. `PanelHeader` is that header row on its own, for a deliberately flat section that sits beside panels (the Prep brief) |
 | Inline notice | `Callout` | `tone` `info` (brand wash + edge) / `warn` (brand wash, full brand edge; never red) / `error` (destructive wash + edge, `role="alert"`) / `muted`; `title`, `action` (primary first), `size` `default` (`px-4 py-3 text-sm`) / `compact` (`px-3 py-2 text-xs`, a status strip under a toolbar), `lead` (a `Spinner` or `StatusDot`, centred on the first line), `actionAlign` `center` (default) / `start` (on the title line, for a tall callout whose body holds rows with their own keys, like the record page's permission notice). Without `title`/`action`/`lead` children render straight into the box. Never override its padding with `className`. `Alert` and `SettingsNote` are thin aliases |
 | Empty / loading / error | `EmptyState`, `PageLoading`, `Callout tone="error"` | `EmptyState` `title`, `body`, `action`, `variant` `plain` / `panel` (dashed), `titleAs`; `PageLoading` `label`, `hideLabel`, `fill` `page` (`h-page`) / `pane` (`h-64`). No icon discs |
 | Run in progress | `RunStatus` | `label` (the `role="status"` line), `onCancel`, `cancelling`, `cancelLabel`; brand spinner, inside a `Panel` |
@@ -195,6 +195,7 @@ building another:
   `VuMeter`, `TransportKey`.
 - `Meetings/DayGroupCard`: one day's card (`Panel` + `ListRow` header), List and Week views.
 - `shared/ModelOptionCard`: a model in a picker, an `OptionCard` with its actions beside it.
+- `NoteEditor/NoteEditor`: the notes editor. `frame` hands back its toolbar and body so a card can own the title (`Panel title=… action={toolbar}`, the Prep agenda).
 - `MeetingDetails/MeetingTitleField`: the editable-title pattern for `PageHeader` (renders
   inside its h1, so no heading of its own).
 - `People/PersonActionsMenu`: the one overflow menu for a person.
