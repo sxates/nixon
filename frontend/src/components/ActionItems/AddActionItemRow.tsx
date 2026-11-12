@@ -7,15 +7,16 @@
  * a failed create (return `false` or throw) keeps the typed text for retry.
  *
  * A trailing due phrase — `Send the deck (Friday)` — is split off on submit with
- * `parseTodoText` (specs/0088) and handed over as `dueDate`, an ISO local date.
+ * `parseTodoText` (specs/0088) and handed over as `dueDate`, an ISO local date. `@Name`
+ * opens a People picker; picked names go out as `@[Name](person:<id>)` tokens.
  */
 
 import { useState } from 'react';
 import { Plus } from '@/components/ui/icons';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { parseTodoText } from '@/lib/todo-parse';
+import { MentionInput } from './MentionInput';
 
 interface AddActionItemRowProps {
   placeholder?: string;
@@ -32,8 +33,8 @@ export function AddActionItemRow({
   const [draft, setDraft] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const submit = async () => {
-    const text = draft.trim();
+  const submit = async (raw: string = draft) => {
+    const text = raw.trim();
     if (!text || isSubmitting) return;
     const { title, dueDate } = parseTodoText(text, new Date());
     const description = title || text;
@@ -56,11 +57,11 @@ export function AddActionItemRow({
       }}
       className={cn('flex items-center gap-1.5', className)}
     >
-      <Input
+      <MentionInput
         value={draft}
-        onChange={(e) => setDraft(e.target.value)}
+        onChange={setDraft}
+        onSubmit={(v) => void submit(v)}
         placeholder={placeholder}
-        aria-label={placeholder}
         className="h-8 text-sm"
       />
       <Button

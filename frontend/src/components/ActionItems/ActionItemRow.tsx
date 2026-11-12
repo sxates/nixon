@@ -22,7 +22,6 @@
 import { useState, type ReactNode } from 'react';
 import { EyeOff, RotateCcw, Trash2 } from '@/components/ui/icons';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Input } from '@/components/ui/input';
 import { MenuButton } from '@/components/ui/menu-button';
 import {
   DropdownMenu,
@@ -34,6 +33,7 @@ import { cn } from '@/lib/utils';
 import { titleSegments } from '@/lib/todo-parse';
 import type { ActionItem, ActionItemStatus } from '@/types';
 import { DueDateControl } from './DueDateControl';
+import { MentionInput } from './MentionInput';
 import { AssigneePicker, type AssigneeCandidate, type AssigneeSelection } from './AssigneePicker';
 
 interface ActionItemRowProps {
@@ -90,19 +90,15 @@ export function ActionItemRow({
   hideAssignee = false,
 }: ActionItemRowProps) {
   const [isEditing, setIsEditing] = useState(false);
-  const [draft, setDraft] = useState(item.description);
 
   const completed = item.status === 'completed';
   const dismissed = item.status === 'dismissed';
 
-  const startEdit = () => {
-    setDraft(item.description);
-    setIsEditing(true);
-  };
+  const startEdit = () => setIsEditing(true);
 
-  const commitEdit = () => {
+  const commitEdit = (serialized: string) => {
     setIsEditing(false);
-    const next = draft.trim();
+    const next = serialized.trim();
     if (next && next !== item.description) void onEditDescription(item, next);
   };
 
@@ -124,20 +120,12 @@ export function ActionItemRow({
 
       <div className="min-w-0 flex-1">
         {isEditing ? (
-          <Input
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onBlur={commitEdit}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault();
-                commitEdit();
-              } else if (e.key === 'Escape') {
-                setDraft(item.description);
-                setIsEditing(false);
-              }
-            }}
-            aria-label="Edit action item description"
+          <MentionInput
+            value={item.description}
+            onSubmit={commitEdit}
+            onCancel={() => setIsEditing(false)}
+            submitOnBlur
+            ariaLabel="Edit action item description"
             className="h-auto border-border bg-background px-1.5 py-0.5 text-sm text-foreground shadow-none md:text-sm"
             autoFocus
           />

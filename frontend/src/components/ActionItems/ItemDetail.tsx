@@ -7,7 +7,9 @@
  *
  * Notes autosave 600 ms after typing stops and on blur, and flush when the page unmounts,
  * so a navigation mid-debounce never drops text. The title uses `EditableText` until the
- * mention editor lands; on save a trailing `(Nov 20)` sets the due date like quick-add.
+ * mention editor (`@person`); on save a trailing `(Nov 20)` sets the due date like quick-add.
+ * A refresh that started before a notes save never overwrites the saved text, and a failed
+ * refresh keeps an already-loaded page (toast) instead of swapping in the error callout.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react';
@@ -18,7 +20,6 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Callout } from '@/components/ui/callout';
 import { Checkbox } from '@/components/ui/checkbox';
-import { EditableText } from '@/components/ui/editable-text';
 import { EmptyState, PageLoading } from '@/components/ui/empty-state';
 import { ListRow } from '@/components/ui/list-row';
 import { PageHeader } from '@/components/ui/page-header';
@@ -30,6 +31,7 @@ import { PAGE_CONTENT_WIDTH, PAGE_GUTTER } from '@/lib/page-width';
 import { cn } from '@/lib/utils';
 import type { ActionItem, ActionItemDetail, Person } from '@/types';
 import { DueDateControl } from './DueDateControl';
+import { MentionInput } from './MentionInput';
 
 export const NOTES_DEBOUNCE_MS = 600;
 
@@ -50,22 +52,38 @@ export function ItemDetail({ id }: { id: string }) {
   const notesDirty = useRef(false);
   const [notes, setNotesText] = useState('');
 
+  const loadSeq = useRef(0); // latest load wins
+  const notesEpoch = useRef(0); // bumped by every notes edit/save
+  const loadedOnce = useRef(false);
+
   const load = useCallback(async () => {
+    const seq = ++loadSeq.current;
+    const epoch = notesEpoch.current;
     try {
       const d = await invoke<ActionItemDetail>('api_get_action_item_detail', { id });
+      if (seq !== loadSeq.current) return;
       setItem(d.item);
       setSources(d.sources ?? []);
-      // Never overwrite text the user is mid-way through typing.
-      if (!notesDirty.current) {
+      // Never overwrite text the user is mid-way through typing, or text saved while this
+      // request was in flight (its notes are older than what we hold).
+      if (!notesDirty.current && epoch === notesEpoch.current) {
         const text = d.item.notesMarkdown ?? '';
         notesDraft.current = text;
         notesSaved.current = text;
         setNotesText(text);
       }
+      loadedOnce.current = true;
       setStatus('ready');
     } catch (err) {
+      if (seq !== loadSeq.current) return;
       console.error('Failed to load to-do:', err);
-      setStatus(/not found/i.test(errorText(err)) ? 'missing' : 'error');
+      if (/no longer exists/i.test(errorText(err))) {
+        setStatus('missing');
+      } else if (loadedOnce.current) {
+        toast.error('Could not refresh this to-do', { description: errorText(err) });
+      } else {
+        setStatus('error');
+      }
     }
   }, [id]);
 
@@ -119,12 +137,9 @@ export function ItemDetail({ id }: { id: string }) {
   };
 
   // ---- title ----
-  const [editingTitle, setEditingTitle] = useState(false);
-  const [titleDraft, setTitleDraft] = useState('');
-  const finishTitle = async () => {
-    setEditingTitle(false);
+  const finishTitle = async (serialized: string) => {
     if (!item) return;
-    const { title, dueDate } = parseTodoText(titleDraft.trim(), new Date());
+    const { title, dueDate } = parseTodoText(serialized.trim(), new Date());
     if (!title) return;
     if (title !== item.description) await editDescription(item, title);
     if (dueDate) await setDueDate(item, dueDate);
@@ -141,6 +156,7 @@ export function ItemDetail({ id }: { id: string }) {
       timer.current = null;
     }
     const text = notesDraft.current;
+    notesEpoch.current += 1;
     if (text === notesSaved.current) {
       notesDirty.current = false;
       return;
@@ -149,6 +165,7 @@ export function ItemDetail({ id }: { id: string }) {
     try {
       await setNotes(id, text.trim() ? text : null);
       notesSaved.current = text;
+      notesEpoch.current += 1;
       if (notesDraft.current === text) notesDirty.current = false;
       if (mounted.current) setSaveState('saved');
     } catch (err) {
@@ -171,6 +188,7 @@ export function ItemDetail({ id }: { id: string }) {
   const onNotesChange = (value: string) => {
     notesDraft.current = value;
     notesDirty.current = true;
+    notesEpoch.current += 1;
     setNotesText(value);
     setSaveState('idle');
     if (timer.current) clearTimeout(timer.current);
@@ -268,17 +286,16 @@ export function ItemDetail({ id }: { id: string }) {
       <div className={cn('flex-1 overflow-y-auto pb-12', PAGE_GUTTER)}>
         <div className={cn('mx-auto flex w-full flex-col gap-6', PAGE_CONTENT_WIDTH)}>
           <div className="flex flex-col gap-3">
-            <EditableText
-              title={editingTitle ? titleDraft : displayTitle}
-              isEditing={editingTitle}
-              onStartEditing={() => {
-                setTitleDraft(item.description);
-                setEditingTitle(true);
-              }}
-              onFinishEditing={() => void finishTitle()}
-              onChange={setTitleDraft}
-              editLabel="Edit title"
-              textClassName={cn('text-xl font-semibold', completed && 'text-muted-foreground line-through')}
+            <MentionInput
+              value={item.description}
+              onSubmit={(v) => void finishTitle(v)}
+              submitOnBlur
+              ariaLabel="Title"
+              placeholder="Title"
+              className={cn(
+                'h-auto border-transparent bg-transparent px-1 py-1 text-xl font-semibold shadow-none hover:bg-muted md:text-xl',
+                completed && 'text-muted-foreground line-through',
+              )}
             />
             <div className="flex flex-wrap items-center gap-3">
               <DueDateControl item={item} onSetDueDate={setDueDate} />

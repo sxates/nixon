@@ -22,6 +22,7 @@ vi.mock('sonner', () => {
 
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
+import { toast } from 'sonner';
 
 const invokeMock = vi.mocked(invoke);
 const listenMock = vi.mocked(listen);
@@ -81,6 +82,8 @@ function stub(d: ActionItemDetail | Error, extra: Record<string, (a?: any) => un
       return d;
     }
     if (cmd === 'api_list_people') return [];
+    if (cmd === 'api_list_people_ranked') return [{ id: 'p-1', displayName: 'Sam Rivera', email: null, role: null, notes: null, voiceprintOptOut: false, starred: false, createdAt: '', updatedAt: '' }];
+    if (cmd === 'api_update_action_item') return item();
     if (cmd === 'api_set_action_item_notes') return null;
     throw new Error(`Unexpected command in test: ${cmd}`);
   }) as unknown as typeof invoke);
@@ -150,7 +153,7 @@ describe('to-do detail page', () => {
   });
 
   it('unknown id shows empty state', async () => {
-    stub(new Error('Action item not found'));
+    stub(new Error('That action item no longer exists'));
     render(<TaskItemPage />);
     expect(await screen.findByText('This to-do no longer exists')).toBeTruthy();
   });
@@ -195,5 +198,73 @@ describe('to-do detail page', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Add to my list' }));
     await screen.findByRole('checkbox', { name: /Mark .* as completed/ });
     expect(callsTo('api_triage_action_item')[0][1]).toEqual({ id: 'ai-1', action: 'add_to_list' });
+  });
+
+  it('has exactly one h1', async () => {
+    stub(detail());
+    render(<TaskItemPage />);
+    await screen.findByLabelText('Notes');
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
+  });
+
+  it('title editing picks a person and saves the token', async () => {
+    stub(detail());
+    render(<TaskItemPage />);
+    const title = (await screen.findByLabelText('Title')) as HTMLInputElement;
+    expect(title.value).toBe('Send the deck');
+    fireEvent.change(title, { target: { value: 'Send the deck to @sa' } });
+    fireEvent.click(await screen.findByText('Sam Rivera'));
+    fireEvent.keyDown(title, { key: 'Enter' });
+    await waitFor(() => expect(callsTo('api_update_action_item')).toHaveLength(1));
+    expect(callsTo('api_update_action_item')[0][1]).toMatchObject({
+      description: 'Send the deck to @[Sam Rivera](person:p-1)',
+    });
+  });
+
+  it('a stale refresh landing after a notes save does not overwrite the notes', async () => {
+    let listener: (() => void) | undefined;
+    listenMock.mockImplementation((async (_e: string, cb: () => void) => { listener = cb; return () => {}; }) as unknown as typeof listen);
+    let release: (() => void) | undefined;
+    let calls = 0;
+    stub(detail(), {
+      api_get_action_item_detail: async () => {
+        calls += 1;
+        if (calls === 2) {
+          await new Promise<void>((r) => { release = r; });
+          return detail({ item: item({ notesMarkdown: 'OLD' }) });
+        }
+        return detail();
+      },
+    });
+    render(<TaskItemPage />);
+    const box = (await screen.findByLabelText('Notes')) as HTMLTextAreaElement;
+    await waitFor(() => expect(listener).toBeTruthy());
+    act(() => listener!());
+    await waitFor(() => expect(release).toBeTruthy());
+    fireEvent.change(box, { target: { value: 'Newer' } });
+    fireEvent.blur(box);
+    await waitFor(() => expect(callsTo('api_set_action_item_notes')).toHaveLength(1));
+    await act(async () => { release!(); });
+    expect((screen.getByLabelText('Notes') as HTMLTextAreaElement).value).toBe('Newer');
+  });
+
+  it('a failed refresh keeps the loaded page and toasts', async () => {
+    let listener: (() => void) | undefined;
+    listenMock.mockImplementation((async (_e: string, cb: () => void) => { listener = cb; return () => {}; }) as unknown as typeof listen);
+    let fail = false;
+    stub(detail(), {
+      api_get_action_item_detail: () => {
+        if (fail) throw new Error('boom');
+        return detail();
+      },
+    });
+    render(<TaskItemPage />);
+    await screen.findByLabelText('Notes');
+    await waitFor(() => expect(listener).toBeTruthy());
+    fail = true;
+    await act(async () => { listener!(); });
+    await waitFor(() => expect(vi.mocked(toast.error)).toHaveBeenCalled());
+    expect(screen.getByLabelText('Notes')).toBeTruthy();
+    expect(screen.queryByText('Could not load this to-do')).toBeNull();
   });
 });
