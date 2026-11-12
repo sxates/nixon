@@ -5,7 +5,7 @@
  * handoff, audio processing and the summary. It reports each stage as one `meeting-wrap-up`
  * event whose payload is the whole state (`audio/wrap_up/mod.rs::WrapUpState`). The webview
  * only reflects it: status for the rail and sidebar, a toast, the IndexedDB recovery mark.
- * Nothing here saves, summarizes or navigates.
+ * Nothing here saves or summarizes; the only navigation is recorder → summary on save.
  */
 
 import { invoke } from '@tauri-apps/api/core';
@@ -81,6 +81,20 @@ export const SAVED_TOAST_TITLE = 'Meeting saved — processing';
 /** Where the saved toast's View goes. */
 export function meetingHref(meetingId: string): string {
   return `/meeting-details?id=${encodeURIComponent(meetingId)}`;
+}
+
+/** Where a stop sends you when you were watching its live transcript: the summary. */
+export function meetingSummaryHref(meetingId: string): string {
+  return `${meetingHref(meetingId)}&tab=summary`;
+}
+
+/**
+ * Whether a saved meeting should take the window to its summary: only when the window was
+ * on the recorder, i.e. watching that meeting's live transcript. Anywhere else stays put
+ * (the owner was pulled out of other meetings and prep, 2026-11-05).
+ */
+export function shouldOpenSummaryOnSave(pathname: string): boolean {
+  return pathname.replace(/\/$/, '') === '/record';
 }
 
 /**

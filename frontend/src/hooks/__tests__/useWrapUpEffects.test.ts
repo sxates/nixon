@@ -3,8 +3,9 @@ import { renderHook, act } from '@testing-library/react';
 import type { WrapUpState } from '@/lib/wrap-up';
 
 // specs/0083 W2b — when Rust reports a meeting saved, the webview tidies up and, if anyone
-// can see it, says so. It never navigates: the owner was pulled out of another meeting or
-// prep every time a recording ended (2026-11-05), and `/record` stays put too.
+// can see it, says so. Off the recorder it never navigates: the owner was pulled out of
+// another meeting or prep every time a recording ended (2026-11-05). On `/record` — watching
+// that meeting's live transcript — it opens the meeting's summary (2026-11-11).
 
 const h = vi.hoisted(() => ({
   listeners: new Map<string, (event: { payload: unknown }) => void>(),
@@ -87,9 +88,8 @@ beforeEach(() => {
 });
 afterEach(() => setVisibility('visible'));
 
-describe('on saved, nothing navigates (specs/0083 owner decision)', () => {
+describe('off the recorder, nothing navigates (specs/0083 owner decision)', () => {
   it.each([
-    '/record',
     '/prep?id=m-9',
     '/meeting-details?id=m-other',
     '/meeting-details?id=m-1',
@@ -106,6 +106,46 @@ describe('on saved, nothing navigates (specs/0083 owner decision)', () => {
   });
 });
 
+describe('on the recorder, saved opens the summary', () => {
+  it('replaces /record with that meeting’s summary tab, once, at saved', async () => {
+    at('/record');
+    renderHook(() => useWrapUpEffects());
+    for (const stage of ['stopping', 'draining', 'saving'] as const) await emit(state(stage));
+    expect(h.replace).not.toHaveBeenCalled();
+
+    await emit(state('saved'));
+    expect(h.replace).toHaveBeenCalledTimes(1);
+    expect(h.replace).toHaveBeenCalledWith('/meeting-details?id=m-1&tab=summary');
+
+    for (const stage of ['diarizing', 'summarizing', 'done'] as const) await emit(state(stage));
+    expect(h.replace).toHaveBeenCalledTimes(1);
+    expect(h.push).not.toHaveBeenCalled();
+  });
+
+  it('shows no saved toast (you are already looking at it)', async () => {
+    at('/record');
+    renderHook(() => useWrapUpEffects());
+    await emit(state('saved'));
+    expect(h.toast.success).not.toHaveBeenCalled();
+  });
+
+  it('still shows Rust’s incomplete-transcription warning', async () => {
+    at('/record');
+    renderHook(() => useWrapUpEffects());
+    const warning = { title: 'Transcription didn’t fully finish', description: 'We saved…' };
+    await emit(state('saved', { transcriptionIncomplete: true, toast: warning }));
+    expect(h.toast.warning).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not navigate on a discard', async () => {
+    at('/record');
+    renderHook(() => useWrapUpEffects());
+    await emit(state('discarded'));
+    expect(h.replace).not.toHaveBeenCalled();
+    expect(h.push).not.toHaveBeenCalled();
+  });
+});
+
 describe('the saved toast', () => {
   it('shows "Meeting saved — processing" with a View that opens the meeting', async () => {
     at('/prep?id=m-9');
@@ -118,14 +158,6 @@ describe('the saved toast', () => {
     expect(options.action.label).toBe('View');
     options.action.onClick();
     expect(h.push).toHaveBeenCalledWith('/meeting-details?id=m-1');
-  });
-
-  it('shows on /record, which stays put', async () => {
-    at('/record');
-    renderHook(() => useWrapUpEffects());
-    await emit(state('saved'));
-    expect(h.toast.success).toHaveBeenCalledTimes(1);
-    expect(h.push).not.toHaveBeenCalled();
   });
 
   it('does not show while the window is hidden', async () => {
