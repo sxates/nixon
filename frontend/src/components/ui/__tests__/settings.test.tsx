@@ -78,9 +78,10 @@ describe('SettingsNote', () => {
     // Callout's info tone: the same 10% / 30% brand values, spelled as the named washes.
     expect(note).toHaveClass('bg-brand-wash');
     expect(note).toHaveClass('border-brand-edge');
-    // The Settings geometry is kept: 3px radius, p-4.
-    expect(note).toHaveClass('rounded-md', 'p-4');
-    expect(note).not.toHaveClass('rounded-lg');
+    // Callout's own geometry, like every callout (docs/design-system.md §Radius).
+    expect(note).toHaveClass('rounded-lg', 'px-4', 'py-3');
+    expect(note).not.toHaveClass('rounded-md');
+    expect(note).not.toHaveClass('p-4');
   });
 
   it('applies the warn tone classes (amber, never the REC red)', () => {
@@ -123,9 +124,12 @@ describe('SettingsSection', () => {
     );
     const heading = screen.getByRole('heading', { name: 'Summary prompts' });
     const action = screen.getByRole('button', { name: 'New prompt' });
-    // Same line: the heading and the action share the justify-between row.
-    expect(heading.parentElement).toHaveClass('justify-between');
+    // Same header: the heading and the action share it, the action in its own column.
+    expect(heading.parentElement).toHaveAttribute('data-section-header');
     expect(heading.parentElement).toContainElement(action);
+    // The 32px action must not stretch the title row: negative margins take it out of the
+    // row height, so the rhythm matches a section without an action.
+    expect(action.parentElement).toHaveClass('-my-2.5');
     // The region is still named by the heading alone.
     expect(screen.getByRole('region', { name: 'Summary prompts' })).toBeInTheDocument();
   });
@@ -140,5 +144,13 @@ describe('SettingsSection', () => {
       'aria-labelledby',
       'appearance-label',
     );
+  });
+});
+
+describe('SettingsGroup', () => {
+  it('is a 4px card like every other card (rounded-lg)', () => {
+    const { container } = render(<SettingsGroup>rows</SettingsGroup>);
+    expect(container.firstElementChild).toHaveClass('rounded-lg', 'border-border', 'bg-card');
+    expect(container.firstElementChild).not.toHaveClass('rounded-md');
   });
 });

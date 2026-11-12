@@ -13,7 +13,7 @@ import { cn } from '@/lib/utils';
  * (TranscriptSettings). Same idea, three different text/box styles per tab.
  *
  * The shape that survived is the ruled row inside a bordered group card, under an
- * engraved caps section label — the Nixon Faceplate/Deck geometry (`rounded-md`, 3px,
+ * engraved caps section label — the Nixon Faceplate/Deck geometry (`rounded-lg`, 4px, a card,
  * token colors only, `u-section-label` reserved for SECTION titles, never row labels).
  *
  *   <SettingsSection title="Recording" description="…">
@@ -57,21 +57,25 @@ export function SettingsSection({
   const labelId = id ?? `settings-section-${generatedId}`;
   return (
     <section aria-labelledby={labelId} className={cn('space-y-3', className)}>
-      <div>
-        {action ? (
-          <div className="flex items-center justify-between gap-3">
-            <h2 id={labelId} className="u-section-label">
-              {title}
-            </h2>
-            <div className="flex flex-none items-center gap-2">{action}</div>
-          </div>
-        ) : (
+      {action ? (
+        // A grid, so the action has its own column beside the title AND the description,
+        // and `-my-2.5` takes the 32px key out of the row height: the header keeps the
+        // rhythm of a section without an action (it used to stretch the title row to 32px).
+        <div data-section-header="" className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3">
           <h2 id={labelId} className="u-section-label">
             {title}
           </h2>
-        )}
-        {description ? <p className="u-meta mt-1">{description}</p> : null}
-      </div>
+          <div className="row-span-2 -my-2.5 flex flex-none items-center gap-2 self-start">{action}</div>
+          {description ? <p className="u-meta mt-1">{description}</p> : null}
+        </div>
+      ) : (
+        <div data-section-header="">
+          <h2 id={labelId} className="u-section-label">
+            {title}
+          </h2>
+          {description ? <p className="u-meta mt-1">{description}</p> : null}
+        </div>
+      )}
       {children}
     </section>
   );
@@ -85,7 +89,7 @@ export interface SettingsGroupProps {
 /** The ruled-row card: rows inside it are separated by hairlines, last one unruled. */
 export function SettingsGroup({ children, className }: SettingsGroupProps) {
   return (
-    <div className={cn('rounded-md border border-border bg-card px-4', className)}>
+    <div className={cn('rounded-lg border border-border bg-card px-4', className)}>
       {children}
     </div>
   );
@@ -159,8 +163,8 @@ export interface SettingsNoteProps {
 }
 
 /**
- * The Settings note — now a thin alias of `Callout` (design-system wave 0b) with the
- * Settings geometry it always had (`p-4`, the 3px row radius). `warn` used to be the REC
+ * The Settings note — a thin alias of `Callout` (design-system wave 0b) with Callout's own
+ * geometry (`rounded-lg`, `px-4 py-3`), like every other card and callout. `warn` used to be the REC
  * red wash; red is recording-only, so it is `Callout`'s amber `warn` now. New code uses
  * `Callout` directly (and `tone="error"` for a load failure).
  */
@@ -171,7 +175,7 @@ export function SettingsNote({
   role,
 }: SettingsNoteProps) {
   return (
-    <Callout tone={tone} role={role} className={cn('rounded-md p-4', className)}>
+    <Callout tone={tone} role={role} className={className}>
       {children}
     </Callout>
   );
