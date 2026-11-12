@@ -358,6 +358,23 @@ describe('ActionItemsSection triage (specs/0088)', () => {
       expect(callsFor('api_triage_action_item')[0]![1]).toEqual({ id: 's2', action: 'dismiss' }),
     );
     await waitFor(() => expect(screen.queryByText('Nope')).not.toBeInTheDocument());
+    const [title, opts] = toastSuccess.mock.calls[0]!;
+    expect(title).toBe('Item dismissed');
+    const undo = (opts as { action: { label: string; onClick: () => void } }).action;
+    expect(undo.label).toBe('Undo');
+    undo.onClick();
+    await waitFor(() =>
+      expect(callsFor('api_triage_action_item')[1]![1]).toEqual({ id: 's2', action: 'restore' }),
+    );
+  });
+
+  it('has no options menu on a suggested extracted row', async () => {
+    stubInvoke({
+      api_get_action_items: () => [makeItem({ triage: 'suggested', description: 'Menuless' })],
+    });
+    render(<ActionItemsSection meetingId="m1" hasSummary />);
+    await screen.findByText('Menuless');
+    expect(screen.queryByRole('button', { name: /options for/i })).not.toBeInTheDocument();
   });
 
   it('record rows have no checkbox and offer adopt', async () => {

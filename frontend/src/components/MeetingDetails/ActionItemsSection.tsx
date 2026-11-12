@@ -140,6 +140,19 @@ export function ActionItemsSection({ meetingId, hasSummary }: ActionItemsSection
     async (item: ActionItem, action: TriageAction) => {
       try {
         await triage(item.id, action);
+        if (action === 'dismiss') {
+          toast.success('Item dismissed', {
+            description: "It won't come back on the next scan.",
+            action: {
+              label: 'Undo',
+              onClick: () => {
+                void triage(item.id, 'restore')
+                  .then(loadItems)
+                  .catch((err) => console.error('Failed to restore action item:', err));
+              },
+            },
+          });
+        }
         await loadItems();
       } catch (err) {
         console.error('Failed to triage action item:', err);

@@ -110,6 +110,9 @@ export function ActionItemRow({
   const showCheckbox = item.triage !== 'record' && !(onTriage && item.triage === 'suggested');
   const suggestedInline = !!onTriage && item.triage === 'suggested' && !dismissed;
   const adoptInline = !!onTriage && item.triage === 'record' && !dismissed;
+  // The menu holds exactly one entry per state; a suggested row's only one (Dismiss) is
+  // inline, so there is nothing to open.
+  const hasMenu = dismissed || item.source === 'manual' || !suggestedInline;
 
   const startEdit = () => setIsEditing(true);
 
@@ -119,22 +122,23 @@ export function ActionItemRow({
     if (next && next !== item.description) void onEditDescription(item, next);
   };
 
+  const triageHandler = onTriage;
   const segments = titleSegments(item.description, nameById);
 
   return (
     <div className="group flex items-start gap-2 rounded-lg px-2 py-1.5 transition-colors hover:bg-accent/60">
       {dragHandle}
       {showCheckbox ? (
-      <Checkbox
-        checked={completed}
-        aria-label={
-          completed
-            ? `Mark "${item.description}" as open`
-            : `Mark "${item.description}" as completed`
-        }
-        onCheckedChange={(next) => void onSetStatus(item, next ? 'completed' : 'open')}
-        className="mt-0.5"
-      />
+        <Checkbox
+          checked={completed}
+          aria-label={
+            completed
+              ? `Mark "${item.description}" as open`
+              : `Mark "${item.description}" as completed`
+          }
+          onCheckedChange={(next) => void onSetStatus(item, next ? 'completed' : 'open')}
+          className="mt-0.5"
+        />
       ) : (
         <span aria-hidden className="size-4 shrink-0" />
       )}
@@ -199,18 +203,33 @@ export function ActionItemRow({
             <span className="text-caption text-muted-foreground">adopted from {adoptedFrom}</span>
           )}
           {meetingChip}
-          {suggestedInline && (
+          {triageHandler && suggestedInline && (
             <>
-              <Button type="button" size="sm" variant="outline" onClick={() => void onTriage!(item, 'add_to_list')}>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => void triageHandler(item, 'add_to_list')}
+              >
                 Add to my list
               </Button>
-              <Button type="button" size="sm" variant="ghost" onClick={() => void onTriage!(item, 'dismiss')}>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() => void triageHandler(item, 'dismiss')}
+              >
                 Dismiss
               </Button>
             </>
           )}
-          {adoptInline && (
-            <Button type="button" size="sm" variant="outline" onClick={() => void onTriage!(item, 'adopt')}>
+          {triageHandler && adoptInline && (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => void triageHandler(item, 'adopt')}
+            >
               Adopt
             </Button>
           )}
@@ -220,29 +239,31 @@ export function ActionItemRow({
         </div>
       </div>
 
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <MenuButton
-            label={`Options for "${item.description}"`}
-            className="-my-0.5 opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100"
-          />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          {dismissed ? (
-            <DropdownMenuItem icon={RotateCcw} onSelect={() => void onSetStatus(item, 'open')}>
-              Restore
-            </DropdownMenuItem>
-          ) : item.source === 'manual' ? (
-            <DropdownMenuItem icon={Trash2} variant="destructive" onSelect={() => void onDelete(item)}>
-              Delete
-            </DropdownMenuItem>
-          ) : suggestedInline ? null : (
-            <DropdownMenuItem icon={EyeOff} onSelect={() => void onSetStatus(item, 'dismissed')}>
-              Dismiss
-            </DropdownMenuItem>
-          )}
-        </DropdownMenuContent>
-      </DropdownMenu>
+      {hasMenu && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <MenuButton
+              label={`Options for "${item.description}"`}
+              className="-my-0.5 opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100"
+            />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            {dismissed ? (
+              <DropdownMenuItem icon={RotateCcw} onSelect={() => void onSetStatus(item, 'open')}>
+                Restore
+              </DropdownMenuItem>
+            ) : item.source === 'manual' ? (
+              <DropdownMenuItem icon={Trash2} variant="destructive" onSelect={() => void onDelete(item)}>
+                Delete
+              </DropdownMenuItem>
+            ) : suggestedInline ? null : (
+              <DropdownMenuItem icon={EyeOff} onSelect={() => void onSetStatus(item, 'dismissed')}>
+                Dismiss
+              </DropdownMenuItem>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
     </div>
   );
 }
