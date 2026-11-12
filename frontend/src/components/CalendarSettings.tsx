@@ -31,7 +31,7 @@ import {
 } from '@/lib/googleCalendar';
 import { describeSyncOutcome } from '@/lib/googleCalendarSyncMessage';
 import { useGoogleCalendarConnect } from '@/hooks/useGoogleCalendarConnect';
-import { SettingsGroup, SettingsNote, SettingsSection } from '@/components/ui/settings';
+import { SettingsGroup, SettingsNote, SettingsRow, SettingsSection } from '@/components/ui/settings';
 
 /**
  * Anchor for deep links into this section (specs/0066). Today's connect-calendar card
@@ -420,121 +420,113 @@ export function CalendarSettings() {
           source whenever Google is not connected; de-emphasized (but still
           usable) while Google is the source. */}
       <SettingsGroup>
-        <div
+        <SettingsRow
           role="group"
           aria-label="macOS Calendar source"
           data-lapsed={connected || undefined}
-          className="flex items-center justify-between gap-4 border-b border-border py-3"
-        >
-          <div className="flex-1">
-            <div
-              className={`flex items-center gap-2 text-sm font-medium ${
-                connected ? 'text-muted-foreground' : 'text-foreground'
-              }`}
-            >
-              macOS Calendar
-              {!connected && ACTIVE_BADGE}
-            </div>
-            <div className="text-sm text-muted-foreground">
-              {connected ? (
-                <>
-                  Not used while Google Calendar is connected
-                  {' · '}
-                  {calendarStatus ? CALENDAR_STATUS_LABEL[calendarStatus] : 'Checking…'}
-                </>
-              ) : (
-                <>
-                  {calendarStatus ? CALENDAR_STATUS_LABEL[calendarStatus] : 'Checking…'}
-                  {' — '}read on-device; your calendar data never leaves this Mac.
-                </>
-              )}
-            </div>
-          </div>
-          {calendarStatus !== 'authorized' && (
-            <Button
-              variant={connected ? 'outline' : 'brand'}
-              size="sm"
-              onClick={handleConnectCalendar}
-              disabled={connectingCalendar || calendarStatus === 'restricted'}
-            >
-              {connectingCalendar ? 'Connecting…' : 'Connect Calendar'}
-            </Button>
-          )}
-        </div>
+          label="macOS Calendar"
+          muted={connected}
+          aside={!connected ? ACTIVE_BADGE : undefined}
+          description={
+            connected ? (
+              <>
+                Not used while Google Calendar is connected
+                {' · '}
+                {calendarStatus ? CALENDAR_STATUS_LABEL[calendarStatus] : 'Checking…'}
+              </>
+            ) : (
+              <>
+                {calendarStatus ? CALENDAR_STATUS_LABEL[calendarStatus] : 'Checking…'}
+                {' — '}read on-device; your calendar data never leaves this Mac.
+              </>
+            )
+          }
+          control={
+            calendarStatus !== 'authorized' ? (
+              <Button
+                variant={connected ? 'outline' : 'brand'}
+                size="sm"
+                onClick={handleConnectCalendar}
+                disabled={connectingCalendar || calendarStatus === 'restricted'}
+              >
+                {connectingCalendar ? 'Connecting…' : 'Connect Calendar'}
+              </Button>
+            ) : undefined
+          }
+        />
 
         {/* Google Calendar (specs/0032, ADR-0010) — connecting makes it the
             active (and only) calendar source. */}
-        <div role="group" aria-label="Google Calendar source" className="py-3">
-          <div className="flex items-center justify-between gap-4">
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-                Google Calendar
-                {connected && ACTIVE_BADGE}
-              </div>
-              <div className="text-sm text-muted-foreground">
-                {googleStatus === null
-                  ? 'Checking…'
-                  : !configured
-                    ? // State (a): no OAuth client id baked into this build — inert.
-                      "Google Calendar isn't configured in this build."
-                    : googleConnecting
-                      ? 'Complete the connection in your browser…'
-                      : connected
-                        ? `Connected as ${googleStatus.email ?? 'your Google account'} · ${formatLastSynced(googleStatus.lastSyncedAt)}`
-                        : 'Not connected'}
-              </div>
-            </div>
+        <SettingsRow
+          role="group"
+          aria-label="Google Calendar source"
+          label="Google Calendar"
+          aside={connected ? ACTIVE_BADGE : undefined}
+          description={
+            googleStatus === null
+              ? 'Checking…'
+              : !configured
+                ? // State (a): no OAuth client id baked into this build — inert.
+                  "Google Calendar isn't configured in this build."
+                : googleConnecting
+                  ? 'Complete the connection in your browser…'
+                  : connected
+                    ? `Connected as ${googleStatus.email ?? 'your Google account'} · ${formatLastSynced(googleStatus.lastSyncedAt)}`
+                    : 'Not connected'
+          }
+          control={
+            <>
+              {/* State (c): connect in flight — cancel/dismiss affordance. */}
+              {configured && googleConnecting && (
+                <div className="flex flex-shrink-0 items-center gap-2">
+                  <Spinner className="text-muted-foreground" />
+                  <Button variant="outline" size="sm" onClick={handleGoogleConnectDismiss}>
+                    Cancel
+                  </Button>
+                </div>
+              )}
 
-            {/* State (c): connect in flight — cancel/dismiss affordance. */}
-            {configured && googleConnecting && (
-              <div className="flex flex-shrink-0 items-center gap-2">
-                <Spinner className="text-muted-foreground" />
-                <Button variant="outline" size="sm" onClick={handleGoogleConnectDismiss}>
-                  Cancel
-                </Button>
-              </div>
-            )}
-
-            {/* State (b): disconnected — Connect. */}
-            {configured && !googleConnecting && !connected && (
-              <Button
-                variant="brand"
-                size="sm"
-                className="flex-shrink-0"
-                onClick={handleGoogleConnect}
-              >
-                Connect Google Calendar
-              </Button>
-            )}
-
-            {/* State (d): connected — Sync now + Disconnect. */}
-            {configured && !googleConnecting && connected && (
-              <div className="flex flex-shrink-0 items-center gap-2">
+              {/* State (b): disconnected — Connect. */}
+              {configured && !googleConnecting && !connected && (
                 <Button
-                  variant="outline"
+                  variant="brand"
                   size="sm"
-                  onClick={handleSyncNow}
-                  disabled={googleSyncing}
+                  className="flex-shrink-0"
+                  onClick={handleGoogleConnect}
                 >
-                  <RefreshCw className={`h-4 w-4 ${googleSyncing ? 'animate-spin' : ''}`} />
-                  {googleSyncing ? 'Syncing…' : 'Sync now'}
+                  Connect Google Calendar
                 </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="text-destructive hover:text-destructive"
-                  onClick={() => setDisconnectOpen(true)}
-                >
-                  Disconnect
-                </Button>
-              </div>
-            )}
-          </div>
+              )}
 
+              {/* State (d): connected — Sync now + Disconnect. */}
+              {configured && !googleConnecting && connected && (
+                <div className="flex flex-shrink-0 items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleSyncNow}
+                    disabled={googleSyncing}
+                  >
+                    <RefreshCw className={`h-4 w-4 ${googleSyncing ? 'animate-spin' : ''}`} />
+                    {googleSyncing ? 'Syncing…' : 'Sync now'}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-destructive hover:text-destructive"
+                    onClick={() => setDisconnectOpen(true)}
+                  >
+                    Disconnect
+                  </Button>
+                </div>
+              )}
+            </>
+          }
+        >
           {/* State (b) details: source-switch note + privacy copy (ADR-0010,
               verbatim) + first-connect note. */}
           {configured && !connected && !googleConnecting && (
-            <div className="mt-3 space-y-2 border-t pt-3">
+            <div className="space-y-2 border-t border-border pt-3">
               <p className="text-sm text-muted-foreground">
                 Connecting switches Nixon&apos;s calendar source to Google Calendar.
               </p>
@@ -549,7 +541,7 @@ export function CalendarSettings() {
 
           {/* State (c) details: waiting on browser consent. */}
           {configured && googleConnecting && (
-            <div className="mt-3 border-t pt-3">
+            <div className="border-t border-border pt-3">
               <p className="text-sm text-muted-foreground">
                 Finish signing in with Google in the browser window that just opened. This
                 times out after 5 minutes.
@@ -559,7 +551,7 @@ export function CalendarSettings() {
 
           {/* State (d) details: per-calendar sync toggles. */}
           {configured && connected && !googleConnecting && googleStatus && (
-            <div className="mt-3 border-t pt-3">
+            <div className="border-t border-border pt-3">
               <div className="mb-2 flex items-center justify-between gap-3">
                 <div className="text-sm font-medium">Calendars to sync</div>
                 {googleStatus.calendars.length > 1 && (
@@ -659,7 +651,7 @@ export function CalendarSettings() {
               <p className="mt-2 text-xs text-muted-foreground">{GOOGLE_ENRICHMENT_COPY}</p>
             </div>
           )}
-        </div>
+        </SettingsRow>
       </SettingsGroup>
 
       {/* Disconnect confirm. */}

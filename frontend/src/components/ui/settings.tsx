@@ -95,9 +95,17 @@ export function SettingsGroup({ children, className }: SettingsGroupProps) {
   );
 }
 
-export interface SettingsRowProps {
+export interface SettingsRowProps
+  extends Omit<React.HTMLAttributes<HTMLDivElement>, 'children' | 'className'> {
   /** The setting's name — one `text-sm font-medium` line. */
   label: React.ReactNode;
+  /**
+   * Status beside the label on its line: an "Active" / "Default" `Badge`, a count. Keeps
+   * the label's weight; the label truncates before the aside wraps.
+   */
+  aside?: React.ReactNode;
+  /** De-emphasise the label (a source that is present but not in use). */
+  muted?: boolean;
   /** What the setting does / what happens when it is on. */
   description?: React.ReactNode;
   /** Right-aligned control (Switch, Select, Button, small input). */
@@ -122,11 +130,21 @@ export function SettingsRow({
   htmlFor,
   children,
   align = 'center',
+  aside,
+  muted = false,
   className,
+  ...rest
 }: SettingsRowProps) {
-  const labelClass = 'text-sm font-medium text-foreground';
+  const labelClass = cn('text-sm font-medium', muted ? 'text-muted-foreground' : 'text-foreground');
+  const labelEl = htmlFor ? (
+    <label htmlFor={htmlFor} className={cn(labelClass, aside != null && 'min-w-0 truncate')}>
+      {label}
+    </label>
+  ) : (
+    <div className={cn(labelClass, aside != null && 'min-w-0 truncate')}>{label}</div>
+  );
   return (
-    <div className={cn('border-b border-border py-3 last:border-b-0', className)}>
+    <div className={cn('border-b border-border py-3 last:border-b-0', className)} {...rest}>
       <div
         className={cn(
           'flex items-center justify-between gap-4',
@@ -134,12 +152,15 @@ export function SettingsRow({
         )}
       >
         <div className="min-w-0 flex-1 pr-4">
-          {htmlFor ? (
-            <label htmlFor={htmlFor} className={labelClass}>
-              {label}
-            </label>
+          {aside != null ? (
+            <div className="flex min-w-0 items-center gap-2">
+              {labelEl}
+              <div data-settings-row-aside="" className="flex flex-none items-center gap-1.5">
+                {aside}
+              </div>
+            </div>
           ) : (
-            <div className={labelClass}>{label}</div>
+            labelEl
           )}
           {description ? (
             <div className="text-sm text-muted-foreground">{description}</div>
@@ -147,7 +168,9 @@ export function SettingsRow({
         </div>
         {control ? <div className="flex-none">{control}</div> : null}
       </div>
-      {children ? <div className="mt-3">{children}</div> : null}
+      {/* `Children.toArray` drops `false`/`null`, so a row whose conditional details are all
+          off draws no empty 12px gap. */}
+      {React.Children.toArray(children).length > 0 ? <div className="mt-3">{children}</div> : null}
     </div>
   );
 }

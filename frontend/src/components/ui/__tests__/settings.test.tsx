@@ -154,3 +154,32 @@ describe('SettingsGroup', () => {
     expect(container.firstElementChild).not.toHaveClass('rounded-md');
   });
 });
+
+describe('SettingsRow aside, muted, attributes', () => {
+  it('puts the aside on the label line and keeps the label at text-sm', () => {
+    render(<SettingsRow label="Standard" aside={<span>Default</span>} description="Body" />);
+    const label = screen.getByText('Standard');
+    expect(label).toHaveClass('text-sm', 'font-medium', 'text-foreground', 'truncate');
+    expect(label.parentElement).toContainElement(screen.getByText('Default'));
+  });
+
+  it('mutes the label', () => {
+    render(<SettingsRow label="macOS Calendar" muted />);
+    expect(screen.getByText('macOS Calendar')).toHaveClass('text-muted-foreground');
+  });
+
+  it('passes role and aria-label to the row', () => {
+    render(<SettingsRow role="group" aria-label="Google Calendar source" label="Google Calendar" />);
+    expect(screen.getByRole('group', { name: 'Google Calendar source' })).toBeInTheDocument();
+  });
+
+  it('draws no details gap when every child is off', () => {
+    const { container } = render(
+      <SettingsRow label="x">
+        {false}
+        {null}
+      </SettingsRow>,
+    );
+    expect(container.querySelector('.mt-3')).toBeNull();
+  });
+});

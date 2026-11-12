@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Callout } from '@/components/ui/callout';
 import { DeckIcon } from '@/components/ui/deck-icon';
 import { IconButton } from '@/components/ui/icon-button';
-import { SettingsGroup, SettingsSection } from '@/components/ui/settings';
+import { SettingsGroup, SettingsRow, SettingsSection } from '@/components/ui/settings';
 import type { SummaryPrompt } from '@/lib/summary-prompts';
 import { PromptEditorDialog } from './PromptEditorDialog';
 import { DeletePromptDialog } from './DeletePromptDialog';
@@ -77,54 +77,52 @@ export function SummaryPromptSettings() {
         <SettingsGroup>
           {loading && <div className="py-3 u-meta">Loading prompts…</div>}
           {prompts.map((prompt) => (
-            <div
+            <SettingsRow
               key={prompt.id}
-              className="flex items-center justify-between gap-4 border-b border-border py-3 last:border-b-0"
-            >
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <span className="truncate font-medium">{prompt.name}</span>
-                  {prompt.is_default && (
-                    <Badge tone="brand">Default</Badge>
-                  )}
-                  {prompt.extract_action_items && (
-                    <Badge>Action items</Badge>
-                  )}
-                </div>
-                <div className="mt-0.5 line-clamp-2 whitespace-pre-line text-sm text-muted-foreground">
-                  {prompt.body}
-                </div>
-              </div>
-              <div className="flex flex-shrink-0 items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setEditorTarget(prompt)}
-                  aria-label={`Edit ${prompt.name}`}
-                >
-                  Edit
-                </Button>
-                {!prompt.is_default && (
+              label={prompt.name}
+              aside={
+                prompt.is_default || prompt.extract_action_items ? (
                   <>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => void setDefault(prompt)}
-                      aria-label={`Set ${prompt.name} as default`}
-                    >
-                      Set as default
-                    </Button>
-                    <IconButton
-                      size="md"
-                      label={`Delete ${prompt.name}`}
-                      icon={<DeckIcon icon={Trash2} />}
-                      className="text-destructive hover:text-destructive"
-                      onClick={() => setDeleteTarget(prompt)}
-                    />
+                    {prompt.is_default && <Badge tone="brand">Default</Badge>}
+                    {prompt.extract_action_items && <Badge>Action items</Badge>}
                   </>
-                )}
-              </div>
-            </div>
+                ) : undefined
+              }
+              description={
+                <span className="mt-0.5 line-clamp-2 whitespace-pre-line">{prompt.body}</span>
+              }
+              control={
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setEditorTarget(prompt)}
+                    aria-label={`Edit ${prompt.name}`}
+                  >
+                    Edit
+                  </Button>
+                  {!prompt.is_default && (
+                    <>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => void setDefault(prompt)}
+                        aria-label={`Set ${prompt.name} as default`}
+                      >
+                        Set as default
+                      </Button>
+                      <IconButton
+                        size="md"
+                        label={`Delete ${prompt.name}`}
+                        icon={<DeckIcon icon={Trash2} />}
+                        className="text-destructive hover:text-destructive"
+                        onClick={() => setDeleteTarget(prompt)}
+                      />
+                    </>
+                  )}
+                </div>
+              }
+            />
           ))}
           {!loading && !loadError && prompts.length === 0 && (
             <div className="py-3 u-meta">
