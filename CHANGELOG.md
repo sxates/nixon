@@ -19,7 +19,9 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 ## [Unreleased]
 
-_(nothing yet)_
+### Internal
+
+- Releases and promotes now update nixonapp.com end to end via `scripts/publish-site.sh`: download-page version, site screenshots from `docs/screenshots/real`, push on `NIXON_SITE_BRANCH`, and deploy of production + staging. Re-runnable by hand.
 
 ## [0.16.1] - 2026-11-10
 

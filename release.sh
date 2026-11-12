@@ -15,8 +15,8 @@
 #   6. Publish to Cloudflare R2 (nixonapp.com, specs/0080): DMG + updater tarball +
 #      signature, then updates/current.json, then updates/early.json (only if it
 #      would move forward, specs/0086), then updates/latest.json LAST (the feed
-#      every install polls), then verify the live feed and push
-#      public/release.json to the site repo. Needs CLOUDFLARE_API_TOKEN,
+#      every install polls), then verify the live feed and update the site
+#      (scripts/publish-site.sh: release.json + screenshots, push, deploy). Needs CLOUDFLARE_API_TOKEN,
 #      CLOUDFLARE_ACCOUNT_ID, NIXON_SITE_DIR (see SETUP.md) and
 #      TAURI_SIGNING_PRIVATE_KEY (specs/0058).
 #   7. Also publish a GitHub Release on the tag (notes from the changelog, DMG +
@@ -179,6 +179,12 @@ if [ "$NO_RELEASE" -eq 0 ]; then
     # fail before the build/tag, not after the tag is pushed
     [ -d "$NIXON_SITE_DIR/public" ] || die "$NIXON_SITE_DIR/public does not exist (is NIXON_SITE_DIR the site repo?)"
     pnpm --dir "$NIXON_SITE_DIR" exec wrangler --version >/dev/null 2>&1 || die "wrangler not runnable via 'pnpm --dir $NIXON_SITE_DIR exec wrangler' (run pnpm install in the site repo)."
+    # The site step (scripts/publish-site.sh) needs this; catch it before the build, not after the push.
+    if [ "$EARLY" -eq 0 ]; then
+      site_branch="$(git -C "$NIXON_SITE_DIR" rev-parse --abbrev-ref HEAD)"
+      [ "$site_branch" = "${NIXON_SITE_BRANCH:-main}" ] || die "site repo is on '$site_branch', not '${NIXON_SITE_BRANCH:-main}' (NIXON_SITE_BRANCH in ${SIGNING_ENV}); switch it first."
+      [ -z "$(git -C "$NIXON_SITE_DIR" status --porcelain)" ] || die "site repo ($NIXON_SITE_DIR) has uncommitted changes; commit or stash them first."
+    fi
     # Token preflight: before the build/tag, prove the token can reach the bucket. A missing
     # updates/latest.json (brand-new empty bucket) is fine; only auth/permission errors fail.
     if [ "$DRY_RUN" -eq 1 ]; then
@@ -279,25 +285,13 @@ verify_live() {
   c_green "   ✅ $1 serves $2; DMG and updater tarball sizes match."
 }
 
-# ---- site release.json (page shows the current version; warn, never fail) ----
-# NOTE: called as `f || warn`, where errexit is ignored — so every step is chained
-# explicitly and the first failure returns non-zero (no invalid JSON, no partial push).
-#RELEASE_JSON_FN_BEGIN
+# ---- nixonapp.com: release.json + screenshots + deploy (warn, never fail) ----
+# scripts/publish-site.sh does the work so it can also be re-run by hand (a second
+# promote refuses once latest.json moved). It needs the site repo on NIXON_SITE_BRANCH.
 publish_release_json() { # version dmg-bytes
-  local ver="$1" size="$2" tmp rj="${NIXON_SITE_DIR}/public/release.json"
-  [ "$(git -C "$NIXON_SITE_DIR" rev-parse --abbrev-ref HEAD)" = main ] || return 1
-  [[ "$size" =~ ^[0-9]+$ ]] || return 1
-  tmp="${rj}.tmp.$$"
-  printf '{"version":"%s","size":%s,"date":"%s"}\n' "$ver" "$size" "$(date -u +%F)" > "$tmp" \
-    && mv -f "$tmp" "$rj" || { rm -f "$tmp"; return 1; }
-  git -C "$NIXON_SITE_DIR" add -- public/release.json || return 1
-  if ! git -C "$NIXON_SITE_DIR" diff --cached --quiet -- public/release.json; then
-    git -C "$NIXON_SITE_DIR" commit -qm "release: v${ver}" -- public/release.json || return 1
-  fi
-  git -C "$NIXON_SITE_DIR" push -q origin main
+  "$REPO_ROOT/scripts/publish-site.sh" "$1" --size "$2"
 }
-#RELEASE_JSON_FN_END
-RELEASE_JSON_WARN="⚠️  Could not push release.json to the site repo (it must be checked out on branch main); the page will show the old version until you do."
+RELEASE_JSON_WARN="⚠️  nixonapp.com was not updated (see the error above). Fix it, then run: scripts/publish-site.sh <version>"
 
 # ---- screenshot_reminder <since-tag> (specs/0060) ---------------------------
 # Non-blocking nudge to refresh docs/screenshots/real when they are missing or older than
@@ -751,7 +745,7 @@ else
    Skipped because of this: the GitHub release and the site release.json push. Artifacts and the feed are already uploaded.
    To finish: re-check ${SITE_BASE}/updates/latest.json, then run:
      ${GH_RETRY}
-   and update ${NIXON_SITE_DIR}/public/release.json by hand."
+   and run scripts/publish-site.sh ${NEW}."
         }
       fi
       verify_live "$ADVERTISED" "$NEW" "$DMG_NAME" "$(stat -f%z "$DMG")" "$(stat -f%z "$UPD_TGZ")"
@@ -761,7 +755,7 @@ else
     if [ "$EARLY" -eq 1 ]; then
       c_yellow "   --early: public/release.json not touched (the download page keeps the everyone version)."
     elif [ "$DRY_RUN" -eq 1 ]; then
-      echo "  [dry-run] write ${NIXON_SITE_DIR}/public/release.json and push"
+      "$REPO_ROOT/scripts/publish-site.sh" "$NEW" --size 1 --dry-run || c_yellow "$RELEASE_JSON_WARN"
     else
       { dmg_size="$(stat -f%z "$DMG")" && publish_release_json "$NEW" "$dmg_size"; } || c_yellow "$RELEASE_JSON_WARN"
     fi
