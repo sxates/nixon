@@ -1,12 +1,13 @@
 'use client';
 
-import { MoreHorizontal, Pencil, Radio, Trash2 } from 'lucide-react';
+import { Pencil, Radio, Trash2 } from '@/components/ui/icons';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { MenuButton } from '@/components/ui/menu-button';
 
 interface MeetingOptionsMenuProps {
   /** Continue recording (specs/0037): resume capture INTO this same meeting. */
@@ -19,7 +20,7 @@ interface MeetingOptionsMenuProps {
   onDelete: () => void;
 }
 
-/** The unobtrusive "…" overflow menu on the meeting-details identity row. */
+/** The unobtrusive "…" overflow menu in the meeting page header's actions. */
 export function MeetingOptionsMenu({
   canContinueRecording,
   onContinueRecording,
@@ -30,33 +31,20 @@ export function MeetingOptionsMenu({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button
-          type="button"
-          aria-label="Meeting options"
-          title="Meeting options"
-          className="mt-1 inline-flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <MoreHorizontal className="h-[18px] w-[18px]" />
-        </button>
+        <MenuButton label="Meeting options" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         {canContinueRecording && (
-          <DropdownMenuItem onSelect={onContinueRecording}>
-            <Radio className="mr-2 h-4 w-4" />
+          <DropdownMenuItem icon={Radio} onSelect={onContinueRecording}>
             Continue recording
           </DropdownMenuItem>
         )}
         {canEditManualMeeting && (
-          <DropdownMenuItem onSelect={onEditManualMeeting}>
-            <Pencil className="mr-2 h-4 w-4" />
+          <DropdownMenuItem icon={Pencil} onSelect={onEditManualMeeting}>
             Edit date & time
           </DropdownMenuItem>
         )}
-        <DropdownMenuItem
-          onSelect={onDelete}
-          className="text-destructive focus:text-destructive"
-        >
-          <Trash2 className="mr-2 h-4 w-4" />
+        <DropdownMenuItem icon={Trash2} variant="destructive" onSelect={onDelete}>
           Delete meeting
         </DropdownMenuItem>
       </DropdownMenuContent>

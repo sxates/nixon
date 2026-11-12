@@ -1,5 +1,6 @@
 'use client';
 
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type { MeetingTab, MeetingTabKey } from '@/hooks/meeting-details/useMeetingTabs';
 
 interface MeetingTabsBarProps {
@@ -11,45 +12,42 @@ interface MeetingTabsBarProps {
 }
 
 /**
- * The meeting-details tablist — underlined active tab in brand. specs/0019 WS1.1:
+ * The meeting-details tablist — the `ui/tabs` underline strip. specs/0019 WS1.1:
  * sticky to the top of the scroll column so Summary/Transcript/Notes stay reachable
  * from deep in a long transcript without scrolling back up. bg-background keeps
  * content from showing through as it scrolls under.
+ *
+ * Only the strip comes from Radix: the panels are `MeetingTabPanels`, which keeps its own
+ * `meeting-tabpanel-*` ids and lazy-mount rules, so each trigger names them explicitly.
+ * The arrow-key handler is `useMeetingTabs`'s; it calls `preventDefault`, which Radix's
+ * own roving focus then defers to.
  */
 export function MeetingTabsBar({ tabs, activeTab, onSelect, tabRefs, onTabKeyDown }: MeetingTabsBarProps) {
   return (
-    <div
-      role="tablist"
-      aria-label="Meeting views"
-      className="sticky top-0 z-10 mb-3 mt-4 flex gap-1 border-b border-border bg-background pt-2"
+    // `contents`: the root draws no box, so the sticky list's containing block is still the
+    // whole document column — inside a box of its own height it could never stick.
+    <Tabs
+      value={activeTab}
+      onValueChange={(value) => onSelect(value as MeetingTabKey)}
+      className="contents"
     >
-      {tabs.map(({ key, label }, index) => {
-        const active = activeTab === key;
-        return (
-          <button
+      <TabsList aria-label="Meeting views" className="sticky top-0 z-10 mb-3 mt-4 bg-background pt-2">
+        {tabs.map(({ key, label }, index) => (
+          <TabsTrigger
             key={key}
-            ref={(el) => { tabRefs.current[index] = el; }}
+            value={key}
+            ref={(el) => {
+              tabRefs.current[index] = el;
+            }}
             id={`meeting-tab-${key}`}
-            role="tab"
-            type="button"
-            aria-selected={active}
             aria-controls={`meeting-tabpanel-${key}`}
-            // Roving tabindex: only the active tab is in the Tab order; arrow keys move
-            // between tabs (WAI-ARIA tabs pattern).
-            tabIndex={active ? 0 : -1}
             onClick={() => onSelect(key)}
             onKeyDown={(e) => onTabKeyDown(e, index)}
-            className={
-              'border-b-2 px-3 py-1.5 text-sm font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring ' +
-              (active
-                ? '-mb-px border-brand text-foreground'
-                : 'border-transparent text-muted-foreground hover:text-foreground')
-            }
           >
             {label}
-          </button>
-        );
-      })}
-    </div>
+          </TabsTrigger>
+        ))}
+      </TabsList>
+    </Tabs>
   );
 }

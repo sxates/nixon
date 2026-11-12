@@ -1,9 +1,10 @@
 "use client";
 import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Speaker, X } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Callout } from '@/components/ui/callout';
+import { DeckIcon } from '@/components/ui/deck-icon';
+import { IconButton } from '@/components/ui/icon-button';
+import { X } from '@/components/ui/icons';
 
 interface AudioOutputInfo {
   device_name: string;
@@ -63,34 +64,25 @@ export function BluetoothPlaybackWarning({
   }
 
   return (
-    <Alert
-      className="mb-4 border-brand/50 bg-brand/10 text-foreground"
+    <Callout
+      tone="warn"
+      className="mb-4"
       role="alert"
       aria-live="polite"
-    >
-      <Speaker className="h-4 w-4 text-brand" />
-      <div className="flex items-start justify-between w-full">
-        <div className="flex-1">
-          <AlertTitle className="text-foreground font-semibold">
-            Bluetooth Playback Detected
-          </AlertTitle>
-          <AlertDescription className="text-foreground mt-1">
-            You&apos;re using <strong>{deviceName}</strong> for playback.
-            Recordings may sound distorted or sped up through Bluetooth devices.
-            For accurate review, please use <strong>computer speakers</strong> or{' '}
-            <strong>wired headphones</strong>.
-          </AlertDescription>
-        </div>
-        <Button
+      title="Bluetooth Playback Detected"
+      action={
+        <IconButton
           variant="ghost"
-          size="icon"
+          label="Dismiss warning"
           onClick={() => setIsDismissed(true)}
-          className="ml-4 h-6 w-6 text-muted-foreground hover:text-foreground hover:bg-brand/20"
-          aria-label="Dismiss warning"
-        >
-          <X className="h-4 w-4" />
-        </Button>
-      </div>
-    </Alert>
+          icon={<DeckIcon icon={X} size={14} />}
+        />
+      }
+    >
+      You&apos;re using <strong>{deviceName}</strong> for playback.
+      Recordings may sound distorted or sped up through Bluetooth devices.
+      For accurate review, please use <strong>computer speakers</strong> or{' '}
+      <strong>wired headphones</strong>.
+    </Callout>
   );
 }

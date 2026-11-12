@@ -92,7 +92,7 @@ function speakerByLine(): Array<[string, string]> {
  * otherwise show up glued to the front ("S1Speaker 1").
  */
 function headerName(row: HTMLElement): string {
-  return row.querySelector<HTMLElement>('span.u-typed')?.textContent?.trim() ?? '';
+  return row.querySelector<HTMLElement>('span.u-speaker')?.textContent?.trim() ?? '';
 }
 
 /** The ordered run headers — one per block of consecutive same-speaker lines. */

@@ -29,7 +29,7 @@ export function SummaryGenerating() {
         aria-label="Writing your summary"
       >
         <Reels state="rewinding" size={44} />
-        <p className="u-section-label mt-4 text-[10px] text-engrave">Reading the tape</p>
+        <p className="u-section-label mt-4">Reading the tape</p>
         <p className="mt-1.5 text-sm text-muted-foreground">Writing your summary…</p>
       </div>
     </div>

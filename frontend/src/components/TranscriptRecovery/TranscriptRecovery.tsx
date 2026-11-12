@@ -7,7 +7,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { formatDistanceToNow } from 'date-fns';
-import { AlertCircle, CheckCircle2, Clock, FileText, Trash2, XCircle } from 'lucide-react';
+import { ListRow } from '@/components/ui/list-row';
+import { Spinner } from '@/components/ui/spinner';
+import { StatusDot } from '@/components/ui/status-dot';
 import {
   Dialog,
   DialogContent,
@@ -21,7 +23,6 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { MeetingMetadata, StoredTranscript } from '@/services/indexedDBService';
 import { toast } from 'sonner';
-import { cn } from '@/lib/utils';
 
 interface TranscriptRecoveryProps {
   isOpen: boolean;
@@ -133,42 +134,28 @@ export function TranscriptRecovery({
           {/* Meeting List */}
           <div className="w-1/3 flex flex-col">
             <h3 className="text-sm font-medium mb-2">Interrupted Meetings</h3>
-            <ScrollArea className="flex-1 border rounded-lg">
-              <div className="p-2 space-y-2">
+            <ScrollArea className="flex-1 rounded-lg border">
+              <div className="space-y-0.5 p-2">
                 {recoverableMeetings.map((meeting) => (
-                  <button
+                  <ListRow
                     key={meeting.meetingId}
                     onClick={() => handleMeetingSelect(meeting.meetingId)}
-                    className={cn(
-                      'w-full text-left p-3 rounded-lg border transition-colors',
-                      selectedMeetingId === meeting.meetingId
-                        ? 'bg-primary/10 border-primary'
-                        : 'hover:bg-muted border-transparent'
-                    )}
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-sm truncate">{meeting.title}</p>
-                        <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
-                          <Clock className="w-3 h-3" />
-                          {formatDistanceToNow(new Date(meeting.lastUpdated), { addSuffix: true })}
-                        </p>
-                        <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
-                          <FileText className="w-3 h-3" />
-                          {meeting.transcriptCount} transcript{meeting.transcriptCount !== 1 ? 's' : ''}
-                        </p>
-                      </div>
-                      {meeting.folderPath ? (
-                        <span title="Audio available">
-                          <CheckCircle2 className="w-4 h-4 text-success flex-shrink-0" />
-                        </span>
-                      ) : (
-                        <span title="No audio">
-                          <AlertCircle className="w-4 h-4 text-brand flex-shrink-0" />
-                        </span>
-                      )}
-                    </div>
-                  </button>
+                    selected={selectedMeetingId === meeting.meetingId}
+                    title={meeting.title}
+                    meta={
+                      <>
+                        {formatDistanceToNow(new Date(meeting.lastUpdated), { addSuffix: true })}
+                        {' · '}
+                        {meeting.transcriptCount} transcript{meeting.transcriptCount !== 1 ? 's' : ''}
+                      </>
+                    }
+                    trailing={
+                      <StatusDot
+                        tone={meeting.folderPath ? 'success' : 'brand'}
+                        label={meeting.folderPath ? 'Audio available' : 'No audio'}
+                      />
+                    }
+                  />
                 ))}
               </div>
             </ScrollArea>
@@ -187,18 +174,15 @@ export function TranscriptRecovery({
                       Started {new Date(selectedMeeting.startTime).toLocaleString()}
                     </p>
                     <div className="flex items-center gap-4 mt-2 text-sm">
-                      <span className="flex items-center gap-1">
-                        <FileText className="w-4 h-4" />
-                        {selectedMeeting.transcriptCount} transcripts
-                      </span>
+                      <span>{selectedMeeting.transcriptCount} transcripts</span>
                       {selectedMeeting.folderPath ? (
-                        <span className="flex items-center gap-1 text-success">
-                          <CheckCircle2 className="w-4 h-4" />
+                        <span className="flex items-center gap-1.5 text-success">
+                          <StatusDot tone="success" />
                           Audio available
                         </span>
                       ) : (
-                        <span className="flex items-center gap-1 text-brand">
-                          <AlertCircle className="w-4 h-4" />
+                        <span className="flex items-center gap-1.5 text-brand">
+                          <StatusDot tone="brand" />
                           No audio
                         </span>
                       )}
@@ -284,30 +268,25 @@ export function TranscriptRecovery({
           >
             {isDeleting ? (
               <>
-                <XCircle className="w-4 h-4 mr-2 animate-spin" />
+                <Spinner />
                 Deleting...
               </>
             ) : (
-              <>
-                <Trash2 className="w-4 h-4 mr-2" />
-                Delete
-              </>
+              'Delete'
             )}
           </Button>
           <Button
+            variant="brand"
             onClick={handleRecover}
             disabled={!selectedMeetingId || isRecovering || isDeleting}
           >
             {isRecovering ? (
               <>
-                <CheckCircle2 className="w-4 h-4 mr-2 animate-spin" />
+                <Spinner />
                 Recovering...
               </>
             ) : (
-              <>
-                <CheckCircle2 className="w-4 h-4 mr-2" />
-                Recover
-              </>
+              'Recover'
             )}
           </Button>
         </DialogFooter>

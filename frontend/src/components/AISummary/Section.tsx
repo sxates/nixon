@@ -5,6 +5,7 @@ import { BlockComponent } from './Block';
 import { EditableText } from '@/components/ui/editable-text';
 import { useState, useRef } from 'react';
 import { motion } from 'framer-motion';
+import { Button } from '@/components/ui/button';
 
 interface SectionProps {
   section: SectionType;
@@ -51,10 +52,11 @@ export const Section: React.FC<SectionProps> = ({
   };
 
   return (
+    // Opacity only: no entrance travel (docs/design-system.md §Motion).
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5 }}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.14 }}
       className="mb-8"
     >
       <div className="flex items-center justify-between mb-4">
@@ -67,12 +69,14 @@ export const Section: React.FC<SectionProps> = ({
           onDelete={onSectionDelete ? () => onSectionDelete(sectionKey) : undefined}
         />
         {onSectionDelete && (
-          <button
+          <Button
+            variant="ghost"
+            size="xs"
             onClick={() => onSectionDelete(sectionKey)}
-            className="text-muted-foreground hover:text-foreground"
+            className="font-normal text-muted-foreground hover:text-foreground"
           >
             Delete
-          </button>
+          </Button>
         )}
       </div>
       <motion.div
@@ -83,9 +87,9 @@ export const Section: React.FC<SectionProps> = ({
         {(section.blocks || []).map((block, index) => (
           <motion.div
             key={block.id}
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.3, delay: index * 0.1 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.14, delay: index * 0.05 }}
           >
             <BlockComponent
               block={block}

@@ -1,9 +1,9 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { ArrowLeft, Pencil } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { PageHeader } from '@/components/ui/page-header';
+import { MeetingTitleField } from '@/components/MeetingDetails/MeetingTitleField';
 import { formatReelNumber } from '@/lib/reel-number';
 
 interface MeetingIdentityHeaderProps {
@@ -34,6 +34,9 @@ interface MeetingIdentityHeaderProps {
   voices?: number;
   /** Back handler for the inline back button (e.g. router.push('/')). */
   onBack?: () => void;
+  /** Right-hand cluster: the scheduled record control and the meeting's overflow menu. */
+  actions?: ReactNode;
+  className?: string;
 }
 
 const PLACEHOLDER_TITLE = '+ New Call';
@@ -86,6 +89,8 @@ export function MeetingIdentityHeader({
   source,
   voices,
   onBack,
+  actions,
+  className,
 }: MeetingIdentityHeaderProps) {
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -160,48 +165,25 @@ export function MeetingIdentityHeader({
     }
   }, [isEditing]);
 
-  const displayTitle = title?.trim() || 'Untitled meeting';
+  // The context's unnamed-session placeholder is not a title: show the muted placeholder.
+  const realTitle = title === PLACEHOLDER_TITLE ? '' : title;
   const reelDate = formatReelDate(createdAt);
   const reelTime = formatReelTime(createdAt);
   const reelLength = formatReelLength(durationSeconds ?? durationFromTranscripts(transcripts));
   const reelSource = source?.trim() || null;
 
-  const titleField = isEditing ? (
-    <input
-      ref={inputRef}
-      type="text"
-      value={title === PLACEHOLDER_TITLE ? '' : title}
+  const titleField = (
+    <MeetingTitleField
+      title={realTitle}
       placeholder="Untitled meeting"
-      onChange={(e) => onTitleChange(e.target.value)}
-      onBlur={() => void commitTitle()}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter') {
-          e.preventDefault();
-          void commitTitle();
-        } else if (e.key === 'Escape') {
-          e.preventDefault();
-          cancelEditing();
-        }
-      }}
-      className="w-full rounded-md border border-input bg-muted px-2 py-1 font-display text-[22px] font-semibold tracking-[-0.011em] text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+      isEditing={isEditing}
+      draft={realTitle}
+      onDraftChange={onTitleChange}
+      onStartEditing={startEditing}
+      onCommit={() => void commitTitle()}
+      onCancel={cancelEditing}
+      inputRef={inputRef}
     />
-  ) : (
-    <button
-      type="button"
-      onClick={startEditing}
-      title="Click to rename"
-      className="group -ml-2 flex w-fit max-w-full items-center gap-2 rounded-md px-2 py-1 text-left transition-colors hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-    >
-      <h1
-        className={cn(
-          'truncate font-display text-[22px] font-semibold tracking-[-0.011em]',
-          displayTitle === 'Untitled meeting' ? 'text-muted-foreground' : 'text-foreground',
-        )}
-      >
-        {displayTitle}
-      </h1>
-      <Pencil className="h-4 w-4 flex-shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
-    </button>
   );
 
   // Engraved identity line (specs/0057): the reel handle plus the recording's facts,
@@ -224,29 +206,18 @@ export function MeetingIdentityHeader({
     </p>
   );
 
-  // Single-column document layout: back button + editable title + the engraved identity
-  // line. The back button used to hang in the gutter left of the reading column
-  // (`lg:absolute lg:-left-9`) so the title lined up with the participants row and tabs
-  // below. specs/0064 W4 moved this header out of that column and across the full width,
-  // which left the hang pulling the button 36px into the page's own padding — hard against
-  // the sidebar (owner feedback 2026-09-19). It is inline again, inside that padding.
+  // The one page header (docs/design-system.md): back · editable title · the engraved
+  // identity line as the subtitle · the per-meeting actions. The recorder renders the same
+  // `PageHeader` + `MeetingTitleField`, so the two screens share one title row. The back
+  // button is inline, inside the page padding — it used to hang 36px into it, hard against
+  // the sidebar (owner feedback 2026-09-19). The caller owns the outer padding.
   return (
-    <div className="relative flex items-start gap-1.5">
-      {onBack && (
-        <button
-          type="button"
-          onClick={onBack}
-          aria-label="Back to meetings"
-          title="Back to meetings"
-          className="-ml-1 mt-1 inline-flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <ArrowLeft className="h-[18px] w-[18px]" />
-        </button>
-      )}
-      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-        {titleField}
-        {identityLine}
-      </div>
-    </div>
+    <PageHeader
+      className={className}
+      back={onBack ? { label: 'Back to meetings', onClick: onBack } : undefined}
+      title={titleField}
+      subtitle={identityLine}
+      actions={actions}
+    />
   );
 }

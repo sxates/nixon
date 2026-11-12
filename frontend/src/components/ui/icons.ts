@@ -56,4 +56,9 @@ export {
   NotebookPen,
 } from 'lucide-react';
 
+// Functional glyphs on icon-only controls, where the glyph is the control's only face:
+// - BatteryLow: the recorder's mode chip, the one carrier of "paused because on battery".
+// - Link2: the Prep tab's icon-only "Link previous meeting…" button.
+export { BatteryLow, Link2 } from 'lucide-react';
+
 export type { LucideIcon } from 'lucide-react';

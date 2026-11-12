@@ -29,7 +29,7 @@
  */
 
 import { useEffect, useState } from 'react';
-import { Mic, Radio } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { useRouter } from 'next/navigation';
 import { useSidebar } from '@/components/Sidebar/SidebarProvider';
 import { useRecordingState } from '@/contexts/RecordingStateContext';
@@ -227,16 +227,17 @@ export function ScheduledRecordControl({
         <span className="whitespace-nowrap text-xs text-muted-foreground">{countdownLabel}</span>
       )}
       {canRecord && (
-        <button
+        <Button
           type="button"
+          variant="brand"
+          size="sm"
           onClick={isContinue ? onContinueRecording : onStartRecord}
           disabled={isRecording || (isContinue && isArming)}
           title={buttonTitle}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-3 py-1.5 text-sm font-semibold text-brand-foreground transition-colors hover:bg-brand/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+          className="text-sm"
         >
-          {isContinue ? <Radio size={14} aria-hidden="true" /> : <Mic size={14} aria-hidden="true" />}
           {buttonLabel}
-        </button>
+        </Button>
       )}
     </div>
   );

@@ -30,6 +30,8 @@ import { consolidateSpeakers } from '@/lib/speaker-consolidation';
 import { useConfig } from '@/contexts/ConfigContext';
 import { useRecordingState } from '@/contexts/RecordingStateContext';
 import { armResumeRecording } from '@/lib/resume-recording';
+import { DOC_CONTENT_WIDTH, PAGE_GUTTER } from '@/lib/page-width';
+import { cn } from '@/lib/utils';
 
 /** specs/0057 — how the recording got here, for the reel label's SOURCE line.
  *  Only what the backend actually knows; an unmapped origin leaves the line blank. */
@@ -309,23 +311,20 @@ export default function PageContent({
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3, ease: 'easeOut' }}
+      // Opacity only: no entrance travel (docs/design-system.md §Motion).
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.14, ease: 'easeOut' }}
       className="flex h-page flex-col bg-background"
     >
-      {/* specs/0064 W4 — the identity header spans the content area, like the header on
-          every other screen (Today, Meetings, People all put their header outside the
-          constrained body). Only the document below it is capped to a reading column.
+      {/* The identity header sits on the same reading column as the document below it
+          (docs/design-system.md §Spacing: title, tabs and first card share one left edge).
           It sits OUTSIDE the scroll column (as on the person page), so the back button and
           title stay put while a long transcript scrolls; the sticky tab bar then pins
-          directly beneath it. No top chrome bar — the back button is inline with the title. */}
-      <div data-testid="meeting-header" className="w-full flex-shrink-0 px-4 pt-6 min-[900px]:px-7">
-        {/* Compressed identity: inline back button + editable serif title + meta row.
-            An unobtrusive overflow menu (delete) aligns to the right of the row. */}
-        <div className="flex items-start gap-2">
-          <div className="min-w-0 flex-1">
+          directly beneath it. */}
+      <div data-testid="meeting-header" className={cn('mx-auto w-full flex-shrink-0', DOC_CONTENT_WIDTH)}>
             <MeetingIdentityHeader
+              className="pb-0 pt-6"
               onBack={() => {
                 // Return to wherever the user came from (day view, All meetings,
                 // People, sidebar) — every entry point `push`es, so history holds it
@@ -347,44 +346,46 @@ export default function PageContent({
               reelNumber={meeting.reelNumber}
               source={REEL_SOURCE_BY_ORIGIN[meeting.origin as string] ?? null}
               voices={voices}
+              actions={
+                <>
+                  {/* Calendar-linked (or manual) meeting: a compact countdown chip + record
+                      button bound to this event (specs/0038 feedback, reworked specs/0041
+                      WS3). For a scheduled occurrence it's "Join & record" / "Start &
+                      record" (opens the call when the event has a link); for an
+                      already-recorded occurrence (false start) it becomes "Continue
+                      recording" via the specs/0037 resume path — same meeting row, never a
+                      duplicate. `isManualEntry` lifts the T-5 window entirely for a
+                      manually added entry (specs/0069b followup). */}
+                  {meeting.calendarEventId && (isScheduled || isRecorded) && (
+                    <ScheduledRecordControl
+                      meetingId={meeting.id}
+                      startsAt={meeting.created_at}
+                      title={meetingData.meetingTitle}
+                      calendarEventId={meeting.calendarEventId}
+                      seriesKey={meeting.calendarSeriesKey ?? null}
+                      origin={isScheduled ? 'scheduled' : 'recorded'}
+                      hasTranscripts={(totalCount ?? meeting.transcripts?.length ?? 0) > 0}
+                      folderPath={meeting.folder_path ?? null}
+                      isManualEntry={meeting.isManualEntry === true}
+                    />
+                  )}
+                  <MeetingOptionsMenu
+                    canContinueRecording={canContinueRecording}
+                    onContinueRecording={handleContinueRecording}
+                    canEditManualMeeting={canEditManualMeeting}
+                    onEditManualMeeting={() => setIsEditManualDialogOpen(true)}
+                    onDelete={() => setIsDeleteDialogOpen(true)}
+                  />
+                </>
+              }
             />
-          </div>
-          {/* Calendar-linked (or manual) meeting: a compact countdown chip + record button
-              bound to this event (specs/0038 feedback, reworked specs/0041 WS3). For a
-              scheduled occurrence it's "Join & record" / "Start & record" (opens the call
-              when the event has a link); for an already-recorded occurrence (false start)
-              it becomes "Continue recording" via the specs/0037 resume path — same meeting
-              row, never a duplicate. Sits inline next to the "…" menu. `isManualEntry`
-              lifts the T-5 window entirely for a manually added entry (specs/0069b
-              followup) — its date/time is the user's own choice, not an invite's. */}
-          {meeting.calendarEventId && (isScheduled || isRecorded) && (
-            <ScheduledRecordControl
-              meetingId={meeting.id}
-              startsAt={meeting.created_at}
-              title={meetingData.meetingTitle}
-              calendarEventId={meeting.calendarEventId}
-              seriesKey={meeting.calendarSeriesKey ?? null}
-              origin={isScheduled ? 'scheduled' : 'recorded'}
-              hasTranscripts={(totalCount ?? meeting.transcripts?.length ?? 0) > 0}
-              folderPath={meeting.folder_path ?? null}
-              isManualEntry={meeting.isManualEntry === true}
-            />
-          )}
-          <MeetingOptionsMenu
-            canContinueRecording={canContinueRecording}
-            onContinueRecording={handleContinueRecording}
-            canEditManualMeeting={canEditManualMeeting}
-            onEditManualMeeting={() => setIsEditManualDialogOpen(true)}
-            onDelete={() => setIsDeleteDialogOpen(true)}
-          />
-        </div>
       </div>
 
       {/* Single-column document. The column owns the scroll; tab content renders inline. */}
       <div data-testid="meeting-scroll-column" className="flex-1 overflow-y-auto">
         {/* Fluid reading column: full width of the content area up to a max cap (the
             content area already excludes the sidebar, so this never overflows). */}
-        <div className="mx-auto w-full max-w-[840px] px-4 pb-24 min-[900px]:px-7">
+        <div className={cn("mx-auto w-full pb-24", DOC_CONTENT_WIDTH, PAGE_GUTTER)}>
           <DeleteMeetingDialog
             open={isDeleteDialogOpen}
             onOpenChange={setIsDeleteDialogOpen}

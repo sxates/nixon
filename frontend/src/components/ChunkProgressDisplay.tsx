@@ -1,4 +1,8 @@
 import React from 'react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Progress } from '@/components/ui/progress';
+import { Spinner } from '@/components/ui/spinner';
 
 export interface ChunkStatus {
   chunk_id: number;
@@ -76,11 +80,11 @@ export function ChunkProgressDisplay({
   const getChunkStatusColor = (status: ChunkStatus['status']) => {
     switch (status) {
       case 'completed':
-        return 'text-success bg-success/10 border-success/30';
+        return 'text-success bg-success-wash border-success/30';
       case 'processing':
-        return 'text-brand bg-brand/10 border-brand/30';
+        return 'text-brand bg-brand-wash border-brand-edge';
       case 'failed':
-        return 'text-destructive bg-destructive/10 border-destructive/30';
+        return 'text-destructive bg-destructive-wash border-destructive-edge';
       case 'pending':
       default:
         return 'text-muted-foreground bg-muted border-border';
@@ -96,36 +100,29 @@ export function ChunkProgressDisplay({
             Processing Progress
           </h3>
           {isPaused && (
-            <span className="bg-brand/10 text-brand px-2 py-1 rounded-[3px] text-xs font-medium">
-              Paused
-            </span>
+            <Badge tone="brand">Paused</Badge>
           )}
         </div>
 
         <div className="flex items-center space-x-2">
           {!isPaused ? (
-            <button
+            <Button
+              variant="outline"
+              size="sm"
               onClick={onPause}
-              className="bg-brand hover:bg-brand/90 text-brand-foreground px-3 py-1 rounded text-sm transition-colors"
               disabled={progress.processing_chunks === 0 && progress.completed_chunks === progress.total_chunks}
             >
               Pause
-            </button>
+            </Button>
           ) : (
-            <button
-              onClick={onResume}
-              className="bg-success hover:bg-success/90 text-success-foreground px-3 py-1 rounded text-sm transition-colors"
-            >
+            <Button variant="brand" size="sm" onClick={onResume}>
               Resume
-            </button>
+            </Button>
           )}
 
-          <button
-            onClick={onCancel}
-            className="bg-destructive hover:bg-destructive/90 text-destructive-foreground px-3 py-1 rounded text-sm transition-colors"
-          >
+          <Button variant="outline" size="sm" onClick={onCancel}>
             Cancel
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -140,12 +137,7 @@ export function ChunkProgressDisplay({
           </span>
         </div>
 
-        <div className="w-full bg-muted rounded-full h-2">
-          <div
-            className="bg-brand h-2 rounded-full transition-all duration-300 ease-out"
-            style={{ width: `${completionPercentage}%` }}
-          />
-        </div>
+        <Progress value={completionPercentage} aria-label="Chunks completed" />
       </div>
 
       {/* Processing Stats */}
@@ -181,7 +173,7 @@ export function ChunkProgressDisplay({
 
       {/* Time Estimate */}
       {progress.estimated_remaining_ms && progress.estimated_remaining_ms > 0 && (
-        <div className="bg-brand/10 border border-brand/30 rounded-lg p-3 mb-4">
+        <div className="mb-4 rounded-lg border border-brand-edge bg-brand-wash p-3">
           <div className="flex items-center space-x-2">
             <span className="text-brand">⏱️</span>
             <span className="text-sm text-foreground">
@@ -204,7 +196,7 @@ export function ChunkProgressDisplay({
             .map((chunk) => (
               <div
                 key={chunk.chunk_id}
-                className={`text-xs p-2 rounded border ${getChunkStatusColor(chunk.status)}`}
+                className={`text-xs p-2 rounded-md border ${getChunkStatusColor(chunk.status)}`}
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-2">
@@ -221,7 +213,7 @@ export function ChunkProgressDisplay({
 
                   {chunk.status === 'processing' && (
                     <div className="flex items-center space-x-1">
-                      <div className="animate-spin w-3 h-3 border border-brand border-t-transparent rounded-full"></div>
+                      <Spinner className="text-brand" />
                     </div>
                   )}
                 </div>

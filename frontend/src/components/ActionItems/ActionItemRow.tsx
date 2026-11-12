@@ -17,7 +17,10 @@
  */
 
 import { useState, type ReactNode } from 'react';
-import { CalendarPlus, Check, Clock, EyeOff, MoreHorizontal, RotateCcw, Trash2 } from 'lucide-react';
+import { Check, EyeOff, RotateCcw, Trash2 } from '@/components/ui/icons';
+import { DeckIcon } from '@/components/ui/deck-icon';
+import { Input } from '@/components/ui/input';
+import { MenuButton } from '@/components/ui/menu-button';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -79,20 +82,19 @@ function DueDateControl({
   return (
     <label
       className={cn(
-        'relative inline-flex cursor-pointer items-center gap-1 rounded px-1 py-px text-[11px] transition-colors hover:bg-muted focus-within:ring-2 focus-within:ring-ring',
-        label ? 'text-muted-foreground' : 'text-muted-foreground/60',
+        'relative inline-flex cursor-pointer items-center gap-1 rounded-md px-1 py-px text-caption transition-colors hover:bg-muted focus-within:ring-2 focus-within:ring-ring',
+        label ? 'text-muted-foreground' : 'text-engrave',
       )}
       title={item.dueDate ? 'Change due date' : 'Set a due date'}
     >
-      {label ? <Clock size={11} /> : <CalendarPlus size={11} />}
       <span>{label ?? 'Due'}</span>
       {/* The native picker overlays the label; onChange sets, empty value clears. */}
-      <input
+      <Input
         type="date"
         aria-label="Due date"
         value={item.dueDate ?? ''}
         onChange={(e) => void onSetDueDate(item, e.target.value ? e.target.value : null)}
-        className="absolute inset-0 cursor-pointer opacity-0"
+        className="absolute inset-0 h-auto cursor-pointer border-0 p-0 opacity-0 shadow-none"
       />
     </label>
   );
@@ -140,7 +142,7 @@ export function ActionItemRow({
   return (
     <div className="group flex items-start gap-2 rounded-lg px-2 py-1.5 transition-colors hover:bg-accent/60">
       {dragHandle}
-      <button
+      <button // ui-gate: allow the item's role="checkbox" box; there is no Checkbox primitive and Button chrome is not a check box
         type="button"
         role="checkbox"
         aria-checked={completed}
@@ -151,18 +153,18 @@ export function ActionItemRow({
         }
         onClick={() => void onSetStatus(item, completed ? 'open' : 'completed')}
         className={cn(
-          'mt-0.5 flex h-[18px] w-[18px] flex-shrink-0 items-center justify-center rounded-[2px] border transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+          'mt-0.5 flex h-[18px] w-[18px] flex-shrink-0 items-center justify-center rounded-sm border transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
           completed
             ? 'border-brand bg-brand text-brand-foreground'
-            : 'border-border bg-card hover:border-brand/60',
+            : 'border-border bg-card hover:border-brand-edge',
         )}
       >
-        {completed && <Check size={12} strokeWidth={3} />}
+        {completed && <DeckIcon icon={Check} size={12} />}
       </button>
 
       <div className="min-w-0 flex-1">
         {isEditing ? (
-          <input
+          <Input
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             onBlur={commitEdit}
@@ -176,17 +178,17 @@ export function ActionItemRow({
               }
             }}
             aria-label="Edit action item description"
-            className="w-full rounded border border-border bg-background px-1.5 py-0.5 text-sm text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="h-auto border-border bg-background px-1.5 py-0.5 text-sm text-foreground shadow-none md:text-sm"
             autoFocus
           />
         ) : (
           <div className="flex items-center gap-2">
-            <button
+            <button // ui-gate: allow click-to-edit description; it wraps across lines, which Button's nowrap fixed-height chrome can't
               type="button"
               onClick={startEdit}
               title="Edit description"
               className={cn(
-                'min-w-0 flex-1 rounded px-0.5 text-left text-sm leading-snug text-foreground hover:text-brand focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                'min-w-0 flex-1 rounded-md px-0.5 text-left text-sm leading-snug text-foreground hover:text-brand focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                 compact && 'truncate',
                 completed && 'text-muted-foreground line-through',
                 dismissed && 'text-muted-foreground',
@@ -195,7 +197,7 @@ export function ActionItemRow({
               {item.description}
             </button>
             {collapsedMeta && (
-              <span className="flex-shrink-0 truncate text-[11px] text-muted-foreground group-hover:hidden group-has-[:focus-visible]:hidden">
+              <span className="flex-shrink-0 truncate text-caption text-muted-foreground group-hover:hidden group-has-[:focus-visible]:hidden">
                 {collapsedMeta}
               </span>
             )}
@@ -221,48 +223,36 @@ export function ActionItemRow({
             <DueDateControl item={item} onSetDueDate={onSetDueDate} />
           ) : (
             item.dueHint && (
-              <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
-                <Clock size={11} />
+              <span className="inline-flex items-center gap-1 text-caption text-muted-foreground">
                 {item.dueHint}
               </span>
             )
           )}
           {meetingChip}
           {dismissed && (
-            <span className="rounded-[2px] bg-muted px-1.5 py-px u-section-label text-[9px]">
-              dismissed
-            </span>
+            <span className="u-section-label-sm rounded-sm bg-muted px-1.5 py-px">dismissed</span>
           )}
         </div>
       </div>
 
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <button
-            type="button"
-            aria-label={`Options for "${item.description}"`}
-            className="mt-0.5 inline-flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100"
-          >
-            <MoreHorizontal className="h-4 w-4" />
-          </button>
+          <MenuButton
+            label={`Options for "${item.description}"`}
+            className="-my-0.5 opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100"
+          />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
           {dismissed ? (
-            <DropdownMenuItem onSelect={() => void onSetStatus(item, 'open')}>
-              <RotateCcw className="mr-2 h-4 w-4" />
+            <DropdownMenuItem icon={RotateCcw} onSelect={() => void onSetStatus(item, 'open')}>
               Restore
             </DropdownMenuItem>
           ) : item.source === 'manual' ? (
-            <DropdownMenuItem
-              onSelect={() => void onDelete(item)}
-              className="text-destructive focus:text-destructive"
-            >
-              <Trash2 className="mr-2 h-4 w-4" />
+            <DropdownMenuItem icon={Trash2} variant="destructive" onSelect={() => void onDelete(item)}>
               Delete
             </DropdownMenuItem>
           ) : (
-            <DropdownMenuItem onSelect={() => void onSetStatus(item, 'dismissed')}>
-              <EyeOff className="mr-2 h-4 w-4" />
+            <DropdownMenuItem icon={EyeOff} onSelect={() => void onSetStatus(item, 'dismissed')}>
               Dismiss
             </DropdownMenuItem>
           )}

@@ -1,5 +1,7 @@
 'use client';
 
+import { Button } from '@/components/ui/button';
+
 interface UnprocessedTranscriptEmptyStateProps {
   /** "Process now" action; the button is omitted when absent (e.g. no meetingId). */
   onProcessNow?: () => void;
@@ -15,13 +17,9 @@ export function UnprocessedTranscriptEmptyState({ onProcessNow }: UnprocessedTra
       <p className="font-display text-lg font-semibold">This recording hasn&apos;t been processed yet</p>
       <p className="text-xs mt-1">Transcribe, identify speakers, and summarize it now.</p>
       {onProcessNow && (
-        <button
-          type="button"
-          onClick={onProcessNow}
-          className="mt-3 inline-flex items-center rounded-lg bg-brand px-3 py-1.5 text-xs font-semibold text-brand-foreground hover:bg-brand/90"
-        >
+        <Button type="button" variant="brand" size="sm" onClick={onProcessNow} className="mt-3">
           Process now
-        </button>
+        </Button>
       )}
     </>
   );

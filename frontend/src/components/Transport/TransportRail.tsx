@@ -97,7 +97,7 @@ export function TransportRail() {
       aria-label={inFlight ? 'Recording in progress' : 'Transport'}
       className={cn(
         'fixed bottom-0 right-0 z-40 flex h-[var(--rail-h)] items-stretch border-t border-border',
-        'bg-panel shadow-[inset_0_1px_0_hsl(var(--bevel-hi)),0_-8px_16px_-12px_rgba(0,0,0,0.35)]',
+        'bg-panel shadow-[inset_0_1px_0_hsl(var(--bevel-hi)),0_-8px_16px_-12px_rgba(0,0,0,0.35)]', // ui-gate: allow the deck rail's top bevel and the lift it casts upward onto the page (hardware part)
         'transition-[left] duration-300',
         isContentInsetCollapsed ? 'left-16' : 'left-64',
       )}

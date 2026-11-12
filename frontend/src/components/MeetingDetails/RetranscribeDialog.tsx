@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { RefreshCw, Globe, Loader2, AlertCircle, X, Cpu } from 'lucide-react';
+import { Callout } from '@/components/ui/callout';
+import { Progress } from '@/components/ui/progress';
+import { Spinner } from '@/components/ui/spinner';
 import {
   Dialog,
   DialogContent,
@@ -277,21 +279,17 @@ export function RetranscribeDialog({
       >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
+            {/* Only the spinner stays: it is status. The other title glyphs were decorative
+                (docs/design-system.md §Icons). */}
             {isProcessing ? (
               <>
-                <Loader2 className="h-5 w-5 animate-spin text-brand" />
+                <Spinner size="md" className="text-brand" />
                 Retranscribing...
               </>
             ) : error ? (
-              <>
-                <AlertCircle className="h-5 w-5 text-destructive" />
-                Retranscription Failed
-              </>
+              'Retranscription Failed'
             ) : (
-              <>
-                <RefreshCw className="h-5 w-5 text-brand" />
-                Retranscribe Meeting
-              </>
+              'Retranscribe Meeting'
             )}
           </DialogTitle>
           <DialogDescription>
@@ -311,10 +309,7 @@ export function RetranscribeDialog({
           {!isProcessing && !error && (
             !isParakeetModel ? (
               <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <Globe className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-sm font-medium">Language</span>
-                </div>
+                <div className="text-sm font-medium">Language</div>
                 <Select value={selectedLang} onValueChange={setSelectedLang}>
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Select language" />
@@ -333,10 +328,7 @@ export function RetranscribeDialog({
               </div>
             ) : (
               <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <Globe className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-sm font-medium">Language</span>
-                </div>
+                <div className="text-sm font-medium">Language</div>
                 <p className="text-xs text-muted-foreground">
                   Language selection isn&apos;t supported for Parakeet. It always uses automatic detection.
                 </p>
@@ -346,10 +338,7 @@ export function RetranscribeDialog({
 
           {!isProcessing && !error && availableModels.length > 0 && (
             <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                <Cpu className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm font-medium">Model</span>
-              </div>
+              <div className="text-sm font-medium">Model</div>
               <Select value={selectedModelKey} onValueChange={setSelectedModelKey} disabled={loadingModels}>
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder={loadingModels ? "Loading models..." : "Select model"} />
@@ -371,12 +360,10 @@ export function RetranscribeDialog({
           {isProcessing && progress && (
             <div className="space-y-2">
               <div className="relative">
-                <div className="w-full bg-muted rounded-full h-3">
-                  <div
-                    className="bg-brand h-3 rounded-full transition-all duration-300 ease-out"
-                    style={{ width: `${Math.min(progress.progress_percentage, 100)}%` }}
-                  />
-                </div>
+                <Progress
+                  value={Math.min(progress.progress_percentage, 100)}
+                  aria-label="Retranscription progress"
+                />
                 <div className="flex justify-between text-xs text-muted-foreground mt-1">
                   <span>{progress.stage}</span>
                   <span>{Math.round(progress.progress_percentage)}%</span>
@@ -389,10 +376,10 @@ export function RetranscribeDialog({
           )}
 
           {error && (
-            <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-3">
-              {/* body copy stays foreground for legibility on the tinted ground; icon/title carry the destructive signal (specs/0057) */}
+            <Callout tone="error">
+              {/* body copy stays foreground for legibility on the tinted ground; the title and edge carry the destructive signal (specs/0057) */}
               <p className="text-sm text-foreground">{error}</p>
-            </div>
+            </Callout>
           )}
         </div>
 
@@ -403,18 +390,16 @@ export function RetranscribeDialog({
                 Cancel
               </Button>
               <Button
+                variant="brand"
                 onClick={handleStartRetranscription}
-                className="bg-brand text-brand-foreground hover:bg-brand/90"
                 disabled={!meetingFolderPath}
               >
-                <RefreshCw className="h-4 w-4 mr-2" />
                 Start Retranscription
               </Button>
             </>
           )}
           {isProcessing && (
             <Button variant="outline" onClick={handleCancel}>
-              <X className="h-4 w-4 mr-2" />
               Cancel
             </Button>
           )}

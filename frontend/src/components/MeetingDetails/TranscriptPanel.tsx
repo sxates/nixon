@@ -11,7 +11,8 @@ import { ownerActionContext } from './SpeakerOwnerAction';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { toast } from 'sonner';
-import { AlertCircle, Loader2 } from 'lucide-react';
+import { Callout } from '@/components/ui/callout';
+import { Spinner } from '@/components/ui/spinner';
 import { cn } from '@/lib/utils';
 import type { UseSpeakersReturn } from '@/hooks/useSpeakers';
 import { useBacklog } from '@/contexts/DeferredBacklogProvider';
@@ -411,11 +412,12 @@ export function TranscriptPanel({
           on a short recording still took over three minutes — and nothing on this page said
           so, so the stale transcript below looked like the final answer. */}
       {isProcessingThisMeeting && (
-        <div
+        <Callout
+          tone="info"
           role="status"
-          className="mt-2 flex items-center gap-2 rounded-[3px] border border-brand/30 bg-brand/5 px-3 py-2"
+          className="mt-2 flex items-center gap-2 px-3 py-2"
         >
-          <Loader2 size={14} aria-hidden="true" className="animate-spin text-brand" />
+          <Spinner className="text-brand" />
           <p className="text-xs text-foreground">
             {backlogStage === 'waiting'
               ? 'Queued for processing — the transcript and summary will update when it runs.'
@@ -423,21 +425,17 @@ export function TranscriptPanel({
                 ? 'Summarizing this meeting…'
                 : 'Re-transcribing this meeting — the transcript below will update when it finishes.'}
           </p>
-        </div>
+        </Callout>
       )}
 
       {/* specs/0072 W3 — speaker identification failed; the audio stays for a retry (the
           activity queue's Retry, or Identify speakers above). */}
       {!isRecording && audio?.state === 'failed' && (
-        <div
-          role="status"
-          className="mt-2 flex items-center gap-2 rounded-[3px] border border-border bg-muted/40 px-3 py-2"
-        >
-          <AlertCircle size={14} aria-hidden="true" className="shrink-0 text-muted-foreground" />
-          <p className="text-xs text-muted-foreground">
+        <Callout tone="warn" role="status" className="mt-2 px-3 py-2">
+          <p className="text-xs text-foreground">
             {speakerIdFailureNote(audio.speakerIdFailure)}
           </p>
-        </div>
+        </Callout>
       )}
 
       {/* specs/0061 W4 (task 3) — filter chip, above the list, only while filtered. */}

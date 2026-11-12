@@ -3,6 +3,7 @@
 import React from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { toast } from 'sonner';
+import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useBacklog } from '@/contexts/DeferredBacklogProvider';
 import { useOptionalLlmActivity } from '@/contexts/LlmActivityProvider';
@@ -23,6 +24,10 @@ const ROW_LAMP: Record<QueueStage, LampTone> = {
   done: 'green',
   error: 'red',
 };
+
+// The queue popover's text actions: 10px muted links in a dense list, so the link variant
+// stripped to its focus ring (no control height, no padding).
+const QUEUE_ACTION = 'h-auto p-0 text-label font-normal text-muted-foreground hover:text-foreground hover:no-underline';
 
 const ACTIVE_STAGES: QueueStage[] = ['transcribing', 'diarizing', 'summarizing', 'llm'];
 
@@ -52,14 +57,14 @@ function Row({
       <div className="flex items-center gap-2.5">
         <LampDot tone={ROW_LAMP[row.stage]} label={row.stageLabel} decorative />
         <span className="min-w-0 flex-1 truncate text-xs text-foreground">{row.title}</span>
-        <span className="u-section-label shrink-0 text-[9px]">{row.stageLabel}</span>
+        <span className="u-section-label-sm shrink-0">{row.stageLabel}</span>
       </div>
-      {row.error && <p className="break-words pl-[18px] text-[10px] text-destructive">{row.error}</p>}
+      {row.error && <p className="break-words pl-[18px] text-label text-destructive">{row.error}</p>}
       {/* A static 60% fill, not a shimmer: the rail's liveness comes from the lamp and the
           counter. Indeterminate bars that animate forever read as progress they can't report. */}
       {active && (
-        <span aria-hidden className="ml-[18px] block h-[3px] rounded-[1px] bg-border">
-          <span className="block h-full w-[60%] rounded-[1px] bg-brand" />
+        <span aria-hidden className="ml-[18px] block h-[3px] rounded-full bg-border">
+          <span className="block h-full w-[60%] rounded-full bg-brand" />
         </span>
       )}
       {/* `row.action` drives the button, not a source/stage/retryable spot-check (that gate
@@ -74,28 +79,29 @@ function Row({
           "Dismiss failures" is unchanged and still clears the lot on purpose. */}
       {row.action === 'retry' && (
         <div className="flex justify-end pl-[18px]">
-          <button type="button" onClick={onRetry} className="text-[10px] text-muted-foreground hover:text-foreground">
+          <Button variant="link" type="button" onClick={onRetry} className={QUEUE_ACTION}>
             Retry
-          </button>
+          </Button>
         </div>
       )}
       {row.action === 'cancel' && (
         <div className="flex justify-end pl-[18px]">
-          <button
+          <Button
+            variant="link"
             type="button"
             onClick={() => void handleCancel()}
             disabled={cancelling}
-            className="text-[10px] text-muted-foreground hover:text-foreground disabled:pointer-events-none"
+            className={QUEUE_ACTION}
           >
             {cancelling ? CANCELLING_LABEL : 'Cancel'}
-          </button>
+          </Button>
         </div>
       )}
       {row.action === 'dismiss' && (
         <div className="flex justify-end pl-[18px]">
-          <button type="button" onClick={onDismiss} className="text-[10px] text-muted-foreground hover:text-foreground">
+          <Button variant="link" type="button" onClick={onDismiss} className={QUEUE_ACTION}>
             Dismiss
-          </button>
+          </Button>
         </div>
       )}
     </li>
@@ -202,24 +208,20 @@ export function QueuePanel({ view, className }: { view: QueueView; className?: s
   return (
     <div className={cn('flex flex-col gap-1', className)}>
       <div className="flex items-center justify-between gap-2 px-2">
-        <span className="u-section-label text-[9px]">Item · Stage</span>
+        <span className="u-section-label-sm">Item · Stage</span>
         {hasLlmFailure && view.failures > 0 && (
-          <button
-            type="button"
-            onClick={handleDismissAll}
-            className="ml-auto text-[10px] text-muted-foreground hover:text-foreground"
-          >
+          <Button variant="link" type="button" onClick={handleDismissAll} className={cn('ml-auto', QUEUE_ACTION)}>
             Dismiss failures
-          </button>
+          </Button>
         )}
         {backlog.processing ? (
-          <button type="button" onClick={stop} className="text-[10px] text-muted-foreground hover:text-foreground">
+          <Button variant="link" type="button" onClick={stop} className={QUEUE_ACTION}>
             Stop
-          </button>
+          </Button>
         ) : backlog.pendingCount > 0 ? (
-          <button type="button" onClick={startNow} className="text-[10px] font-semibold text-brand hover:underline">
+          <Button variant="link" type="button" onClick={startNow} className="h-auto p-0 text-label text-brand">
             Process all
-          </button>
+          </Button>
         ) : null}
       </div>
       <ul className="max-h-72 overflow-y-auto">
@@ -238,13 +240,9 @@ export function QueuePanel({ view, className }: { view: QueueView; className?: s
       </ul>
       {hasFinished && (
         <div className="flex justify-end px-2">
-          <button
-            type="button"
-            onClick={() => void handleClearFinished()}
-            className="text-[10px] text-muted-foreground hover:text-foreground"
-          >
+          <Button variant="link" type="button" onClick={() => void handleClearFinished()} className={QUEUE_ACTION}>
             Clear finished
-          </button>
+          </Button>
         </div>
       )}
     </div>

@@ -10,7 +10,10 @@
  * so it survives a later re-diarization (see api_set_segment_speaker).
  */
 
-import { SplitSquareHorizontal, Check } from 'lucide-react';
+import { Check } from '@/components/ui/icons';
+import { DeckIcon } from '@/components/ui/deck-icon';
+import { MenuButton } from '@/components/ui/menu-button';
+import { StatusDot } from '@/components/ui/status-dot';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -44,17 +47,15 @@ export function SegmentSpeakerMenu({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button
-          type="button"
-          // Hidden until the row is hovered (group/segment), so it doesn't clutter. Keyboard
-          // focus and an open menu also show it — but not plain `focus:`, which a mouse click
-          // leaves behind, keeping the icon lit after the pointer has gone.
-          className="ml-0.5 rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground focus-visible:opacity-100 data-[state=open]:opacity-100 group-hover/segment:opacity-100"
-          title="Move this line to another speaker"
-          aria-label="Move this line to another speaker"
-        >
-          <SplitSquareHorizontal size={12} />
-        </button>
+        {/* The line's overflow `…` (design system: one MenuButton for overflow). 20px, not
+            28: it sits inside a 12px typed name line. Hidden until the row is hovered
+            (group/segment), so it doesn't clutter. Keyboard focus and an open menu also
+            show it — but not plain `focus:`, which a mouse click leaves behind, keeping the
+            icon lit after the pointer has gone. */}
+        <MenuButton
+          label="Move this line to another speaker"
+          className="ml-0.5 h-5 w-5 opacity-0 transition-opacity focus-visible:opacity-100 data-[state=open]:opacity-100 group-hover/segment:opacity-100"
+        />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-48">
         <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
@@ -71,16 +72,10 @@ export function SegmentSpeakerMenu({
             }}
             className="text-sm"
           >
-            <span
-              className={cn(
-                'mr-2 inline-block h-2.5 w-2.5 rounded-full',
-                speakerBgClass(s.speakerKey),
-              )}
-              aria-hidden
-            />
+            <StatusDot className={cn('mr-2', speakerBgClass(s.speakerKey))} />
             <span className="flex-1 truncate">{s.displayName}</span>
             {s.speakerKey === currentSpeakerKey && (
-              <Check size={13} className="ml-1 flex-shrink-0 text-muted-foreground" />
+              <DeckIcon icon={Check} size={12} className="ml-1 flex-none text-muted-foreground" />
             )}
           </DropdownMenuItem>
         ))}

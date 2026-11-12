@@ -11,7 +11,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Loader2, MoreHorizontal } from 'lucide-react';
+import { MenuButton } from '@/components/ui/menu-button';
+import { Spinner } from '@/components/ui/spinner';
 import { RetranscribeDialog } from './RetranscribeDialog';
 import { AudioSetupSubmenu } from './AudioSetupSubmenu';
 import type {
@@ -203,7 +204,7 @@ export function TranscriptButtonGroup({
                       : 'Identify who spoke (runs on-device after the meeting)'
             }
           >
-            {isDiarizing && <Loader2 className="animate-spin" size={16} />}
+            {isDiarizing && <Spinner />}
             <span>
               {isDiarizing
                 ? (downloadProgress?.label ??
@@ -235,7 +236,7 @@ export function TranscriptButtonGroup({
           <Button
             size="xs"
             variant="outline"
-            className="bg-brand/10 hover:bg-brand/20 border-brand/30 text-brand gap-1.5"
+            className="gap-1.5 border-brand-edge bg-brand-wash text-brand hover:text-brand"
             onClick={handleProcessNow}
             disabled={isProcessingThis}
             title={
@@ -244,7 +245,7 @@ export function TranscriptButtonGroup({
                 : "This meeting hasn't been processed yet — transcribe, identify speakers, and summarize it now"
             }
           >
-            {isProcessingThis && <Loader2 className="animate-spin" size={16} />}
+            {isProcessingThis && <Spinner />}
             <span>
               {backlogStatus === 'waiting'
                 ? 'Queued'
@@ -261,7 +262,7 @@ export function TranscriptButtonGroup({
           <Button
             size="xs"
             variant="outline"
-            className="bg-brand/10 hover:bg-brand/20 border-brand/30 text-brand"
+            className="border-brand-edge bg-brand-wash text-brand hover:text-brand"
             onClick={() => {
               setShowRetranscribeDialog(true);
             }}
@@ -293,14 +294,9 @@ export function TranscriptButtonGroup({
             one shape. */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button
-              variant="outline"
-              size="xs"
-              aria-label="More transcript actions"
-              title="More transcript actions"
-            >
-              <MoreHorizontal size={14} />
-            </Button>
+            {/* Bordered, to sit with the outline buttons beside it (same trigger as the
+                Summary tab's toolbar `…`). */}
+            <MenuButton label="More transcript actions" variant="bordered" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuItem

@@ -3,7 +3,9 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Summary, Block } from '@/types';
 import { Section } from './Section';
-import { ExclamationTriangleIcon } from '@heroicons/react/24/outline';
+import { Button } from '@/components/ui/button';
+import { Callout } from '@/components/ui/callout';
+import { Spinner } from '@/components/ui/spinner';
 import { devLog } from '@/lib/dev-log';
 
 interface Props {
@@ -573,21 +575,19 @@ export const AISummary = ({ summary, status, error, onSummaryChange, onRegenerat
     URL.revokeObjectURL(url);
   };
 
+  // The error is the Callout's tone, not a warning glyph (docs/design-system.md §Icons).
   const renderErrorState = () => (
-    <div className="w-full p-4 bg-destructive/5 border border-destructive/20 rounded-lg">
-      <div className="flex items-center mb-2">
-        <ExclamationTriangleIcon className="h-5 w-5 text-destructive mr-2" />
-        <h3 className="text-destructive font-medium">Error Generating Summary</h3>
-      </div>
+    <Callout tone="error" className="p-4">
+      <h3 className="text-destructive font-medium mb-2">Error Generating Summary</h3>
       <p className="text-destructive text-sm">{error}</p>
       <p className="text-destructive/80 text-xs mt-2">Please check your model configuration and API keys, or try again.</p>
-    </div>
+    </Callout>
   );
 
   const renderLoadingState = () => (
-    <div className="w-full p-4 bg-brand/10 border border-brand/20 rounded-lg">
+    <Callout tone="info" className="p-4">
       <div className="flex items-center space-x-3">
-        <div className="animate-spin rounded-full h-5 w-5 border-2 border-brand border-t-transparent"></div>
+        <Spinner size="md" className="text-brand" />
         <div>
           <h3 className="text-brand font-medium">
             {status === 'processing' ? 'Processing Transcript' : 'Generating Summary'}
@@ -599,7 +599,7 @@ export const AISummary = ({ summary, status, error, onSummaryChange, onRegenerat
           </p>
         </div>
       </div>
-    </div>
+    </Callout>
   );
 
   if (error) {
@@ -628,7 +628,7 @@ export const AISummary = ({ summary, status, error, onSummaryChange, onRegenerat
 
       
       {selectedBlocks.length > 1 && (
-        <textarea
+        <textarea // ui-gate: allow off-screen copy buffer for multi-block selection, not a form field
           ref={hiddenInputRef}
           className="sr-only"
           readOnly
@@ -648,20 +648,22 @@ export const AISummary = ({ summary, status, error, onSummaryChange, onRegenerat
           }}
           onClick={e => e.stopPropagation()}
         >
-          <button
-            className="w-full px-4 py-2 text-left hover:bg-accent flex items-center space-x-2"
+          <Button
+            variant="ghost"
+            className="w-full justify-start rounded-none px-4 font-normal"
             onClick={handleCopyBlocks}
           >
             <span className="text-muted-foreground">📋</span>
             <span>Copy {selectedBlocks.length > 1 ? `${selectedBlocks.length} blocks` : 'block'}</span>
-          </button>
-          <button
-            className="w-full px-4 py-2 text-left hover:bg-accent text-destructive flex items-center space-x-2"
+          </Button>
+          <Button
+            variant="ghost"
+            className="w-full justify-start rounded-none px-4 font-normal text-destructive hover:text-destructive"
             onClick={handleDeleteBlocks}
           >
             <span>🗑️</span>
             <span>Delete {selectedBlocks.length > 1 ? `${selectedBlocks.length} blocks` : 'block'}</span>
-          </button>
+          </Button>
         </div>
       )}
 

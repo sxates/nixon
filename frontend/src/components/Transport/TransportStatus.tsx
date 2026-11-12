@@ -98,7 +98,7 @@ export function TransportStatus({ phase, elapsedSeconds }: { phase: TransportPha
         <LevelLadder level={level.rms} active={phase === 'recording'} fill />
       </div>
       {canNavigate ? (
-        <button
+        <button // ui-gate: allow two-line rail readout (title + state) that is itself the link back to /record; Button's single-line control chrome would break the deck readout
           type="button"
           onClick={() => router.push('/record')}
           // aria-label REPLACES the button's accessible name entirely, so it must carry both
@@ -108,7 +108,7 @@ export function TransportStatus({ phase, elapsedSeconds }: { phase: TransportPha
           className={cn(
             // flex-1 so the title takes the slack and truncates predictably; the
             // instruments sit before it and cannot be moved by its length (specs/0064 W6).
-            'flex min-w-0 flex-1 flex-col items-start rounded-[3px] text-left leading-tight',
+            'flex min-w-0 flex-1 flex-col items-start rounded-md text-left leading-tight',
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-panel',
             'hover:[&>span:first-child]:text-brand',
           )}
@@ -116,12 +116,12 @@ export function TransportStatus({ phase, elapsedSeconds }: { phase: TransportPha
           <span className="max-w-full truncate text-xs font-semibold text-foreground transition-colors [transition-duration:120ms]">
             {line1}
           </span>
-          <span className="u-section-label text-[9px]">{line2}</span>
+          <span className="u-section-label-sm">{line2}</span>
         </button>
       ) : (
         <div className="flex min-w-0 flex-1 flex-col leading-tight">
           <span className="truncate text-xs font-semibold text-foreground">{line1}</span>
-          <span className="u-section-label text-[9px]">{line2}</span>
+          <span className="u-section-label-sm">{line2}</span>
         </div>
       )}
     </div>

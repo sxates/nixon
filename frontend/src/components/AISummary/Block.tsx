@@ -2,6 +2,7 @@
 
 import { Block } from '@/types';
 import { useRef, useState, useEffect } from 'react';
+import { ListRow } from '@/components/ui/list-row';
 
 interface BlockProps {
   block: Block;
@@ -220,8 +221,8 @@ export const BlockComponent: React.FC<BlockProps> = ({
 
   return (
     <div 
-      className={`group relative min-h-[24px] flex items-start rounded transition-all duration-150 ease-in-out
-        ${isSelected ? 'bg-brand/10 ring-1 ring-brand/30 shadow-sm' : 'hover:bg-accent'}`}
+      className={`group relative min-h-[24px] flex items-start rounded-md transition-all duration-150 ease-in-out
+        ${isSelected ? 'bg-brand-wash ring-1 ring-brand-edge shadow-sm' : 'hover:bg-accent'}`}
       onMouseDown={onMouseDown}
       onMouseEnter={onMouseEnter}
       onMouseUp={onMouseUp}
@@ -232,7 +233,7 @@ export const BlockComponent: React.FC<BlockProps> = ({
       )}
 
       <div className="relative flex-1 py-0.5 px-1">
-        <textarea
+        <textarea // ui-gate: allow borderless auto-growing block editor; the Textarea primitive's border, padding, min-height and md:text-sm would all have to be undone
           ref={textareaRef}
           value={block.content}
           data-block-id={block.id}
@@ -260,23 +261,19 @@ export const BlockComponent: React.FC<BlockProps> = ({
                        animate-in fade-in slide-in-from-top-2 duration-150"
           >
             {filteredCommands.map((cmd, index) => (
-              <button
-                key={cmd.id}
-                className={`
-                  w-full text-left px-3 py-2 flex items-center space-x-3 hover:bg-accent
-                  ${index === selectedCommandIndex ? 'bg-accent' : ''}
-                `}
-                onClick={() => handleCommandSelect(cmd)}
-                onMouseEnter={() => setSelectedCommandIndex(index)}
-              >
-                <span className="flex-shrink-0 w-6 h-6 flex items-center justify-center bg-muted rounded text-muted-foreground">
-                  {cmd.icon}
-                </span>
-                <div className="flex-1">
-                  <div className="font-medium">{cmd.label}</div>
-                  <div className="text-sm text-muted-foreground">{cmd.description}</div>
-                </div>
-              </button>
+              <div key={cmd.id} className="px-1" onMouseEnter={() => setSelectedCommandIndex(index)}>
+                <ListRow
+                  className={index === selectedCommandIndex ? 'bg-accent' : undefined}
+                  onClick={() => handleCommandSelect(cmd)}
+                  lead={
+                    <span className="flex h-6 w-6 items-center justify-center rounded-sm bg-muted text-muted-foreground">
+                      {cmd.icon}
+                    </span>
+                  }
+                  title={cmd.label}
+                  meta={cmd.description}
+                />
+              </div>
             ))}
           </div>
         )}
