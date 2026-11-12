@@ -4,6 +4,10 @@ import { cva, type VariantProps } from "class-variance-authority"
 
 import { cn } from "@/lib/utils"
 
+/** The dark, unlit state shared by the lamp variants (`brand`, `record`). */
+const LAMP_DISABLED =
+  "disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none disabled:opacity-100"
+
 const buttonVariants = cva(
   "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
   {
@@ -19,14 +23,16 @@ const buttonVariants = cva(
           "bg-secondary text-secondary-foreground shadow-sm hover:bg-secondary/80",
         ghost: "hover:bg-accent hover:text-accent-foreground",
         link: "text-primary underline-offset-4 hover:underline",
-        brand: "bg-brand text-brand-foreground shadow-sm hover:bg-brand/90",
+        // A disabled lamp goes dark; it is never a dimmed lamp (docs/design-system.md
+        // §Colour). `opacity-50` over amber still reads as a lit, pressable key in Deck.
+        brand: `bg-brand text-brand-foreground shadow-sm hover:bg-brand/90 ${LAMP_DISABLED}`,
         // "+ Add …" affordances (docs/design-system.md): a dashed outline that lights to
         // the brand edge on hover. Was hand-rolled in ParticipantsPanel.
         dashed:
           "border border-dashed border-border bg-transparent text-muted-foreground hover:border-brand-edge hover:text-brand",
         // REC red (docs/design-system.md): starts a recording; nothing else. Errors and
         // destructive confirms are `destructive`, primary CTAs `brand`.
-        record: "bg-record text-record-foreground shadow-sm hover:bg-record/90",
+        record: `bg-record text-record-foreground shadow-sm hover:bg-record/90 ${LAMP_DISABLED}`,
       },
       size: {
         default: "h-9 px-4 py-2",

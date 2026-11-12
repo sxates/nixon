@@ -48,3 +48,33 @@ describe('Button', () => {
     expect(cls).toContain('w-7');
   });
 });
+
+// A disabled lamp goes dark; it is never a dimmed lamp. `opacity-50` over amber kept the
+// disabled onboarding Continue / Ask reading as a lit key in Deck.
+describe('Button disabled lamps', () => {
+  for (const variant of ['brand', 'record'] as const) {
+    it(`${variant} goes dark when disabled`, () => {
+      render(
+        <Button variant={variant} disabled>
+          Go
+        </Button>,
+      );
+      const cls = screen.getByRole('button').className;
+      expect(cls).toContain('disabled:bg-muted');
+      expect(cls).toContain('disabled:text-muted-foreground');
+      expect(cls).toContain('disabled:shadow-none');
+      expect(cls).toContain('disabled:opacity-100');
+      // twMerge drops the base dimming, so the dark key is not ALSO half-transparent.
+      expect(cls).not.toContain('disabled:opacity-50');
+    });
+  }
+
+  it('other variants keep the base dimming', () => {
+    render(
+      <Button variant="outline" disabled>
+        Go
+      </Button>,
+    );
+    expect(screen.getByRole('button').className).toContain('disabled:opacity-50');
+  });
+});

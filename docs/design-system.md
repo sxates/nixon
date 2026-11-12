@@ -32,6 +32,11 @@ don't flip with `.dark`.
 Lamp colours are the only saturated ones, and each means one thing. Red never marks a
 non-recording CTA. Use `destructive` for errors, never `record`.
 
+**A disabled lamp goes dark; it is never a dimmed lamp.** A disabled `brand` or `record`
+button is drawn unlit (`bg-muted text-muted-foreground`, no shadow, full opacity), because
+amber at 50% still reads as a lit, pressable key in Deck. `Button` does this for you; don't
+override `disabled:` on a lamp variant.
+
 **Tints.** Use the named washes, not ad-hoc opacities:
 
 | Token | Use |
