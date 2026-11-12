@@ -44,8 +44,9 @@ export interface CalloutProps extends Omit<React.HTMLAttributes<HTMLDivElement>,
   /** A spinner or status dot before the content. */
   lead?: React.ReactNode;
   /**
-   * Where `action` sits: `center` (default) on the whole box, or `start` on the title line
-   * — for a tall callout whose body holds rows with their own buttons.
+   * Where `action` sits: `center` (default) beside the whole box, or `start` on the title
+   * line, with the body running the full width under it — for a tall callout whose body
+   * holds rows with their own buttons.
    */
   actionAlign?: 'center' | 'start';
 }
@@ -98,20 +99,38 @@ export const Callout = React.forwardRef<HTMLDivElement, CalloutProps>(function C
               {lead}
             </div>
           ) : null}
-          <div className="min-w-0 flex-1">
-            {title != null ? <div className="font-medium text-foreground">{title}</div> : null}
-            {children != null ? (
-              <div className={cn(title != null && 'mt-0.5 text-xs text-muted-foreground')}>{children}</div>
-            ) : null}
-          </div>
-          {action != null ? (
-            <div
-              data-callout-action=""
-              className={cn('flex flex-none items-center gap-2', actionAlign === 'start' ? 'self-start' : 'self-center')}
-            >
-              {action}
+          {actionAlign === 'start' && title != null ? (
+            // Title line with the action on it; the body runs the full width underneath
+            // (a tall body of rows with their own keys must not share a column with it).
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center justify-between gap-3">
+                <div className="font-medium text-foreground">{title}</div>
+                {action != null ? (
+                  <div data-callout-action="" className="flex flex-none items-center gap-2">
+                    {action}
+                  </div>
+                ) : null}
+              </div>
+              {children != null ? <div className="mt-0.5 text-xs text-muted-foreground">{children}</div> : null}
             </div>
-          ) : null}
+          ) : (
+            <>
+              <div className="min-w-0 flex-1">
+                {title != null ? <div className="font-medium text-foreground">{title}</div> : null}
+                {children != null ? (
+                  <div className={cn(title != null && 'mt-0.5 text-xs text-muted-foreground')}>{children}</div>
+                ) : null}
+              </div>
+              {action != null ? (
+                <div
+                  data-callout-action=""
+                  className={cn('flex flex-none items-center gap-2', actionAlign === 'start' ? 'self-start' : 'self-center')}
+                >
+                  {action}
+                </div>
+              ) : null}
+            </>
+          )}
         </>
       ) : (
         children
