@@ -78,3 +78,23 @@ describe('Button disabled lamps', () => {
     expect(screen.getByRole('button').className).toContain('disabled:opacity-50');
   });
 });
+
+describe('Button keycap size', () => {
+  it('is a 24px card-faced key with the 9px engraved caps label', () => {
+    render(
+      <Button variant="outline" size="keycap">
+        Restart
+      </Button>,
+    );
+    const cls = screen.getByRole('button').className;
+    expect(cls).toContain('h-6');
+    expect(cls).toContain('u-section-label-sm');
+    // The utility size too: the base `text-sm` utility would otherwise beat the component class.
+    expect(cls).toContain('text-micro');
+    expect(cls).not.toContain('text-sm');
+    expect(cls).toContain('bg-card');
+    expect(cls).toContain('text-foreground');
+    // The size's card face replaces outline's page-coloured face (a black slab in Deck).
+    expect(cls).not.toContain('bg-background');
+  });
+});

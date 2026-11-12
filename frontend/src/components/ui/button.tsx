@@ -41,6 +41,11 @@ const buttonVariants = cva(
         lg: "h-10 px-8",
         icon: "h-9 w-9",
         "icon-sm": "h-7 w-7 [&_svg]:size-3.5",
+        // An engraved key cap (the sidebar's RESTART): 24px, the 9px engraved caps label,
+        // a card-faced key with the outline edge. It sets its own face so it reads as a key
+        // on the panel in both themes (outline's bg-background is a black slab in Deck).
+        keycap:
+          "u-section-label-sm h-6 border border-input bg-card px-2 text-micro text-foreground shadow-sm hover:bg-muted hover:text-foreground",
       },
     },
     defaultVariants: {

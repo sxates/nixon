@@ -21,16 +21,14 @@ export function RestartToUpdateButton({
   const { request, canRestart } = useRestartConfirm();
   const { isRecording } = useRecordingState();
   return (
-    // An engraved key cap: the outline button at its smallest size, labelled in the 9px
-    // engraved caps (`.u-section-label-sm`, sized by `text-micro`).
+    // An engraved key cap (`Button size="keycap"`): 24px, card-faced, the 9px engraved caps.
     <Button
       variant="outline"
-      size="xs"
+      size="keycap"
       onClick={request}
       disabled={!canRestart}
       title={isRecording ? 'Finish the recording first' : undefined}
       className={cn(
-        'u-section-label-sm px-2 text-micro text-foreground',
         // Keep the hover while disabled, so the "Finish the recording first" title still shows.
         'disabled:pointer-events-auto disabled:cursor-default',
         className,
