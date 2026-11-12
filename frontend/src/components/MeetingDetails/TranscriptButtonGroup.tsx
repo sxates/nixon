@@ -294,9 +294,9 @@ export function TranscriptButtonGroup({
             one shape. */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            {/* Bordered, to sit with the outline buttons beside it (same trigger as the
+            {/* Outline, to match the outline buttons beside it in the group (same trigger as the
                 Summary tab's toolbar `…`). */}
-            <MenuButton label="More transcript actions" variant="bordered" />
+            <MenuButton label="More transcript actions" variant="outline" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuItem

@@ -156,7 +156,8 @@ without a visible ring.
 | Need | Use | Notes |
 |---|---|---|
 | Any button with text | `Button` | variants `brand` (primary CTA), `outline` (row action), `ghost`, `link`, `dashed` ("+ Add …"), `destructive` (**confirm inside a dialog only**), `record` (**starts a recording; nothing else**); sizes `xs`/`sm`/`default`/`lg`, plus `icon-sm` (28px square) |
-| Icon-only button | `IconButton` | `size` `sm` (28) / `md` (32), `variant` `ghost` / `bordered`, tooltip from `label` |
+| Icon-only button | `IconButton` | `size` `sm` (28) / `md` (32), `variant` `ghost` / `bordered` / `outline` (the icon-only twin of `Button outline`), tooltip from `label` |
+| Joined toolbar keys | `ButtonGroup` | `orientation` horizontal (default) / vertical; joins its children's edges and radii. Every segment is `Button variant="outline"` (`size="xs"` in the document toolbars) and an icon segment is `IconButton` / `MenuButton variant="outline"`, so the group has one face. `ButtonGroupSeparator`, `ButtonGroupText` for a divider or a static label |
 | Overflow `…` | `MenuButton` | an `IconButton` preset: 14px horizontal glyph, opens a `DropdownMenu` |
 | Menu items | `DropdownMenuItem` | `icon` prop; `destructive` variant |
 | Page title row | `PageHeader` | `back`, editable `title`, `subtitle` node (not inside the h1), `actions`, `width` `page` / `doc` / `none` (default; aligns the row to the content column) |

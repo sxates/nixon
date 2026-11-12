@@ -76,3 +76,22 @@ describe('MenuButton', () => {
     expect(screen.getByRole('menuitem', { name: 'Rename' })).toBeTruthy();
   });
 });
+
+// An icon segment in a ButtonGroup must wear Button outline's face, or it reads as a
+// different key (bg-card + muted ink next to bg-background + foreground in Faceplate).
+describe('IconButton outline', () => {
+  it('matches Button variant="outline": background surface, input edge, foreground ink', () => {
+    render(<IconButton label="More" variant="outline" icon={<svg />} />);
+    const cls = screen.getByRole('button').className;
+    expect(cls).toContain('bg-background');
+    expect(cls).toContain('border-input');
+    expect(cls).toContain('text-foreground');
+    expect(cls).not.toContain('bg-card');
+    expect(cls).not.toContain('text-muted-foreground');
+  });
+
+  it('is available on MenuButton', () => {
+    render(<MenuButton variant="outline" />);
+    expect(screen.getByRole('button', { name: 'More actions' }).className).toContain('bg-background');
+  });
+});

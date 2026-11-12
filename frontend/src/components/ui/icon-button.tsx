@@ -9,8 +9,9 @@
  * with it). `rounded-md` (3px) matches the panel chrome — docs/design-system.md §Radius.
  *
  * `size` is `sm` (28px, the default) or `md` (32px) — the two control heights an icon
- * button may take. `variant` is `bordered` (the default: a card-faced key) or `ghost`
- * (no frame until hover, for toolbars and row overflow menus).
+ * button may take. `variant` is `bordered` (the default: a card-faced key), `ghost`
+ * (no frame until hover, for toolbars and row overflow menus) or `outline` (the icon-only
+ * twin of `Button variant="outline"`, for a segment in a `ButtonGroup`).
  *
  * It mounts its own `TooltipProvider`. One is already mounted app-wide in `app/layout.tsx`,
  * and nesting Radix providers is supported — but a component rendered in isolation (a test,
@@ -39,6 +40,10 @@ export const iconButtonVariants = cva(
       variant: {
         bordered: 'border border-border bg-card hover:bg-muted',
         ghost: 'bg-transparent hover:bg-accent data-[state=open]:bg-accent data-[state=open]:text-foreground',
+        // The icon-only face of `Button variant="outline"`: same surface, edge, shadow and
+        // ink, so an icon segment in a `ButtonGroup` matches the text segments beside it.
+        outline:
+          'border border-input bg-background text-foreground shadow-sm hover:bg-accent hover:text-accent-foreground data-[state=open]:bg-accent',
       },
     },
     defaultVariants: {
@@ -49,7 +54,7 @@ export const iconButtonVariants = cva(
 );
 
 export type IconButtonSize = 'sm' | 'md';
-export type IconButtonVariant = 'bordered' | 'ghost';
+export type IconButtonVariant = 'bordered' | 'ghost' | 'outline';
 
 export interface IconButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'children'> {
   /** The full action text. Becomes the tooltip AND the button's accessible name. */
@@ -59,7 +64,7 @@ export interface IconButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonEle
   side?: 'top' | 'right' | 'bottom' | 'left';
   /** `sm` = 28px (default), `md` = 32px. */
   size?: IconButtonSize;
-  /** `bordered` (default) or `ghost`. */
+  /** `bordered` (default), `ghost`, or `outline` (inside a `ButtonGroup` of outline Buttons). */
   variant?: IconButtonVariant;
 }
 
