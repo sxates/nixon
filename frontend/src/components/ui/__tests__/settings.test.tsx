@@ -75,16 +75,20 @@ describe('SettingsNote', () => {
   it('applies the info tone classes', () => {
     render(<SettingsNote tone="info">Heads up</SettingsNote>);
     const note = screen.getByText('Heads up');
-    expect(note).toHaveClass('bg-brand/10');
-    expect(note).toHaveClass('border-brand/30');
-    expect(note).toHaveClass('rounded-[3px]');
+    // Callout's info tone: the same 10% / 30% brand values, spelled as the named washes.
+    expect(note).toHaveClass('bg-brand-wash');
+    expect(note).toHaveClass('border-brand-edge');
+    // The Settings geometry is kept: 3px radius, p-4.
+    expect(note).toHaveClass('rounded-md', 'p-4');
+    expect(note).not.toHaveClass('rounded-lg');
   });
 
-  it('applies the warn tone classes', () => {
+  it('applies the warn tone classes (amber, never the REC red)', () => {
     render(<SettingsNote tone="warn">Careful</SettingsNote>);
     const note = screen.getByText('Careful');
-    expect(note).toHaveClass('bg-record/10');
-    expect(note).toHaveClass('border-record/30');
+    expect(note).toHaveClass('bg-brand-wash');
+    expect(note).toHaveClass('border-brand');
+    expect(note.className).not.toMatch(/record/);
   });
 
   it('defaults to the muted tone', () => {
@@ -109,6 +113,21 @@ describe('SettingsSection', () => {
     expect(region).toHaveAttribute('aria-labelledby', heading.id);
     expect(heading.id).toBeTruthy();
     expect(screen.getByText('How meetings are captured.')).toHaveClass('u-meta');
+  });
+
+  it('puts an action on the title line', () => {
+    render(
+      <SettingsSection title="Summary prompts" action={<button type="button">New prompt</button>}>
+        <div>body</div>
+      </SettingsSection>,
+    );
+    const heading = screen.getByRole('heading', { name: 'Summary prompts' });
+    const action = screen.getByRole('button', { name: 'New prompt' });
+    // Same line: the heading and the action share the justify-between row.
+    expect(heading.parentElement).toHaveClass('justify-between');
+    expect(heading.parentElement).toContainElement(action);
+    // The region is still named by the heading alone.
+    expect(screen.getByRole('region', { name: 'Summary prompts' })).toBeInTheDocument();
   });
 
   it('uses an explicit id when one is given', () => {

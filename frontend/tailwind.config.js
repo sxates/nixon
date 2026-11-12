@@ -103,6 +103,8 @@ module.exports = {
   			'destructive-edge': 'hsl(var(--destructive) / 0.3)',
   			'success-wash': 'hsl(var(--success) / 0.1)',
   			rule: 'hsl(var(--rule))',
+  			// Dialog overlay; carries its own alpha per theme, so no `/N` modifier.
+  			scrim: 'hsl(var(--scrim))',
   			panel: 'hsl(var(--panel))',
   			engrave: 'hsl(var(--engrave))',
   			'lamp-amber': 'hsl(var(--lamp-amber))',

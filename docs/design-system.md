@@ -22,6 +22,7 @@ don't flip with `.dark`.
 | Body text / secondary text | `text-foreground` / `text-muted-foreground` |
 | Engraved silkscreen label | `text-engrave` |
 | Hairline | `border-border` (`border-rule` for the soft in-card divider) |
+| Dialog overlay | `bg-scrim` (its own alpha per theme) |
 | Transcript paper | `bg-paper`, `text-paper-ink` |
 | **Amber lamp**: armed, active, selected, queue, today, primary CTA | `brand` |
 | **REC red**: recording state *only* | `record`, `text-record-ink` |
@@ -145,22 +146,22 @@ without a visible ring.
 | Inline editable text | `EditableText` | the click-to-edit title or field, with the hover pencil |
 | Underline tabs | `Tabs` / `TabStrip` | underline is the default; optional `badge` slot; roving focus built in |
 | View switch | `SegmentedControl` | `size` default / `compact`; the only segmented style |
-| Card | `Panel` | `title`, `count`, `action` slot, `variant` `solid` / `dashed`; header is a `.u-section-label` |
-| Inline notice | `Callout` | `tone` `info` / `warn` / `error` / `muted`, `title`, `action`; replaces `Alert` and the ad-hoc error boxes (`SettingsNote` is a thin alias) |
-| Empty / loading / error | `EmptyState`, `PageLoading`, `Callout tone="error"` | no icon discs |
-| Run in progress | `RunStatus` | spinner, label and an optional Cancel, inside a `Panel` |
+| Card | `Panel` | `title` (makes it a `<section>` named by the heading), `count` chip, `action` slot, `variant` `solid` / `dashed`, `size` `default` (`px-4 py-3`) / `document` (`p-6`), `titleAs`; header is a `.u-section-label`, no icons |
+| Inline notice | `Callout` | `tone` `info` (brand wash + edge) / `warn` (brand wash, full brand edge; never red) / `error` (destructive wash + edge, `role="alert"`) / `muted`; `title`, `action` (primary first). Without `title`/`action` children render straight into the box. `Alert` and `SettingsNote` are thin aliases |
+| Empty / loading / error | `EmptyState`, `PageLoading`, `Callout tone="error"` | `EmptyState` `title`, `body`, `action`, `variant` `plain` / `panel` (dashed), `titleAs`; `PageLoading` `label`, `hideLabel`, `fill` `page` (`h-page`) / `pane` (`h-64`). No icon discs |
+| Run in progress | `RunStatus` | `label` (the `role="status"` line), `onCancel`, `cancelling`, `cancelLabel`; brand spinner, inside a `Panel` |
 | Spinner | `Spinner` | `sm` (14) / `md` (20), inherits colour; `label` makes it a `role="status"`; never a raw `Loader2` or a CSS spinner |
 | Progress bar | `Progress` | `h-1.5 rounded-full bg-muted` with a `bg-brand` fill; every download and move bar; `tone` `brand` / `success` / `destructive` |
-| Status pill | `Badge` | `tone` `brand` / `success` / `muted` / `destructive`; 11px, `rounded-sm` |
-| Lamp / status / speaker dot | `StatusDot` | `size` 6/8/10; `tone` or a speaker colour class |
-| Person | `Avatar`, `AvatarStack` | photo or initials; the only `initials()` |
-| Person picker | `PersonPicker` / `PersonOption` | search, then name with muted email and a suffix |
-| List row | `ListRow` | slots `lead`, `title`, `meta`, `trailing`, `menu`; `LinkRow` adds the chevron |
-| Settings | `SettingsSection` (`action` slot) / `SettingsGroup` / `SettingsRow` | rows put `Button variant="outline" size="sm"` on the right |
-| Permission | `PermissionRow` + `PermissionStatus` | one shape for settings, onboarding and the modal |
-| Selectable card | `OptionCard` | model pickers, theme choice |
-| Confirm | `ConfirmDialog` | `title`, `body`, `confirmLabel`, `tone`, `busy` |
-| Date navigation | `DateNavigator` | Today / prev / label / next |
+| Status pill | `Badge` | `tone` `brand` / `success` / `muted` (default) / `destructive` / `outline`; 11px semibold, `rounded-sm`, named washes only |
+| Lamp / status / speaker dot | `StatusDot` | `size` 6 / 8 (default) / 10; `tone` `brand` / `record` / `success` / `destructive` / `muted`, or a speaker colour `className`; `label` makes it `role="img"` |
+| Person | `Avatar`, `AvatarStack` | `Avatar` `name`, `photo`, `size` 16 / 22 / 24 / 28 / 32 (default) / 56, `colorClass` or `colorKey`, `fallback`, `title`; `AvatarStack` `people`, `size` 22 / 24, `max` (4px overlap, never clips initials). `initials()` is exported from here (implementation in `lib/initials.ts`) |
+| Person picker | `PersonPicker` / `PersonOption` | `PersonPicker` `query`, `onQueryChange`, `onSubmit` (Enter), `inputAction`, `before`, `groups` (`label`, `options`, `emptyMessage`); filtering is the caller's (`matchesPersonQuery`). `PersonOption` `name`, `email`, `suffix`, `lead`, `onSelect`, `selected` |
+| List row | `ListRow` | slots `lead`, `title`, `meta`, `trailing`, `menu`; `onClick` makes the main area a button (trailing and menu stay outside it); `selected`, `menuReveal` `always` / `hover`, `ruled`. `LinkRow` `title`, `meta`, `onClick`, `muted`, `hint`: one baseline + chevron, brand on hover |
+| Settings | `SettingsSection` (`action` slot on the title line) / `SettingsGroup` / `SettingsRow` | rows put `Button variant="outline" size="sm"` on the right |
+| Permission | `PermissionRow` + `PermissionStatus` | `state` `granted` / `denied` / `silent` / `checking` (a `StatusDot` and a word, or a spinner); `PermissionRow` `title`, `description`, `statusLabel`, `action`, `variant` `row` / `card`. One shape for settings, onboarding and the modal |
+| Selectable card | `OptionCard` / `OptionCardGroup` | `OptionCard` `title`, `description`, `trailing`, `value` (in a group) or `selected` + `onSelect`; radio semantics. `OptionCardGroup` `value`, `onValueChange`, one Tab stop with arrow keys. Model pickers, theme choice |
+| Confirm | `ConfirmDialog` | `open`, `onOpenChange`, `title`, `body`, `confirmLabel`, `cancelLabel`, `tone` `destructive` / `brand`, `busy` (spinner, can't be dismissed), `confirmDisabled`, `onConfirm`, `children` for details |
+| Date navigation | `DateNavigator` | `label`, `onPrev`, `onNext`, `prevLabel`, `nextLabel`, `onToday`, `showToday`, `leading`, `trailing`, `labelClassName`; Today sits left of the arrows |
 | Form field | `Input`, `Textarea`, `Select`, `Switch`, `Label` (`optional` prop) | no native `<input>`/`<select>` in screens |
 
 Domain components (`ProcessingBadge`, `RecordingBadge`, `StateChip`, `LampDot`, `TapeCounter`,

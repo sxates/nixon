@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import { Callout } from '@/components/ui/callout';
 import { cn } from '@/lib/utils';
 
 /**
@@ -12,7 +13,7 @@ import { cn } from '@/lib/utils';
  * (TranscriptSettings). Same idea, three different text/box styles per tab.
  *
  * The shape that survived is the ruled row inside a bordered group card, under an
- * engraved caps section label — the Nixon Faceplate/Deck geometry (`rounded-[3px]`,
+ * engraved caps section label — the Nixon Faceplate/Deck geometry (`rounded-md`, 3px,
  * token colors only, `u-section-label` reserved for SECTION titles, never row labels).
  *
  *   <SettingsSection title="Recording" description="…">
@@ -29,6 +30,11 @@ export interface SettingsSectionProps {
   title: React.ReactNode;
   /** One-line purpose statement under the title. */
   description?: React.ReactNode;
+  /**
+   * A control on the title line, right-aligned ("New prompt", "Refresh"). Use
+   * `Button variant="outline" size="sm"` (or `dashed` for "+ Add …").
+   */
+  action?: React.ReactNode;
   children?: React.ReactNode;
   /**
    * Id for the title element. The `<section>` points at it with `aria-labelledby`,
@@ -42,6 +48,7 @@ export interface SettingsSectionProps {
 export function SettingsSection({
   title,
   description,
+  action,
   children,
   id,
   className,
@@ -51,9 +58,18 @@ export function SettingsSection({
   return (
     <section aria-labelledby={labelId} className={cn('space-y-3', className)}>
       <div>
-        <h2 id={labelId} className="u-section-label">
-          {title}
-        </h2>
+        {action ? (
+          <div className="flex items-center justify-between gap-3">
+            <h2 id={labelId} className="u-section-label">
+              {title}
+            </h2>
+            <div className="flex flex-none items-center gap-2">{action}</div>
+          </div>
+        ) : (
+          <h2 id={labelId} className="u-section-label">
+            {title}
+          </h2>
+        )}
         {description ? <p className="u-meta mt-1">{description}</p> : null}
       </div>
       {children}
@@ -69,7 +85,7 @@ export interface SettingsGroupProps {
 /** The ruled-row card: rows inside it are separated by hairlines, last one unruled. */
 export function SettingsGroup({ children, className }: SettingsGroupProps) {
   return (
-    <div className={cn('rounded-[3px] border border-border bg-card px-4', className)}>
+    <div className={cn('rounded-md border border-border bg-card px-4', className)}>
       {children}
     </div>
   );
@@ -134,12 +150,6 @@ export function SettingsRow({
 
 export type SettingsNoteTone = 'info' | 'warn' | 'muted';
 
-const NOTE_TONE_CLASS: Record<SettingsNoteTone, string> = {
-  info: 'border-brand/30 bg-brand/10',
-  warn: 'border-record/30 bg-record/10',
-  muted: 'bg-muted',
-};
-
 export interface SettingsNoteProps {
   tone?: SettingsNoteTone;
   children?: React.ReactNode;
@@ -148,7 +158,12 @@ export interface SettingsNoteProps {
   role?: string;
 }
 
-/** The callout box used for banners and explanatory notes. */
+/**
+ * The Settings note — now a thin alias of `Callout` (design-system wave 0b) with the
+ * Settings geometry it always had (`p-4`, the 3px row radius). `warn` used to be the REC
+ * red wash; red is recording-only, so it is `Callout`'s amber `warn` now. New code uses
+ * `Callout` directly (and `tone="error"` for a load failure).
+ */
 export function SettingsNote({
   tone = 'muted',
   children,
@@ -156,16 +171,8 @@ export function SettingsNote({
   role,
 }: SettingsNoteProps) {
   return (
-    <div
-      role={role}
-      data-tone={tone}
-      className={cn(
-        'rounded-[3px] border border-border p-4 text-sm text-foreground',
-        NOTE_TONE_CLASS[tone],
-        className,
-      )}
-    >
+    <Callout tone={tone} role={role} className={cn('rounded-md p-4', className)}>
       {children}
-    </div>
+    </Callout>
   );
 }

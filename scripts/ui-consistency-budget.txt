@@ -2,7 +2,7 @@
 # Lowered by scripts/check-ui-consistency.sh --update; never raised by it.
 raw-button=181
 raw-input=24
-arbitrary-text-size=134
+arbitrary-text-size=130
 arbitrary-radius=166
 label-override=22
 arbitrary-shadow=6
