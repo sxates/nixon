@@ -3,11 +3,14 @@
 
 mod common;
 
+use app_lib::action_items::diff::compute_diff_with_forced;
 use app_lib::action_items::diff::{
     content_key, CandidateInsert, ExtractionDiff, PristineUpdate, ResolvedCandidate,
 };
-use app_lib::action_items::merge::SourceAttach;
+use app_lib::action_items::merge::{route_candidates, SourceAttach, TrackedItem};
+use app_lib::action_items::skip_zero_candidate_deletes;
 use app_lib::database::repositories::action_item::ActionItemsRepository as Repo;
+use app_lib::database::repositories::action_item_todo::meeting_has_attaches;
 use chrono::{Duration, Utc};
 use common::fresh_db;
 use sqlx::SqlitePool;
@@ -140,13 +143,6 @@ async fn reextract_skips_attach_to_deleted_item() {
     meeting(pool, "b", 1).await;
     let x = extracted(pool, "a", "Send the budget").await;
     assert!(Repo::delete(pool, &x).await.unwrap());
-    // `Repo::delete` leaves the primary source row behind; clear it so only the stale
-    // attach could create an orphan.
-    sqlx::query("DELETE FROM action_item_sources WHERE action_item_id = ?")
-        .bind(&x)
-        .execute(pool)
-        .await
-        .unwrap();
     run(
         pool,
         "b",
@@ -213,19 +209,35 @@ async fn attach_to_standalone_todo() {
 async fn pristine_multi_source_item_survives_when_m_drops_it() {
     let (_d, db) = fresh_db().await;
     let pool = db.pool();
-    meeting(pool, "a", 5).await;
-    meeting(pool, "c", 3).await;
-    meeting(pool, "m", 1).await;
-    let x = extracted(pool, "m", "Send the budget").await;
-    run(pool, "c", &ExtractionDiff::default(), &[attach(&x, "c")]).await;
-    run(pool, "a", &ExtractionDiff::default(), &[attach(&x, "a")]).await;
-    run(pool, "m", &delete_diff(&[&x]), &[]).await;
+    meeting(pool, "z-old", 5).await;
+    meeting(pool, "m-mid", 3).await;
+    meeting(pool, "a-new", 1).await;
+    let x = extracted(pool, "a-new", "Send the budget").await;
+    run(
+        pool,
+        "m-mid",
+        &ExtractionDiff::default(),
+        &[attach(&x, "c")],
+    )
+    .await;
+    run(
+        pool,
+        "z-old",
+        &ExtractionDiff::default(),
+        &[attach(&x, "a")],
+    )
+    .await;
+    run(pool, "a-new", &delete_diff(&[&x]), &[]).await;
     let item = Repo::get(pool, &x).await.unwrap().expect("survives");
-    assert_eq!(item.meeting_id.as_deref(), Some("a"), "oldest other source");
+    assert_eq!(
+        item.meeting_id.as_deref(),
+        Some("z-old"),
+        "oldest other source"
+    );
     let s = sources(pool, &x).await;
     assert_eq!(
         s.iter().map(|r| r.0.as_str()).collect::<Vec<_>>(),
-        vec!["a", "c"]
+        vec!["m-mid", "z-old"]
     );
 }
 
@@ -397,4 +409,183 @@ async fn inserts_and_pristine_updates_upsert_primary_source() {
             Some("Send the budget today".into())
         )]
     );
+}
+
+#[tokio::test]
+async fn zero_candidate_run_keeps_attaches() {
+    let (_d, db) = fresh_db().await;
+    let pool = db.pool();
+    meeting(pool, "a", 5).await;
+    meeting(pool, "b", 1).await;
+    let x = extracted(pool, "a", "Send the budget").await;
+    run(
+        pool,
+        "b",
+        &ExtractionDiff::default(),
+        &[attach(&x, "again")],
+    )
+    .await;
+    let has = meeting_has_attaches(pool, "b").await.unwrap();
+    assert!(has);
+    assert!(
+        skip_zero_candidate_deletes("b", 0, &ExtractionDiff::default(), has),
+        "suspect empty reply must not sweep attaches"
+    );
+    // The owning meeting has none, so a genuinely empty summary there is not suspect.
+    let own = meeting_has_attaches(pool, "a").await.unwrap();
+    assert!(!own);
+    assert!(!skip_zero_candidate_deletes(
+        "a",
+        0,
+        &ExtractionDiff::default(),
+        own
+    ));
+    // A non-empty run is never suspect.
+    assert!(!skip_zero_candidate_deletes(
+        "b",
+        1,
+        &ExtractionDiff::default(),
+        has
+    ));
+    assert_eq!(sources(pool, &x).await.len(), 2, "attach still there");
+}
+
+#[tokio::test]
+async fn manual_delete_removes_sources() {
+    let (_d, db) = fresh_db().await;
+    let pool = db.pool();
+    meeting(pool, "a", 5).await;
+    let x = extracted(pool, "a", "Send the budget").await;
+    assert!(Repo::delete(pool, &x).await.unwrap());
+    assert!(sources(pool, &x).await.is_empty());
+}
+
+#[tokio::test]
+async fn existing_attach_to_deleted_item_is_swept() {
+    let (_d, db) = fresh_db().await;
+    let pool = db.pool();
+    meeting(pool, "a", 5).await;
+    meeting(pool, "b", 1).await;
+    let x = extracted(pool, "a", "Send the budget").await;
+    run(
+        pool,
+        "b",
+        &ExtractionDiff::default(),
+        &[attach(&x, "first")],
+    )
+    .await;
+    assert!(Repo::delete(pool, &x).await.unwrap());
+    run(
+        pool,
+        "b",
+        &ExtractionDiff::default(),
+        &[attach(&x, "again")],
+    )
+    .await;
+    let count = || async {
+        sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM action_item_sources")
+            .fetch_one(pool)
+            .await
+            .unwrap()
+    };
+    assert_eq!(count().await, 0, "no orphan source rows anywhere");
+    // Even an orphan left by an older build is swept by the next run.
+    sqlx::query("INSERT INTO action_item_sources (action_item_id, meeting_id, added_at) VALUES ('gone', 'b', 't')")
+        .execute(pool)
+        .await
+        .unwrap();
+    run(pool, "b", &ExtractionDiff::default(), &[]).await;
+    assert_eq!(count().await, 0);
+}
+
+#[tokio::test]
+async fn reattach_preserves_added_at() {
+    let (_d, db) = fresh_db().await;
+    let pool = db.pool();
+    meeting(pool, "a", 5).await;
+    meeting(pool, "b", 1).await;
+    let x = extracted(pool, "a", "Send the budget").await;
+    run(pool, "b", &ExtractionDiff::default(), &[attach(&x, "one")]).await;
+    sqlx::query("UPDATE action_item_sources SET added_at = 'first-seen' WHERE meeting_id = 'b'")
+        .execute(pool)
+        .await
+        .unwrap();
+    run(pool, "b", &ExtractionDiff::default(), &[attach(&x, "two")]).await;
+    let (ctx, added): (Option<String>, String) =
+        sqlx::query_as("SELECT context, added_at FROM action_item_sources WHERE meeting_id = 'b'")
+            .fetch_one(pool)
+            .await
+            .unwrap();
+    assert_eq!(ctx.as_deref(), Some("two"));
+    assert_eq!(added, "first-seen");
+}
+
+#[tokio::test]
+async fn matched_protected_row_gets_context_but_no_item_change() {
+    let (_d, db) = fresh_db().await;
+    let pool = db.pool();
+    meeting(pool, "m", 1).await;
+    let x = extracted(pool, "m", "Send the budget deck").await;
+    sqlx::query("UPDATE action_items SET triage = 'listed', user_edited = 1 WHERE id = ?")
+        .bind(&x)
+        .execute(pool)
+        .await
+        .unwrap();
+    assert_eq!(sources(pool, &x).await, vec![("m".to_string(), None)]);
+    let before = Repo::get(pool, &x).await.unwrap().unwrap();
+    let existing = Repo::get_for_meeting(pool, "m").await.unwrap();
+    let c = ResolvedCandidate {
+        context: Some("fresh context".to_string()),
+        ..cand("Send the budget deck")
+    };
+    let diff = compute_diff_with_forced(&existing, &[], &[(x.clone(), c)]);
+    assert!(diff.updates.is_empty() && diff.inserts.is_empty() && diff.delete_ids.is_empty());
+    run(pool, "m", &diff, &[]).await;
+    assert_eq!(
+        sources(pool, &x).await,
+        vec![("m".to_string(), Some("fresh context".to_string()))]
+    );
+    let after = Repo::get(pool, &x).await.unwrap().unwrap();
+    assert_eq!(after.description, before.description);
+    assert_eq!(after.updated_at, before.updated_at);
+    assert_eq!(after.triage, "listed");
+}
+
+#[tokio::test]
+async fn routing_to_persistence_one_item_two_sources() {
+    let (_d, db) = fresh_db().await;
+    let pool = db.pool();
+    meeting(pool, "a", 5).await;
+    meeting(pool, "b", 1).await;
+    let other = extracted(pool, "a", "Order team lunch").await;
+    let x = extracted(pool, "a", "Send the budget").await;
+    let tracked = vec![
+        TrackedItem {
+            id: other.clone(),
+            meeting_id: Some("a".into()),
+            description: "Order team lunch".into(),
+        },
+        TrackedItem {
+            id: x.clone(),
+            meeting_id: Some("a".into()),
+            description: "Send the budget".into(),
+        },
+    ];
+    let c = ResolvedCandidate {
+        context: Some("budget came up again".to_string()),
+        same_as: Some(2),
+        ..cand("Share the budget numbers with finance")
+    };
+    let own = Repo::get_for_meeting(pool, "b").await.unwrap();
+    let routed = route_candidates("b", vec![c], &tracked, &own);
+    let diff = compute_diff_with_forced(&own, &routed.for_diff, &routed.kept);
+    run(pool, "b", &diff, &routed.attaches).await;
+    assert_eq!(count_items(pool).await, 2, "no new row");
+    let s = sources(pool, &x).await;
+    assert_eq!(s.len(), 2);
+    assert_eq!(
+        s[1],
+        ("b".to_string(), Some("budget came up again".to_string()))
+    );
+    assert_eq!(sources(pool, &other).await.len(), 1);
 }

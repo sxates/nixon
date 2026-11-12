@@ -137,6 +137,9 @@ pub struct ExtractionDiff {
     pub updates: Vec<PristineUpdate>,
     /// Pristine rows the new summary no longer supports — machine-owned, so deleted.
     pub delete_ids: Vec<String>,
+    /// PROTECTED rows that absorbed a candidate: untouched, but their source context for
+    /// this meeting is refreshed from the candidate (specs/0088).
+    pub matched: Vec<(String, ResolvedCandidate)>,
 }
 
 impl ExtractionDiff {
@@ -272,7 +275,9 @@ pub fn compute_diff_with_forced(
         };
         entry.matched = true;
         let key = content_key(&candidate.description);
-        if !entry.protected && seen_keys.insert(key.clone()) {
+        if entry.protected {
+            diff.matched.push((id.clone(), candidate.clone()));
+        } else if seen_keys.insert(key.clone()) {
             diff.updates.push(PristineUpdate {
                 id: id.clone(),
                 candidate: candidate.clone(),
@@ -332,15 +337,18 @@ pub fn compute_diff_with_forced(
         match matched_idx {
             Some(i) => {
                 entries[i].matched = true;
-                if !entries[i].protected {
+                if entries[i].protected {
+                    // Protected match → drop the candidate: the row stays exactly as the
+                    // user left it and no duplicate is created.
+                    diff.matched
+                        .push((entries[i].item.id.clone(), candidate.clone()));
+                } else {
                     diff.updates.push(PristineUpdate {
                         id: entries[i].item.id.clone(),
                         candidate: candidate.clone(),
                         content_key: key,
                     });
                 }
-                // Protected match → drop the candidate: the row stays exactly as the
-                // user left it and no duplicate is created.
             }
             None => diff.inserts.push(CandidateInsert {
                 candidate: candidate.clone(),

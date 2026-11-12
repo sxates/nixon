@@ -64,7 +64,11 @@ async fn extract_pass(
     // The zero-candidate safety valve, exactly where `run_extraction` applies it — the
     // REAL guard, not a mirror: a suspect empty extraction applies nothing and leaves
     // the ledger untouched so a later run retries.
-    if skip_zero_candidate_deletes(meeting_id, candidates.len() as u32, &plan) {
+    let has_attaches =
+        app_lib::database::repositories::action_item_todo::meeting_has_attaches(pool, meeting_id)
+            .await
+            .expect("attach check");
+    if skip_zero_candidate_deletes(meeting_id, candidates.len() as u32, &plan, has_attaches) {
         return false;
     }
     let written = ActionItemsRepository::replace_extracted(

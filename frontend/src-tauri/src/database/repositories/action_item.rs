@@ -26,7 +26,9 @@ use crate::action_items::diff::{ExtractionDiff, ResolvedCandidate};
 use crate::action_items::merge::SourceAttach;
 use crate::action_items::triage::triage_for;
 
-use super::action_item_todo::{apply_sources_in_tx, delete_or_detach_in_tx};
+use super::action_item_todo::{
+    apply_sources_in_tx, delete_item_with_links, delete_or_detach_in_tx,
+};
 
 /// One action item, serialized camelCase for the frontend.
 #[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
@@ -453,11 +455,7 @@ impl ActionItemsRepository {
     /// Hard delete. The UI offers this for MANUAL items only — deleting an extracted item
     /// would just get re-proposed on the next run; dismissing is the persistent "no".
     pub async fn delete(pool: &SqlitePool, id: &str) -> Result<bool, SqlxError> {
-        let res = sqlx::query("DELETE FROM action_items WHERE id = ?")
-            .bind(id)
-            .execute(pool)
-            .await?;
-        Ok(res.rows_affected() > 0)
+        delete_item_with_links(pool, id).await
     }
 
     /// The meeting's extraction ledger row, if any run ever completed.
@@ -592,6 +590,13 @@ impl ActionItemsRepository {
             ));
         }
 
+        for (id, candidate) in &diff.matched {
+            primaries.push((
+                id.clone(),
+                candidate.context.clone(),
+                candidate.description.clone(),
+            ));
+        }
         apply_sources_in_tx(&mut tx, meeting_id, &primaries, attaches).await?;
 
         sqlx::query(
@@ -1098,6 +1103,7 @@ mod action_items_tests {
                 content_key: diff::content_key("send deck to alice"),
             }],
             delete_ids: vec![drop_me.id.clone()],
+            ..Default::default()
         };
 
         let written = ActionItemsRepository::replace_extracted(
@@ -1191,6 +1197,7 @@ mod action_items_tests {
             }],
             updates: vec![],
             delete_ids: vec![],
+            ..Default::default()
         };
 
         // ...then the user deletes the meeting before the apply.
@@ -1266,6 +1273,7 @@ mod action_items_tests {
                 content_key: diff::content_key("send deck to alice"),
             }],
             delete_ids: vec![completed_target.id.clone()],
+            ..Default::default()
         };
 
         // Between snapshot and apply, the user touches BOTH rows.

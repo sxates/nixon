@@ -392,11 +392,13 @@ pub(crate) type PrimarySource = (String, Option<String>, String);
 
 /// Persist the source rows of one extraction run, inside its transaction (specs/0088).
 ///
-/// 1. Drop this meeting's earlier ATTACHES: its source rows on items that belong to another
-///    meeting or to nobody (`IS NOT`, so standalone to-dos count). Attaches are rebuilt from
-///    the fresh routing below; the item's own primary row is never touched here.
-/// 2. Upsert the primary row of every item this run inserted or rewrote.
-/// 3. Insert each attach, only while its target still exists: the routing was computed
+/// 1. Sweep this meeting's source rows on items that no longer exist, and its earlier
+///    ATTACHES (rows on items another meeting or nobody owns, `NOT IN` the owned set so
+///    standalone to-dos count) that this run did not reproduce. Reproduced attaches are
+///    kept and upserted below, so `added_at` stays at its first-seen value.
+/// 2. Upsert the primary row of every item this run inserted, rewrote or matched, only
+///    while this meeting still owns the item. Only context and phrasing change.
+/// 3. Upsert each attach, only while its target still exists: the routing was computed
 ///    before a slow LLM call and the target may have been deleted since. An attach never
 ///    changes the target item itself (a dismissed or completed target stays as it is).
 pub(crate) async fn apply_sources_in_tx(
@@ -407,17 +409,34 @@ pub(crate) async fn apply_sources_in_tx(
 ) -> Result<(), SqlxError> {
     let now = Utc::now().to_rfc3339();
     sqlx::query(
-        "DELETE FROM action_item_sources WHERE meeting_id = ?1 AND action_item_id IN \
-         (SELECT id FROM action_items WHERE meeting_id IS NOT ?1)",
+        "DELETE FROM action_item_sources WHERE meeting_id = ? \
+         AND action_item_id NOT IN (SELECT id FROM action_items)",
     )
     .bind(meeting_id)
     .execute(&mut *tx)
     .await?;
+    let attached: Vec<String> = sqlx::query_scalar(
+        "SELECT action_item_id FROM action_item_sources WHERE meeting_id = ?1 \
+         AND action_item_id NOT IN (SELECT id FROM action_items WHERE meeting_id = ?1)",
+    )
+    .bind(meeting_id)
+    .fetch_all(&mut *tx)
+    .await?;
+    for id in attached
+        .iter()
+        .filter(|id| !attaches.iter().any(|a| &a.item_id == *id))
+    {
+        sqlx::query("DELETE FROM action_item_sources WHERE action_item_id = ? AND meeting_id = ?")
+            .bind(id)
+            .bind(meeting_id)
+            .execute(&mut *tx)
+            .await?;
+    }
     for (item_id, context, phrasing) in primaries {
         sqlx::query(
             "INSERT INTO action_item_sources \
                 (action_item_id, meeting_id, context, phrasing, added_at) \
-             VALUES (?, ?, ?, ?, ?) \
+             SELECT id, ?2, ?3, ?4, ?5 FROM action_items WHERE id = ?1 AND meeting_id = ?2 \
              ON CONFLICT(action_item_id, meeting_id) DO UPDATE SET \
                 context = excluded.context, phrasing = excluded.phrasing",
         )
@@ -431,9 +450,11 @@ pub(crate) async fn apply_sources_in_tx(
     }
     for a in attaches {
         sqlx::query(
-            "INSERT OR REPLACE INTO action_item_sources \
+            "INSERT INTO action_item_sources \
                 (action_item_id, meeting_id, context, phrasing, added_at) \
-             SELECT id, ?2, ?3, ?4, ?5 FROM action_items WHERE id = ?1",
+             SELECT id, ?2, ?3, ?4, ?5 FROM action_items WHERE id = ?1 \
+             ON CONFLICT(action_item_id, meeting_id) DO UPDATE SET \
+                context = excluded.context, phrasing = excluded.phrasing",
         )
         .bind(&a.item_id)
         .bind(meeting_id)
@@ -444,6 +465,35 @@ pub(crate) async fn apply_sources_in_tx(
         .await?;
     }
     Ok(())
+}
+
+/// Hard delete of one item together with its source and mention rows, in one transaction.
+pub(crate) async fn delete_item_with_links(pool: &SqlitePool, id: &str) -> Result<bool, SqlxError> {
+    let mut tx = pool.begin().await?;
+    for table in ["action_item_sources", "action_item_people"] {
+        sqlx::query(&format!("DELETE FROM {table} WHERE action_item_id = ?"))
+            .bind(id)
+            .execute(&mut *tx)
+            .await?;
+    }
+    let res = sqlx::query("DELETE FROM action_items WHERE id = ?")
+        .bind(id)
+        .execute(&mut *tx)
+        .await?;
+    tx.commit().await?;
+    Ok(res.rows_affected() > 0)
+}
+
+/// Whether `meeting_id` currently has attach rows: sources on items that another meeting
+/// (or nobody) owns. Feeds the zero-candidate safety valve.
+pub async fn meeting_has_attaches(pool: &SqlitePool, meeting_id: &str) -> Result<bool, SqlxError> {
+    sqlx::query_scalar(
+        "SELECT EXISTS (SELECT 1 FROM action_item_sources s WHERE s.meeting_id = ?1 \
+         AND s.action_item_id IN (SELECT id FROM action_items WHERE meeting_id IS NOT ?1))",
+    )
+    .bind(meeting_id)
+    .fetch_one(pool)
+    .await
 }
 
 /// A pristine extracted row that the meeting's new summary no longer supports.

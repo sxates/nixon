@@ -33,7 +33,7 @@ use tauri::{AppHandle, Emitter, Manager, Runtime};
 use tracing::{info, warn};
 
 use crate::database::repositories::action_item::ActionItemsRepository;
-use crate::database::repositories::action_item_todo::ActionItemTodoRepository;
+use crate::database::repositories::action_item_todo::{self, ActionItemTodoRepository};
 use crate::database::repositories::meeting::MeetingsRepository;
 use crate::database::repositories::meeting_participant::MeetingParticipantsRepository;
 use crate::llm_activity::{LlmActivityState, Origin, TaskKind};
@@ -88,8 +88,12 @@ fn try_claim_extraction(meeting_id: &str) -> Option<InFlightGuard> {
 /// caller applies NOTHING and does NOT write the ledger fingerprint, so a later run
 /// retries against the same summary.
 ///
+/// The same goes for a zero-candidate run while the meeting holds attach rows (sources it
+/// added to items other meetings own, `has_attaches`): applying it would sweep them, and
+/// nothing would bring them back.
+///
 /// Deliberate edge: a summary that genuinely contains no action items AND no pristine
-/// rows to protect (no rows at all, or protected-only rows — either way
+/// rows to protect AND no attaches (no rows at all, or protected-only rows — either way
 /// `plan.delete_ids` is empty) does NOT trip the valve. There is nothing to delete, and
 /// writing the ledger is harmless — it preserves idempotence for genuinely empty
 /// summaries.
@@ -100,8 +104,9 @@ pub fn skip_zero_candidate_deletes(
     meeting_id: &str,
     candidate_count: u32,
     plan: &diff::ExtractionDiff,
+    has_attaches: bool,
 ) -> bool {
-    if candidate_count == 0 && !plan.delete_ids.is_empty() {
+    if candidate_count == 0 && (!plan.delete_ids.is_empty() || has_attaches) {
         warn!(
             "Action-item extraction for meeting_id {}: extractor returned no candidates; \
              skipping {} pristine delete(s) as a safety valve (nothing applied, ledger not \
@@ -338,7 +343,10 @@ async fn run_extraction_inner<R: Runtime>(
 
     // Zero-candidate safety valve: apply nothing and leave the ledger alone (see the
     // guard's doc — the 2026-07 incident's "0 candidate(s) → ... 1 delete(s)" run).
-    if skip_zero_candidate_deletes(meeting_id, candidate_count, &plan) {
+    let has_attaches = action_item_todo::meeting_has_attaches(pool, meeting_id)
+        .await
+        .context("Failed to check the meeting's attached sources")?;
+    if skip_zero_candidate_deletes(meeting_id, candidate_count, &plan, has_attaches) {
         return Ok(0);
     }
 
@@ -450,15 +458,15 @@ mod tests {
     #[test]
     fn zero_candidate_valve_fires_only_when_pristine_deletes_are_pending() {
         assert!(
-            skip_zero_candidate_deletes("m1", 0, &plan_with_deletes(1)),
+            skip_zero_candidate_deletes("m1", 0, &plan_with_deletes(1), false),
             "the incident shape: 0 candidates, 1 pending pristine delete"
         );
         assert!(
-            !skip_zero_candidate_deletes("m1", 0, &plan_with_deletes(0)),
+            !skip_zero_candidate_deletes("m1", 0, &plan_with_deletes(0), false),
             "genuinely empty summary with nothing to delete → proceed (ledger written)"
         );
         assert!(
-            !skip_zero_candidate_deletes("m1", 2, &plan_with_deletes(1)),
+            !skip_zero_candidate_deletes("m1", 2, &plan_with_deletes(1), false),
             "a run WITH candidates may delete pristine rows (normal regeneration)"
         );
     }
@@ -492,7 +500,8 @@ mod tests {
             assert!(skip_zero_candidate_deletes(
                 "m-warn",
                 0,
-                &plan_with_deletes(3)
+                &plan_with_deletes(3),
+                false
             ));
         });
 
