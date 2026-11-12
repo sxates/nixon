@@ -5,6 +5,9 @@
  * section and the task hub. A plain input + button; Enter or the button submits
  * (the parent owns the IPC call). The draft clears only after `onAdd` succeeds —
  * a failed create (return `false` or throw) keeps the typed text for retry.
+ *
+ * A trailing due phrase — `Send the deck (Friday)` — is split off on submit with
+ * `parseTodoText` (specs/0088) and handed over as `dueDate`, an ISO local date.
  */
 
 import { useState } from 'react';
@@ -12,11 +15,12 @@ import { Plus } from '@/components/ui/icons';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
+import { parseTodoText } from '@/lib/todo-parse';
 
 interface AddActionItemRowProps {
   placeholder?: string;
   /** Create handler. Return `false` (or throw) to signal failure and keep the draft. */
-  onAdd: (description: string) => boolean | void | Promise<boolean | void>;
+  onAdd: (description: string, dueDate?: string) => boolean | void | Promise<boolean | void>;
   className?: string;
 }
 
@@ -29,11 +33,13 @@ export function AddActionItemRow({
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const submit = async () => {
-    const description = draft.trim();
-    if (!description || isSubmitting) return;
+    const text = draft.trim();
+    if (!text || isSubmitting) return;
+    const { title, dueDate } = parseTodoText(text, new Date());
+    const description = title || text;
     setIsSubmitting(true);
     try {
-      const ok = await onAdd(description);
+      const ok = await (dueDate && title ? onAdd(description, dueDate) : onAdd(description));
       if (ok !== false) setDraft('');
     } catch {
       // The parent surfaces the error; keep the draft so the text isn't lost.

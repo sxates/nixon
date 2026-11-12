@@ -56,7 +56,7 @@ export interface ActionItemMutations {
   assign: (item: ActionItem, selection: AssigneeSelection) => Promise<void>;
   deleteItem: (item: ActionItem) => Promise<void>;
   /** Returns false on failure so `AddActionItemRow` keeps the typed draft. */
-  add: (description: string) => Promise<boolean>;
+  add: (description: string, dueDate?: string) => Promise<boolean>;
   /** Set (ISO `YYYY-MM-DD`) or clear (`null`) an item's structured due date (WS1.a). */
   setDueDate: (item: ActionItem, dueDate: string | null) => Promise<void>;
   /**
@@ -212,11 +212,12 @@ export function useActionItemMutations<T extends ActionItem>({
   const dismissOlderThan = (days: 14 | 30 | 60) =>
     invoke<string[]>('api_dismiss_suggestions_older_than', { days });
 
-  const add = async (description: string): Promise<boolean> => {
+  const add = async (description: string, dueDate?: string): Promise<boolean> => {
     try {
       const created = await invoke<ActionItem>('api_create_action_item', {
         meetingId,
         description,
+        ...(dueDate ? { dueDate } : {}),
       });
       if (!appendCreated || appendCreated(created)) {
         const row = lift(created);

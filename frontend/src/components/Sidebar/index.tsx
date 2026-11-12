@@ -13,6 +13,7 @@ import {
 import { useRouter, usePathname } from 'next/navigation';
 import { useSidebar } from './SidebarProvider';
 import { DeckIcon } from '@/components/ui/deck-icon';
+import { useTodoViews } from '@/hooks/useTodoViews';
 import { cn } from '@/lib/utils';
 import { QueueRow } from './QueueRow';
 import { IconSlot, NavRow } from './SidebarRow';
@@ -51,8 +52,8 @@ const NAV_ITEMS: NavItem[] = [
     isActive: isMeetingsPath,
   },
   {
-    // Cross-meeting task hub (specs/0034).
-    label: 'Action items',
+    // The hand-ordered to-do list + suggestion inbox (specs/0088, was the specs/0034 hub).
+    label: 'To-do',
     path: '/tasks',
     icon: CheckSquare,
     slot: 'tasks',
@@ -83,6 +84,8 @@ const Sidebar: React.FC = () => {
   const router = useRouter();
   const pathname = usePathname();
   const { isCollapsed, isContentInsetCollapsed, toggleCollapse } = useSidebar();
+  // The To-do row's badge: suggestions waiting in the inbox (count only; no list queries).
+  const { inboxCount } = useTodoViews({ countOnly: true });
   // A narrow window's expanded sidebar floats over the page; a click outside it closes it.
   const isOverlay = !isCollapsed && isContentInsetCollapsed;
 
@@ -155,6 +158,7 @@ const Sidebar: React.FC = () => {
               label={item.label}
               collapsed={isCollapsed}
               active={item.isActive(pathname)}
+              badge={item.slot === 'tasks' ? inboxCount : undefined}
               onClick={() => router.push(item.path)}
             />
           ))}

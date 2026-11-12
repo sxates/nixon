@@ -1,31 +1,10 @@
 /**
- * Pure helpers for the action-items feature (specs/0034): the task hub's filter →
- * IPC-args mapping, meeting grouping, and assignee display resolution. Kept free of
+ * Pure helpers for the action-items feature (specs/0034, 0088): assignee IPC args and
+ * display resolution, drag reordering, and bulk-dismiss selectors. Kept free of
  * React/Tauri so the hub's core logic is unit-testable (Vitest, no IPC).
  */
 
-import type { ActionItem, ActionItemStatus, ActionItemWithMeeting } from '@/types';
-
-/** The hub's status filter — one of the three persisted statuses (default 'open'). */
-export type StatusFilter = ActionItemStatus;
-
-/** The hub's person filter: everyone, the app owner ("Me"), or a specific person. */
-export type PersonFilter =
-  | { kind: 'anyone' }
-  | { kind: 'me' }
-  | { kind: 'person'; personId: string };
-
-/** Invoke args for `api_list_action_items` from the hub's filter state. */
-export function buildListArgs(
-  status: StatusFilter,
-  person: PersonFilter,
-): { status: StatusFilter; personId: string | null; mineOnly: boolean } {
-  return {
-    status,
-    personId: person.kind === 'person' ? person.personId : null,
-    mineOnly: person.kind === 'me',
-  };
-}
+import type { ActionItem } from '@/types';
 
 /** What the assignee picker resolved to. `raw` = free-text name (kept verbatim). */
 export type AssigneeSelection =
@@ -49,51 +28,6 @@ export function updateAssigneeArgs(
     case 'clear':
       return { id, assigneeClear: true };
   }
-}
-
-/**
- * Hub ordering (specs/0038 WS1.b). `meeting` is the grouped default (by source meeting,
- * newest-first — `groupActionItems`); `manual` and `due` are flat orders computed
- * client-side over `sortOrder` / `dueDate` (the server list order is unchanged).
- */
-export type HubSort = 'manual' | 'due' | 'meeting';
-
-/** The two flat (ungrouped) sorts — `meeting` renders grouped instead. */
-export type FlatSort = Exclude<HubSort, 'meeting'>;
-
-/**
- * Flat client-side ordering for the hub's Manual / Due sorts (specs/0038 WS1.b):
- *   - `manual`: by `sortOrder` ascending, NULLs last, then `createdAt` (oldest first);
- *   - `due`:    by `dueDate` ascending (soonest first), NULLs last, then `createdAt`.
- * Pure and stable; never mutates the input.
- */
-export function sortActionItems(
-  items: ActionItemWithMeeting[],
-  sort: FlatSort,
-): ActionItemWithMeeting[] {
-  const byCreatedAt = (a: ActionItem, b: ActionItem) =>
-    (a.createdAt || '').localeCompare(b.createdAt || '');
-  const copy = [...items];
-  if (sort === 'manual') {
-    copy.sort((a, b) => {
-      const ao = a.sortOrder;
-      const bo = b.sortOrder;
-      if (ao != null && bo != null && ao !== bo) return ao - bo;
-      if (ao != null && bo == null) return -1;
-      if (ao == null && bo != null) return 1;
-      return byCreatedAt(a, b);
-    });
-  } else {
-    copy.sort((a, b) => {
-      const ad = a.dueDate;
-      const bd = b.dueDate;
-      if (ad && bd && ad !== bd) return ad.localeCompare(bd);
-      if (ad && !bd) return -1;
-      if (!ad && bd) return 1;
-      return byCreatedAt(a, b);
-    });
-  }
-  return copy;
 }
 
 /**
@@ -143,68 +77,6 @@ export function affectedByBulk(items: ActionItem[], filter: BulkFilter): string[
     case 'ids':
       return [...filter.ids];
   }
-}
-
-/** One hub group: a source meeting (or the standalone "Unattached" bucket). */
-export interface ActionItemGroup {
-  /** Stable render key: the meeting id, or 'unattached'. */
-  key: string;
-  meetingId: string | null;
-  title: string;
-  /** Meeting creation time (ISO) — null for the unattached group. */
-  createdAt: string | null;
-  items: ActionItemWithMeeting[];
-}
-
-export const UNATTACHED_GROUP_TITLE = 'Unattached';
-
-/**
- * Group hub items by source meeting: meetings newest-first (by meeting `created_at`),
- * standalone items (`meetingId === null`) in a trailing "Unattached" group. Within a
- * group, items keep oldest-first order (by item `createdAt`) so lists read stably.
- */
-export function groupActionItems(items: ActionItemWithMeeting[]): ActionItemGroup[] {
-  const byMeeting = new Map<string, ActionItemGroup>();
-  const unattached: ActionItemWithMeeting[] = [];
-
-  for (const item of items) {
-    if (!item.meetingId) {
-      unattached.push(item);
-      continue;
-    }
-    let group = byMeeting.get(item.meetingId);
-    if (!group) {
-      group = {
-        key: item.meetingId,
-        meetingId: item.meetingId,
-        title: item.meetingTitle?.trim() || 'Untitled meeting',
-        createdAt: item.meetingCreatedAt ?? null,
-        items: [],
-      };
-      byMeeting.set(item.meetingId, group);
-    }
-    group.items.push(item);
-  }
-
-  const byCreatedAtAsc = (a: ActionItem, b: ActionItem) =>
-    (a.createdAt || '').localeCompare(b.createdAt || '');
-
-  const groups = Array.from(byMeeting.values());
-  for (const group of groups) group.items.sort(byCreatedAtAsc);
-  // Meetings newest-first; ISO-8601 UTC strings compare lexicographically.
-  groups.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
-
-  if (unattached.length > 0) {
-    unattached.sort(byCreatedAtAsc);
-    groups.push({
-      key: 'unattached',
-      meetingId: null,
-      title: UNATTACHED_GROUP_TITLE,
-      createdAt: null,
-      items: unattached,
-    });
-  }
-  return groups;
 }
 
 /**

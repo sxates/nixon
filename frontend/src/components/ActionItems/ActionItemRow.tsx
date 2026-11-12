@@ -8,9 +8,12 @@
  *
  * Affordances:
  *   - round checkbox: open ↔ completed;
- *   - description: click to edit inline (Enter/blur saves, Escape cancels);
+ *   - description: click to edit inline (Enter/blur saves, Escape cancels) — or, when the
+ *     surface passes `onOpen` (the To-do page), click opens the item's detail page;
+ *     `@[Name](person:id)` mentions render as the person's current name;
  *   - assignee chip: AssigneePicker (roster/People + "Me" + free text + clear);
- *   - due hint: verbatim extracted text, display-only in v1;
+ *   - due hint: verbatim extracted text, display-only in v1; a structured due date that is
+ *     today or overdue reads in `brand` (amber — never red, red means recording);
  *   - overflow menu: Dismiss (extracted — persists so re-extraction won't resurrect
  *     it), Restore (dismissed), Delete (manual — extracted items are dismissed, not
  *     deleted, or the next scan would just re-propose them).
@@ -29,6 +32,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import { formatDueDate } from '@/lib/format-date';
+import { titleSegments } from '@/lib/todo-parse';
 import type { ActionItem, ActionItemStatus } from '@/types';
 import { AssigneePicker, type AssigneeCandidate, type AssigneeSelection } from './AssigneePicker';
 
@@ -52,11 +56,12 @@ interface ActionItemRowProps {
   meetingChip?: ReactNode;
   /** Drag handle (WS1.b Manual sort); rendered to the left of the checkbox. */
   dragHandle?: ReactNode;
-  /**
-   * Collapse to a single line by default, expanding the meta row on hover/focus
-   * (WS1.b hub flat views). The per-meeting section leaves this false.
-   */
-  compact?: boolean;
+  /** Open the item's detail page; when set, a title click calls this instead of editing. */
+  onOpen?: (item: ActionItem) => void;
+  /** Meetings that mention this item (specs/0088); "from N meetings" shows when above 1. */
+  sourceCount?: number;
+  /** Current person names by id, so mention tokens in the title show the live name. */
+  nameById?: Map<string, string>;
   /**
    * Hide the assignee chip (specs/0063 W4). For a surface whose own grouping already
    * names the assignee — the Prep tab lists carried-over items under "Your open items"
@@ -71,6 +76,14 @@ interface ActionItemRowProps {
  * fallback label when there's no date), and reveals a native date input to set/clear it.
  * A native `<input type="date">` keeps this dependency-free and works in the WKWebview.
  */
+/** Local calendar date as `YYYY-MM-DD` (never via UTC). */
+function localIso(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+const EMPTY_NAMES = new Map<string, string>();
+
 function DueDateControl({
   item,
   onSetDueDate,
@@ -79,11 +92,13 @@ function DueDateControl({
   onSetDueDate: (item: ActionItem, dueDate: string | null) => void | Promise<void>;
 }) {
   const label = formatDueDate(item.dueDate) ?? item.dueHint;
+  const urgent =
+    item.status === 'open' && !!item.dueDate && item.dueDate.slice(0, 10) <= localIso(new Date());
   return (
     <label
       className={cn(
         'relative inline-flex cursor-pointer items-center gap-1 rounded-md px-1 py-px text-caption transition-colors hover:bg-muted focus-within:ring-2 focus-within:ring-ring',
-        label ? 'text-muted-foreground' : 'text-engrave',
+        urgent ? 'text-brand' : label ? 'text-muted-foreground' : 'text-engrave',
       )}
       title={item.dueDate ? 'Change due date' : 'Set a due date'}
     >
@@ -111,7 +126,9 @@ export function ActionItemRow({
   onSetDueDate,
   meetingChip,
   dragHandle,
-  compact = false,
+  onOpen,
+  sourceCount,
+  nameById = EMPTY_NAMES,
   hideAssignee = false,
 }: ActionItemRowProps) {
   const [isEditing, setIsEditing] = useState(false);
@@ -131,13 +148,7 @@ export function ActionItemRow({
     if (next && next !== item.description) void onEditDescription(item, next);
   };
 
-  const dueLabel = formatDueDate(item.dueDate) ?? item.dueHint;
-  // Collapsed one-line summary (compact mode, not hovered): a muted glance at assignee
-  // and due so the row still reads at a glance before it expands.
-  const collapsedMeta =
-    compact && (assigneeName || dueLabel)
-      ? [assigneeName, dueLabel].filter(Boolean).join(' · ')
-      : null;
+  const segments = titleSegments(item.description, nameById);
 
   return (
     <div className="group flex items-start gap-2 rounded-lg px-2 py-1.5 transition-colors hover:bg-accent/60">
@@ -176,33 +187,28 @@ export function ActionItemRow({
           <div className="flex items-center gap-2">
             <button // ui-gate: allow click-to-edit description; it wraps across lines, which Button's nowrap fixed-height chrome can't
               type="button"
-              onClick={startEdit}
-              title="Edit description"
+              onClick={() => (onOpen ? onOpen(item) : startEdit())}
+              title={onOpen ? 'Open this item' : 'Edit description'}
               className={cn(
                 'min-w-0 flex-1 rounded-md px-0.5 text-left text-sm leading-snug text-foreground hover:text-brand focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                compact && 'truncate',
                 completed && 'text-muted-foreground line-through',
                 dismissed && 'text-muted-foreground',
               )}
             >
-              {item.description}
+              {segments.map((seg, i) =>
+                seg.kind === 'person' ? (
+                  <span key={i} className="font-medium">
+                    @{seg.name}
+                  </span>
+                ) : (
+                  <span key={i}>{seg.text}</span>
+                ),
+              )}
             </button>
-            {collapsedMeta && (
-              <span className="flex-shrink-0 truncate text-caption text-muted-foreground group-hover:hidden group-has-[:focus-visible]:hidden">
-                {collapsedMeta}
-              </span>
-            )}
           </div>
         )}
 
-        <div
-          className={cn(
-            'mt-1 flex-wrap items-center gap-1.5',
-            compact
-              ? 'hidden group-hover:flex group-has-[:focus-visible]:flex'
-              : 'flex',
-          )}
-        >
+        <div className="mt-1 flex flex-wrap items-center gap-1.5">
           {!hideAssignee && (
             <AssigneePicker
               label={assigneeName}
@@ -218,6 +224,9 @@ export function ActionItemRow({
                 {item.dueHint}
               </span>
             )
+          )}
+          {sourceCount !== undefined && sourceCount > 1 && (
+            <span className="text-caption text-muted-foreground">from {sourceCount} meetings</span>
           )}
           {meetingChip}
           {dismissed && (
