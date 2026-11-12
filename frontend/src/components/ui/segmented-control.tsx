@@ -56,6 +56,10 @@ export function SegmentedControl({
     select((from + delta + options.length) % options.length);
   };
 
+  // No option active (a value outside the set): the first option holds the Tab stop, or
+  // the group would drop out of the Tab order entirely.
+  const noneActive = !options.some((o) => o.value === value);
+
   return (
     <div
       role="group"
@@ -74,7 +78,7 @@ export function SegmentedControl({
             type="button"
             aria-pressed={active}
             // Roving tabindex: only the active option is in the Tab order.
-            tabIndex={active ? 0 : -1}
+            tabIndex={active || (noneActive && index === 0) ? 0 : -1}
             onClick={() => {
               if (!active) onChange(option.value);
             }}
