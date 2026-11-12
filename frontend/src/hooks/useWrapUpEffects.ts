@@ -12,8 +12,10 @@
  *   - any stage's `toast` (transcription incomplete, a refused handoff, a skipped summary),
  *     once per event; `failed`: an error toast.
  *
- * Nothing here navigates. The owner was pulled out of another meeting or prep whenever a
- * recording ended (2026-11-05), so a stop from any source, `/record` included, stays put.
+ * Navigation: only from the recorder. If the window is on `/record` (watching the live
+ * transcript) when the meeting is saved, it moves to that meeting's summary (2026-11-11).
+ * Anywhere else stays put — the owner was pulled out of another meeting or prep whenever a
+ * recording ended (2026-11-05).
  */
 
 import { useEffect, useRef } from 'react';
@@ -26,6 +28,8 @@ import {
   WRAP_UP_EVENT,
   SAVED_TOAST_TITLE,
   meetingHref,
+  meetingSummaryHref,
+  shouldOpenSummaryOnSave,
   shouldShowSavedToast,
   type WrapUpState,
 } from '@/lib/wrap-up';
@@ -110,13 +114,17 @@ export function useWrapUpEffects(): void {
 
       if (state.stage === 'saved' && state.meetingId) {
         const meetingId = state.meetingId;
-        const show = shouldShowSavedToast({
-          visible: isVisible(),
-          pathname: window.location.pathname,
-          search: window.location.search,
-          meetingId,
-        });
-        if (show) {
+        if (shouldOpenSummaryOnSave(window.location.pathname)) {
+          // `replace`: the emptied recorder isn't worth a Back step.
+          deps.current.router.replace(meetingSummaryHref(meetingId));
+        } else if (
+          shouldShowSavedToast({
+            visible: isVisible(),
+            pathname: window.location.pathname,
+            search: window.location.search,
+            meetingId,
+          })
+        ) {
           toast.success(SAVED_TOAST_TITLE, {
             description: state.title ?? undefined,
             action: {
