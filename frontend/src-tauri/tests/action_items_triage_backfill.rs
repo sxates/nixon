@@ -194,3 +194,148 @@ async fn migration_backfills_triage_and_sources() {
         }
     }
 }
+
+// ---- create / replace_extracted write the triage columns (specs/0088 W1) ----
+
+mod common;
+
+use app_lib::action_items::diff::{
+    self, CandidateInsert, ExtractionDiff, PristineUpdate, ResolvedCandidate,
+};
+use app_lib::database::repositories::action_item::ActionItemsRepository;
+use app_lib::database::repositories::meeting::MeetingsRepository;
+use common::fresh_db;
+
+fn cand(description: &str, is_self: bool, person: Option<&str>) -> ResolvedCandidate {
+    ResolvedCandidate {
+        description: description.to_string(),
+        assignee_person_id: person.map(String::from),
+        assignee_is_self: is_self,
+        assignee_raw: None,
+        due_hint: None,
+        due_date: None,
+    }
+}
+
+#[tokio::test]
+async fn create_manual_is_listed_and_appends() {
+    let (_dir, db) = fresh_db().await;
+    let pool = db.pool();
+    for (i, d) in ["one", "two"].iter().enumerate() {
+        let it = ActionItemsRepository::create(
+            pool,
+            None,
+            &cand(d, true, None),
+            "manual",
+            &diff::content_key(d),
+        )
+        .await
+        .unwrap();
+        assert_eq!(it.sort_order, Some(i as i64));
+    }
+    let third = ActionItemsRepository::create(
+        pool,
+        None,
+        &cand("three", true, None),
+        "manual",
+        &diff::content_key("three"),
+    )
+    .await
+    .unwrap();
+    assert_eq!(third.triage, "listed");
+    assert_eq!(third.sort_order, Some(2));
+    assert!(third.adopted_at.is_some());
+}
+
+#[tokio::test]
+async fn create_extracted_uses_triage_for() {
+    let (_dir, db) = fresh_db().await;
+    let pool = db.pool();
+    let mine =
+        ActionItemsRepository::create(pool, None, &cand("mine", true, None), "extracted", "k1")
+            .await
+            .unwrap();
+    let theirs = ActionItemsRepository::create(
+        pool,
+        None,
+        &cand("theirs", false, Some("p-1")),
+        "extracted",
+        "k2",
+    )
+    .await
+    .unwrap();
+    assert_eq!(mine.triage, "suggested");
+    assert_eq!(theirs.triage, "record");
+    for it in [&mine, &theirs] {
+        assert!(it.adopted_at.is_none());
+        assert!(it.sort_order.is_none());
+    }
+}
+
+#[tokio::test]
+async fn create_with_meeting_writes_source_row() {
+    let (_dir, db) = fresh_db().await;
+    let pool = db.pool();
+    let m = MeetingsRepository::create_meeting(pool, Some("Sync".into()), None, None, None, None)
+        .await
+        .unwrap();
+    let it = ActionItemsRepository::create(
+        pool,
+        Some(&m),
+        &cand("ship it", true, None),
+        "extracted",
+        "k",
+    )
+    .await
+    .unwrap();
+    let row = sqlx::query(
+        "SELECT meeting_id, context, phrasing FROM action_item_sources WHERE action_item_id = ?",
+    )
+    .bind(&it.id)
+    .fetch_all(pool)
+    .await
+    .unwrap();
+    assert_eq!(row.len(), 1);
+    assert_eq!(row[0].get::<String, _>("meeting_id"), m);
+    assert!(row[0].get::<Option<String>, _>("context").is_none());
+    assert_eq!(row[0].get::<String, _>("phrasing"), "ship it");
+}
+
+#[tokio::test]
+async fn replace_extracted_sets_triage_on_insert_and_pristine_update() {
+    let (_dir, db) = fresh_db().await;
+    let pool = db.pool();
+    let m = MeetingsRepository::create_meeting(pool, Some("Sync".into()), None, None, None, None)
+        .await
+        .unwrap();
+    let first = ExtractionDiff {
+        inserts: vec![CandidateInsert {
+            candidate: cand("draft plan", false, None),
+            content_key: diff::content_key("draft plan"),
+        }],
+        ..Default::default()
+    };
+    ActionItemsRepository::replace_extracted(pool, &m, &first, "fp1", "p", "m", 1)
+        .await
+        .unwrap();
+    let rows = ActionItemsRepository::get_for_meeting(pool, &m)
+        .await
+        .unwrap();
+    assert_eq!(rows[0].triage, "suggested");
+
+    let second = ExtractionDiff {
+        updates: vec![PristineUpdate {
+            id: rows[0].id.clone(),
+            candidate: cand("draft plan", false, Some("p-1")),
+            content_key: rows[0].content_key.clone(),
+        }],
+        ..Default::default()
+    };
+    ActionItemsRepository::replace_extracted(pool, &m, &second, "fp2", "p", "m", 1)
+        .await
+        .unwrap();
+    let rows = ActionItemsRepository::get_for_meeting(pool, &m)
+        .await
+        .unwrap();
+    assert_eq!(rows[0].triage, "record");
+}

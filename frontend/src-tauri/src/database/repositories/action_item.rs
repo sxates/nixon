@@ -226,14 +226,23 @@ impl ActionItemsRepository {
     ) -> Result<ActionItem, SqlxError> {
         let id = format!("ai-{}", Uuid::new_v4());
         let now = Utc::now().to_rfc3339();
+        // specs/0088: a hand-typed item is a to-do (end of the list); an extracted one is
+        // triaged like any extraction candidate and is not yet adopted.
+        let manual = source == "manual";
+        let triage = if manual {
+            "listed"
+        } else {
+            triage_for(candidate).as_str()
+        };
+        let mut tx = pool.begin().await?;
         sqlx::query(
             "INSERT INTO action_items
                 (id, meeting_id, description, assignee_person_id, assignee_is_self,
                  assignee_raw, due_hint, due_date, status, source, user_edited, content_key,
                  created_at, updated_at, triage, adopted_at, sort_order)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'open', ?, 0, ?, ?, ?, 'listed', ?,
-                 (SELECT COALESCE(MAX(sort_order), -1) + 1 FROM action_items
-                  WHERE triage = 'listed'))",
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'open', ?, 0, ?, ?, ?, ?, ?,
+                 CASE WHEN ? THEN (SELECT COALESCE(MAX(sort_order), -1) + 1 FROM action_items
+                                   WHERE triage = 'listed') END)",
         )
         .bind(&id)
         .bind(meeting_id)
@@ -247,9 +256,25 @@ impl ActionItemsRepository {
         .bind(content_key)
         .bind(&now)
         .bind(&now)
-        .bind(&now)
-        .execute(pool)
+        .bind(triage)
+        .bind(manual.then_some(&now))
+        .bind(manual)
+        .execute(&mut *tx)
         .await?;
+        if let Some(meeting_id) = meeting_id {
+            sqlx::query(
+                "INSERT OR IGNORE INTO action_item_sources
+                    (action_item_id, meeting_id, context, phrasing, added_at)
+                 VALUES (?, ?, NULL, ?, ?)",
+            )
+            .bind(&id)
+            .bind(meeting_id)
+            .bind(&candidate.description)
+            .bind(&now)
+            .execute(&mut *tx)
+            .await?;
+        }
+        tx.commit().await?;
 
         // Fetch back rather than hand-assembling, so the returned row is exactly what
         // any later read will see.
@@ -1481,9 +1506,8 @@ mod action_items_tests {
         .await
         .unwrap();
 
-        // `create` adds a to-do (specs/0088), so fresh rows go to the end of the list.
-        assert_eq!(a.sort_order, Some(0));
-        assert_eq!(c.sort_order, Some(2));
+        // Fresh extracted rows have no order.
+        assert!(a.sort_order.is_none());
 
         // Reorder c, a, b — plus a ghost id that no longer exists (skipped).
         let written = ActionItemsRepository::reorder(
