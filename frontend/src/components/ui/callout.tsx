@@ -43,6 +43,11 @@ export interface CalloutProps extends Omit<React.HTMLAttributes<HTMLDivElement>,
   size?: CalloutSize;
   /** A spinner or status dot before the content. */
   lead?: React.ReactNode;
+  /**
+   * Where `action` sits: `center` (default) on the whole box, or `start` on the title line
+   * — for a tall callout whose body holds rows with their own buttons.
+   */
+  actionAlign?: 'center' | 'start';
 }
 
 export const CALLOUT_SIZES = {
@@ -53,7 +58,18 @@ export const CALLOUT_SIZES = {
 export type CalloutSize = keyof typeof CALLOUT_SIZES;
 
 export const Callout = React.forwardRef<HTMLDivElement, CalloutProps>(function Callout(
-  { tone = 'info', title, action, size = 'default', lead, className, children, role, ...props },
+  {
+    tone = 'info',
+    title,
+    action,
+    size = 'default',
+    lead,
+    actionAlign = 'center',
+    className,
+    children,
+    role,
+    ...props
+  },
   ref,
 ) {
   const structured = title != null || action != null || lead != null;
@@ -89,7 +105,12 @@ export const Callout = React.forwardRef<HTMLDivElement, CalloutProps>(function C
             ) : null}
           </div>
           {action != null ? (
-            <div className="flex flex-none items-center gap-2 self-center">{action}</div>
+            <div
+              data-callout-action=""
+              className={cn('flex flex-none items-center gap-2', actionAlign === 'start' ? 'self-start' : 'self-center')}
+            >
+              {action}
+            </div>
           ) : null}
         </>
       ) : (
