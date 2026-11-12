@@ -6,7 +6,6 @@
 import type { DayAgendaItem } from '@/lib/day-agenda';
 import {
   dayCounts,
-  dayLabel,
   localDateKey,
   parseLocalDateKey,
   type TimelineContext,
@@ -31,12 +30,20 @@ export function weekRangeLabel(weekDays: string[]): string {
   return `${shortDate(weekDays[0])} – ${shortDate(weekDays[6])}`;
 }
 
-/** Beside the nav arrows: "Today" / "Tomorrow" / a date, or "This week" / a range. */
+/**
+ * Beside the nav arrows: the day in view as a date ("Thu, Nov 12"), or "This week" / a
+ * range. The day is always a date, not "Today": Today is the DateNavigator's own key, as in
+ * Week and Month, so the label never repeats it.
+ */
 export function agendaNavLabel({ mode, now, viewDate, weekDays }: AgendaLabelInput): string {
   if (mode === 'week') {
     return weekDays.includes(localDateKey(now)) ? 'This week' : weekRangeLabel(weekDays);
   }
-  return dayLabel(viewDate, now);
+  return parseLocalDateKey(viewDate).toLocaleDateString([], {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+  });
 }
 
 /** Under the title: the day (or week) in view and what's in it. */

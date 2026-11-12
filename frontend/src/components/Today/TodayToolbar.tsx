@@ -15,7 +15,6 @@ interface TodayToolbarProps {
   viewDate: string;
   /** Primary date label shown next to the nav arrows. */
   navLabel: string;
-  viewIsToday: boolean;
   onPrev: () => void;
   onNext: () => void;
   onToday: () => void;
@@ -34,7 +33,6 @@ export function TodayToolbar({
   viewMode,
   viewDate,
   navLabel,
-  viewIsToday,
   onPrev,
   onNext,
   onToday,
@@ -49,10 +47,10 @@ export function TodayToolbar({
       onNext={onNext}
       prevLabel={viewMode === 'week' ? 'Previous week' : 'Previous day'}
       nextLabel={viewMode === 'week' ? 'Next week' : 'Next day'}
+      // Today is always a key, as in Week and Month (the DateNavigator default): the
+      // agenda used to drop it and print "Today" as the label instead, so the same
+      // control was drawn two ways across the views.
       onToday={onToday}
-      // Day view: no Today while today is in view. Week view keeps it (it also resets
-      // the week to the current one).
-      showToday={!(viewMode !== 'week' && viewIsToday)}
       trailing={
         // Native date picker: a transparent input overlays the calendar glyph so a click
         // opens the OS picker; the value stays a valid local YYYY-MM-DD. Same 28px ghost
