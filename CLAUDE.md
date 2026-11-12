@@ -168,6 +168,12 @@ A change is done when:
    everything goes through the semantic tokens so Deck/Faceplate stay in parity).
 2d. For UI changes, run `pnpm shots` then `pnpm shots:diff` from `frontend/` and look at the
    sheet (specs/0060).
+2e. `scripts/check-ui-consistency.sh` passes (ADR-0019): screens build from `components/ui/`
+   per `docs/design-system.md`. Each mechanical rule (raw `<button>`/`<input>`, `text-[Npx]`,
+   off-scale radii, `shadow-[…]`, `lucide-react` imports, entrance travel, hand-rolled hover)
+   has a budget in `scripts/ui-consistency-budget.txt` that `--update` only lowers. Deck
+   hardware parts sit in `scripts/ui-consistency-allow.txt` with a reason; a one-off line takes
+   `// ui-gate: allow <reason>`. `--list <rule>` prints the hits; `--self-test` checks the gate.
 3. The app still launches via `./clean_run.sh`.
 4. The relevant smoke path still works (record → live transcript → summary).
 
