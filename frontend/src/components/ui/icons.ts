@@ -29,4 +29,24 @@ export {
 // Dropdown-menu leading icons (`DropdownMenuItem icon={…}`) in use today.
 export { Circle, EyeOff, MicOff, Radio, RotateCcw, UserCheck, UserPlus, Waves } from 'lucide-react';
 
+// Icon-only controls whose glyph IS the label (the tooltip carries the words): search,
+// import audio, the agenda's jump-to-date picker, the manual-sort drag handle, and the
+// sidebar's update download / restart glyph.
+export { CalendarDays, Download, FileAudio, GripVertical, RotateCw, Search } from 'lucide-react';
+
+// Sidebar navigation. The collapsed rail is icon-only, so each destination's glyph is its
+// only visible wayfinding; the hamburger toggles the rail.
+export { CheckSquare, Menu, MessageSquare, Settings, Users } from 'lucide-react';
+
+// Command palette (⌘K) item leading icons — the palette's rows are menu items.
+export {
+  AudioLines,
+  Calendar,
+  FileText,
+  LayoutList,
+  ListPlus,
+  Mic,
+  NotebookPen,
+} from 'lucide-react';
+
 export type { LucideIcon } from 'lucide-react';
