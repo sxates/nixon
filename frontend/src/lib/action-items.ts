@@ -60,26 +60,6 @@ export type BulkFilter =
   | { mode: 'ids'; ids: string[] };
 
 /**
- * The ids a bulk filter would affect in the CURRENT view — snapshotted client-side
- * before the bulk call so an Undo can re-`open` exactly them (`{ mode: 'ids' }`). Mirrors
- * the backend: person/notSelf only touch OPEN items and never my own (`assigneeIsSelf`).
- */
-export function affectedByBulk(items: ActionItem[], filter: BulkFilter): string[] {
-  switch (filter.mode) {
-    case 'person':
-      return items
-        .filter((i) => i.status === 'open' && i.assigneePersonId === filter.personId)
-        .map((i) => i.id);
-    case 'notSelf':
-      return items
-        .filter((i) => i.status === 'open' && !i.assigneeIsSelf)
-        .map((i) => i.id);
-    case 'ids':
-      return [...filter.ids];
-  }
-}
-
-/**
  * Resolve an item's assignee to a display label, or null when unassigned.
  * Priority: "Me" (owner flag) → people-directory name → raw extracted name.
  * A dangling `assigneePersonId` (person deleted) falls back to `assigneeRaw`.

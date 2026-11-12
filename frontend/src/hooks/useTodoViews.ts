@@ -5,9 +5,8 @@
  * dismissed list) through `api_list_todo_view`, plus the inbox badge count, and refetches
  * on the `action-items-updated` event.
  *
- * That event fires from extraction, triage, notes, dismiss-older and
- * `api_update_action_item`, but NOT from the legacy status / bulk status / delete /
- * reorder commands — callers of those must call `reload()` themselves.
+ * That event fires from extraction and every mutation (triage, status, bulk status,
+ * delete, reorder, notes, dismiss-older, update), so the lists stay current on their own.
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';

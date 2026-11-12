@@ -59,7 +59,7 @@ import { RunStatus } from '@/components/ui/run-status';
 import { Spinner } from '@/components/ui/spinner';
 import { ActionItemRow } from '@/components/ActionItems/ActionItemRow';
 import type { AssigneeCandidate } from '@/components/ActionItems/AssigneePicker';
-import { useActionItemMutations } from '@/hooks/useActionItemMutations';
+import { useActionItemMutations, type TriageAction } from '@/hooks/useActionItemMutations';
 import { LinkMeetingPicker } from './LinkMeetingPicker';
 import { PrepNotesEditor } from './PrepNotesEditor';
 
@@ -137,6 +137,27 @@ export function PrepPanel({
   useEffect(() => {
     void loadPrep();
   }, [loadPrep]);
+
+  // Re-read just the carried-over items (triage elsewhere, extraction, edits). Rows the
+  // user ticked off here stay on screen struck through, as `api_get_prep` returns open
+  // items only.
+  const refreshItems = useCallback(async () => {
+    try {
+      const v = await invoke<PrepView>('api_get_prep', { meetingId });
+      const fresh = v.openItems ?? [];
+      setOpenItems((prev) => [
+        ...fresh,
+        ...prev.filter((p) => p.status === 'completed' && !fresh.some((f) => f.id === p.id)),
+      ]);
+    } catch (err) {
+      console.error('Failed to refresh carried-over items:', err);
+    }
+  }, [meetingId]);
+
+  useEffect(() => {
+    const dispose = safeListen('action-items-updated', () => void refreshItems());
+    return () => dispose();
+  }, [refreshItems]);
 
   // People directory — to resolve "owed by others" assignee display names.
   useEffect(() => {
@@ -230,11 +251,26 @@ export function PrepPanel({
   // only thing that field drives is `add`, which this panel has no affordance for — passing
   // this meeting's id would silently create carried-over items on the wrong meeting the
   // moment someone adds one.
-  const { setStatus, editDescription, assign, deleteItem } = useActionItemMutations({
+  const { setStatus, editDescription, assign, deleteItem, triage } = useActionItemMutations({
     setItems: setOpenItems,
     meetingId: null,
     onStatusChanged: () => onOpenItemsChanged?.(),
   });
+
+  const handleTriage = useCallback(
+    async (item: ActionItem, action: TriageAction) => {
+      try {
+        await triage(item.id, action);
+      } catch (err) {
+        console.error('Failed to triage action item:', err);
+        toast.error('Could not update the item', {
+          description: err instanceof Error ? err.message : String(err),
+        });
+      }
+      await refreshItems();
+    },
+    [triage, refreshItems],
+  );
 
   // After a link lands the backend regenerates the brief and re-broadcasts; re-read the
   // view (clearing the event guard so the fresh persisted state is adopted).
@@ -434,6 +470,7 @@ export function PrepPanel({
                     onEditDescription={editDescription}
                     onAssign={assign}
                     onDelete={deleteItem}
+                    onTriage={handleTriage}
                     hideAssignee
                     meetingChip={<SourceMeetingChip item={item} onOpenMeeting={openMeeting} />}
                   />
@@ -464,6 +501,7 @@ export function PrepPanel({
                           onEditDescription={editDescription}
                           onAssign={assign}
                           onDelete={deleteItem}
+                          onTriage={handleTriage}
                           hideAssignee
                           meetingChip={<SourceMeetingChip item={item} onOpenMeeting={openMeeting} />}
                         />

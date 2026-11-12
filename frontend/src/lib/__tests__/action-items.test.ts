@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
 import {
-  affectedByBulk,
   assigneeLabel,
   reorderIds,
   updateAssigneeArgs,
@@ -68,27 +67,6 @@ describe('reorderIds (specs/0038 WS1.b drag)', () => {
   it('is a no-op for the same id or a missing id', () => {
     expect(reorderIds(['a', 'b'], 'a', 'a')).toEqual(['a', 'b']);
     expect(reorderIds(['a', 'b'], 'z', 'a')).toEqual(['a', 'b']);
-  });
-});
-
-describe('affectedByBulk (specs/0038 WS1.e)', () => {
-  const items = [
-    item({ id: 'mine', assigneeIsSelf: true }),
-    item({ id: 'alice', assigneePersonId: 'p1' }),
-    item({ id: 'unassigned' }),
-    item({ id: 'alice-done', assigneePersonId: 'p1', status: 'completed' }),
-  ];
-
-  it('notSelf: every OPEN item not assigned to me (covers unassigned/others)', () => {
-    expect(affectedByBulk(items, { mode: 'notSelf' })).toEqual(['alice', 'unassigned']);
-  });
-
-  it('person: OPEN items assigned to that person only', () => {
-    expect(affectedByBulk(items, { mode: 'person', personId: 'p1' })).toEqual(['alice']);
-  });
-
-  it('ids: passes the explicit set through', () => {
-    expect(affectedByBulk(items, { mode: 'ids', ids: ['x', 'y'] })).toEqual(['x', 'y']);
   });
 });
 

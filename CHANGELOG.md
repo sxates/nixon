@@ -29,6 +29,10 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 - Clear out old suggestions in one step: dismiss everything in the Inbox older than 14, 30, or 60 days.
 - Items assigned to other people stay on the meeting as a record, and you can adopt one onto your list if it becomes yours.
 
+### Changed
+
+- Action items Nixon found in past meetings now wait in your Inbox; items you typed or already worked on are on your To-do list. The Everyone and By-person views are gone: other people's items stay on their meetings.
+
 ### Internal
 
 - Action items gain `triage` (suggested / listed / record) beside `status`, plus `action_item_sources` and `action_item_people`; existing items are backfilled on migration.

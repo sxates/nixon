@@ -91,7 +91,7 @@ fn month_day(month: u32, day: u32, today: NaiveDate) -> Option<NaiveDate> {
     if let Some(d) = NaiveDate::from_ymd_opt(today.year(), month, day).filter(|d| *d >= today) {
         return Some(d);
     }
-    // Passed already (or Feb 29 in a non-leap year): the next year it exists in.
+    // Passed already (or Feb 29 in a non-leap year): try next year (None if still invalid).
     NaiveDate::from_ymd_opt(today.year() + 1, month, day)
 }
 

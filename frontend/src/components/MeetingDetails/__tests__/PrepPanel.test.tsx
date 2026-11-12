@@ -172,6 +172,58 @@ describe('PrepPanel (specs/0036)', () => {
     expect(await screen.findByText('Alice')).toBeInTheDocument();
   });
 
+  it('Adopt on an owed-by-others row triages it, then reloads the prep view', async () => {
+    let calls = 0;
+    stubInvoke({
+      api_get_prep: () => {
+        calls += 1;
+        return makeView({
+          briefStatus: 'none',
+          openItems: [
+            makeItem({
+              id: 'other-1',
+              triage: calls > 1 ? 'listed' : 'record',
+              assigneePersonId: 'p1',
+              description: 'Send the budget',
+            }),
+          ],
+        });
+      },
+      api_list_people: () => [person('p1', 'Alice')],
+      api_triage_action_item: () => makeItem({ id: 'other-1', triage: 'listed' }),
+    });
+    render(<PrepPanel meetingId="m1" />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Adopt' }));
+
+    await waitFor(() =>
+      expect(invokeMock).toHaveBeenCalledWith('api_triage_action_item', {
+        id: 'other-1',
+        action: 'adopt',
+      }),
+    );
+    await waitFor(() => expect(calls).toBe(2));
+    expect(await screen.findByText('Your open items')).toBeInTheDocument();
+  });
+
+  it('reloads the prep view when action items change elsewhere', async () => {
+    let calls = 0;
+    stubInvoke({
+      api_get_prep: () => {
+        calls += 1;
+        return makeView({ briefStatus: 'none' });
+      },
+    });
+    const { safeListen } = await import('@/lib/safe-listen');
+    render(<PrepPanel meetingId="m1" />);
+    await waitFor(() => expect(calls).toBe(1));
+
+    const reg = vi.mocked(safeListen).mock.calls.find((c) => c[0] === 'action-items-updated');
+    expect(reg).toBeTruthy();
+    (reg![1] as () => void)();
+    await waitFor(() => expect(calls).toBe(2));
+  });
+
   it('prep splits by triage', async () => {
     stubInvoke({
       api_get_prep: () =>

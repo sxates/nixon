@@ -34,6 +34,7 @@ import { titleSegments } from '@/lib/todo-parse';
 import { Button } from '@/components/ui/button';
 import type { ActionItem, ActionItemStatus } from '@/types';
 import type { TriageAction } from '@/hooks/useActionItemMutations';
+import { parseTodoText } from '@/lib/todo-parse';
 import { DueDateControl } from './DueDateControl';
 import { MentionInput } from './MentionInput';
 import { AssigneePicker, type AssigneeCandidate, type AssigneeSelection } from './AssigneePicker';
@@ -118,8 +119,12 @@ export function ActionItemRow({
 
   const commitEdit = (serialized: string) => {
     setIsEditing(false);
-    const next = serialized.trim();
-    if (next && next !== item.description) void onEditDescription(item, next);
+    // A trailing "(Friday)" is a due date, as in quick-add and the detail page.
+    const { title, dueDate } = onSetDueDate
+      ? parseTodoText(serialized.trim(), new Date())
+      : { title: serialized.trim(), dueDate: null };
+    if (title && title !== item.description) void onEditDescription(item, title);
+    if (title && dueDate) void onSetDueDate?.(item, dueDate);
   };
 
   const triageHandler = onTriage;

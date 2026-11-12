@@ -387,37 +387,6 @@ async fn run_extraction_inner<R: Runtime>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::database::repositories::action_item::ActionItem;
-
-    fn item(
-        id: &str,
-        description: &str,
-        status: &str,
-        source: &str,
-        user_edited: bool,
-    ) -> ActionItem {
-        ActionItem {
-            id: id.to_string(),
-            meeting_id: Some("m1".to_string()),
-            description: description.to_string(),
-            assignee_person_id: None,
-            assignee_is_self: false,
-            assignee_raw: None,
-            due_hint: None,
-            due_date: None,
-            status: status.to_string(),
-            source: source.to_string(),
-            user_edited,
-            content_key: diff::content_key(description),
-            created_at: "2026-07-01T00:00:00Z".to_string(),
-            updated_at: "2026-07-01T00:00:00Z".to_string(),
-            completed_at: None,
-            sort_order: None,
-            triage: "suggested".to_string(),
-            adopted_at: None,
-            notes_markdown: None,
-        }
-    }
 
     /// Regression (concurrent-run double-insert): the per-meeting in-flight guard admits
     /// one claimant, is meeting-scoped, and releases on drop — including mid-scope drops,

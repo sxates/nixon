@@ -14,8 +14,8 @@
  *     dismissed list, where each row can be restored.
  *   - **Done**: completed items by week; the checkbox reopens one.
  *
- * Lists come from `useTodoViews`; the legacy status / reorder / delete commands emit no
- * event, so every mutation here ends in `reload()`.
+ * Lists come from `useTodoViews`, which refetches on `action-items-updated`; mutations
+ * here also call `reload()` so the screen settles without waiting for the event.
  */
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
