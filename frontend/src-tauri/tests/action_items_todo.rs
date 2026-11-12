@@ -323,3 +323,143 @@ async fn inbox_orders_by_latest_source_newest_first() {
     let b = extracted(pool, "newer", "b", "suggested", "open").await;
     assert_eq!(ids(pool, TodoView::Inbox).await, vec![b, a]);
 }
+
+async fn person(pool: &SqlitePool, id: &str, name: &str) {
+    sqlx::query(
+        "INSERT INTO people (id, display_name, created_at, updated_at) VALUES (?, ?, 'now', 'now')",
+    )
+    .bind(id)
+    .bind(name)
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+async fn mention_ids(pool: &SqlitePool, item: &str) -> Vec<String> {
+    sqlx::query_scalar(
+        "SELECT person_id FROM action_item_people WHERE action_item_id = ? ORDER BY person_id",
+    )
+    .bind(item)
+    .fetch_all(pool)
+    .await
+    .unwrap()
+}
+
+#[tokio::test]
+async fn create_with_mention_syncs_people() {
+    let (_d, db) = fresh_db().await;
+    let pool = db.pool();
+    person(pool, "p-1", "Sam Lee").await;
+    let desc = "Check in with @[Sam Lee](person:p-1)";
+    let id = ActionItemsRepository::create(pool, None, &cand(desc), "manual", "k")
+        .await
+        .unwrap()
+        .id;
+    Todo::sync_mentions(pool, &id, desc).await.unwrap();
+    assert_eq!(mention_ids(pool, &id).await, vec!["p-1".to_string()]);
+}
+
+#[tokio::test]
+async fn edit_removing_mention_clears_row() {
+    let (_d, db) = fresh_db().await;
+    let pool = db.pool();
+    person(pool, "p-1", "Sam Lee").await;
+    let id = ActionItemsRepository::create(pool, None, &cand("x"), "manual", "k")
+        .await
+        .unwrap()
+        .id;
+    Todo::sync_mentions(pool, &id, "hi @[Sam Lee](person:p-1)")
+        .await
+        .unwrap();
+    Todo::sync_mentions(pool, &id, "hi Sam").await.unwrap();
+    assert!(mention_ids(pool, &id).await.is_empty());
+}
+
+#[tokio::test]
+async fn person_delete_removes_mentions_keeps_title() {
+    use app_lib::database::repositories::people::PeopleRepository;
+    let (_d, db) = fresh_db().await;
+    let pool = db.pool();
+    person(pool, "p-1", "Sam Lee").await;
+    let desc = "Ping @[Sam Lee](person:p-1)";
+    let id = ActionItemsRepository::create(pool, None, &cand(desc), "manual", "k")
+        .await
+        .unwrap()
+        .id;
+    Todo::sync_mentions(pool, &id, desc).await.unwrap();
+    PeopleRepository::delete(pool, "p-1").await.unwrap();
+    assert!(mention_ids(pool, &id).await.is_empty());
+    let item = ActionItemsRepository::get(pool, &id).await.unwrap().unwrap();
+    assert_eq!(item.description, desc);
+}
+
+async fn delete_meeting(pool: &SqlitePool, id: &str) {
+    use app_lib::database::repositories::meeting::MeetingsRepository;
+    assert!(MeetingsRepository::delete_meeting(pool, id).await.unwrap());
+}
+
+async fn meeting_id_of(pool: &SqlitePool, item: &str) -> Option<Option<String>> {
+    sqlx::query_scalar("SELECT meeting_id FROM action_items WHERE id = ?")
+        .bind(item)
+        .fetch_optional(pool)
+        .await
+        .unwrap()
+}
+
+#[tokio::test]
+async fn meeting_delete_keeps_listed_as_standalone() {
+    let (_d, db) = fresh_db().await;
+    let pool = db.pool();
+    meeting(pool, "m1", 5).await;
+    let id = extracted(pool, "m1", "keep me", "listed", "open").await;
+    source(pool, &id, "m1").await;
+    delete_meeting(pool, "m1").await;
+    assert_eq!(meeting_id_of(pool, &id).await, Some(None));
+    let n: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM action_item_sources")
+        .fetch_one(pool)
+        .await
+        .unwrap();
+    assert_eq!(n, 0);
+}
+
+#[tokio::test]
+async fn meeting_delete_repoints_multi_source_item() {
+    let (_d, db) = fresh_db().await;
+    let pool = db.pool();
+    meeting(pool, "m1", 30).await;
+    meeting(pool, "m2", 20).await;
+    meeting(pool, "m3", 10).await;
+    let id = extracted(pool, "m3", "shared", "suggested", "open").await;
+    source(pool, &id, "m3").await;
+    source(pool, &id, "m2").await;
+    source(pool, &id, "m1").await;
+    delete_meeting(pool, "m3").await;
+    // Oldest remaining source meeting wins.
+    assert_eq!(meeting_id_of(pool, &id).await, Some(Some("m1".to_string())));
+    let n: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM action_item_sources WHERE action_item_id = ? AND meeting_id = 'm3'",
+    )
+    .bind(&id)
+    .fetch_one(pool)
+    .await
+    .unwrap();
+    assert_eq!(n, 0);
+}
+
+#[tokio::test]
+async fn meeting_delete_removes_single_source_suggestion() {
+    let (_d, db) = fresh_db().await;
+    let pool = db.pool();
+    meeting(pool, "m1", 5).await;
+    let id = extracted(pool, "m1", "only here", "suggested", "open").await;
+    source(pool, &id, "m1").await;
+    person(pool, "p-1", "Sam Lee").await;
+    sqlx::query("INSERT INTO action_item_people (action_item_id, person_id) VALUES (?, 'p-1')")
+        .bind(&id)
+        .execute(pool)
+        .await
+        .unwrap();
+    delete_meeting(pool, "m1").await;
+    assert_eq!(meeting_id_of(pool, &id).await, None);
+    assert!(mention_ids(pool, &id).await.is_empty());
+}

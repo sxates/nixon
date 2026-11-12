@@ -64,7 +64,8 @@ pub fn stable_text_fingerprint(text: &str) -> String {
 /// (non-alphanumeric → space, so "deck/slides" still splits into two tokens), whitespace
 /// collapsed. This is the input to both [`content_key`] and the Jaccard token sets.
 pub fn normalize_description(text: &str) -> String {
-    let nfc: String = text.nfc().collect();
+    let plain = super::mentions::plain_description(text);
+    let nfc: String = plain.nfc().collect();
     let mapped: String = nfc
         .to_lowercase()
         .chars()

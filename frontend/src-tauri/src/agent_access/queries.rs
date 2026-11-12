@@ -487,7 +487,13 @@ fn action_item_line(item: &ActionItem, names: &[(String, String)]) -> String {
     if let Some(d) = due.filter(|d| !d.trim().is_empty()) {
         extras.push(format!("due: {}", one_line(&d)));
     }
-    let mut line = format!("- [{}] {}", item.status, one_line(&item.description));
+    let mut line = format!(
+        "- [{}] {}",
+        item.status,
+        one_line(&crate::action_items::mentions::plain_description(
+            &item.description
+        ))
+    );
     if !extras.is_empty() {
         line.push_str(&format!(" ({})", extras.join(", ")));
     }

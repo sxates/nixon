@@ -6,7 +6,9 @@
 
 use chrono::{Duration, Utc};
 use serde::{Deserialize, Serialize};
-use sqlx::{FromRow, SqlitePool};
+use sqlx::{FromRow, SqliteConnection, SqlitePool};
+
+use crate::action_items::mentions::person_ids_in;
 
 use super::action_item::{ActionItem, ActionItemsRepository};
 
@@ -260,4 +262,92 @@ impl ActionItemTodoRepository {
         .fetch_all(pool)
         .await
     }
+
+    /// Replace the item's `action_item_people` rows with the people mentioned in
+    /// `description` (specs/0088). Mentions of people that no longer exist are skipped.
+    pub async fn sync_mentions(
+        pool: &SqlitePool,
+        item_id: &str,
+        description: &str,
+    ) -> Result<(), SqlxError> {
+        let mut tx = pool.begin().await?;
+        sqlx::query("DELETE FROM action_item_people WHERE action_item_id = ?")
+            .bind(item_id)
+            .execute(&mut *tx)
+            .await?;
+        for pid in person_ids_in(description) {
+            sqlx::query(
+                "INSERT OR IGNORE INTO action_item_people (action_item_id, person_id)
+                 SELECT ?, id FROM people WHERE id = ?",
+            )
+            .bind(item_id)
+            .bind(&pid)
+            .execute(&mut *tx)
+            .await?;
+        }
+        tx.commit().await
+    }
+}
+
+/// Source-aware meeting delete (specs/0088), run inside `delete_meeting`'s transaction.
+///
+/// 1. Items of `meeting_id` with another source meeting move to the oldest such meeting
+///    (`UPDATE OR IGNORE`; if the unique index refuses, fall through to 2/3).
+/// 2. Remaining listed items become standalone (`meeting_id = NULL`).
+/// 3. Everything else is deleted with its mention and source rows.
+/// 4. This meeting's source rows go.
+pub async fn cascade_meeting_delete(
+    tx: &mut SqliteConnection,
+    meeting_id: &str,
+) -> Result<(), SqlxError> {
+    let multi: Vec<String> = sqlx::query_scalar(
+        "SELECT id FROM action_items
+         WHERE meeting_id = ?1
+           AND EXISTS (SELECT 1 FROM action_item_sources s
+                       JOIN meetings m ON m.id = s.meeting_id
+                       WHERE s.action_item_id = action_items.id AND s.meeting_id != ?1)",
+    )
+    .bind(meeting_id)
+    .fetch_all(&mut *tx)
+    .await?;
+    for id in multi {
+        sqlx::query(
+            "UPDATE OR IGNORE action_items SET meeting_id = (
+                 SELECT s.meeting_id FROM action_item_sources s
+                 JOIN meetings m ON m.id = s.meeting_id
+                 WHERE s.action_item_id = ?1 AND s.meeting_id != ?2
+                 ORDER BY m.created_at ASC, s.meeting_id ASC LIMIT 1)
+             WHERE id = ?1",
+        )
+        .bind(&id)
+        .bind(meeting_id)
+        .execute(&mut *tx)
+        .await?;
+    }
+
+    sqlx::query(
+        "UPDATE action_items SET meeting_id = NULL WHERE meeting_id = ? AND triage = 'listed'",
+    )
+    .bind(meeting_id)
+    .execute(&mut *tx)
+    .await?;
+
+    for table in ["action_item_people", "action_item_sources"] {
+        sqlx::query(&format!(
+            "DELETE FROM {table} WHERE action_item_id IN
+             (SELECT id FROM action_items WHERE meeting_id = ?)"
+        ))
+        .bind(meeting_id)
+        .execute(&mut *tx)
+        .await?;
+    }
+    sqlx::query("DELETE FROM action_items WHERE meeting_id = ?")
+        .bind(meeting_id)
+        .execute(&mut *tx)
+        .await?;
+    sqlx::query("DELETE FROM action_item_sources WHERE meeting_id = ?")
+        .bind(meeting_id)
+        .execute(&mut *tx)
+        .await?;
+    Ok(())
 }

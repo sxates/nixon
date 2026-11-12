@@ -178,7 +178,7 @@ pub async fn api_create_action_item<R: Runtime>(
     let state = app.state::<AppState>();
     let pool = state.db_manager.pool();
     let key = diff::content_key(&description);
-    ActionItemsRepository::create(
+    let item = ActionItemsRepository::create(
         pool,
         meeting_id
             .as_deref()
@@ -200,7 +200,11 @@ pub async fn api_create_action_item<R: Runtime>(
         &key,
     )
     .await
-    .map_err(|e| format!("Failed to create action item: {e}"))
+    .map_err(|e| format!("Failed to create action item: {e}"))?;
+    ActionItemTodoRepository::sync_mentions(pool, &item.id, &item.description)
+        .await
+        .map_err(|e| format!("Failed to save mentions: {e}"))?;
+    Ok(item)
 }
 
 /// Edit an item's content. Any content change sets `user_edited = 1` (the row becomes
@@ -294,6 +298,9 @@ pub async fn api_update_action_item<R: Runtime>(
     .await
     .map_err(|e| format!("Failed to update action item: {e}"))?
     .ok_or_else(|| "That action item no longer exists".to_string())?;
+    ActionItemTodoRepository::sync_mentions(pool, &id, &description)
+        .await
+        .map_err(|e| format!("Failed to save mentions: {e}"))?;
     // specs/0088: a suggestion handed to someone else leaves the inbox.
     ActionItemTodoRepository::reconcile_triage_after_assignee_change(pool, &id)
         .await

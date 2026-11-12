@@ -16,6 +16,7 @@ pub mod commands;
 pub mod diff;
 pub mod extractor;
 pub mod grammar;
+pub mod mentions;
 mod reply_parse;
 pub mod schema;
 pub mod todo_commands;
