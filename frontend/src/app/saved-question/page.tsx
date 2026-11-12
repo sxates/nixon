@@ -15,11 +15,17 @@
  */
 
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
-import { motion } from 'framer-motion';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { invoke } from '@tauri-apps/api/core';
 import { toast } from 'sonner';
-import { ArrowLeft, Clock, Loader2, RotateCw, Sparkles, Star } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Callout } from '@/components/ui/callout';
+import { DeckIcon } from '@/components/ui/deck-icon';
+import { EmptyState, PageLoading } from '@/components/ui/empty-state';
+import { ArrowLeft, RefreshCw } from '@/components/ui/icons';
+import { Panel } from '@/components/ui/panel';
+import { RunStatus } from '@/components/ui/run-status';
+import { cn } from '@/lib/utils';
 import { AnswerMarkdown } from '@/components/AskAI/AnswerMarkdown';
 import { SourcesList } from '@/components/AskAI/SourcesList';
 import {
@@ -37,7 +43,7 @@ import {
 import { formatMeetingDate } from '@/lib/format-date';
 import { safeListen } from '@/lib/safe-listen';
 import { PageHeader } from '@/components/ui/page-header';
-import { PAGE_CONTENT_WIDTH } from '@/lib/page-width';
+import { PAGE_CONTENT_WIDTH, PAGE_GUTTER } from '@/lib/page-width';
 
 type Phase = 'idle' | 'running' | 'error';
 
@@ -236,25 +242,21 @@ function SavedQuestionContent() {
   const running = phase === 'running';
 
   if (loading) {
-    return (
-      <div className="flex h-page items-center justify-center bg-background text-muted-foreground">
-        <Loader2 className="h-5 w-5 animate-spin" />
-      </div>
-    );
+    return <PageLoading className="bg-background" />;
   }
 
   if (!saved) {
     return (
-      <div className="flex h-page flex-col items-center justify-center gap-4 bg-background px-8 text-center">
-        <p className="text-sm text-muted-foreground">That saved question no longer exists.</p>
-        <button
-          type="button"
-          onClick={() => router.push('/ask')}
-          className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-border bg-card px-3 text-sm font-semibold text-foreground transition-colors hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <ArrowLeft size={14} aria-hidden="true" />
-          Back to Ask AI
-        </button>
+      <div className="flex h-page items-center justify-center bg-background px-8">
+        <EmptyState
+          title="That saved question no longer exists."
+          action={
+            <Button variant="outline" onClick={() => router.push('/ask')}>
+              <DeckIcon icon={ArrowLeft} size={14} />
+              Back to Ask AI
+            </Button>
+          }
+        />
       </div>
     );
   }
@@ -262,113 +264,73 @@ function SavedQuestionContent() {
   const answeredLabel = formatMeetingDate(answeredAt);
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.25, ease: 'easeOut' }}
-      className="flex h-page flex-col bg-background"
-    >
-      <div className="flex-shrink-0 px-4 min-[900px]:px-7 pt-7">
-        <button
-          type="button"
-          onClick={onBack}
-          className="u-meta inline-flex items-center gap-1.5 text-muted-foreground transition-colors hover:text-foreground focus:outline-none"
-        >
-          <ArrowLeft size={14} aria-hidden="true" />
-          Ask AI
-        </button>
-      </div>
+    <div className="flex h-page flex-col bg-background animate-fade-in">
       <PageHeader
-        className="pt-3"
-        title={
-          <span className="flex items-center gap-2">
-            <Star size={18} aria-hidden="true" className="flex-shrink-0 text-brand" />
-            <span className="min-w-0 truncate">{saved.label?.trim() || saved.question}</span>
-          </span>
-        }
+        back={{ label: 'Ask AI', onClick: onBack }}
+        title={<span className="block min-w-0 truncate">{saved.label?.trim() || saved.question}</span>}
         subtitle="Saved question — shows the last answer; Rerun to refresh it."
         actions={
-          <button
-            type="button"
+          <Button
+            variant="brand"
             onClick={() => void rerun()}
             disabled={running}
             title="Answer this again against your latest meetings"
-            className="inline-flex h-9 flex-shrink-0 items-center gap-1.5 rounded-lg bg-brand px-4 text-sm font-semibold text-brand-foreground transition-colors hover:bg-brand/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground"
           >
-            <RotateCw size={14} aria-hidden="true" />
+            <DeckIcon icon={RefreshCw} size={14} />
             Rerun
-          </button>
+          </Button>
         }
       />
 
-      <div className="flex-1 overflow-y-auto px-4 min-[900px]:px-7 pb-12">
-        <div className={`mx-auto ${PAGE_CONTENT_WIDTH}`}>
+      <div className={cn('flex-1 overflow-y-auto pb-12', PAGE_GUTTER)}>
+        <div className={cn('mx-auto', PAGE_CONTENT_WIDTH)}>
           {/* Run progress */}
           {running && (
-            <div className="mb-4 flex items-center justify-between gap-3 rounded-[3px] border border-border bg-card px-4 py-3 shadow-sm">
-              <p className="flex min-w-0 items-center gap-2 text-sm text-foreground">
-                <Loader2 size={15} aria-hidden="true" className="animate-spin text-brand" />
-                <span className="truncate">{progress ? stageLabel(progress) : 'Starting…'}</span>
-              </p>
-              <button
-                type="button"
-                onClick={() => void cancelRun()}
-                disabled={cancelling}
-                className="flex-shrink-0 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-semibold text-foreground transition-colors hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:text-muted-foreground"
-              >
-                {cancelling ? 'Cancelling…' : 'Cancel'}
-              </button>
-            </div>
+            <RunStatus
+              className="mb-4"
+              label={progress ? stageLabel(progress) : 'Starting…'}
+              onCancel={() => void cancelRun()}
+              cancelling={cancelling}
+            />
           )}
 
           {/* Error — readable message; Rerun stays available above. */}
           {phase === 'error' && runError && (
-            <div className="mb-4 rounded-[3px] border border-destructive/30 bg-destructive/5 px-4 py-3">
-              <p className="text-sm text-foreground">{runError}</p>
-              <p className="u-meta mt-1">Adjust your model settings and try Rerun again.</p>
-            </div>
+            <Callout tone="error" className="mb-4" title={runError}>
+              Adjust your model settings and try Rerun again.
+            </Callout>
           )}
 
           {/* Cached / fresh answer, or the empty state when never run. */}
           {answer ? (
-            <div className="rounded-[3px] border border-border bg-card p-6 shadow-sm">
+            <Panel size="document">
               {answeredLabel && (
-                <p className="u-meta mb-3 flex items-center gap-1.5 border-b border-border pb-3">
-                  <Clock size={12} aria-hidden="true" />
+                <p className="u-meta mb-3 border-b border-border pb-3">
                   Last answered {answeredLabel} — Rerun to refresh against your latest meetings
                 </p>
               )}
               <AnswerMarkdown markdown={answer.markdown} sources={answer.sources} />
               <SourcesList sources={answer.sources} />
-            </div>
+            </Panel>
           ) : (
             !running && (
-              <div className="rounded-[3px] border border-dashed border-border bg-card/50 px-6 py-10 text-center">
-                <Sparkles size={20} aria-hidden="true" className="mx-auto mb-3 text-muted-foreground" />
-                <p className="text-sm font-medium text-foreground">Not run yet</p>
-                <p className="u-meta mx-auto mt-1 max-w-sm">
-                  Press Rerun to answer this against your latest meetings. The answer is saved here
-                  so opening this page again won&apos;t re-run the model.
-                </p>
-              </div>
+              <EmptyState
+                variant="panel"
+                title="Not run yet"
+                body="Press Rerun to answer this against your latest meetings. The answer is saved here so opening this page again won't re-run the model."
+              />
             )
           )}
         </div>
       </div>
-    </motion.div>
+    </div>
   );
 }
 
 export default function SavedQuestionPage() {
   // useSearchParams requires a Suspense boundary (same pattern as /ask, meeting-details).
   return (
-    <Suspense
-      fallback={
-        <div className="flex h-page items-center justify-center bg-background text-muted-foreground">
-          <Loader2 className="h-5 w-5 animate-spin" />
-        </div>
-      }
-    >
+    <Suspense fallback={<PageLoading className="bg-background" />}>
       <SavedQuestionContent />
     </Suspense>
   );
