@@ -101,3 +101,17 @@ describe('AvatarStack', () => {
     expect(getByTitle('Ada Example · ada@example.com').textContent).toBe('AE');
   });
 });
+
+// Speakers table: a dot-only row's name sat 8px left of a photo row's (x=455 vs 463),
+// because the fallback rendered at its own 8px width instead of the 16px avatar slot.
+describe('Avatar fallback slot', () => {
+  it('centres the fallback inside the avatar size box', () => {
+    const { container } = render(<Avatar name="Priya" size={16} fallback={<span data-testid="dot" />} />);
+    const box = container.firstElementChild as HTMLElement;
+    expect(box.getAttribute('data-size')).toBe('16');
+    expect(box.className).toContain('h-4');
+    expect(box.className).toContain('w-4');
+    expect(box.className).toContain('justify-center');
+    expect(box.className).toContain('items-center');
+  });
+});

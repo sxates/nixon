@@ -414,7 +414,7 @@ function SpeakerChip({
         colorClass={speakerBgClass(speaker.speakerKey)}
         fallback={
           <span data-speaker-dot className="inline-flex">
-            <StatusDot className={speakerBgClass(speaker.speakerKey)} />
+            <StatusDot size={10} className={speakerBgClass(speaker.speakerKey)} />
           </span>
         }
       />

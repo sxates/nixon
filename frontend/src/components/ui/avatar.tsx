@@ -55,7 +55,8 @@ export interface AvatarProps {
   colorKey?: string | null;
   /**
    * Rendered instead of the initials chip when there is no photo or it fails to load
-   * (the speaker legend's colour dot). Absent → initials.
+   * (the speaker legend's colour dot), centred inside the avatar's size box so it takes
+   * the same slot as a photo. Absent → initials.
    */
   fallback?: ReactNode;
   /** Native tooltip (the stack uses "Name · email"). */
@@ -94,7 +95,20 @@ export function Avatar({
       />
     );
   }
-  if (fallback !== undefined) return <>{fallback}</>;
+  // The fallback sits in the avatar's own size box, centred — so a 10px speaker dot in a
+  // 16px slot keeps the name beside it on the same x as a row that has a photo.
+  if (fallback !== undefined) {
+    return (
+      <span
+        data-size={size}
+        data-avatar-fallback=""
+        title={title}
+        className={cn('inline-flex flex-none items-center justify-center', AVATAR_SIZE_CLASSES[size], className)}
+      >
+        {fallback}
+      </span>
+    );
+  }
   // `bg-muted` is `speakerBgClass`'s null-key fallback and is a *light* chip: its ink must
   // be the foreground, not the background (which would be invisible on it).
   const ink = bg === 'bg-muted' ? 'text-foreground' : 'text-background';
