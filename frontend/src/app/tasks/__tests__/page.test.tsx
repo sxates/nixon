@@ -278,6 +278,27 @@ describe('TasksPage (specs/0088 To-do / Inbox / Done)', () => {
     expect(screen.queryByRole('button', { name: 'Filter by a specific person' })).not.toBeInTheDocument();
   });
 
+  it('a drag drop reorders the rows on screen', async () => {
+    stubInvoke({
+      rows: [
+        todoRow({ id: 'a', description: 'First item', sortOrder: 0 }),
+        todoRow({ id: 'b', description: 'Second item', sortOrder: 1 }),
+      ],
+    });
+    render(<TasksPage />);
+    await screen.findByText('First item');
+    const order = () =>
+      screen.getAllByRole('button', { name: /^(First|Second) item$/ }).map((b) => b.textContent);
+    expect(order()).toEqual(['First item', 'Second item']);
+
+    fireEvent.dragStart(screen.getByText('Second item'));
+    fireEvent.dragOver(screen.getByText('First item'));
+    fireEvent.drop(screen.getByText('First item'));
+
+    await waitFor(() => expect(order()).toEqual(['Second item', 'First item']));
+    expect(callsTo('api_reorder_action_items').at(-1)![1]).toEqual({ orderedIds: ['b', 'a'] });
+  });
+
   it('opens an item from its title', async () => {
     stubInvoke({ rows: [todoRow({ id: 'a', description: 'Send the deck' })] });
     render(<TasksPage />);
@@ -285,12 +306,17 @@ describe('TasksPage (specs/0088 To-do / Inbox / Done)', () => {
     expect(pushMock).toHaveBeenCalledWith('/tasks/item?id=a');
   });
 
-  it('assigning an inbox suggestion to someone else updates it', async () => {
+  it('assigning an inbox suggestion to someone else updates it and the row leaves', async () => {
     searchParams = new URLSearchParams('tab=inbox');
-    stubInvoke(
-      { rows: [inboxRow('a', 'Draft the plan')] },
-      { api_update_action_item: () => inboxRow('a', 'Draft the plan', { assigneePersonId: 'p1' }) },
-    );
+    const store = { rows: [inboxRow('a', 'Draft the plan')] };
+    stubInvoke(store, {
+      api_update_action_item: () => {
+        // The backend moves a reassigned suggestion out of the inbox view.
+        store.rows[0]!.assigneePersonId = 'p1';
+        store.rows[0]!.triage = 'record';
+        return store.rows[0];
+      },
+    });
     render(<TasksPage />);
 
     fireEvent.click(await screen.findByRole('button', { name: 'Assign…' }));
@@ -298,6 +324,8 @@ describe('TasksPage (specs/0088 To-do / Inbox / Done)', () => {
     await waitFor(() =>
       expect(callsTo('api_update_action_item')[0]![1]).toEqual({ id: 'a', assigneePersonId: 'p1' }),
     );
+    await waitFor(() => expect(screen.queryByText('Draft the plan')).not.toBeInTheDocument());
+    expect(await screen.findByText('Nothing waiting')).toBeInTheDocument();
   });
 
   it('Show dismissed swaps in the dismissed list with Restore', async () => {

@@ -338,10 +338,21 @@ pub async fn api_set_action_item_status<R: Runtime>(
     }
     let state = app.state::<AppState>();
     let pool = state.db_manager.pool();
-    ActionItemsRepository::set_status(pool, &id, &status)
+    let item = ActionItemsRepository::set_status(pool, &id, &status)
         .await
         .map_err(|e| format!("Failed to update action item status: {e}"))?
-        .ok_or_else(|| "That action item no longer exists".to_string())
+        .ok_or_else(|| "That action item no longer exists".to_string())?;
+    emit_updated(&app, item.meeting_id.as_deref().unwrap_or_default());
+    Ok(item)
+}
+
+/// Tell open views (the To-do page, the sidebar's inbox badge) to re-read. `""` = standalone,
+/// multi-item or unknown meeting.
+fn emit_updated<R: Runtime>(app: &AppHandle<R>, meeting_id: &str) {
+    let _ = app.emit(
+        super::ACTION_ITEMS_UPDATED_EVENT,
+        serde_json::json!({ "meeting_id": meeting_id }),
+    );
 }
 
 /// Hard-delete an action item. The UI offers this for MANUAL items only — deleting an
@@ -354,9 +365,11 @@ pub async fn api_delete_action_item<R: Runtime>(
 ) -> Result<bool, String> {
     let state = app.state::<AppState>();
     let pool = state.db_manager.pool();
-    ActionItemsRepository::delete(pool, &id)
+    let deleted = ActionItemsRepository::delete(pool, &id)
         .await
-        .map_err(|e| format!("Failed to delete action item: {e}"))
+        .map_err(|e| format!("Failed to delete action item: {e}"))?;
+    emit_updated(&app, "");
+    Ok(deleted)
 }
 
 /// Manual extraction trigger ("Scan again" / retroactive extraction for pre-0034
@@ -415,9 +428,11 @@ pub async fn api_reorder_action_items<R: Runtime>(
 ) -> Result<u64, String> {
     let state = app.state::<AppState>();
     let pool = state.db_manager.pool();
-    ActionItemsRepository::reorder(pool, &ordered_ids)
+    let written = ActionItemsRepository::reorder(pool, &ordered_ids)
         .await
-        .map_err(|e| format!("Failed to reorder action items: {e}"))
+        .map_err(|e| format!("Failed to reorder action items: {e}"))?;
+    emit_updated(&app, "");
+    Ok(written)
 }
 
 /// How `api_bulk_set_action_item_status` selects its target rows (specs/0038 WS1.e). A
@@ -475,7 +490,9 @@ pub async fn api_bulk_set_action_item_status<R: Runtime>(
 
     let state = app.state::<AppState>();
     let pool = state.db_manager.pool();
-    ActionItemsRepository::bulk_set_status(pool, &repo_filter, &status)
+    let affected = ActionItemsRepository::bulk_set_status(pool, &repo_filter, &status)
         .await
-        .map_err(|e| format!("Failed to update action items: {e}"))
+        .map_err(|e| format!("Failed to update action items: {e}"))?;
+    emit_updated(&app, "");
+    Ok(affected)
 }

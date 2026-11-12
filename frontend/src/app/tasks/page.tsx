@@ -72,6 +72,7 @@ function TasksPageContent() {
   const changeTab = (next: string) => {
     if (!isTab(next)) return;
     setTab(next);
+    if (next !== 'inbox') setShowDismissed(false);
     router.replace(`/tasks?tab=${next}`);
   };
 
@@ -149,7 +150,15 @@ function TasksPageContent() {
     setOverId(null);
     setArmedId(null);
   }, []);
-  const openItems = useMemo(() => items.filter((i) => i.status === 'open'), [items]);
+  // Hand order: `sortOrder` ascending, unordered rows after, ties keep backend order (the
+  // sort is stable). Re-sorting here is what makes an optimistic drag land on screen.
+  const openItems = useMemo(
+    () =>
+      items
+        .filter((i) => i.status === 'open')
+        .sort((a, b) => (a.sortOrder ?? Infinity) - (b.sortOrder ?? Infinity) || 0),
+    [items],
+  );
   const handleDrop = (targetId: string) => {
     if (draggingId && draggingId !== targetId) {
       void reorder(
