@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { ChevronDownIcon } from "lucide-react"
+import { ChevronDown } from "./icons"
 import { Accordion as AccordionPrimitive } from "radix-ui"
 
 import { cn } from "@/lib/utils"
@@ -41,7 +41,7 @@ function AccordionTrigger({
         {...props}
       >
         {children}
-        <ChevronDownIcon
+        <ChevronDown
           size={16}
           className="pointer-events-none shrink-0 opacity-60 transition-transform duration-200"
           aria-hidden="true"
