@@ -19,6 +19,10 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 ## [Unreleased]
 
+_(nothing yet)_
+
+## [0.16.2] - 2026-11-12
+
 ### Changed
 
 - When a meeting ends while you're watching its live transcript, Nixon now opens that meeting's summary. If you're on any other page, you stay where you are.
