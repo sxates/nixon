@@ -9,7 +9,7 @@ import {
   Settings,
   Users,
   type LucideIcon,
-} from 'lucide-react';
+} from '@/components/ui/icons';
 import { useRouter, usePathname } from 'next/navigation';
 import { useSidebar } from './SidebarProvider';
 import { DeckIcon } from '@/components/ui/deck-icon';
@@ -77,7 +77,7 @@ const NAV_ITEMS: NavItem[] = [
 
 /** The brushed-panel surface shared by both sidebar branches (specs/0057 decision 5). */
 const PANEL_SURFACE =
-  'bg-panel shadow-[inset_0_1px_0_hsl(var(--bevel-hi)),inset_-1px_0_0_hsl(var(--bevel-lo))]';
+  'bg-panel shadow-[inset_0_1px_0_hsl(var(--bevel-hi)),inset_-1px_0_0_hsl(var(--bevel-lo))]'; // ui-gate: allow the faceplate's bevel (two inset hairlines); no shadow token draws it
 
 const Sidebar: React.FC = () => {
   const router = useRouter();
@@ -127,7 +127,7 @@ const Sidebar: React.FC = () => {
             collapse the panel. The toggle keeps the shared icon column, so the glyph still sits
             at the same x in both states. */}
         <div data-sidebar-row className={cn(SIDEBAR_ROW, 'mt-2 flex-shrink-0')}>
-          <button
+          <button // ui-gate: allow rail toggle fills the 64px icon column at the 40px row height; IconButton is 28/32px
             type="button"
             onClick={toggleCollapse}
             aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
@@ -140,7 +140,7 @@ const Sidebar: React.FC = () => {
             </IconSlot>
           </button>
           {!isCollapsed && (
-            <span className={cn(SIDEBAR_LABEL, 'text-[13px] tracking-[0.18em] text-foreground')}>
+            <span className={cn(SIDEBAR_LABEL, 'text-meta tracking-[0.18em] text-foreground')}>
               NIXON
             </span>
           )}

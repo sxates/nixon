@@ -82,7 +82,7 @@ export function DayTimeline({
             className="absolute right-0 flex -translate-y-1/2 items-center gap-1.5"
             style={{ top: hourOffsetPx(h, bounds) }}
           >
-            <span className="font-narrow text-[10px] uppercase tracking-[0.06em] tabular-nums text-engrave">
+            <span className="font-narrow text-label uppercase tracking-[0.06em] tabular-nums text-engrave">
               {hourLabel(h)}
             </span>
             <span aria-hidden="true" className="h-px w-2 bg-border" />
@@ -95,7 +95,7 @@ export function DayTimeline({
         {hours.map((h) => (
           <div
             key={h}
-            className="absolute left-0 right-0 border-t border-border/50"
+            className="absolute left-0 right-0 border-t border-rule"
             style={{ top: hourOffsetPx(h, bounds) }}
             aria-hidden="true"
           />
@@ -109,7 +109,7 @@ export function DayTimeline({
           >
             <span className="-ml-[3px] h-1.5 w-1.5 flex-shrink-0 bg-brand" />
             <span className="h-[1.5px] flex-1 bg-brand" />
-            <span className="ml-1.5 font-narrow text-[10px] tabular-nums text-brand">
+            <span className="ml-1.5 font-narrow text-label tabular-nums text-brand">
               {nowLabel}
             </span>
           </div>

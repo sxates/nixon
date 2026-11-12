@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Download, RotateCw } from 'lucide-react';
+import { Download, RotateCw } from '@/components/ui/icons';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import { DeckIcon } from '@/components/ui/deck-icon';
@@ -52,7 +52,7 @@ export function UpdateRow({ collapsed = false }: { collapsed?: boolean }) {
     return (
       <Popover>
         <PopoverTrigger asChild>
-          <button
+          <button // ui-gate: allow sidebar row (row.ts geometry), see SidebarRow
             type="button"
             title={line}
             aria-label={`Update status — ${line}`}
@@ -65,17 +65,17 @@ export function UpdateRow({ collapsed = false }: { collapsed?: boolean }) {
           </button>
         </PopoverTrigger>
         <PopoverContent side="right" align="end" aria-label="Update" className="w-72 border-border bg-popover p-3">
-          <p className="u-section-label text-[9px]">Update</p>
+          <p className="u-section-label-sm">Update</p>
           <p className="mt-1 text-xs text-foreground">{line}</p>
           {ready && <RestartToUpdateButton label="Restart to update" className="mt-3 w-full px-2 py-1" />}
           {/* Said out loud, not hidden in a `title`: on the icon rail there is no row text
               to explain why the button is dead. */}
           {ready && isRecording && (
-            <p className="mt-2 text-[11px] text-muted-foreground">
+            <p className="u-row-meta mt-2">
               Finish the recording first — Nixon won&apos;t restart mid-take.
             </p>
           )}
-          {updates.error && <p className="mt-2 text-[11px] text-record-ink">{updates.error}</p>}
+          {updates.error && <p className="mt-2 text-caption text-destructive">{updates.error}</p>}
         </PopoverContent>
       </Popover>
     );
@@ -94,14 +94,14 @@ export function UpdateRow({ collapsed = false }: { collapsed?: boolean }) {
             panel's border while every other row stopped `pr-3.5` short (review finding,
             fix round 2). */}
         <div className="flex min-w-0 flex-1 items-center gap-2 pr-3.5">
-          <span className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground">{line}</span>
+          <span className="u-row-meta min-w-0 flex-1 truncate">{line}</span>
           {ready && <RestartToUpdateButton />}
         </div>
       </div>
       {updates.error && (
         // Aligned to where labels start (the `w-16` icon column), not the old `pl-5` from
         // before the shared row geometry (specs/0069 W1).
-        <p className="truncate pb-1 pl-16 pr-3.5 text-[11px] text-record-ink" title={updates.error}>
+        <p className="truncate pb-1 pl-16 pr-3.5 text-caption text-destructive" title={updates.error}>
           {updates.error}
         </p>
       )}

@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 
 // specs/0057 Task 6 — the timeline block stopped being a glowing rounded card and
-// became a transport-log panel: a hairline `rounded-[3px]` panel whose STATE is
+// became a transport-log panel: a hairline `rounded-md` (3px) panel whose STATE is
 // carried by a 3px left bar (the tape-label spine), not by a coloured glow. The bar
 // colour per state and the engraved chip text are the contract this pins down.
 
@@ -83,7 +83,7 @@ describe('TimelineBlock state bar (specs/0057 Task 6)', () => {
     for (const [state] of cases) {
       const container = renderBlock(state);
       const block = container.querySelector('[role="button"]')!;
-      expect(block.className).toContain('rounded-[3px]');
+      expect(block.className).toContain('rounded-md');
       expect(block.className).not.toContain('rounded-xl');
       expect(container.querySelectorAll('.animate-ping')).toHaveLength(0);
       expect(container.querySelectorAll('.rounded-full')).toHaveLength(0);

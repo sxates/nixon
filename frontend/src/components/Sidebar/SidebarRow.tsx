@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import type { LucideIcon } from 'lucide-react';
+import type { LucideIcon } from '@/components/ui/icons';
 import { DeckIcon } from '@/components/ui/deck-icon';
 import { cn } from '@/lib/utils';
 import { SIDEBAR_GLYPH, SIDEBAR_ICON_SLOT, SIDEBAR_LABEL, SIDEBAR_ROW } from './row';
@@ -27,7 +27,7 @@ function IndexBar({ active }: { active: boolean }) {
       className={cn(
         'absolute top-2 bottom-2 left-1.5 w-[1.5px] [transition-property:background-color] [transition-duration:120ms]',
         active
-          ? 'bg-brand shadow-[0_0_6px_-1px_hsl(var(--brand)/0.6)]'
+          ? 'bg-brand shadow-[0_0_6px_-1px_hsl(var(--brand)/0.6)]' // ui-gate: allow the index bar is a lit amber lamp; the glow is its light
           : 'bg-transparent',
       )}
     />
@@ -56,7 +56,7 @@ export function NavRow({
   indexBar?: boolean;
 }) {
   return (
-    <button
+    <button // ui-gate: allow sidebar row: the shared row.ts geometry (64px icon column, no padding); ListRow's padding and radius would move the rail glyphs
       type="button"
       data-sidebar-row
       onClick={onClick}

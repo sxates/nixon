@@ -1,6 +1,11 @@
 'use client';
 
-import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
+import { DateNavigator } from '@/components/ui/date-navigator';
+import { DeckIcon } from '@/components/ui/deck-icon';
+import { CalendarDays } from '@/components/ui/icons';
+import { Input } from '@/components/ui/input';
+import { PAGE_GUTTER } from '@/lib/page-width';
+import { cn } from '@/lib/utils';
 import type { AgendaMode } from '@/hooks/useDayAgenda';
 import { MEETINGS_CONTENT_WIDTH } from '@/lib/meetings-view';
 import { NavSlotPortal, useHasNavSlot } from '@/components/Meetings/NavSlot';
@@ -37,60 +42,39 @@ export function TodayToolbar({
 }: TodayToolbarProps) {
   const hasSlot = useHasNavSlot();
   const nav = (
-          <div className="flex items-center gap-1">
-            {/* Today sits LEFT of the arrows: the nav is right-aligned, so it appearing and
-                disappearing never moves the arrows. */}
-            {!(viewMode !== 'week' && viewIsToday) && (
-              <button
-                type="button"
-                onClick={onToday}
-                className="mr-1 rounded-md border border-border bg-card px-2.5 py-1 text-[12px] font-semibold text-foreground transition-colors hover:bg-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                Today
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={onPrev}
-              aria-label={viewMode === 'week' ? 'Previous week' : 'Previous day'}
-              className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <ChevronLeft className="h-4 w-4" aria-hidden="true" />
-            </button>
-
-            <div className="flex items-center gap-1.5">
-              <h2 className="min-w-[3.5rem] text-center font-display text-[15px] font-semibold text-foreground">
-                {navLabel}
-              </h2>
-              {/* Native date picker: a transparent input overlays the calendar icon so a
-                  click opens the OS picker; the value stays a valid local YYYY-MM-DD. */}
-              <label className="relative flex h-7 w-7 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-within:ring-2 focus-within:ring-ring">
-                <CalendarDays className="h-[15px] w-[15px]" aria-hidden="true" />
-                <input
-                  type="date"
-                  aria-label="Jump to date"
-                  value={viewDate}
-                  onChange={(e) => e.target.value && onGoToDate(e.target.value)}
-                  className="absolute inset-0 cursor-pointer opacity-0"
-                />
-              </label>
-            </div>
-
-            <button
-              type="button"
-              onClick={onNext}
-              aria-label={viewMode === 'week' ? 'Next week' : 'Next day'}
-              className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <ChevronRight className="h-4 w-4" aria-hidden="true" />
-            </button>
-          </div>
+    <DateNavigator
+      label={navLabel}
+      labelClassName="min-w-14"
+      onPrev={onPrev}
+      onNext={onNext}
+      prevLabel={viewMode === 'week' ? 'Previous week' : 'Previous day'}
+      nextLabel={viewMode === 'week' ? 'Next week' : 'Next day'}
+      onToday={onToday}
+      // Day view: no Today while today is in view. Week view keeps it (it also resets
+      // the week to the current one).
+      showToday={!(viewMode !== 'week' && viewIsToday)}
+      trailing={
+        // Native date picker: a transparent input overlays the calendar glyph so a click
+        // opens the OS picker; the value stays a valid local YYYY-MM-DD. Same 28px ghost
+        // key as the arrows beside it.
+        <label className="relative flex h-7 w-7 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-within:ring-2 focus-within:ring-ring">
+          <DeckIcon icon={CalendarDays} size={14} />
+          <Input
+            type="date"
+            aria-label="Jump to date"
+            value={viewDate}
+            onChange={(e) => e.target.value && onGoToDate(e.target.value)}
+            className="absolute inset-0 h-full w-full cursor-pointer border-0 p-0 opacity-0 shadow-none"
+          />
+        </label>
+      }
+    />
   );
   // In the Meetings page the navigation sits at the right of the view-tab row (NavSlot);
   // standalone (tests) it keeps its own row.
   if (hasSlot) return <NavSlotPortal>{nav}</NavSlotPortal>;
   return (
-    <div className="flex-shrink-0 px-7 pt-1.5">
+    <div className={cn('flex-shrink-0 pt-1.5', PAGE_GUTTER)}>
       <div className={`mx-auto ${MEETINGS_CONTENT_WIDTH}`}>
         <div className="mb-2.5 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-1">
           {/* Date navigation: prev / label + picker / next, plus a Today reset. */}

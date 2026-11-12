@@ -55,6 +55,15 @@ describe('SegmentedControl', () => {
     expect(screen.getByRole('button', { name: 'Day' }).tabIndex).toBe(-1);
   });
 
+  // A value that matches no option (Action items' "Mine | Everyone" while a person filter
+  // is on) left every option at tabIndex -1, so the group dropped out of the Tab order.
+  it('keeps the first option tabbable when no option is active', () => {
+    renderControl('none-of-these');
+    const tabbable = screen.getAllByRole('button').filter((b) => b.tabIndex === 0);
+    expect(tabbable.map((b) => b.textContent)).toEqual(['Day']);
+    expect(screen.getAllByRole('button').every((b) => b.getAttribute('aria-pressed') === 'false')).toBe(true);
+  });
+
   // The roving tabIndex means arrow keys MUST move DOM focus as well as the
   // selection: selecting without focusing strands the user on a button that just
   // became tabIndex={-1}, with the next arrow press landing on the wrong element

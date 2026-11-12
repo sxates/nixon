@@ -18,7 +18,6 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
-import { Video, CircleDot } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ConnectCalendarCard } from '@/components/Calendar/ConnectCalendarCard';
 import { useRecordingState } from '@/contexts/RecordingStateContext';
@@ -82,12 +81,10 @@ function MeetingRow({ meeting }: { meeting: UpcomingMeeting }) {
       </div>
       {meeting.zoomUrl && (
         <div className="flex flex-shrink-0 items-center gap-2">
-          <Button variant="outline" size="sm" className="gap-1.5" onClick={handleJoin}>
-            <Video className="h-3.5 w-3.5" />
+          <Button variant="outline" size="sm" onClick={handleJoin}>
             Join
           </Button>
-          <Button variant="brand" size="sm" className="gap-1.5" onClick={handleJoinAndRecord}>
-            <CircleDot className="h-3.5 w-3.5" />
+          <Button variant="brand" size="sm" onClick={handleJoinAndRecord}>
             Join &amp; Record
           </Button>
         </div>

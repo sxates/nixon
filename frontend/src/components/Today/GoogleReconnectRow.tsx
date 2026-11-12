@@ -2,8 +2,8 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { CalendarX2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Callout } from '@/components/ui/callout';
 import { CALENDAR_SETTINGS_ROUTE } from '@/components/Calendar/ConnectCalendarCard';
 import { useGoogleCalendarConnect } from '@/hooks/useGoogleCalendarConnect';
 import {
@@ -45,36 +45,26 @@ export function GoogleReconnectRow() {
 
   if (!status?.connected || !status.authRequired) return null;
 
+  // A Callout like the connect-calendar card: `warn` (attention, never red), primary
+  // action first.
   return (
-    <div
+    <Callout
       role="status"
-      className="mb-4 flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-2.5"
+      tone="warn"
+      className="mb-4"
+      title="Google Calendar needs reconnecting"
+      action={
+        <>
+          <Button variant="brand" size="sm" onClick={() => void connect()} disabled={connecting}>
+            {connecting ? 'Finish in browser…' : 'Reconnect'}
+          </Button>
+          <Button variant="ghost" size="sm" onClick={() => router.push(CALENDAR_SETTINGS_ROUTE)}>
+            Settings
+          </Button>
+        </>
+      }
     >
-      <CalendarX2 className="h-4 w-4 flex-shrink-0 text-destructive" aria-hidden="true" />
-      <div className="min-w-0 flex-1">
-        <div className="text-sm font-medium text-foreground">
-          Google Calendar needs reconnecting
-        </div>
-        <div className="truncate text-xs text-muted-foreground">
-          Nothing has synced since your Google session expired — these may be out of date.
-        </div>
-      </div>
-      <button
-        type="button"
-        onClick={() => router.push(CALENDAR_SETTINGS_ROUTE)}
-        className="flex-shrink-0 text-xs text-muted-foreground hover:text-foreground"
-      >
-        Settings
-      </button>
-      <Button
-        variant="brand"
-        size="sm"
-        className="flex-shrink-0"
-        onClick={() => void connect()}
-        disabled={connecting}
-      >
-        {connecting ? 'Finish in browser…' : 'Reconnect'}
-      </Button>
-    </div>
+      Nothing has synced since your Google session expired — these may be out of date.
+    </Callout>
   );
 }

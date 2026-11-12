@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 
 // Owner feedback 2026-09-21: "the 'week' view is missing the … actions menu that lets me
 // remove items." It was missing because this view shipped (specs/0038 WS4) as a read-only
@@ -113,7 +114,7 @@ describe('WeekView row actions', () => {
     expect(onSelectItem).not.toHaveBeenCalled();
   });
 
-  it('the row itself still routes on click and on Enter', () => {
+  it('the row itself still routes on click and on Enter', async () => {
     const onSelectItem = vi.fn();
     const item = event('Lunch');
     renderWeek([item], { onSelectItem });
@@ -122,8 +123,11 @@ describe('WeekView row actions', () => {
     fireEvent.click(row);
     expect(onSelectItem).toHaveBeenCalledWith(item);
 
+    // The row is a native <button> now (ListRow), so Enter activates it the way the
+    // browser does — through a real key press, not a synthetic keydown.
     onSelectItem.mockClear();
-    fireEvent.keyDown(row, { key: 'Enter' });
+    row.focus();
+    await userEvent.keyboard('{Enter}');
     expect(onSelectItem).toHaveBeenCalledWith(item);
   });
 });
@@ -168,5 +172,30 @@ describe('WeekView row parity with All Meetings', () => {
     expect(screen.getByText('Standup')).toBeInTheDocument();
     // The day header's count follows the filtered rows, not the raw list.
     expect(screen.getByText('1 meeting')).toBeInTheDocument();
+  });
+});
+
+// Design-system audit 2026-11-11 (P1): Thursday listed 2:00 PM, then 9:15, then 11:00 —
+// the view rendered the backend's order. Rows within a day read top to bottom by start time.
+describe('WeekView row order', () => {
+  it('sorts each day by start time, whatever order the items arrive in', () => {
+    renderWeek([
+      event('Afternoon review', { id: 'c', startTime: '2026-09-16T14:00:00', endTime: '2026-09-16T15:00:00' }),
+      event('Early standup', { id: 'a', startTime: '2026-09-16T09:15:00', endTime: '2026-09-16T09:30:00' }),
+      event('Late morning sync', { id: 'b', startTime: '2026-09-16T11:00:00', endTime: '2026-09-16T11:30:00' }),
+    ]);
+    const titles = screen
+      .getAllByText(/^(Afternoon review|Early standup|Late morning sync)$/)
+      .map((el) => el.textContent);
+    expect(titles).toEqual(['Early standup', 'Late morning sync', 'Afternoon review']);
+  });
+
+  it('keeps an item with an unparseable start time last rather than throwing', () => {
+    renderWeek([
+      event('No time', { id: 'x', startTime: 'not-a-date' }),
+      event('Morning', { id: 'y', startTime: '2026-09-16T08:00:00' }),
+    ]);
+    const titles = screen.getAllByText(/^(No time|Morning)$/).map((el) => el.textContent);
+    expect(titles).toEqual(['Morning', 'No time']);
   });
 });

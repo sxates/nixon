@@ -1,7 +1,8 @@
 'use client';
 
-import { Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Spinner } from '@/components/ui/spinner';
+import { StatusDot } from '@/components/ui/status-dot';
 import { useBacklog } from '@/contexts/DeferredBacklogProvider';
 import { useQueueOpen } from '@/contexts/QueueOpenContext';
 
@@ -19,13 +20,13 @@ export function ProcessMeetingsButton() {
   if (view.pendingCount === 0 && !view.processing) return null;
 
   return view.processing ? (
-    <Button variant="outline" onClick={() => setOpen(true)} className="gap-2">
-      <Loader2 size={14} className="animate-spin" aria-hidden />
+    <Button variant="outline" onClick={() => setOpen(true)}>
+      <Spinner size="sm" />
       Processing… ({view.activeOrdinal} of {view.total})
     </Button>
   ) : (
-    <Button variant="outline" onClick={startNow} className="gap-2">
-      <span className="h-1.5 w-1.5 rounded-full bg-brand" aria-hidden />
+    <Button variant="outline" onClick={startNow}>
+      <StatusDot size={6} tone="brand" />
       Process {view.pendingCount} meeting{view.pendingCount === 1 ? '' : 's'}
     </Button>
   );

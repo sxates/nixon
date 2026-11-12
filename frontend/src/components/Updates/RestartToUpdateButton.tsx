@@ -3,6 +3,7 @@
 import React from 'react';
 import { useRestartConfirm } from '@/contexts/RestartConfirmContext';
 import { useRecordingState } from '@/contexts/RecordingStateContext';
+import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 /**
@@ -20,19 +21,22 @@ export function RestartToUpdateButton({
   const { request, canRestart } = useRestartConfirm();
   const { isRecording } = useRecordingState();
   return (
-    <button
-      type="button"
+    // An engraved key cap: the outline button at its smallest size, labelled in the 9px
+    // engraved caps (`.u-section-label-sm`, sized by `text-micro`).
+    <Button
+      variant="outline"
+      size="xs"
       onClick={request}
       disabled={!canRestart}
       title={isRecording ? 'Finish the recording first' : undefined}
       className={cn(
-        'u-section-label rounded-[3px] border border-border bg-key px-2 py-0.5 text-[9px] text-foreground transition-colors',
-        'hover:bg-key/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-        'disabled:cursor-default disabled:opacity-50 disabled:hover:bg-key',
+        'u-section-label-sm px-2 text-micro text-foreground',
+        // Keep the hover while disabled, so the "Finish the recording first" title still shows.
+        'disabled:pointer-events-auto disabled:cursor-default',
         className,
       )}
     >
       {label}
-    </button>
+    </Button>
   );
 }

@@ -39,7 +39,7 @@ export function QueueRow({ collapsed = false }: { collapsed?: boolean }) {
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         {collapsed ? (
-          <button
+          <button // ui-gate: allow sidebar row (row.ts geometry), see SidebarRow
             type="button"
             aria-label={`Queue ${view.count} — ${line}`}
             title={`Queue ${view.count} — ${line}`}
@@ -51,7 +51,7 @@ export function QueueRow({ collapsed = false }: { collapsed?: boolean }) {
             </IconSlot>
           </button>
         ) : (
-          <button
+          <button // ui-gate: allow sidebar row (row.ts geometry), see SidebarRow
             type="button"
             data-sidebar-row
             className={cn(SIDEBAR_ROW, 'relative text-left transition-colors hover:bg-key focus:outline-none focus-visible:ring-2 focus-visible:ring-ring')}
@@ -66,7 +66,7 @@ export function QueueRow({ collapsed = false }: { collapsed?: boolean }) {
                 it every time a stage name changed. `SIDEBAR_LABEL` is for the label; this
                 trailing status line keeps its own right inset, and a left gap so a long line
                 truncates short of the count instead of reading "Queue 1AI · …". */}
-            <span className="ml-3 min-w-0 flex-1 truncate pr-3.5 text-right text-[11px] text-muted-foreground">
+            <span className="u-row-meta ml-3 min-w-0 flex-1 truncate pr-3.5 text-right">
               {line}
             </span>
           </button>

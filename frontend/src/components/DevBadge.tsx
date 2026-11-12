@@ -28,25 +28,15 @@ const DevBadge: React.FC<DevBadgeProps> = ({ isCollapsed = false }) => {
     ? `Development build — separate data from the production app\nDev flags: ${formatFlags(flags)}`
     : "Development build — separate data from the production app";
 
-  if (isCollapsed) {
-    return (
-      <span
-        data-dev-badge=""
-        title={label}
-        aria-label={label}
-        className="inline-flex items-center justify-center px-1.5 py-0.5 rounded-[2px] text-[9px] font-bold uppercase tracking-[0.12em] bg-brand/15 text-brand border border-brand/40"
-      >
-        DEV
-      </span>
-    );
-  }
-
+  // The same engraved chip collapsed or expanded: 9px caps (`.u-section-label-sm`) on the
+  // brand wash, under the brand edge.
   return (
     <span
       data-dev-badge=""
+      data-collapsed={isCollapsed || undefined}
       title={label}
       aria-label={label}
-      className="inline-flex items-center justify-center px-1.5 py-0.5 rounded-[2px] text-[9px] font-bold uppercase tracking-[0.12em] bg-brand/15 text-brand border border-brand/40"
+      className="u-section-label-sm inline-flex items-center justify-center rounded-sm border border-brand-edge bg-brand-wash px-1.5 py-0.5 text-brand"
     >
       DEV
     </span>

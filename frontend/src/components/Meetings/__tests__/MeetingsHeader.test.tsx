@@ -49,12 +49,12 @@ describe('MeetingsHeader', () => {
     expect(screen.getByRole('button', { name: 'Agenda' })).toHaveAttribute('aria-pressed', 'true');
   });
 
-  it('gives every view option the same-size icon', () => {
+  // Design-system icon policy (docs/design-system.md §Icons, owner decision 2026-11-11):
+  // view tabs are text-only — the per-tab calendar/list glyphs were decorative.
+  it('draws the view options as text, with no per-tab icons', () => {
     renderHeader('agenda', true);
     for (const name of ['Agenda', 'Week', 'Month', 'List']) {
-      const icon = screen.getByRole('button', { name }).querySelector('svg');
-      expect(icon, `${name} has no icon`).not.toBeNull();
-      expect(icon!.getAttribute('class')).toContain('h-3.5 w-3.5');
+      expect(screen.getByRole('button', { name }).querySelector('svg')).toBeNull();
     }
   });
 
