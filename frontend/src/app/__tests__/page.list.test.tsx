@@ -148,9 +148,10 @@ describe('All Meetings search entry point (specs/0054 W3 follow-up)', () => {
 });
 
 describe('All Meetings view toggle (specs/0057 Task 2)', () => {
-  it('exposes Month/List as an aria-pressed group, and pressing Month flips the state', async () => {
-    // The toggle moved from a pair of Buttons to the shared SegmentedControl.
-    // The pressed contract is what assistive tech reads, so it is what we pin.
+  it('exposes Month/List as view tabs, and choosing Month flips the state', async () => {
+    // The toggle moved from a pair of Buttons to the shared SegmentedControl, then to Tabs
+    // (tabs switch the view). The selected contract is what assistive tech reads, so it is
+    // what we pin.
     invokeMock.mockResolvedValue([]);
     const { getByRole } = render(<AllMeetingsPage />);
 
@@ -158,16 +159,16 @@ describe('All Meetings view toggle (specs/0057 Task 2)', () => {
     // per render, so each state change replaces the DOM subtree and any node
     // captured earlier is detached (same trap the search test above calls out).
     const option = (name: RegExp) =>
-      within(getByRole('group', { name: /meeting view/i })).getByRole('button', { name });
+      within(getByRole('tablist', { name: /meeting view/i })).getByRole('tab', { name });
 
     // List is the default view (specs/0054 W3).
-    expect(option(/list/i).getAttribute('aria-pressed')).toBe('true');
-    expect(option(/month/i).getAttribute('aria-pressed')).toBe('false');
+    expect(option(/list/i).getAttribute('aria-selected')).toBe('true');
+    expect(option(/month/i).getAttribute('aria-selected')).toBe('false');
 
-    fireEvent.click(option(/month/i));
+    fireEvent.mouseDown(option(/month/i), { button: 0 });
 
-    expect(option(/month/i).getAttribute('aria-pressed')).toBe('true');
-    expect(option(/list/i).getAttribute('aria-pressed')).toBe('false');
+    expect(option(/month/i).getAttribute('aria-selected')).toBe('true');
+    expect(option(/list/i).getAttribute('aria-selected')).toBe('false');
   });
 });
 

@@ -161,8 +161,8 @@ without a visible ring.
 | Menu items | `DropdownMenuItem` | `icon` prop; `destructive` variant |
 | Page title row | `PageHeader` | `back`, editable `title`, `subtitle` node (not inside the h1), `actions`, `width` `page` / `doc` / `none` (default; aligns the row to the content column) |
 | Inline editable text | `EditableText` | the click-to-edit title or field, with the hover pencil |
-| Underline tabs | `Tabs` / `TabStrip` | underline is the default; optional `badge` slot; roving focus built in |
-| View switch | `SegmentedControl` | `size` default / `compact`; the only segmented style; one Tab stop (with no active option, the first holds it) |
+| View switch | `Tabs` | underline tabs: a hairline rule with a 2px brand underline on the active tab; optional `badge` slot; roving focus built in. Use it whenever the control changes **which view** is on screen (meeting tabs, Settings tabs, Meetings Agenda / Week / Month / List), with or without `TabsContent` (drop `aria-controls` when the panels live elsewhere) |
+| Filter | `SegmentedControl` | a boxed key group: recessed `bg-muted` track, the active option a raised `bg-card` cell, `rounded-md`; `size` default (28px) / `compact` (24px); one Tab stop (with no active option, the first holds it). Use it when the control **narrows what a view shows** (Action items status / whose, Ask's date scope) |
 | Card | `Panel` | `title` (makes it a `<section>` named by the heading), `count` chip, `action` slot, `variant` `solid` / `dashed`, `size` `default` (`px-4 py-3`) / `document` (`p-6`), `titleAs`; header is a `.u-section-label`, no icons |
 | Inline notice | `Callout` | `tone` `info` (brand wash + edge) / `warn` (brand wash, full brand edge; never red) / `error` (destructive wash + edge, `role="alert"`) / `muted`; `title`, `action` (primary first). Without `title`/`action` children render straight into the box. `Alert` and `SettingsNote` are thin aliases |
 | Empty / loading / error | `EmptyState`, `PageLoading`, `Callout tone="error"` | `EmptyState` `title`, `body`, `action`, `variant` `plain` / `panel` (dashed), `titleAs`; `PageLoading` `label`, `hideLabel`, `fill` `page` (`h-page`) / `pane` (`h-64`). No icon discs |
@@ -181,6 +181,11 @@ without a visible ring.
 | Date navigation | `DateNavigator` | `label`, `onPrev`, `onNext`, `prevLabel`, `nextLabel`, `onToday`, `showToday`, `leading`, `trailing`, `labelClassName`; Today sits left of the arrows |
 | Form field | `Input`, `Textarea`, `Select`, `Switch`, `Checkbox`, `Label` (`optional` prop) | no native `<input>`/`<select>` in screens |
 | Checkbox | `Checkbox` | `checked` / `defaultChecked`, `onCheckedChange`, `label` (names it), `size` `sm` (16) / `default` (18); `onClick` fires first (shift-click ranges). **Checkbox vs Switch:** pick from a list, or an option a dialog's button submits, is a `Checkbox`. A single setting that applies at once is a `Switch` |
+
+**Tabs switch the view; a boxed SegmentedControl filters it; never two underline strips in a
+row.** Two underline strips side by side read as two levels of navigation, and an underlined
+filter reads as a place you go. A filter bar with two SegmentedControls divides them with a
+hairline so they don't read as one five-way control.
 
 Domain components are composed from these and stay where they are. Reuse them before
 building another:

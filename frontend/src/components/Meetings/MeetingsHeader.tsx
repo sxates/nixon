@@ -5,7 +5,7 @@ import { DeckIcon } from '@/components/ui/deck-icon';
 import { IconButton } from '@/components/ui/icon-button';
 import { FileAudio, Plus } from '@/components/ui/icons';
 import { PageHeader } from '@/components/ui/page-header';
-import { SegmentedControl, type SegmentedOption } from '@/components/ui/segmented-control';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { SearchMeetingsButton } from '@/components/CommandPalette/SearchMeetingsButton';
 import { ProcessMeetingsButton } from '@/components/DeferredBacklog/ProcessMeetingsButton';
 import { useImportDialog } from '@/contexts/ImportDialogContext';
@@ -13,17 +13,22 @@ import { isMeetingsView, MEETINGS_CONTENT_WIDTH, type MeetingsView } from '@/lib
 import { PAGE_GUTTER } from '@/lib/page-width';
 import { cn } from '@/lib/utils';
 
+export interface MeetingsViewOption {
+  value: MeetingsView;
+  label: string;
+}
+
 // Text-only view tabs: no per-tab glyphs (docs/design-system.md §Icons).
-const AGENDA: SegmentedOption = { value: 'agenda', label: 'Agenda' };
-const WEEK: SegmentedOption = { value: 'week', label: 'Week' };
-const MONTH: SegmentedOption = { value: 'month', label: 'Month' };
-const LIST: SegmentedOption = { value: 'list', label: 'List' };
+const AGENDA: MeetingsViewOption = { value: 'agenda', label: 'Agenda' };
+const WEEK: MeetingsViewOption = { value: 'week', label: 'Week' };
+const MONTH: MeetingsViewOption = { value: 'month', label: 'Month' };
+const LIST: MeetingsViewOption = { value: 'list', label: 'List' };
 
 /**
  * With a calendar: widening left to right, one day → a week → a month → everything.
  * Without one: the old All meetings pair, unchanged (specs/0054 W3).
  */
-export function viewOptions(calendarConnected: boolean): SegmentedOption[] {
+export function viewOptions(calendarConnected: boolean): MeetingsViewOption[] {
   return calendarConnected
     ? [AGENDA, WEEK, MONTH, LIST]
     : [MONTH, LIST];
@@ -79,6 +84,12 @@ export function MeetingsHeader({
 /**
  * The view switch, in its own row right above the content, like the Action items filter
  * bar: same gutters, centred on the shared Meetings content width.
+ *
+ * `Tabs`, not a SegmentedControl: Agenda / Week / Month / List change WHICH view is on
+ * screen, and tabs switch the view (docs/design-system.md). The row owns the hairline so
+ * the date navigation on the right sits on the same rule as the tabs; the tablist itself
+ * draws none. There is no `TabsContent` — the panes are rendered by the page — so the
+ * triggers drop Radix's `aria-controls`, which would point at panels that don't exist.
  */
 export function MeetingsViewTabs({
   view,
@@ -94,20 +105,23 @@ export function MeetingsViewTabs({
 }) {
   return (
     <div className={cn('flex-shrink-0 pb-3', PAGE_GUTTER)}>
-      <div
+      <Tabs
+        value={view}
+        onValueChange={(next) => isMeetingsView(next) && onChooseView(next)}
         className={cn(
-          'mx-auto flex w-full flex-wrap items-center justify-between gap-x-4 gap-y-2',
+          'mx-auto flex w-full flex-wrap items-end justify-between gap-x-4 border-b border-border',
           MEETINGS_CONTENT_WIDTH,
         )}
       >
-        <SegmentedControl
-          aria-label="Meeting view"
-          options={viewOptions(calendarConnected)}
-          value={view}
-          onChange={(next) => isMeetingsView(next) && onChooseView(next)}
-        />
-        <div ref={navSlotRef} className="flex items-center gap-2" />
-      </div>
+        <TabsList aria-label="Meeting view" className="border-b-0">
+          {viewOptions(calendarConnected).map((option) => (
+            <TabsTrigger key={option.value} value={option.value} aria-controls={undefined}>
+              {option.label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+        <div ref={navSlotRef} className="flex items-center gap-2 pb-1.5" />
+      </Tabs>
     </div>
   );
 }

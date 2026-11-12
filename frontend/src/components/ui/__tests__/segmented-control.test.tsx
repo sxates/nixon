@@ -31,10 +31,28 @@ describe('SegmentedControl', () => {
     expect(screen.getByRole('button', { name: 'Week' }).getAttribute('aria-pressed')).toBe('true');
   });
 
-  it('underlines the active option in brand', () => {
+  // Tabs switch the view; a boxed SegmentedControl filters it — never two underline strips
+  // in a row (docs/design-system.md). The active option is a raised card cell in a recessed
+  // track, not a brand underline.
+  it('draws a boxed key group: recessed track, raised active cell, no underline', () => {
     renderControl('week');
-    expect(screen.getByRole('button', { name: 'Week' }).className).toContain('border-brand');
-    expect(screen.getByRole('button', { name: 'Day' }).className).toContain('border-transparent');
+    const group = screen.getByRole('group', { name: 'Agenda view' });
+    expect(group.className).toContain('bg-muted');
+    expect(group.className).toContain('rounded-md');
+    expect(group.className).toContain('h-7');
+    const active = screen.getByRole('button', { name: 'Week' }).className;
+    const idle = screen.getByRole('button', { name: 'Day' }).className;
+    expect(active).toContain('bg-card');
+    expect(idle).not.toContain('bg-card');
+    expect(active).not.toContain('border-b-2');
+    expect(active).not.toContain('border-brand');
+  });
+
+  it('is 24px in the compact size', () => {
+    render(
+      <SegmentedControl options={OPTIONS} value="day" onChange={vi.fn()} aria-label="Scope" size="compact" />,
+    );
+    expect(screen.getByRole('group', { name: 'Scope' }).className).toContain('h-6');
   });
 
   it('fires onChange when an option is clicked', () => {
@@ -157,7 +175,7 @@ describe('SegmentedControl', () => {
   it('defaults to the page-level size', () => {
     renderControl();
     const btn = screen.getByRole('button', { name: 'Day' });
-    expect(btn.className).toContain('text-sm');
+    expect(btn.className).toContain('text-xs');
     expect(btn.className).toContain('px-3');
     expect(screen.getByRole('group').getAttribute('data-size')).toBe('default');
   });
@@ -167,10 +185,10 @@ describe('SegmentedControl', () => {
       <SegmentedControl options={OPTIONS} value="day" onChange={vi.fn()} aria-label="Agenda view" size="compact" />
     );
     const btn = screen.getByRole('button', { name: 'Day' });
-    expect(btn.className).toContain('text-xs');
+    expect(btn.className).toContain('text-caption');
     expect(btn.className).toContain('px-2');
     expect(btn.className).not.toContain('text-sm');
-    // Still the one underline style.
-    expect(btn.className).toContain('border-b-2');
+    // Still the one boxed style.
+    expect(btn.className).toContain('bg-card');
   });
 });
