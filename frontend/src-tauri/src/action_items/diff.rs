@@ -270,11 +270,21 @@ pub fn compute_diff_with_forced(
     let mut seen_keys: HashSet<String> = HashSet::new();
 
     for (id, candidate) in forced {
-        let Some(entry) = entries.iter_mut().find(|e| e.item.id == *id && !e.matched) else {
+        let Some(idx) = entries.iter().position(|e| e.item.id == *id && !e.matched) else {
             continue;
         };
-        entry.matched = true;
         let key = content_key(&candidate.description);
+        // Rewriting a pristine row onto a key another row holds would break the unique
+        // index; leave the pairing to the normal path (exact key picks that other row).
+        if !entries[idx].protected
+            && entries
+                .iter()
+                .any(|e| e.item.id != *id && e.item.content_key == key)
+        {
+            continue;
+        }
+        let entry = &mut entries[idx];
+        entry.matched = true;
         if entry.protected {
             diff.matched.push((id.clone(), candidate.clone()));
         } else if seen_keys.insert(key.clone()) {
@@ -452,6 +462,25 @@ mod tests {
         assert_eq!(plan.updates.len(), 1);
         assert_eq!(plan.inserts.len(), 1);
         assert_ne!(plan.inserts[0].content_key, plan.updates[0].content_key);
+    }
+
+    #[test]
+    fn forced_pairing_onto_a_key_another_row_holds_is_skipped() {
+        let existing = [
+            pristine("x", "Book the venue"),
+            pristine("y", "Reserve the main hall"),
+        ];
+        let forced = [("x".to_string(), candidate("Reserve the main hall"))];
+        let plan =
+            compute_diff_with_forced(&existing, &[candidate("Reserve the main hall")], &forced);
+        let held = content_key("Reserve the main hall");
+        assert!(
+            plan.updates
+                .iter()
+                .all(|u| u.id == "y" || u.content_key != held),
+            "x must not be rewritten onto y's key"
+        );
+        assert!(plan.inserts.iter().all(|i| i.content_key != held));
     }
 
     #[test]
