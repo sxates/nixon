@@ -31,6 +31,7 @@ use crate::action_items::diff::{self, ResolvedCandidate};
 use crate::database::repositories::action_item::{
     ActionItem, ActionItemFilters, ActionItemWithMeeting, ActionItemsRepository, BulkStatusFilter,
 };
+use crate::database::repositories::action_item_todo::ActionItemTodoRepository;
 use crate::database::repositories::meeting_note::MeetingNotesRepository;
 use crate::database::repositories::setting::SettingsRepository;
 use crate::database::repositories::summary::SummaryProcessesRepository;
@@ -112,7 +113,7 @@ pub async fn api_get_action_items<R: Runtime>(
 ) -> Result<Vec<ActionItem>, String> {
     let state = app.state::<AppState>();
     let pool = state.db_manager.pool();
-    ActionItemsRepository::get_for_meeting(pool, &meeting_id)
+    ActionItemTodoRepository::list_for_meeting_page(pool, &meeting_id)
         .await
         .map_err(|e| format!("Failed to load action items: {e}"))
 }
@@ -292,7 +293,15 @@ pub async fn api_update_action_item<R: Runtime>(
     )
     .await
     .map_err(|e| format!("Failed to update action item: {e}"))?
-    .ok_or_else(|| "That action item no longer exists".to_string())
+    .ok_or_else(|| "That action item no longer exists".to_string())?;
+    // specs/0088: a suggestion handed to someone else leaves the inbox.
+    ActionItemTodoRepository::reconcile_triage_after_assignee_change(pool, &id)
+        .await
+        .map_err(|e| format!("Failed to update action item: {e}"))?;
+    ActionItemsRepository::get(pool, &id)
+        .await
+        .map_err(|e| format!("Failed to update action item: {e}"))?
+        .ok_or_else(|| "That action item no longer exists".to_string())
 }
 
 /// Flip an item's status: `'open' | 'completed' | 'dismissed'`. Completing stamps

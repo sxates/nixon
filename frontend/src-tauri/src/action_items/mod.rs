@@ -18,6 +18,7 @@ pub mod extractor;
 pub mod grammar;
 mod reply_parse;
 pub mod schema;
+pub mod todo_commands;
 pub mod triage;
 
 use std::collections::HashSet;
