@@ -10,13 +10,16 @@ import { resolve } from 'node:path';
  */
 const root = resolve(__dirname, '../..');
 const css = readFileSync(resolve(root, 'app/globals.css'), 'utf8');
-const header = readFileSync(resolve(root, 'components/MeetingDetails/MeetingIdentityHeader.tsx'), 'utf8');
+const tailwind = readFileSync(resolve(root, '../tailwind.config.js'), 'utf8');
 
-/** Title size in px from the display-state <h1> in MeetingIdentityHeader. */
+/**
+ * The meeting title's size in px. The title is PageHeader's `<h1 class="u-page-title">`,
+ * and `.u-page-title` is `text-title`, so the size is the `title` token in tailwind.config.js.
+ */
 function titlePx(): number {
-  const h1 = header.match(/<h1[\s\S]*?>/)?.[0] ?? '';
-  const m = h1.match(/text-\[(\d+(?:\.\d+)?)px\]/);
-  if (!m) throw new Error('could not find the meeting title size in MeetingIdentityHeader');
+  expect(css).toMatch(/\.u-page-title\s*\{[^}]*text-title/);
+  const m = tailwind.match(/\btitle:\s*\['(\d+(?:\.\d+)?)px'/);
+  if (!m) throw new Error('could not find the `title` font-size token in tailwind.config.js');
   return Number(m[1]);
 }
 

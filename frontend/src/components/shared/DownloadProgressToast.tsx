@@ -3,7 +3,8 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { safeListen } from '@/lib/safe-listen';
 import { toast } from 'sonner';
-import { X, Check, ArrowBigDownDash } from 'lucide-react';
+import { Progress } from '@/components/ui/progress';
+import { StatusDot } from '@/components/ui/status-dot';
 import { getDownloadTotalMb } from '@/lib/onboarding-summary-model';
 
 interface DownloadProgress {
@@ -61,26 +62,15 @@ function DownloadToastContent({
   const unitLabel = download.unitLabel ?? 'MB';
 
   return (
-    <div className="flex items-center gap-3 w-full max-w-sm bg-card rounded-lg shadow-lg border border-border p-3 relative">
-
-      {/* Icon */}
-      <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${isComplete ? 'bg-success/20' : hasError ? 'bg-destructive/20' : isCancelled ? 'bg-muted' : 'bg-muted'
-        }`}>
-        {isComplete ? (
-          <Check className="w-4 h-4 text-success" />
-        ) : hasError ? (
-          <X className="w-4 h-4 text-destructive" />
-        ) : isCancelled ? (
-          <X className="w-4 h-4 text-muted-foreground" />
-        ) : (
-          <ArrowBigDownDash className="size-5 text-muted-foreground " />
-        )}
-      </div>
-
-      {/* Content */}
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center justify-between gap-2 mb-1">
-          <p className="text-sm font-medium text-foreground truncate">
+    <div className="flex w-full max-w-sm items-start gap-3 rounded-lg border border-border bg-card p-3 shadow-lg">
+      <div className="min-w-0 flex-1">
+        <div className="mb-1 flex items-center gap-2">
+          {/* State lamp: the old 32px icon disc (design-system wave C). */}
+          <StatusDot
+            size={6}
+            tone={isComplete ? 'success' : hasError ? 'destructive' : isCancelled ? 'muted' : 'brand'}
+          />
+          <p className="truncate text-sm font-medium text-foreground">
             {download.displayName}
           </p>
         </div>
@@ -93,13 +83,11 @@ function DownloadToastContent({
           <p className="text-xs text-muted-foreground">Download cancelled</p>
         ) : (
           <>
-            {/* Progress bar */}
-            <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden mb-1.5">
-              <div
-                className="h-full bg-brand rounded-full transition-all duration-300"
-                style={{ width: `${download.progress}%` }}
-              />
-            </div>
+            <Progress
+              value={download.progress}
+              aria-label={`Downloading ${download.displayName}`}
+              className="mb-1.5"
+            />
 
             {/* Progress text */}
             <div className="flex items-center justify-between text-xs text-muted-foreground">

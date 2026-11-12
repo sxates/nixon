@@ -97,7 +97,7 @@ export function TransportKey({ fn, legend, lit = false, holding = false, disable
       className={cn(
         // h-11 (44px) with the contents centred BELOW the lamp bar: at h-10/justify-end the
         // 12px glyph's top landed at ~7px, flush with the bar at y 3-7 (owner feedback, 0.3.1).
-        'relative flex h-11 w-12 flex-none flex-col items-center justify-center gap-0.5 rounded-[2px] pt-2',
+        'relative flex h-11 w-12 flex-none flex-col items-center justify-center gap-0.5 rounded-sm pt-2',
         faceLit ? LIT_FACE[fn] : 'bg-key',
         'shadow-[inset_0_1px_0_hsl(var(--bevel-hi)),inset_0_-1px_0_hsl(var(--bevel-lo)),0_1px_0_rgba(0,0,0,0.4)]',
         'transition-transform [transition-duration:60ms] [transition-timing-function:cubic-bezier(.2,0,0,1)] active:translate-y-px',
@@ -114,7 +114,7 @@ export function TransportKey({ fn, legend, lit = false, holding = false, disable
       <span
         aria-hidden
         className={cn(
-          'absolute left-2 right-2 top-[3px] h-1 rounded-[1px] transition-[background-color,box-shadow] ease-out',
+          'absolute left-2 right-2 top-[3px] h-1 rounded-[1px] transition-[background-color,box-shadow] ease-out', // ui-gate: allow 1px-cornered lamp bar on the key cap (hardware part)
           lit ? cn(LIT_BAR[fn], '[transition-duration:120ms]') : 'bg-border [transition-duration:400ms]',
           // A named keyframe, never an arbitrary `duration-[…]`: tailwindcss-animate makes
           // those ambiguous and Tailwind emits nothing for them (same trap as the reels).
@@ -133,7 +133,7 @@ export function TransportKey({ fn, legend, lit = false, holding = false, disable
       </svg>
       <span
         className={cn(
-          'text-[9px] font-semibold tracking-[0.12em]',
+          'text-micro font-semibold tracking-[0.12em]',
           holdingInk ? HOLDING_LEGEND[fn] : lit ? LIT_LEGEND[fn] : 'text-engrave',
         )}
       >

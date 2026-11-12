@@ -25,6 +25,8 @@ import dynamic from 'next/dynamic';
 import { PrepPanel } from '@/components/MeetingDetails/PrepPanel';
 import { RecordAgendaPanel } from '@/components/Record/RecordAgendaPanel';
 import { usePrepAvailability } from '@/hooks/usePrepAvailability';
+import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 // Client-only: NotepadPanel's editor is a contentEditable that touches `document`,
 // which must not run during SSR. ssr:false keeps it off the server render path.
@@ -80,46 +82,48 @@ export function RecordRail({ meetingId }: { meetingId: string | null }) {
 
   return (
     <div className="min-w-0 flex w-[40%] max-w-[440px] flex-col overflow-hidden border-l border-border">
-      <div
-        role="tablist"
-        aria-label="Recording side panel"
-        // px-2 + the tab's px-3 puts the first label on the panels' px-5 gutter line.
-        className="flex flex-shrink-0 gap-1 border-b border-border bg-background px-2 pt-2"
+      {/* The `ui/tabs` underline strip (the same one as meeting details). Only the strip is
+          Radix: the panels below keep their own lifecycle (always-mounted Notes, lazy Prep),
+          so each trigger names its panel explicitly. The arrow-key handler is ours and calls
+          `preventDefault`, which Radix's own roving focus defers to. */}
+      <Tabs
+        value={effectiveTab}
+        onValueChange={(value) => setActiveTab(value as RecordTabKey)}
+        className="flex-shrink-0"
       >
-        {tabs.map(({ key, label }, index) => {
-          const active = effectiveTab === key;
-          return (
-            <button
+        <TabsList
+          aria-label="Recording side panel"
+          // px-2 + the tab's px-3 puts the first label on the panels' px-5 gutter line.
+          className="bg-background px-2 pt-2"
+        >
+          {tabs.map(({ key, label }, index) => (
+            <TabsTrigger
               key={key}
-              ref={(el) => { tabRefs.current[index] = el; }}
+              value={key}
+              ref={(el) => {
+                tabRefs.current[index] = el;
+              }}
               id={`record-tab-${key}`}
-              role="tab"
-              type="button"
-              aria-selected={active}
               aria-controls={`record-tabpanel-${key}`}
-              tabIndex={active ? 0 : -1}
               onClick={() => setActiveTab(key)}
               onKeyDown={(e) => handleTabKeyDown(e, index)}
-              className={
-                'inline-flex items-center gap-1.5 border-b-2 px-3 py-1.5 text-sm font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring ' +
-                (active
-                  ? '-mb-px border-brand text-foreground'
-                  : 'border-transparent text-muted-foreground hover:text-foreground')
+              badge={
+                key === 'prep' && openItemCount > 0 ? (
+                  <Badge
+                    tone="brand"
+                    className="px-1 py-0"
+                    aria-label={`${openItemCount} carried-over open item${openItemCount === 1 ? '' : 's'}`}
+                  >
+                    {openItemCount}
+                  </Badge>
+                ) : null
               }
             >
-              <span>{label}</span>
-              {key === 'prep' && openItemCount > 0 && (
-                <span
-                  className="inline-flex h-4 min-w-4 items-center justify-center rounded-[2px] bg-brand/15 px-1 text-[10px] font-semibold tabular-nums text-brand"
-                  aria-label={`${openItemCount} carried-over open item${openItemCount === 1 ? '' : 's'}`}
-                >
-                  {openItemCount}
-                </span>
-              )}
-            </button>
-          );
-        })}
-      </div>
+              {label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </Tabs>
 
       {/* NOTES — pinned agenda strip + live notepad. Always mounted (see header comment). */}
       <div
@@ -130,7 +134,8 @@ export function RecordRail({ meetingId }: { meetingId: string | null }) {
         className={effectiveTab === 'notes' ? 'min-h-0 flex flex-1 flex-col overflow-hidden' : 'hidden'}
       >
         {meetingId && <RecordAgendaPanel meetingId={meetingId} />}
-        <NotepadPanel meetingId={meetingId ?? undefined} />
+        {/* No "MY NOTES" label: the tab right above already says it. */}
+        <NotepadPanel meetingId={meetingId ?? undefined} showHeader={false} />
       </div>
 
       {/* PREP — lazily mounted on first activation, then kept. px-5 = the record-screen gutter. */}

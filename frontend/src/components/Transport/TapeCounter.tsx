@@ -18,10 +18,10 @@ type Size = 'sm' | 'xs';
 type Tone = 'normal' | 'amber' | 'dim';
 
 const WELL: Record<Size, string> = {
-  sm: 'w-3 h-[18px] text-[13px]',
-  xs: 'w-2.5 h-[15px] text-[11px]',
+  sm: 'w-3 h-[18px] text-[13px]', // ui-gate: allow odometer figure sized to its counter well (hardware part, no line-height)
+  xs: 'w-2.5 h-[15px] text-[11px]', // ui-gate: allow odometer figure sized to its counter well (hardware part, no line-height)
 };
-const COLON: Record<Size, string> = { sm: 'text-[12px]', xs: 'text-[10px]' };
+const COLON: Record<Size, string> = { sm: 'text-[12px]', xs: 'text-[10px]' }; // ui-gate: allow counter colon matched to the odometer figures
 const TONE: Record<Tone, string> = {
   normal: 'text-foreground',
   amber: 'text-brand',
@@ -37,7 +37,7 @@ function Digit({ value, size, tone }: { value: string; size: Size; tone: Tone })
     <span
       data-digit={value}
       className={cn(
-        'relative inline-flex overflow-hidden rounded-[2px] bg-well font-sans font-semibold tabular-nums tracking-[-0.02em]',
+        'relative inline-flex overflow-hidden rounded-sm bg-well font-sans font-semibold tabular-nums tracking-[-0.02em]',
         'shadow-[inset_0_1px_2px_rgba(0,0,0,0.6),inset_0_-1px_0_hsl(var(--bevel-hi))]',
         WELL[size],
         TONE[tone],

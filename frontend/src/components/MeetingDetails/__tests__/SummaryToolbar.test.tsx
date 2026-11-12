@@ -69,6 +69,16 @@ describe('SummaryToolbar (specs/0064 W3, specs/0079)', () => {
     expect(screen.queryByRole('button', { name: /re-think structure/i })).not.toBeInTheDocument();
   });
 
+  // The empty Summary tab has its own Generate summary CTA: the toolbar leaves its copy out.
+  it('hides Generate when hideGenerate is set, but still offers Stop during a run', () => {
+    const { unmount } = render(<SummaryToolbar {...base} hasSummary={false} hideGenerate />);
+    expect(screen.queryByRole('button', { name: /generate summary/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /summary prompt/i })).toBeInTheDocument();
+    unmount();
+    render(<SummaryToolbar {...base} hasSummary={false} hideGenerate summaryStatus="summarizing" />);
+    expect(screen.getByRole('button', { name: /stop/i })).toBeInTheDocument();
+  });
+
   it('promotes Save out of the flyout the moment there are unsaved edits', () => {
     render(<SummaryToolbar {...base} isDirty />);
     expect(screen.getByRole('button', { name: /save/i })).toBeInTheDocument();

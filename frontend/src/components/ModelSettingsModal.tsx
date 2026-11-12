@@ -14,9 +14,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Lock, Unlock, Eye, EyeOff, RefreshCw, CheckCircle2, XCircle, ChevronDown, ChevronUp, Download, ExternalLink, Check, ChevronsUpDown } from 'lucide-react';
+import { Callout } from '@/components/ui/callout';
+import { DeckIcon } from '@/components/ui/deck-icon';
+import { Check, ChevronDown, ChevronsUpDown, ChevronUp, Eye, EyeOff, Lock, RefreshCw, Unlock } from '@/components/ui/icons';
+import { OptionCard, OptionCardGroup } from '@/components/ui/option-card';
+import { Progress } from '@/components/ui/progress';
+import { SettingsRow } from '@/components/ui/settings';
+import { Spinner } from '@/components/ui/spinner';
+import { StatusDot } from '@/components/ui/status-dot';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
   Command,
@@ -784,14 +790,13 @@ export function ModelSettingsModal({
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-4">
-        <h3 className="text-lg font-semibold">Model Settings</h3>
-      </div>
+      {/* The settings tab names this section already; only the meeting page's dialog needs
+          a visible heading (its DialogTitle is visually hidden). */}
+      {layout === 'dialog' && <h3 className="mb-4 text-heading font-semibold">Model settings</h3>}
 
-      <div className="space-y-4">
-        <div>
-          <Label>Summarization Model</Label>
-          <div className="flex space-x-2 mt-1">
+      <div>
+        <SettingsRow label="Summarization model" htmlFor="summary-provider">
+          <div className="flex space-x-2">
             <Select
               value={modelConfig.provider}
               onValueChange={(value) => {
@@ -852,13 +857,13 @@ export function ModelSettingsModal({
                 }
               }}
             >
-              <SelectTrigger>
+              <SelectTrigger id="summary-provider">
                 <SelectValue placeholder="Select provider" />
               </SelectTrigger>
               <SelectContent className="max-h-64 overflow-y-auto">
-                <SelectItem value="builtin-ai">Built-in AI (Offline, No API needed)</SelectItem>
+                <SelectItem value="builtin-ai">Built-in AI (offline, no API needed)</SelectItem>
                 <SelectItem value="claude">Claude</SelectItem>
-                <SelectItem value="custom-openai">Custom Server (OpenAI)</SelectItem>
+                <SelectItem value="custom-openai">Custom server (OpenAI)</SelectItem>
                 <SelectItem value="groq">Groq</SelectItem>
                 <SelectItem value="ollama">Ollama</SelectItem>
                 <SelectItem value="openai">OpenAI</SelectItem>
@@ -879,7 +884,7 @@ export function ModelSettingsModal({
                     <span className="truncate">
                       {modelConfig.model || "Select model..."}
                     </span>
-                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    <DeckIcon icon={ChevronsUpDown} className="ml-2 shrink-0 opacity-50" />
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-[250px] p-0" align="start">
@@ -890,8 +895,8 @@ export function ModelSettingsModal({
                        (modelConfig.provider === 'openai' && isLoadingOpenAI) ||
                        (modelConfig.provider === 'claude' && isLoadingClaude) ||
                        (modelConfig.provider === 'groq' && isLoadingGroq) ? (
-                        <div className="py-6 text-center text-sm text-muted-foreground">
-                          <RefreshCw className="mx-auto h-4 w-4 animate-spin mb-2" />
+                        <div className="flex flex-col items-center gap-2 py-6 text-center text-sm text-muted-foreground">
+                          <Spinner />
                           Loading models...
                         </div>
                       ) : (
@@ -925,16 +930,18 @@ export function ModelSettingsModal({
               </Popover>
             )}
           </div>
-        </div>
+        </SettingsRow>
 
         {/* Subscription CLI (Claude Code): status, privacy, its own Save (specs/0085) */}
         {isCliProvider(modelConfig.provider) && (
-          <CliProviderPanel provider={modelConfig.provider} onSave={handleSave} />
+          <div className="py-3">
+            <CliProviderPanel provider={modelConfig.provider} onSave={handleSave} />
+          </div>
         )}
 
         {/* Custom OpenAI Configuration Section */}
         {modelConfig.provider === 'custom-openai' && (
-          <div className="space-y-4 border-t pt-4">
+          <div className="space-y-4 border-b border-border py-3 last:border-b-0">
             <div>
               <Label htmlFor="custom-endpoint">Endpoint URL *</Label>
               <Input
@@ -950,7 +957,7 @@ export function ModelSettingsModal({
             </div>
 
             <div>
-              <Label htmlFor="custom-model">Model Name *</Label>
+              <Label htmlFor="custom-model">Model name *</Label>
               <Input
                 id="custom-model"
                 value={customOpenAIModel}
@@ -964,7 +971,7 @@ export function ModelSettingsModal({
             </div>
 
             <div>
-              <Label htmlFor="custom-api-key">API Key (optional)</Label>
+              <Label htmlFor="custom-api-key">API key (optional)</Label>
               <Input
                 id="custom-api-key"
                 type="password"
@@ -977,22 +984,22 @@ export function ModelSettingsModal({
 
             {/* Advanced Options (Collapsible) */}
             <div>
-              <div
-                className="flex items-center justify-between cursor-pointer py-2"
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                aria-expanded={isCustomOpenAIAdvancedOpen}
                 onClick={() => setIsCustomOpenAIAdvancedOpen(!isCustomOpenAIAdvancedOpen)}
+                className="-mx-3 w-[calc(100%+1.5rem)] justify-between text-sm font-medium"
               >
-                <Label className="cursor-pointer">Advanced Options</Label>
-                {isCustomOpenAIAdvancedOpen ? (
-                  <ChevronUp className="h-4 w-4 text-muted-foreground" />
-                ) : (
-                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                )}
-              </div>
+                Advanced Options
+                <DeckIcon icon={isCustomOpenAIAdvancedOpen ? ChevronUp : ChevronDown} className="text-muted-foreground" />
+              </Button>
 
               {isCustomOpenAIAdvancedOpen && (
                 <div className="space-y-3 pl-2 border-l-2 border-muted mt-2">
                   <div>
-                    <Label htmlFor="custom-max-tokens">Max Tokens</Label>
+                    <Label htmlFor="custom-max-tokens">Max tokens</Label>
                     <Input
                       id="custom-max-tokens"
                       type="number"
@@ -1045,24 +1052,21 @@ export function ModelSettingsModal({
             >
               {isTestingConnection ? (
                 <>
-                  <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                  <Spinner />
                   Testing Connection...
                 </>
               ) : (
-                <>
-                  <CheckCircle2 className="mr-2 h-4 w-4" />
-                  Test Connection
-                </>
+                'Test Connection'
               )}
             </Button>
           </div>
         )}
 
         {requiresApiKey && (
-          <div>
-            <Label>API Key</Label>
-            <div className="relative mt-1">
+          <SettingsRow label="API key" htmlFor="summary-api-key">
+            <div className="relative">
               <Input
+                id="summary-api-key"
                 type={showApiKey ? 'text' : 'password'}
                 value={apiKey || ''}
                 onChange={(e) => setApiKey(e.target.value)}
@@ -1100,39 +1104,42 @@ export function ModelSettingsModal({
                         : 'Lock to prevent editing'
                     }
                   >
-                    {isApiKeyLocked ? <Lock /> : <Unlock />}
+                    <DeckIcon icon={isApiKeyLocked ? Lock : Unlock} size={16} />
                   </Button>
                 )}
                 <Button
                   type="button"
                   variant="ghost"
                   size="icon"
+                  aria-label={showApiKey ? 'Hide API key' : 'Show API key'}
                   onClick={() => setShowApiKey(!showApiKey)}
                 >
-                  {showApiKey ? <EyeOff /> : <Eye />}
+                  <DeckIcon icon={showApiKey ? EyeOff : Eye} size={16} />
                 </Button>
               </div>
             </div>
-          </div>
+          </SettingsRow>
         )}
 
         {modelConfig.provider === 'ollama' && (
-          <div>
-            <div
-              className="flex items-center justify-between cursor-pointer py-2"
-              onClick={() => setIsEndpointSectionCollapsed(!isEndpointSectionCollapsed)}
-            >
-              <Label className="cursor-pointer">Custom Endpoint (optional)</Label>
-              {isEndpointSectionCollapsed ? (
-                <ChevronDown className="h-4 w-4 text-muted-foreground" />
-              ) : (
-                <ChevronUp className="h-4 w-4 text-muted-foreground" />
-              )}
-            </div>
-
+          <SettingsRow
+            label="Custom endpoint (optional)"
+            control={
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                aria-label={isEndpointSectionCollapsed ? 'Show custom endpoint' : 'Hide custom endpoint'}
+                aria-expanded={!isEndpointSectionCollapsed}
+                onClick={() => setIsEndpointSectionCollapsed(!isEndpointSectionCollapsed)}
+              >
+                <DeckIcon icon={isEndpointSectionCollapsed ? ChevronDown : ChevronUp} className="text-muted-foreground" />
+              </Button>
+            }
+          >
             {!isEndpointSectionCollapsed && (
               <>
-                <p className="text-sm text-muted-foreground mt-1 mb-2">
+                <p className="text-sm text-muted-foreground mb-2">
                   Leave empty or enter a custom endpoint (e.g., http://x.yy.zz:11434)
                 </p>
                 <div className="flex gap-2 mt-1">
@@ -1155,10 +1162,10 @@ export function ModelSettingsModal({
                       )}
                     />
                     {endpointValidationState === 'valid' && (
-                      <CheckCircle2 className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-success" />
+                      <StatusDot tone="success" label="Endpoint reachable" className="absolute right-3 top-1/2 -translate-y-1/2" />
                     )}
                     {endpointValidationState === 'invalid' && (
-                      <XCircle className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-destructive" />
+                      <StatusDot tone="destructive" label="Endpoint not reachable" className="absolute right-3 top-1/2 -translate-y-1/2" />
                     )}
                   </div>
                   <Button
@@ -1171,42 +1178,41 @@ export function ModelSettingsModal({
                   >
                     {isLoadingOllama ? (
                       <>
-                        <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                        <Spinner />
                         Fetching...
                       </>
                     ) : (
                       <>
-                        <RefreshCw className="mr-2 h-4 w-4" />
+                        <DeckIcon icon={RefreshCw} />
                         Fetch Models
                       </>
                     )}
                   </Button>
                 </div>
                 {ollamaEndpointChanged && !error && (
-                  <Alert className="mt-3 border-brand/50 bg-brand/10">
-                    <AlertDescription className="text-foreground">
-                      Endpoint changed. Please click &quot;Fetch Models&quot; to load models from the new endpoint before saving.
-                    </AlertDescription>
-                  </Alert>
+                  <Callout tone="warn" className="mt-3">
+                    Endpoint changed. Please click &quot;Fetch Models&quot; to load models from the new endpoint before saving.
+                  </Callout>
                 )}
               </>
             )}
-          </div>
+          </SettingsRow>
         )}
 
         {modelConfig.provider === 'ollama' && (
-          <div>
-            <div className="flex items-center justify-between mb-4">
-              <h4 className="text-sm font-bold">Available Ollama Models</h4>
-              {lastFetchedEndpoint && models.length > 0 && (
+          <SettingsRow
+            label="Available Ollama models"
+            control={
+              lastFetchedEndpoint && models.length > 0 ? (
                 <div className="flex items-center gap-2 text-sm">
                   <span className="text-muted-foreground">Using:</span>
-                  <code className="px-2 py-1 bg-muted rounded text-xs">
+                  <code className="rounded-sm bg-muted px-2 py-1 text-xs">
                     {lastFetchedEndpoint || 'http://localhost:11434'}
                   </code>
                 </div>
-              )}
-            </div>
+              ) : undefined
+            }
+          >
             {models.length > 0 && (
               <div className="mb-4">
                 <Input
@@ -1218,8 +1224,8 @@ export function ModelSettingsModal({
               </div>
             )}
             {isLoadingOllama ? (
-              <div className="text-center py-8 text-muted-foreground">
-                <RefreshCw className="mx-auto h-8 w-8 animate-spin mb-2" />
+              <div className="flex flex-col items-center gap-2 py-8 text-center text-muted-foreground">
+                <Spinner size="md" />
                 Loading models...
               </div>
             ) : models.length === 0 ? (
@@ -1227,18 +1233,15 @@ export function ModelSettingsModal({
                 {ollamaNotInstalled ? (
                   /* Show Ollama download link when not installed */
                   <div className="space-y-4">
-                    <Alert className="border-brand/50 bg-brand/10">
-                      <AlertDescription className="text-foreground">
-                        Ollama is not installed or not running. Please download and install Ollama to use local models.
-                      </AlertDescription>
-                    </Alert>
+                    <Callout tone="warn">
+                      Ollama is not installed or not running. Please download and install Ollama to use local models.
+                    </Callout>
                     <Button
-                      variant="default"
+                      variant="brand"
                       size="sm"
                       onClick={() => invoke('open_external_url', { url: 'https://ollama.com/download' })}
-                      className="w-full bg-brand text-brand-foreground hover:bg-brand/90"
+                      className="w-full"
                     >
-                      <ExternalLink className="mr-2 h-4 w-4" />
                       Download Ollama
                     </Button>
                     <div className="text-sm text-muted-foreground text-center">
@@ -1248,13 +1251,11 @@ export function ModelSettingsModal({
                 ) : (
                   /* Show model download option when Ollama is installed but no models */
                   <>
-                    <Alert className="mb-4">
-                      <AlertDescription>
-                        {ollamaEndpointChanged
-                          ? 'Endpoint changed. Click "Fetch Models" to load models from the new endpoint.'
-                          : 'No models found. Download a recommended model or click "Fetch Models" to load available Ollama models.'}
-                      </AlertDescription>
-                    </Alert>
+                    <Callout tone="muted" className="mb-4">
+                      {ollamaEndpointChanged
+                        ? 'Endpoint changed. Click "Fetch Models" to load models from the new endpoint.'
+                        : 'No models found. Download a recommended model or click "Fetch Models" to load available Ollama models.'}
+                    </Callout>
                     {!ollamaEndpointChanged && (
                       <div className="space-y-3">
                         <Button
@@ -1266,14 +1267,11 @@ export function ModelSettingsModal({
                         >
                           {isDownloading('gemma3:1b') ? (
                             <>
-                              <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                              <Spinner />
                               Downloading gemma3:1b...
                             </>
                           ) : (
-                            <>
-                              <Download className="mr-2 h-4 w-4" />
-                              Download gemma3:1b (Recommended, ~800MB)
-                            </>
+                            'Download gemma3:1b (Recommended, ~800MB)'
                           )}
                         </Button>
 
@@ -1286,12 +1284,7 @@ export function ModelSettingsModal({
                                 {Math.round(getProgress('gemma3:1b')!)}%
                               </span>
                             </div>
-                            <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
-                              <div
-                                className="h-full bg-brand rounded-full transition-all duration-300"
-                                style={{ width: `${getProgress('gemma3:1b')}%` }}
-                              />
-                            </div>
+                            <Progress value={getProgress('gemma3:1b')} aria-label="Downloading gemma3:1b" />
                           </div>
                         )}
                       </div>
@@ -1302,67 +1295,55 @@ export function ModelSettingsModal({
             ) : !ollamaEndpointChanged && (
               <ScrollArea className="max-h-[calc(100vh-450px)] overflow-y-auto pr-4">
                 {filteredModels.length === 0 ? (
-                  <Alert>
-                    <AlertDescription>
-                      No models found matching &quot;{searchQuery}&quot;. Try a different search term.
-                    </AlertDescription>
-                  </Alert>
+                  <Callout tone="muted">
+                    No models found matching &quot;{searchQuery}&quot;. Try a different search term.
+                  </Callout>
                 ) : (
-                  <div className="grid gap-4">
+                  <OptionCardGroup
+                    aria-label="Available Ollama models"
+                    value={modelConfig.model}
+                    onValueChange={(name) => setModelConfig((prev: ModelConfig) => ({ ...prev, model: name }))}
+                    className="grid gap-2"
+                  >
                     {filteredModels.map((model) => {
                       const progress = getProgress(model.name);
                       const modelIsDownloading = isDownloading(model.name);
 
                       return (
-                        <div
+                        <OptionCard
                           key={model.id}
-                          className={cn(
-                            'bg-card p-2 m-0 rounded-md border transition-colors',
-                            modelConfig.model === model.name
-                              ? 'ring-1 ring-brand border-brand bg-brand/10'
-                              : 'hover:bg-muted/50',
-                            !modelIsDownloading && 'cursor-pointer'
-                          )}
-                          onClick={() => {
-                            if (!modelIsDownloading) {
-                              setModelConfig((prev: ModelConfig) => ({ ...prev, model: model.name }))
-                            }
-                          }}
-                        >
-                          <div>
-                            <b className="font-bold">{model.name}&nbsp;</b>
-                            <span className="text-muted-foreground">with a size of </span>
-                            <span className="font-mono font-bold text-sm">{model.size}</span>
-                          </div>
-
-                          {/* Progress bar for downloading models */}
-                          {modelIsDownloading && progress !== undefined && (
-                            <div className="mt-3 pt-3 border-t border-border">
-                              <div className="flex items-center justify-between mb-2">
-                                <span className="text-sm font-medium text-brand">Downloading...</span>
-                                <span className="text-sm font-semibold text-brand">{Math.round(progress)}%</span>
-                              </div>
-                              <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
-                                <div
-                                  className="h-full bg-brand rounded-full transition-all duration-300"
-                                  style={{ width: `${progress}%` }}
-                                />
-                              </div>
-                            </div>
-                          )}
-                        </div>
+                          value={model.name}
+                          // A model still downloading can't be chosen yet.
+                          disabled={modelIsDownloading}
+                          title={model.name}
+                          description={
+                            <>
+                              with a size of <span className="font-mono">{model.size}</span>
+                              {/* Progress bar for downloading models */}
+                              {modelIsDownloading && progress !== undefined && (
+                                <span className="mt-2 block border-t border-border pt-2">
+                                  <span className="mb-1.5 flex items-center justify-between font-medium text-brand">
+                                    <span>Downloading...</span>
+                                    <span className="font-semibold">{Math.round(progress)}%</span>
+                                  </span>
+                                  <Progress value={progress} aria-label={`Downloading ${model.name}`} />
+                                </span>
+                              )}
+                            </>
+                          }
+                        />
                       );
                     })}
-                  </div>
+                  </OptionCardGroup>
                 )}
               </ScrollArea>
             )}
-          </div>
+          </SettingsRow>
         )}
 
         {/* Built-in AI Models Section */}
         {modelConfig.provider === 'builtin-ai' && (
-          <div className="mt-6">
+          <div className="py-3">
             <BuiltInModelManager
               selectedModel={modelConfig.model}
               layout={layout}
@@ -1374,35 +1355,9 @@ export function ModelSettingsModal({
         )}
       </div>
 
-      {/* Auto-generate summaries toggle */}
-      {/* <div className="mt-6 pt-6 border-t border-border">
-        <div className="flex items-center justify-between">
-          <div className="flex-1">
-            <Label htmlFor="auto-generate" className="text-base font-medium">
-              Auto-generate summaries
-            </Label>
-            <p className="text-sm text-muted-foreground mt-1">
-              Automatically generate summary when opening meetings without one
-            </p>
-          </div>
-          <Switch
-            id="auto-generate"
-            checked={autoGenerateEnabled}
-            onCheckedChange={setAutoGenerateEnabled}
-          />
-        </div>
-      </div> */}
-
       {!isCliProvider(modelConfig.provider) && (
-      <div className="mt-6 flex justify-end">
-        <Button
-          className={cn(
-            'px-4 text-sm font-medium text-brand-foreground rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-ring',
-            isDoneDisabled ? 'bg-muted text-muted-foreground cursor-not-allowed' : 'bg-brand hover:bg-brand/90'
-          )}
-          onClick={handleSave}
-          disabled={isDoneDisabled}
-        >
+      <div className="mt-3 flex justify-end">
+        <Button variant="brand" onClick={handleSave} disabled={isDoneDisabled}>
           Save
         </Button>
       </div>

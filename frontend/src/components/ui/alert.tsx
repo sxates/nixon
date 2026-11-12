@@ -1,32 +1,34 @@
 import * as React from "react"
-import { cva, type VariantProps } from "class-variance-authority"
 
+import { Callout } from "@/components/ui/callout"
 import { cn } from "@/lib/utils"
 
-const alertVariants = cva(
-  "relative w-full rounded-lg border px-4 py-3 text-sm [&>svg+div]:translate-y-[-3px] [&>svg]:absolute [&>svg]:left-4 [&>svg]:top-4 [&>svg]:text-foreground [&>svg~*]:pl-7",
-  {
-    variants: {
-      variant: {
-        default: "bg-background text-foreground",
-        destructive:
-          "border-destructive/50 text-destructive dark:border-destructive [&>svg]:text-destructive",
-      },
-    },
-    defaultVariants: {
-      variant: "default",
-    },
-  }
-)
+/**
+ * Shim over `Callout` (design-system wave 0b) so the shadcn `Alert` callers keep working.
+ * New code uses `Callout` with a `tone`. `variant="default"` is the plain bordered box on
+ * the page background it always was; `destructive` is `Callout tone="error"`. A leading
+ * `<svg>` child keeps the shadcn icon layout.
+ */
+const ICON_LAYOUT =
+  "[&>svg+div]:translate-y-[-3px] [&>svg]:absolute [&>svg]:left-4 [&>svg]:top-4 [&>svg]:text-foreground [&>svg~*]:pl-7"
+
+type AlertVariant = "default" | "destructive"
 
 const Alert = React.forwardRef<
   HTMLDivElement,
-  React.HTMLAttributes<HTMLDivElement> & VariantProps<typeof alertVariants>
+  React.HTMLAttributes<HTMLDivElement> & { variant?: AlertVariant | null }
 >(({ className, variant, ...props }, ref) => (
-  <div
+  <Callout
     ref={ref}
     role="alert"
-    className={cn(alertVariants({ variant }), className)}
+    tone={variant === "destructive" ? "error" : "muted"}
+    className={cn(
+      ICON_LAYOUT,
+      variant === "destructive"
+        ? "text-destructive [&>svg]:text-destructive"
+        : "border-border bg-background",
+      className
+    )}
     {...props}
   />
 ))

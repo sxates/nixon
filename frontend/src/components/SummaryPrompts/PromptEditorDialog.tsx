@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { toast } from 'sonner';
-import { AlertTriangle, Loader2 } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -13,6 +12,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { Callout } from '@/components/ui/callout';
+import { Spinner } from '@/components/ui/spinner';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
@@ -141,13 +142,9 @@ export function PromptEditorDialog({ open, onOpenChange, prompt, onSaved }: Prom
           </div>
 
           {saveError && (
-            <div
-              role="alert"
-              className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"
-            >
-              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+            <Callout tone="error" className="text-destructive">
               {saveError}
-            </div>
+            </Callout>
           )}
         </div>
 
@@ -156,7 +153,7 @@ export function PromptEditorDialog({ open, onOpenChange, prompt, onSaved }: Prom
             Cancel
           </Button>
           <Button variant="brand" onClick={handleSave} disabled={!canSave}>
-            {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {isSaving && <Spinner />}
             {isNew ? 'Create prompt' : 'Save'}
           </Button>
         </DialogFooter>

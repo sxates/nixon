@@ -1,42 +1,34 @@
 'use client';
 
-import { CalendarClock, CalendarDays, CalendarRange, FileAudio, List, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { DeckIcon } from '@/components/ui/deck-icon';
+import { IconButton } from '@/components/ui/icon-button';
+import { FileAudio, Plus } from '@/components/ui/icons';
 import { PageHeader } from '@/components/ui/page-header';
-import { SegmentedControl, type SegmentedOption } from '@/components/ui/segmented-control';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { SearchMeetingsButton } from '@/components/CommandPalette/SearchMeetingsButton';
 import { ProcessMeetingsButton } from '@/components/DeferredBacklog/ProcessMeetingsButton';
 import { useImportDialog } from '@/contexts/ImportDialogContext';
 import { isMeetingsView, MEETINGS_CONTENT_WIDTH, type MeetingsView } from '@/lib/meetings-view';
+import { PAGE_GUTTER } from '@/lib/page-width';
 import { cn } from '@/lib/utils';
 
-// Every option carries an icon at the same size, so the four read as one control.
-const AGENDA: SegmentedOption = {
-  value: 'agenda',
-  label: 'Agenda',
-  icon: <CalendarClock className="h-3.5 w-3.5" aria-hidden="true" />,
-};
-const WEEK: SegmentedOption = {
-  value: 'week',
-  label: 'Week',
-  icon: <CalendarRange className="h-3.5 w-3.5" aria-hidden="true" />,
-};
-const MONTH: SegmentedOption = {
-  value: 'month',
-  label: 'Month',
-  icon: <CalendarDays className="h-3.5 w-3.5" aria-hidden="true" />,
-};
-const LIST: SegmentedOption = {
-  value: 'list',
-  label: 'List',
-  icon: <List className="h-3.5 w-3.5" aria-hidden="true" />,
-};
+export interface MeetingsViewOption {
+  value: MeetingsView;
+  label: string;
+}
+
+// Text-only view tabs: no per-tab glyphs (docs/design-system.md §Icons).
+const AGENDA: MeetingsViewOption = { value: 'agenda', label: 'Agenda' };
+const WEEK: MeetingsViewOption = { value: 'week', label: 'Week' };
+const MONTH: MeetingsViewOption = { value: 'month', label: 'Month' };
+const LIST: MeetingsViewOption = { value: 'list', label: 'List' };
 
 /**
  * With a calendar: widening left to right, one day → a week → a month → everything.
  * Without one: the old All meetings pair, unchanged (specs/0054 W3).
  */
-export function viewOptions(calendarConnected: boolean): SegmentedOption[] {
+export function viewOptions(calendarConnected: boolean): MeetingsViewOption[] {
   return calendarConnected
     ? [AGENDA, WEEK, MONTH, LIST]
     : [MONTH, LIST];
@@ -58,29 +50,28 @@ export function MeetingsHeader({
 }) {
   const { openImportDialog } = useImportDialog();
   return (
+    // `width="page"`: the title keeps the content's left edge when the rail is collapsed
+    // (audit 2026-11-11: "Meetings" at x=92, the cards at x=132).
     <PageHeader
+      width="page"
       title="Meetings"
       subtitle={subtitle}
       actions={
         <>
           <SearchMeetingsButton />
-          {/* Import audio: an icon button beside Search, on every view (owner, 2026-11-05).
-              Same 32px box and 12px glyph as SearchMeetingsButton. */}
-          <button
-            type="button"
+          {/* Import audio: an icon button beside Search, on every view (owner, 2026-11-05). */}
+          <IconButton
+            size="md"
+            label="Import audio"
             onClick={() => openImportDialog()}
-            aria-label="Import audio"
-            title="Import audio"
-            className="inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-[3px] border border-border bg-card text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <FileAudio className="h-3 w-3" aria-hidden="true" />
-          </button>
+            icon={<DeckIcon icon={FileAudio} size={14} />}
+          />
           <ProcessMeetingsButton />
           {/* A meeting added here lives on the calendar views; without a calendar there is
               no view that would show it until it is recorded. */}
           {calendarConnected && (
-            <Button variant="brand" onClick={onAddMeeting} className="gap-2">
-              <Plus className="h-[13px] w-[13px]" aria-hidden="true" />
+            <Button variant="brand" onClick={onAddMeeting}>
+              <Plus aria-hidden="true" />
               Add meeting
             </Button>
           )}
@@ -93,6 +84,12 @@ export function MeetingsHeader({
 /**
  * The view switch, in its own row right above the content, like the Action items filter
  * bar: same gutters, centred on the shared Meetings content width.
+ *
+ * `Tabs`, not a SegmentedControl: Agenda / Week / Month / List change WHICH view is on
+ * screen, and tabs switch the view (docs/design-system.md). The row owns the hairline so
+ * the date navigation on the right sits on the same rule as the tabs; the tablist itself
+ * draws none. There is no `TabsContent` — the panes are rendered by the page — so the
+ * triggers drop Radix's `aria-controls`, which would point at panels that don't exist.
  */
 export function MeetingsViewTabs({
   view,
@@ -107,21 +104,24 @@ export function MeetingsViewTabs({
   navSlotRef?: (el: HTMLDivElement | null) => void;
 }) {
   return (
-    <div className="flex-shrink-0 px-4 min-[900px]:px-7 pb-3">
-      <div
+    <div className={cn('flex-shrink-0 pb-3', PAGE_GUTTER)}>
+      <Tabs
+        value={view}
+        onValueChange={(next) => isMeetingsView(next) && onChooseView(next)}
         className={cn(
-          'mx-auto flex w-full flex-wrap items-center justify-between gap-x-4 gap-y-2',
+          'mx-auto flex w-full flex-wrap items-end justify-between gap-x-4 border-b border-border',
           MEETINGS_CONTENT_WIDTH,
         )}
       >
-        <SegmentedControl
-          aria-label="Meeting view"
-          options={viewOptions(calendarConnected)}
-          value={view}
-          onChange={(next) => isMeetingsView(next) && onChooseView(next)}
-        />
-        <div ref={navSlotRef} className="flex items-center gap-2" />
-      </div>
+        <TabsList aria-label="Meeting view" className="border-b-0">
+          {viewOptions(calendarConnected).map((option) => (
+            <TabsTrigger key={option.value} value={option.value} aria-controls={undefined}>
+              {option.label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+        <div ref={navSlotRef} className="flex items-center gap-2 pb-1.5" />
+      </Tabs>
     </div>
   );
 }

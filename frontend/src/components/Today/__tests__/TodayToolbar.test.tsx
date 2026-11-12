@@ -8,13 +8,12 @@ import { render, screen } from '@testing-library/react';
 
 import { TodayToolbar } from '@/components/Today/TodayToolbar';
 
-function renderToolbar(viewMode: 'day' | 'week' = 'day', viewIsToday = true) {
+function renderToolbar(viewMode: 'day' | 'week' = 'day') {
   render(
     <TodayToolbar
       viewMode={viewMode}
       viewDate="2026-09-13"
       navLabel="Sunday, September 13"
-      viewIsToday={viewIsToday}
       onPrev={vi.fn()}
       onNext={vi.fn()}
       onToday={vi.fn()}
@@ -37,8 +36,9 @@ describe('TodayToolbar', () => {
     expect(screen.getByRole('button', { name: 'Next week' })).toBeInTheDocument();
   });
 
-  it('offers Today only when the day in view is not today', () => {
-    renderToolbar('day', true);
-    expect(screen.queryByRole('button', { name: 'Today' })).toBeNull();
+  // Today is a key in every view (as in Week and Month), never only a label.
+  it('offers the Today key in the day view too', () => {
+    renderToolbar('day');
+    expect(screen.getByRole('button', { name: 'Today' })).toBeInTheDocument();
   });
 });

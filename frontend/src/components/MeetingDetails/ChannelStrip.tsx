@@ -53,16 +53,16 @@ export function ChannelStrip({
       className={cn('pb-1', className)}
     >
       <div role="row" className={cn(GRID, 'h-[22px]')}>
-        <span role="columnheader" className="u-section-label text-[9px]">
+        <span role="columnheader" className="u-section-label-sm">
           CH
         </span>
-        <span role="columnheader" className="u-section-label text-[9px]">
+        <span role="columnheader" className="u-section-label-sm">
           Speaker
         </span>
-        <span role="columnheader" className="u-section-label text-right text-[9px]">
+        <span role="columnheader" className="u-section-label-sm text-right">
           Time
         </span>
-        <span role="columnheader" className="u-section-label text-[9px]">
+        <span role="columnheader" className="u-section-label-sm">
           Share of talk
         </span>
         {/* Spacer for the trailing action column — a columnheader with no name is noise. */}
@@ -95,7 +95,7 @@ export function ChannelStrip({
           >
             <span
               role="cell"
-              className="flex items-center gap-2 text-[11px] font-semibold text-engrave"
+              className="flex items-center gap-2 text-caption font-semibold text-engrave"
             >
               {/* specs/0061 W4 task 3, ruling R37 — the row stays `role="row"`
                   with its `role="cell"` children intact (a bare `role="button"`
@@ -109,7 +109,7 @@ export function ChannelStrip({
                   aria-label={`Filter transcript to ${r.displayName ?? r.speakerKey}`}
                   onClick={() => onSelect(r.speakerKey)}
                   className={cn(
-                    'flex items-center gap-2 rounded-[2px] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
+                    'flex items-center gap-2 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                     selected && 'bg-muted',
                   )}
                 >
@@ -125,7 +125,7 @@ export function ChannelStrip({
             </span>
             <span
               role="cell"
-              className="min-w-0 overflow-hidden text-[13px] text-foreground"
+              className="min-w-0 overflow-hidden text-meta text-foreground"
             >
               {renderName(r)}
             </span>
@@ -147,7 +147,7 @@ export function ChannelStrip({
             </span>
             <span
               role="cell"
-              className="text-right text-[11px] tabular-nums text-muted-foreground"
+              className="text-right text-caption tabular-nums text-muted-foreground"
             >
               {percents[i]}%
             </span>

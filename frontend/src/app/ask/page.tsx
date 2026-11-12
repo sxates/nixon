@@ -24,11 +24,20 @@
  */
 
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { motion } from 'framer-motion';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { invoke } from '@tauri-apps/api/core';
 import { toast } from 'sonner';
-import { ChevronDown, ChevronRight, Loader2, Sparkles, Star, Trash2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Callout } from '@/components/ui/callout';
+import { DeckIcon } from '@/components/ui/deck-icon';
+import { PageLoading } from '@/components/ui/empty-state';
+import { IconButton } from '@/components/ui/icon-button';
+import { ChevronDown, ChevronRight, Sparkles, Trash2 } from '@/components/ui/icons';
+import { Input } from '@/components/ui/input';
+import { LinkRow } from '@/components/ui/list-row';
+import { Panel } from '@/components/ui/panel';
+import { RunStatus } from '@/components/ui/run-status';
+import { SegmentedControl } from '@/components/ui/segmented-control';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -66,7 +75,7 @@ import { safeListen } from '@/lib/safe-listen';
 import { cn } from '@/lib/utils';
 import type { Person } from '@/types';
 import { PageHeader } from '@/components/ui/page-header';
-import { PAGE_CONTENT_WIDTH } from '@/lib/page-width';
+import { PAGE_CONTENT_WIDTH, PAGE_GUTTER } from '@/lib/page-width';
 
 const DATE_PRESETS: Array<{ value: DatePreset; label: string }> = [
   { value: '7d', label: '7d' },
@@ -414,22 +423,18 @@ function AskPageContent() {
     personId === null ? 'Any meeting' : `Meetings with ${personName ?? 'this person'}`;
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.25, ease: 'easeOut' }}
-      className="flex h-page flex-col bg-background"
-    >
+    <div className="flex h-page flex-col bg-background animate-fade-in">
       <PageHeader
+        width="page"
         title="Ask AI"
         subtitle="Ask a question across your meetings — answers cite their sources"
       />
 
-      <div className="flex-1 overflow-y-auto px-4 min-[900px]:px-7 pb-12">
-        <div className={`mx-auto ${PAGE_CONTENT_WIDTH}`}>
+      <div className={cn('flex-1 overflow-y-auto pb-12', PAGE_GUTTER)}>
+        <div className={cn('mx-auto', PAGE_CONTENT_WIDTH)}>
           {/* Question + scope */}
-          <div className="rounded-[3px] border border-border bg-card p-4 shadow-sm">
-            <input
+          <Panel className="p-4">
+            <Input
               type="text"
               value={question}
               onChange={(e) => setQuestion(e.target.value)}
@@ -450,7 +455,7 @@ function AskPageContent() {
               placeholder="What did we decide about…"
               aria-label="Question"
               autoFocus
-              className="w-full bg-transparent text-[15px] text-foreground outline-none placeholder:text-muted-foreground"
+              size="lg"
             />
 
             {/* Owner feedback 2026-09-21: "Input at the very top, full width, but then
@@ -459,76 +464,49 @@ function AskPageContent() {
                 rule between them, which put Ask a long way from the thing it acts on. */}
             <div className="mt-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
               <div className="flex flex-shrink-0 items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => void startRun()}
-                  disabled={!canAsk}
-                  className={cn(
-                    'inline-flex h-9 items-center gap-1.5 rounded-lg px-4 text-sm font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                    canAsk
-                      ? 'bg-brand text-brand-foreground hover:bg-brand/90'
-                      : 'cursor-not-allowed bg-muted text-muted-foreground',
-                  )}
-                >
-                  <Sparkles size={14} aria-hidden="true" />
+                {/* 32px keys (`sm`) like the scope controls on the right; the question
+                    field above is the one 36px control (28/32/36, docs/design-system.md). */}
+                <Button variant="brand" size="sm" onClick={() => void startRun()} disabled={!canAsk}>
+                  <DeckIcon icon={Sparkles} size={14} />
                   Ask
-                </button>
-                <button
-                  type="button"
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
                   onClick={() => void saveCurrentQuestion()}
                   disabled={!trimmedQuestion || saving}
                   title="Save this question to re-run later against fresh data"
-                  className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-border bg-card px-3 text-sm font-semibold text-foreground transition-colors hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:text-muted-foreground"
                 >
-                  <Star size={14} aria-hidden="true" />
                   Save
-                </button>
+                </Button>
               </div>
 
               {/* Scope: which meetings the question may draw from. */}
               <div className="flex flex-wrap items-center justify-end gap-2">
-                <div
-                  role="group"
+                <SegmentedControl
+                  size="lg"
                   aria-label="Filter by date"
-                  className="inline-flex items-center rounded-lg border border-border bg-muted p-0.5"
-                >
-                  {DATE_PRESETS.map(({ value, label }) => {
-                    const active = preset === value;
-                    return (
-                      <button
-                        key={value}
-                        type="button"
-                        aria-pressed={active}
-                        onClick={() => setPreset(value)}
-                        className={cn(
-                          'rounded-md px-3 py-1 text-xs font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                          active
-                            ? 'bg-card text-foreground shadow-sm'
-                            : 'text-muted-foreground hover:text-foreground',
-                        )}
-                      >
-                        {label}
-                      </button>
-                    );
-                  })}
-                </div>
+                  options={DATE_PRESETS}
+                  value={preset}
+                  onChange={(v) => setPreset(v as DatePreset)}
+                />
 
                 {preset === 'custom' && (
                   <div className="inline-flex items-center gap-1.5">
-                    <input
+                    <Input
                       type="date"
                       value={customFrom}
                       onChange={(e) => setCustomFrom(e.target.value)}
                       aria-label="From date"
-                      className="h-[30px] rounded-lg border border-border bg-card px-2 text-xs text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      className="h-8 w-auto px-2 text-xs md:text-xs"
                     />
                     <span className="text-xs text-muted-foreground">to</span>
-                    <input
+                    <Input
                       type="date"
                       value={customTo}
                       onChange={(e) => setCustomTo(e.target.value)}
                       aria-label="To date"
-                      className="h-[30px] rounded-lg border border-border bg-card px-2 text-xs text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      className="h-8 w-auto px-2 text-xs md:text-xs"
                     />
                     {rangeProblem && <span className="text-xs text-muted-foreground">{rangeProblem}</span>}
                   </div>
@@ -536,15 +514,16 @@ function AskPageContent() {
 
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <button
-                      type="button"
+                    <Button
+                      variant="outline"
+                      size="sm"
                       aria-label="Filter by the meetings someone was in"
                       title="Answer from meetings this person was in — on the invite or actually speaking. It does not narrow the answer to their lines."
-                      className="inline-flex h-[30px] max-w-[15rem] items-center gap-1.5 rounded-lg border border-border bg-card px-3 text-xs font-semibold text-foreground transition-colors hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      className="max-w-[15rem] gap-1.5"
                     >
                       <span className="truncate">{personLabel}</span>
-                      <ChevronDown size={13} aria-hidden="true" className="flex-shrink-0 text-muted-foreground" />
-                    </button>
+                      <DeckIcon icon={ChevronDown} size={12} className="text-muted-foreground" />
+                    </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
                     <DropdownMenuItem onSelect={() => setPersonId(null)}>Any meeting</DropdownMenuItem>
@@ -562,34 +541,23 @@ function AskPageContent() {
             <p className="u-meta mt-3 border-t border-border pt-2.5">
               Answers come from your configured summary model and list their sources.
             </p>
-          </div>
+          </Panel>
 
           {/* Run progress */}
           {phase === 'running' && (
-            <div className="mt-4 flex items-center justify-between gap-3 rounded-[3px] border border-border bg-card px-4 py-3 shadow-sm">
-              <p className="flex min-w-0 items-center gap-2 text-sm text-foreground">
-                <Loader2 size={15} aria-hidden="true" className="animate-spin text-brand" />
-                <span className="truncate">
-                  {progress ? stageLabel(progress) : 'Starting…'}
-                </span>
-              </p>
-              <button
-                type="button"
-                onClick={() => void cancelRun()}
-                disabled={cancelling}
-                className="flex-shrink-0 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-semibold text-foreground transition-colors hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:text-muted-foreground"
-              >
-                {cancelling ? 'Cancelling…' : 'Cancel'}
-              </button>
-            </div>
+            <RunStatus
+              className="mt-4"
+              label={progress ? stageLabel(progress) : 'Starting…'}
+              onCancel={() => void cancelRun()}
+              cancelling={cancelling}
+            />
           )}
 
           {/* Error — readable message, input above stays live for a retry. */}
           {phase === 'error' && runError && (
-            <div className="mt-4 rounded-[3px] border border-destructive/30 bg-destructive/5 px-4 py-3">
-              <p className="text-sm text-foreground">{runError}</p>
-              <p className="u-meta mt-1">Adjust the question or your model settings and try again.</p>
-            </div>
+            <Callout tone="error" className="mt-4" title={runError}>
+              Adjust the question or your model settings and try again.
+            </Callout>
           )}
 
           {/* The answer to the question you just asked. Owner feedback 2026-09-21 made this
@@ -597,59 +565,40 @@ function AskPageContent() {
               stopped being two things at once and lost the "Saved answer from your history"
               banner that existed to tell them apart. */}
           {phase === 'done' && answer && (
-            <div className="mt-4 rounded-[3px] border border-border bg-card p-6 shadow-sm">
+            <Panel size="document" className="mt-4">
               <div className="mb-3 flex items-center justify-between gap-2">
                 <span className="u-meta">{scopeLabel(answerScope)}</span>
                 <CopyAnswerButton markdown={answer.markdown} />
               </div>
               <AnswerMarkdown markdown={answer.markdown} sources={answer.sources} />
               <SourcesList sources={answer.sources} />
-            </div>
+            </Panel>
           )}
 
           {/* WS2.b — Saved questions: star now, re-run against fresh data later. */}
           {savedQuestions.length > 0 && (
-            <section className="mt-8">
-              <h2 className="u-section-label mb-2 flex items-center gap-1.5">
-                <Star size={12} aria-hidden="true" />
+            <section className="mt-8" aria-labelledby="ask-saved-heading">
+              <h2 id="ask-saved-heading" className="u-section-label mb-2">
                 Saved questions
               </h2>
               <div className="flex flex-col gap-1.5">
                 {savedQuestions.map((sq) => (
-                  <div
-                    key={sq.id}
-                    className="group flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 shadow-sm"
-                  >
-                    <button
-                      type="button"
+                  <Panel key={sq.id} className="flex items-center gap-1 px-1 py-1">
+                    <LinkRow
+                      className="min-w-0 flex-1"
+                      title={sq.label?.trim() || sq.question}
+                      meta={sq.lastRunAt ? formatMeetingDate(sq.lastRunAt) || undefined : undefined}
+                      hint="Open this saved question — shows its last answer, with a Rerun button"
                       onClick={() => router.push(`/saved-question?id=${sq.id}`)}
-                      title="Open this saved question — shows its last answer, with a Rerun button"
-                      className="flex min-w-0 flex-1 items-baseline gap-2 text-left focus:outline-none"
-                    >
-                      <span className="min-w-0 flex-1 truncate text-[13.5px] font-medium text-foreground group-hover:text-brand">
-                        {sq.label?.trim() || sq.question}
-                      </span>
-                      {sq.lastRunAt && (
-                        <span className="flex-shrink-0 text-xs text-muted-foreground">
-                          {formatMeetingDate(sq.lastRunAt)}
-                        </span>
-                      )}
-                      <ChevronRight
-                        size={13}
-                        aria-hidden="true"
-                        className="self-center text-muted-foreground group-hover:text-brand"
-                      />
-                    </button>
-                    <button
-                      type="button"
+                    />
+                    <IconButton
+                      variant="ghost"
+                      label="Remove saved question"
+                      className="hover:text-destructive"
                       onClick={() => void deleteSavedQuestionEntry(sq.id)}
-                      title="Remove saved question"
-                      aria-label="Remove saved question"
-                      className="flex-shrink-0 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-destructive focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    >
-                      <Trash2 size={13} aria-hidden="true" />
-                    </button>
-                  </div>
+                      icon={<DeckIcon icon={Trash2} size={14} />}
+                    />
+                  </Panel>
                 ))}
               </div>
             </section>
@@ -658,17 +607,13 @@ function AskPageContent() {
           {/* WS2.a — History: collapsible, most-recent-first, reload read-only. */}
           {history.length > 0 && (
             <section className="mt-8">
-              <button
+              <button // ui-gate: allow disclosure toggle drawn as the engraved section label, not a control-shaped Button
                 type="button"
                 onClick={() => setHistoryOpen((v) => !v)}
-                className="u-section-label mb-2 flex items-center gap-1.5 transition-colors hover:text-foreground focus:outline-none"
+                className="u-section-label mb-2 flex items-center gap-1.5 rounded-sm transition-colors hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 aria-expanded={historyOpen}
               >
-                {historyOpen ? (
-                  <ChevronDown size={12} aria-hidden="true" />
-                ) : (
-                  <ChevronRight size={12} aria-hidden="true" />
-                )}
+                <DeckIcon icon={historyOpen ? ChevronDown : ChevronRight} size={12} />
                 History
                 <span className="font-normal normal-case tracking-normal">({history.length})</span>
               </button>
@@ -678,52 +623,43 @@ function AskPageContent() {
                     const date = formatMeetingDate(entry.createdAt);
                     const open = expandedHistoryId === entry.id;
                     return (
-                      <div
+                      <Panel
                         key={entry.id}
-                        className={cn(
-                          'group rounded-lg border bg-card shadow-sm transition-colors',
-                          open ? 'border-brand/40' : 'border-border',
-                        )}
+                        className={cn('group p-0 transition-colors', open && 'border-brand-edge')}
                       >
-                        <div className="flex items-center gap-2 px-3 py-2">
-                          <button
+                        <div className="flex items-center gap-2 py-1 pl-3 pr-1">
+                          <button // ui-gate: allow accordion row header (aria-expanded); ListRow/LinkRow have no disclosure state
                             type="button"
                             onClick={() => toggleHistoryEntry(entry)}
                             aria-expanded={open}
                             title={open ? 'Collapse this answer' : 'Show this answer'}
-                            className="flex min-w-0 flex-1 items-baseline gap-2 text-left focus:outline-none"
+                            className="flex min-w-0 flex-1 items-baseline gap-2 rounded-md py-1 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                           >
-                            <ChevronRight
-                              size={13}
-                              aria-hidden="true"
+                            <DeckIcon
+                              icon={ChevronRight}
+                              size={12}
                               className={cn(
-                                'self-center flex-shrink-0 text-muted-foreground transition-transform',
+                                'flex-shrink-0 self-center text-muted-foreground transition-transform',
                                 open && 'rotate-90',
                               )}
                             />
                             <span
                               className={cn(
-                                'min-w-0 flex-1 truncate text-[13.5px]',
-                                open
-                                  ? 'font-semibold text-brand'
-                                  : 'font-medium text-foreground group-hover:text-brand',
+                                'u-row-title min-w-0 flex-1 truncate',
+                                open ? 'text-brand' : 'group-hover:text-brand',
                               )}
                             >
                               {entry.question}
                             </span>
-                            {date && (
-                              <span className="flex-shrink-0 text-xs text-muted-foreground">{date}</span>
-                            )}
+                            {date && <span className="u-row-meta flex-shrink-0">{date}</span>}
                           </button>
-                          <button
-                            type="button"
+                          <IconButton
+                            variant="ghost"
+                            label="Delete from history"
+                            className="hover:text-destructive"
                             onClick={() => void deleteHistoryEntry(entry.id)}
-                            title="Delete from history"
-                            aria-label="Delete from history"
-                            className="flex-shrink-0 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-destructive focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                          >
-                            <Trash2 size={13} aria-hidden="true" />
-                          </button>
+                            icon={<DeckIcon icon={Trash2} size={14} />}
+                          />
                         </div>
                         {/* The answer, in place. Sources included — the citation chips are
                             the point of an Ask AI answer, and Copy strips them for you. */}
@@ -734,16 +670,16 @@ function AskPageContent() {
                                 {scopeLabel(parseScope(entry.scopeJson))}
                               </span>
                               <CopyAnswerButton markdown={entry.answerMarkdown} />
-                              <button
-                                type="button"
+                              <Button
+                                variant="outline"
+                                size="xs"
                                 onClick={() => askAgain(entry)}
                                 disabled={phase === 'running' || !!rangeProblem}
                                 title="Ask this again against your current meetings"
-                                className="inline-flex h-7 flex-shrink-0 items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 text-xs font-semibold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:text-muted-foreground/50"
                               >
-                                <Sparkles size={13} aria-hidden="true" />
+                                <DeckIcon icon={Sparkles} size={12} />
                                 Ask again
-                              </button>
+                              </Button>
                             </div>
                             <AnswerMarkdown
                               markdown={entry.answerMarkdown}
@@ -752,7 +688,7 @@ function AskPageContent() {
                             <SourcesList sources={parseSources(entry.sourcesJson)} />
                           </div>
                         )}
-                      </div>
+                      </Panel>
                     );
                   })}
                 </div>
@@ -761,20 +697,14 @@ function AskPageContent() {
           )}
         </div>
       </div>
-    </motion.div>
+    </div>
   );
 }
 
 export default function AskPage() {
   // useSearchParams requires a Suspense boundary (same pattern as meeting-details).
   return (
-    <Suspense
-      fallback={
-        <div className="flex h-page items-center justify-center bg-background text-muted-foreground">
-          <Loader2 className="h-5 w-5 animate-spin" />
-        </div>
-      }
-    >
+    <Suspense fallback={<PageLoading className="bg-background" />}>
       <AskPageContent />
     </Suspense>
   );

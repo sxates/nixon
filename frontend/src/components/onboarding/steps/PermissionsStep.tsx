@@ -1,10 +1,10 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { toast } from 'sonner';
-import { Mic, Volume2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { OnboardingContainer } from '../OnboardingContainer';
 import { PermissionRow } from '../shared';
+import { openPrivacySettings } from '@/lib/system-settings';
 import { useOnboarding } from '@/contexts/OnboardingContext';
 import type { ProbeResult } from '@/types/onboarding';
 
@@ -32,7 +32,7 @@ export function PermissionsStep() {
     if (permissions.microphone === 'denied') {
       // Try to open system settings
       try {
-        await invoke('open_system_settings');
+        await openPrivacySettings('microphone');
       } catch {
         toast.error('Could not open System Settings', {
           description: 'Please enable microphone access in System Settings → Privacy & Security → Microphone.',
@@ -66,7 +66,7 @@ export function PermissionsStep() {
     if (permissions.systemAudio === 'denied') {
       // Try to open system settings
       try {
-        await invoke('open_system_settings');
+        await openPrivacySettings('systemAudio');
       } catch {
         toast.error('Could not open System Settings', {
           description: 'Please enable Audio Capture in System Settings → Privacy & Security → Audio Capture.',
@@ -120,7 +120,7 @@ export function PermissionsStep() {
 
   return (
     <OnboardingContainer
-      title="Grant Permissions"
+      title="Grant permissions"
       description="Nixon needs access to your microphone and system audio to record meetings"
       step={4}
       hideProgress={true}
@@ -132,7 +132,6 @@ export function PermissionsStep() {
         <div className="space-y-4">
           {/* Microphone */}
           <PermissionRow
-            icon={<Mic className="w-5 h-5" />}
             title="Microphone"
             description="Required to capture your voice during meetings"
             status={permissions.microphone}
@@ -142,7 +141,6 @@ export function PermissionsStep() {
 
           {/* System Audio */}
           <PermissionRow
-            icon={<Volume2 className="w-5 h-5" />}
             title="System Audio"
             description="Click Enable to grant Audio Capture permission"
             status={permissions.systemAudio}
@@ -153,16 +151,13 @@ export function PermissionsStep() {
 
         {/* Action Buttons */}
         <div className="flex flex-col gap-3 pt-4">
-          <Button onClick={handleFinish} disabled={!allPermissionsGranted} className="w-full h-11">
+          <Button variant="brand" size="lg" className="w-full" onClick={handleFinish} disabled={!allPermissionsGranted}>
             Continue
           </Button>
 
-          <button
-            onClick={handleSkip}
-            className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-          >
+          <Button variant="ghost" onClick={handleSkip} className="text-muted-foreground">
             I&apos;ll do this later
-          </button>
+          </Button>
 
           {!allPermissionsGranted && (
             <p className="text-xs text-center text-muted-foreground">

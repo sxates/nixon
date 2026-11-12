@@ -23,18 +23,21 @@ const setPermissionStatusMock = vi.fn();
 const setPermissionsSkippedMock = vi.fn();
 const goNextMock = vi.fn();
 
-const basePermissions = {
-  microphone: 'authorized' as const,
-  systemAudio: 'not_determined' as const,
-  screenRecording: 'not_determined' as const,
+type Status = 'authorized' | 'denied' | 'not_determined' | 'silent';
+const basePermissions: { microphone: Status; systemAudio: Status; screenRecording: Status } = {
+  microphone: 'authorized',
+  systemAudio: 'not_determined',
+  screenRecording: 'not_determined',
 };
+// Per-test override of the starting permissions (the denied → System Settings tests).
+let initialPermissions = basePermissions;
 
 vi.mock('@/contexts/OnboardingContext', () => ({
   // A real `useState` here (not a plain mock object) so that calling
   // `setPermissionStatus` actually re-renders `PermissionsStep` with the
   // updated status, the same way the real context does.
   useOnboarding: () => {
-    const [permissions, setPermissions] = React.useState(basePermissions);
+    const [permissions, setPermissions] = React.useState(initialPermissions);
     return {
       permissions,
       setPermissionStatus: (key: 'microphone' | 'systemAudio' | 'screenRecording', status: string) => {
@@ -50,6 +53,7 @@ vi.mock('@/contexts/OnboardingContext', () => ({
 import { PermissionsStep } from '@/components/onboarding/steps/PermissionsStep';
 
 beforeEach(() => {
+  initialPermissions = basePermissions;
   invokeMock.mockReset();
   toastErrorMock.mockClear();
   setPermissionStatusMock.mockClear();
@@ -86,5 +90,30 @@ describe('PermissionsStep — honest Audio Capture probe (specs/0061 W3)', () =>
     fireEvent.click(skipButton);
     expect(setPermissionsSkippedMock).toHaveBeenCalledWith(true);
     expect(goNextMock).toHaveBeenCalled();
+  });
+});
+
+// "Open Settings" on a denied row used to call `open_system_settings` with no
+// `preferencePane`, which the Rust command requires, so the invoke rejected and
+// System Settings never opened. Each row must name its own Privacy pane.
+describe('PermissionsStep — Open Settings deep-links the right pane', () => {
+  it('microphone denied → Privacy_Microphone', () => {
+    initialPermissions = { ...basePermissions, microphone: 'denied', systemAudio: 'authorized' };
+    invokeMock.mockResolvedValue(undefined);
+    render(<PermissionsStep />);
+    fireEvent.click(screen.getByRole('button', { name: 'Open Settings' }));
+    expect(invokeMock).toHaveBeenCalledWith('open_system_settings', {
+      preferencePane: 'Privacy_Microphone',
+    });
+  });
+
+  it('system audio denied → Privacy_ScreenCapture', () => {
+    initialPermissions = { ...basePermissions, systemAudio: 'denied' };
+    invokeMock.mockResolvedValue(undefined);
+    render(<PermissionsStep />);
+    fireEvent.click(screen.getByRole('button', { name: 'Open Settings' }));
+    expect(invokeMock).toHaveBeenCalledWith('open_system_settings', {
+      preferencePane: 'Privacy_ScreenCapture',
+    });
   });
 });

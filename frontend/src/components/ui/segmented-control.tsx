@@ -15,15 +15,27 @@ export interface SegmentedControlProps {
   value: string;
   onChange: (value: string) => void;
   'aria-label': string;
+  /**
+   * `default` (28px) for a page-level filter; `compact` (24px) inside a panel or toolbar;
+   * `lg` (32px) when it sits in a row of default-height (32px) buttons, like Ask's scope bar.
+   */
+  size?: 'default' | 'compact' | 'lg';
   className?: string;
 }
 
 /**
- * A two-or-three-way view switch drawn as underlined tabs (specs/0057 Task 2) —
- * the same 2px brand underline the meeting-details tab bar and the Settings tabs
- * use, so "switch the view" reads the same everywhere. It stays a `role="group"`
- * of `aria-pressed` buttons (not a tablist): these toggle a view, they don't
- * label panels.
+ * A two-to-four-way FILTER drawn as a boxed key group: a recessed `bg-muted` track with the
+ * active option raised as a `bg-card` cell (docs/design-system.md §Component catalog).
+ *
+ * **Tabs switch the view; a boxed SegmentedControl filters it; never two underline strips
+ * in a row.** It used to draw underline tabs like `Tabs`, so Action items showed two
+ * underline strips side by side and Ask's 7d/30d scope read as navigation. A control that
+ * changes WHICH view is on screen (Meetings Agenda/Week/Month/List) is `Tabs`.
+ *
+ * Sizes: `default` is 28px (the `xs` control height), `compact` 24px for a panel or toolbar,
+ * `lg` 32px to match default-height buttons beside it.
+ * It stays a `role="group"` of `aria-pressed` buttons (not a tablist): these filter what a
+ * view shows, they don't label panels.
  *
  * Keyboard: the group is ONE Tab stop (roving tabIndex — only the active option
  * is tabbable), so Arrow/Home/End must move DOM focus as well as the selection.
@@ -35,6 +47,7 @@ export function SegmentedControl({
   value,
   onChange,
   'aria-label': ariaLabel,
+  size = 'default',
   className,
 }: SegmentedControlProps) {
   const buttonRefs = React.useRef<Array<HTMLButtonElement | null>>([]);
@@ -53,8 +66,21 @@ export function SegmentedControl({
     select((from + delta + options.length) % options.length);
   };
 
+  // No option active (a value outside the set): the first option holds the Tab stop, or
+  // the group would drop out of the Tab order entirely.
+  const noneActive = !options.some((o) => o.value === value);
+
   return (
-    <div role="group" aria-label={ariaLabel} className={cn('flex items-center gap-1', className)}>
+    <div
+      role="group"
+      aria-label={ariaLabel}
+      data-size={size}
+      className={cn(
+        'inline-flex flex-none items-stretch gap-0.5 rounded-md border border-border bg-muted p-0.5',
+        size === 'compact' ? 'h-6' : size === 'lg' ? 'h-8' : 'h-7',
+        className,
+      )}
+    >
       {options.map((option, index) => {
         const active = option.value === value;
         return (
@@ -66,7 +92,7 @@ export function SegmentedControl({
             type="button"
             aria-pressed={active}
             // Roving tabindex: only the active option is in the Tab order.
-            tabIndex={active ? 0 : -1}
+            tabIndex={active || (noneActive && index === 0) ? 0 : -1}
             onClick={() => {
               if (!active) onChange(option.value);
             }}
@@ -86,10 +112,11 @@ export function SegmentedControl({
               }
             }}
             className={cn(
-              'inline-flex items-center gap-1.5 border-b-2 px-3 py-1.5 text-sm font-semibold transition-colors [transition-duration:140ms] focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+              'inline-flex items-center gap-1.5 rounded-sm font-semibold transition-colors [transition-duration:140ms] focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+              size === 'compact' ? 'px-2 text-caption' : 'px-3 text-xs',
               active
-                ? 'border-brand text-foreground'
-                : 'border-transparent text-muted-foreground hover:text-foreground'
+                ? 'bg-card text-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
             )}
           >
             {option.icon}

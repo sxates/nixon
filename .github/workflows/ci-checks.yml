@@ -86,6 +86,14 @@ jobs:
       - name: Semantic-token gate (specs/0057)
         run: ../scripts/check-off-token-colors.sh
 
+      # ADR-0019: per-rule UI-consistency budget (raw <button>/<input>, text-[Npx],
+      # off-scale radii, lucide imports, …) that only ratchets down. The self-test
+      # runs the gate against a scratch repo so a broken rule can't pass silently.
+      - name: UI-consistency gate (ADR-0019)
+        run: |
+          ../scripts/check-ui-consistency.sh --self-test
+          ../scripts/check-ui-consistency.sh
+
       # Non-blocking supply-chain audit (specs/0028). Advisories are surfaced but
       # do not fail the build yet — tighten to `--audit-level=high` once the tree
       # is clean. `|| true` keeps it informational.

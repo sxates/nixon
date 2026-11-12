@@ -1,4 +1,6 @@
-import { X } from 'lucide-react';
+import { X } from '@/components/ui/icons';
+import { DeckIcon } from '@/components/ui/deck-icon';
+import { IconButton } from '@/components/ui/icon-button';
 import { cn } from '@/lib/utils';
 
 /**
@@ -19,19 +21,18 @@ export function SpeakerFilterChip({
   return (
     <div
       className={cn(
-        'inline-flex items-center gap-1.5 rounded-[3px] border border-border bg-card px-2 py-0.5 text-xs',
+        'inline-flex items-center gap-1.5 rounded-md border border-border bg-card py-0.5 pl-2 pr-0.5 text-xs',
         className,
       )}
     >
       <span className="text-foreground">Showing: {displayName}</span>
-      <button
-        type="button"
+      <IconButton
+        variant="ghost"
+        label="Clear speaker filter"
         onClick={onClear}
-        aria-label="Clear speaker filter"
-        className="rounded-[2px] text-muted-foreground hover:text-foreground"
-      >
-        <X size={12} />
-      </button>
+        icon={<DeckIcon icon={X} size={12} />}
+        className="h-5 w-5"
+      />
     </div>
   );
 }

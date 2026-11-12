@@ -19,12 +19,22 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 ## [Unreleased]
 
+_(nothing yet)_
+
+## [0.16.2] - 2026-11-12
+
 ### Changed
 
 - When a meeting ends while you're watching its live transcript, Nixon now opens that meeting's summary. If you're on any other page, you stay where you are.
+- Overall improvements to the look and consistency of the app.
+
+### Fixed
+
+- **Open Settings** in the recording permissions dialog and in onboarding takes you straight to the right page of System Settings: Microphone, Screen & System Audio Recording, or Calendars.
 
 ### Internal
 
+- Design system: `docs/design-system.md` + ADR-0019. Screens compose shared primitives in `components/ui/`; `scripts/check-ui-consistency.sh` ratchets raw buttons/inputs, off-scale text sizes and radii, arbitrary shadows, direct icon imports, entrance travel and hand-rolled hovers (all budgets at 0), wired into CI and `/check`.
 - Releases and promotes now update nixonapp.com end to end via `scripts/publish-site.sh`: download-page version, site screenshots from `docs/screenshots/real`, push on `NIXON_SITE_BRANCH`, and deploy of production + staging. Re-runnable by hand.
 
 ## [0.16.1] - 2026-11-10

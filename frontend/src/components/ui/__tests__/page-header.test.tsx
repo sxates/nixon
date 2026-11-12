@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/react';
 
 import { PageHeader } from '@/components/ui/page-header';
 
@@ -11,7 +11,7 @@ describe('PageHeader', () => {
     render(<PageHeader title="All meetings" />);
     const heading = screen.getByRole('heading', { level: 1, name: 'All meetings' });
     expect(heading).toBeTruthy();
-    expect(heading.className).toContain('font-display');
+    expect(heading.className).toContain('u-page-title');
   });
 
   it('renders a ReactNode title (person details passes an inline editor)', () => {
@@ -46,5 +46,55 @@ describe('PageHeader', () => {
     const header = container.querySelector('header')!;
     expect(header.className).toContain('px-7');
     expect(header.className).toContain('pt-2');
+  });
+
+  it('renders a back IconButton before the title when given', () => {
+    const onClick = vi.fn();
+    const { container } = render(<PageHeader title="Ada" back={{ label: 'People', onClick }} />);
+    const back = screen.getByRole('button', { name: 'People' });
+    fireEvent.click(back);
+    expect(onClick).toHaveBeenCalledOnce();
+    // Before the h1 in document order, and not inside it.
+    const h1 = container.querySelector('h1')!;
+    expect(h1.contains(back)).toBe(false);
+    expect(back.compareDocumentPosition(h1) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('renders no back button by default', () => {
+    render(<PageHeader title="People" />);
+    expect(screen.queryByRole('button')).toBeNull();
+  });
+
+  it('renders a node subtitle OUTSIDE the h1 so an editor keeps its own weight', () => {
+    const { container } = render(
+      <PageHeader title="Ada" subtitle={<input aria-label="Person title" defaultValue="CTO" />} />
+    );
+    const editor = screen.getByLabelText('Person title');
+    expect(container.querySelector('h1')!.contains(editor)).toBe(false);
+    // A node subtitle is not phrasing content, so it is a div, still in .u-meta.
+    expect(editor.closest('div.u-meta')).toBeTruthy();
+    expect(container.querySelector('p.u-meta')).toBeNull();
+  });
+
+  it("width='page' centres the row in the page column inside the gutter", () => {
+    const { container } = render(<PageHeader title="Meetings" width="page" actions={<span>a</span>} />);
+    const header = container.querySelector('header')!;
+    expect(header.className).toContain('px-7');
+    const column = header.firstElementChild as HTMLElement;
+    expect(column.className).toContain('mx-auto');
+    expect(column.className).toContain('max-w-[1080px]');
+    expect(column.className).toContain('justify-between');
+    expect(column.querySelector('h1')!.textContent).toBe('Meetings');
+  });
+
+  it("width='doc' uses the document column; the default keeps the row on the header", () => {
+    const { container, rerender } = render(<PageHeader title="Notes" width="doc" />);
+    expect((container.querySelector('header')!.firstElementChild as HTMLElement).className).toContain(
+      'max-w-[840px]',
+    );
+    rerender(<PageHeader title="Notes" />);
+    const header = container.querySelector('header')!;
+    expect(header.className).toContain('justify-between');
+    expect(header.className).not.toContain('max-w-');
   });
 });

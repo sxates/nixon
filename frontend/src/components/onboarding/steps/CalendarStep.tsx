@@ -1,10 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { invoke } from '@tauri-apps/api/core';
 import { toast } from 'sonner';
-import { Calendar } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { OnboardingContainer } from '../OnboardingContainer';
 import { PermissionRow } from '../shared';
+import { openPrivacySettings } from '@/lib/system-settings';
 import { useOnboarding } from '@/contexts/OnboardingContext';
 import { useGoogleCalendarConnect } from '@/hooks/useGoogleCalendarConnect';
 import {
@@ -26,7 +25,7 @@ function mapEventKitStatus(status: CalendarAccessStatus | null): PermissionStatu
  * Final, skippable onboarding step (specs/0061 W1): offers both Google
  * Calendar and macOS Calendar so a first-run user is offered a calendar
  * connection before they ever see the Today view / prep briefs that depend
- * on one. Neither row is required — both "Finish Setup" and "Skip for now"
+ * on one. Neither row is required — both "Finish setup" and "Skip for now"
  * complete onboarding the same way.
  */
 export function CalendarStep() {
@@ -61,7 +60,7 @@ export function CalendarStep() {
   const handleMacCalendarAction = async () => {
     if (eventKitStatus === 'denied' || eventKitStatus === 'restricted') {
       try {
-        await invoke('open_system_settings');
+        await openPrivacySettings('calendar');
       } catch {
         toast.error('Could not open System Settings', {
           description:
@@ -113,7 +112,6 @@ export function CalendarStep() {
           {showGoogleRow && (
             <div role="group" aria-label="Google Calendar">
               <PermissionRow
-                icon={<Calendar className="w-5 h-5" />}
                 title="Google Calendar"
                 description="Read-only access to your Google account's events."
                 status={
@@ -129,7 +127,6 @@ export function CalendarStep() {
 
           <div role="group" aria-label="macOS Calendar">
             <PermissionRow
-              icon={<Calendar className="w-5 h-5" />}
               title="macOS Calendar"
               description="Read your Mac's calendar to show today's meetings on-device."
               status={mapEventKitStatus(eventKitStatus)}
@@ -142,16 +139,13 @@ export function CalendarStep() {
         </div>
 
         <div className="flex flex-col gap-3 pt-4">
-          <Button onClick={() => void handleFinish()} className="w-full h-11">
-            Finish Setup
+          <Button variant="brand" size="lg" className="w-full" onClick={() => void handleFinish()}>
+            Finish setup
           </Button>
 
-          <button
-            onClick={() => void handleSkip()}
-            className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-          >
+          <Button variant="ghost" onClick={() => void handleSkip()} className="text-muted-foreground">
             Skip for now
-          </button>
+          </Button>
         </div>
       </div>
     </OnboardingContainer>

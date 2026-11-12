@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { RefreshCw, Mic, Speaker } from 'lucide-react';
+import { RefreshCw } from '@/components/ui/icons';
+import { Callout } from '@/components/ui/callout';
+import { DeckIcon } from '@/components/ui/deck-icon';
+import { IconButton } from '@/components/ui/icon-button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 
@@ -79,9 +82,9 @@ export function DeviceSelection({ selectedDevices, onDeviceChange, disabled = fa
     return (
       <div className="p-4 space-y-4">
         <div className="animate-pulse">
-          <div className="h-4 bg-muted rounded w-1/3 mb-4"></div>
-          <div className="h-10 bg-muted rounded mb-3"></div>
-          <div className="h-10 bg-muted rounded"></div>
+          <div className="mb-4 h-4 w-1/3 rounded-md bg-muted"></div>
+          <div className="mb-3 h-10 rounded-md bg-muted"></div>
+          <div className="h-10 rounded-md bg-muted"></div>
         </div>
       </div>
     );
@@ -92,27 +95,25 @@ export function DeviceSelection({ selectedDevices, onDeviceChange, disabled = fa
       <div className="flex items-center justify-between">
         <h4 className="text-sm font-medium text-foreground">Audio Devices</h4>
         <div className="flex items-center space-x-2">
-          <button
+          <IconButton
+            label="Refresh devices"
+            variant="ghost"
+            size="md"
             onClick={handleRefresh}
             disabled={refreshing || disabled}
-            className="h-8 w-8 p-0 inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors hover:bg-muted disabled:pointer-events-none disabled:opacity-50"
-          >
-            <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-          </button>
+            icon={<DeckIcon icon={RefreshCw} size={16} className={refreshing ? 'animate-spin' : undefined} />}
+          />
         </div>
       </div>
 
       {error && (
-        <div className="p-3 text-sm text-foreground bg-destructive/10 border border-destructive/30 rounded-md">
-          {error}
-        </div>
+        <Callout tone="error">{error}</Callout>
       )}
 
       <div className="space-y-3">
         {/* Microphone Selection */}
         <div className="space-y-2">
           <div className="flex items-center gap-2">
-            <Mic className="h-4 w-4 text-muted-foreground" />
             <Label htmlFor="mic-selection" className="text-sm font-medium text-foreground">
               Microphone
             </Label>
@@ -145,7 +146,6 @@ export function DeviceSelection({ selectedDevices, onDeviceChange, disabled = fa
         {/* System Audio Selection */}
         <div className="space-y-2">
           <div className="flex items-center gap-2">
-            <Speaker className="h-4 w-4 text-muted-foreground" />
             <Label htmlFor="system-selection" className="text-sm font-medium text-foreground">
               System Audio
             </Label>

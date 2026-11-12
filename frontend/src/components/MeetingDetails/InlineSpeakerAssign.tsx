@@ -15,13 +15,14 @@
  */
 
 import { useMemo, useState } from 'react';
-import { Check, ChevronDown } from 'lucide-react';
+import { ChevronDown } from '@/components/ui/icons';
+import { DeckIcon } from '@/components/ui/deck-icon';
+import { PersonOption, PersonPicker, matchesPersonQuery } from '@/components/ui/person-picker';
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
-import { Input } from '@/components/ui/input';
 import { filterPeople } from '@/lib/people-filter';
 import { cn } from '@/lib/utils';
 import { speakerColorClass } from '@/lib/speaker-colors';
@@ -78,17 +79,10 @@ export function InlineSpeakerAssign({
     [people, attendeeEmails],
   );
 
-  const q = query.trim().toLowerCase();
+  const q = query.trim();
   const filteredAttendees = useMemo(
-    () =>
-      !q
-        ? attendees
-        : attendees.filter(
-            (a) =>
-              a.name?.toLowerCase().includes(q) ||
-              a.email?.toLowerCase().includes(q),
-          ),
-    [attendees, q],
+    () => attendees.filter((a) => matchesPersonQuery(query, a.name ?? '', a.email)),
+    [attendees, query],
   );
   const filteredPeople = useMemo(
     () => filterPeople(offeredPeople, query),
@@ -114,7 +108,7 @@ export function InlineSpeakerAssign({
     return (
       <span
         className={cn(
-          'u-typed font-bold uppercase text-[12px] tracking-[0.02em] whitespace-nowrap',
+          'u-speaker whitespace-nowrap',
           speakerColorClass(speakerKey),
         )}
       >
@@ -132,17 +126,18 @@ export function InlineSpeakerAssign({
       }}
     >
       <PopoverTrigger asChild>
-        <button
+        <button // ui-gate: allow the transcript speaker name IS the trigger: typed caps in the speaker colour inside a virtualized row, not Button chrome
           type="button"
           className={cn(
-            'group flex items-center gap-0.5 rounded px-1 -ml-1 py-0 u-typed font-bold uppercase text-[12px] tracking-[0.02em] whitespace-nowrap hover:bg-muted',
+            'u-speaker group -ml-1 flex items-center gap-0.5 whitespace-nowrap rounded-md px-1 py-0 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
             speakerColorClass(speakerKey),
           )}
           title="Assign this speaker to a person"
         >
           {speakerName}
-          <ChevronDown
-            size={11}
+          <DeckIcon
+            icon={ChevronDown}
+            size={12}
             className="text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100"
           />
         </button>
@@ -157,77 +152,50 @@ export function InlineSpeakerAssign({
           />
 
           {hasPickList && (
-            <Input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
+            <PersonPicker
+              query={query}
+              onQueryChange={setQuery}
               placeholder="Assign to a person…"
-              className="h-8 text-sm"
-              aria-label="Search people to assign"
-              autoFocus
+              searchLabel="Search people to assign"
+              groups={[
+                ...(attendees.length > 0
+                  ? [
+                      {
+                        label: 'Attendees',
+                        options: filteredAttendees.map((attendee) => (
+                          <PersonOption
+                            key={attendee.email || attendee.name}
+                            name={attendee.name}
+                            email={attendee.email}
+                            suffix={attendee.isCurrentUser ? '(you)' : undefined}
+                            onSelect={() => void pickAttendee(attendee)}
+                          />
+                        )),
+                      },
+                    ]
+                  : []),
+                ...(offeredPeople.length > 0
+                  ? [
+                      {
+                        label: 'People',
+                        options: filteredPeople.map((person) => (
+                          <PersonOption
+                            key={person.id}
+                            name={person.displayName}
+                            email={person.email}
+                            suffix={person.role ? `· ${person.role}` : undefined}
+                            onSelect={() => void pickPerson(person)}
+                          />
+                        )),
+                      },
+                    ]
+                  : []),
+              ]}
             />
           )}
 
-          {attendees.length > 0 && (
-            <div className="space-y-1">
-              <div className="u-section-label px-1">Attendees</div>
-              <div className="max-h-44 space-y-0.5 overflow-y-auto">
-                {filteredAttendees.map((attendee) => (
-                  <button
-                    key={attendee.email || attendee.name}
-                    type="button"
-                    onClick={() => void pickAttendee(attendee)}
-                    className="flex w-full flex-col items-start rounded px-2 py-1 text-left text-xs hover:bg-muted"
-                  >
-                    <span className="font-medium text-foreground">
-                      {attendee.name}
-                      {attendee.isCurrentUser && (
-                        <span className="ml-1 text-muted-foreground">(you)</span>
-                      )}
-                    </span>
-                    {attendee.email && (
-                      <span className="truncate text-[11px] text-muted-foreground">
-                        {attendee.email}
-                      </span>
-                    )}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {offeredPeople.length > 0 && (
-            <div className="space-y-1">
-              <div className="u-section-label px-1">People</div>
-              <div className="max-h-44 space-y-0.5 overflow-y-auto">
-                {filteredPeople.map((person) => (
-                  <button
-                    key={person.id}
-                    type="button"
-                    onClick={() => void pickPerson(person)}
-                    className="flex w-full flex-col items-start rounded px-2 py-1 text-left text-xs hover:bg-muted"
-                  >
-                    <span className="font-medium text-foreground">
-                      {person.displayName}
-                      {person.role && (
-                        <span className="ml-1 text-muted-foreground">· {person.role}</span>
-                      )}
-                    </span>
-                    {person.email && (
-                      <span className="truncate text-[11px] text-muted-foreground">
-                        {person.email}
-                      </span>
-                    )}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
           {q && filteredAttendees.length === 0 && filteredPeople.length === 0 && (
-            <div className="flex items-center gap-1.5 px-2 py-1 text-xs text-muted-foreground">
-              <Check size={12} className="opacity-0" />
-              No matches
-            </div>
+            <div className="px-2 py-1 text-xs text-muted-foreground">No matches</div>
           )}
         </div>
       </PopoverContent>

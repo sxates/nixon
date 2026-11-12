@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { getVersion } from '@tauri-apps/api/app';
 import { useOptionalUpdateStatus, describeStatus } from '@/contexts/UpdateStatusContext';
+import { Button } from '@/components/ui/button';
 import { SettingsNote } from '@/components/ui/settings';
 import { AnswerMarkdown } from '@/components/AskAI/AnswerMarkdown';
 import { RestartToUpdateButton } from '@/components/Updates/RestartToUpdateButton';
@@ -36,18 +37,18 @@ function UpdatesBlockContent({
                             className="px-2.5 py-1 text-xs"
                         />
                     )}
-                    <button
-                        type="button"
+                    <Button
+                        variant="outline"
+                        size="xs"
                         onClick={() => checkNow()}
                         disabled={busy || status.state === 'checking' || status.state === 'downloading'}
-                        className="rounded-[3px] border border-border px-2.5 py-1 text-xs text-muted-foreground hover:bg-key disabled:opacity-50"
                     >
                         Check for updates
-                    </button>
+                    </Button>
                 </div>
             </div>
             {status.state === 'error' && <p className="text-xs text-muted-foreground">{status.message}</p>}
-            {error && <p className="text-xs text-record-ink">{error}</p>}
+            {error && <p className="text-xs text-destructive">{error}</p>}
             {/* The release body IS markdown — it is the changelog's Added/Changed/Fixed
                 sections, published verbatim (CLAUDE.md). Splitting it into one bullet per
                 line printed the `###` headings as bullets and dropped the structure
@@ -56,8 +57,8 @@ function UpdatesBlockContent({
                 markdown dependency. */}
             {ready && notes.length > 0 && (
                 <SettingsNote tone="muted">
-                    <p className="u-section-label mb-1 text-[9px]">What&apos;s new in {status.version}</p>
-                    <div className="text-xs [&_h3]:text-[11px] [&_li]:text-xs [&_p]:text-xs">
+                    <p className="u-section-label-sm mb-1">What&apos;s new in {status.version}</p>
+                    <div className="text-xs [&_h3]:text-caption [&_li]:text-xs [&_p]:text-xs">
                         <AnswerMarkdown markdown={notes} />
                     </div>
                 </SettingsNote>
@@ -79,7 +80,7 @@ export function About() {
         <div className="mx-auto max-w-2xl space-y-4">
             {/* Header */}
             <div className="text-center">
-                <h1 className="u-section-label text-[28px] tracking-[0.22em] text-foreground">NIXON</h1>
+                <h1 className="font-display text-display font-semibold uppercase leading-none tracking-[0.22em] text-foreground">NIXON</h1>
                 <span aria-hidden="true" className="mt-2.5 block h-px w-full bg-border" />
                 {currentVersion && (
                     <span className="text-sm text-muted-foreground"> v{currentVersion}</span>
@@ -95,20 +96,20 @@ export function About() {
             {/* Features Grid */}
             <div className="space-y-3">
                 <div className="grid grid-cols-2 gap-2">
-                    <div className="bg-muted rounded p-3">
-                        <h3 className="font-bold text-sm text-foreground mb-1">Privacy-first</h3>
+                    <div className="rounded-md bg-muted p-3">
+                        <h3 className="mb-1 text-sm font-medium text-foreground">Privacy-first</h3>
                         <p className="text-xs text-muted-foreground leading-relaxed">Your audio, transcripts, and notes stay on your machine. No cloud, no leaks.</p>
                     </div>
-                    <div className="bg-muted rounded p-3">
-                        <h3 className="font-bold text-sm text-foreground mb-1">Use Any Model</h3>
+                    <div className="rounded-md bg-muted p-3">
+                        <h3 className="mb-1 text-sm font-medium text-foreground">Use Any Model</h3>
                         <p className="text-xs text-muted-foreground leading-relaxed">Run a local open-source model, or plug in an external API. No lock-in.</p>
                     </div>
-                    <div className="bg-muted rounded p-3">
-                        <h3 className="font-bold text-sm text-foreground mb-1">Cost-Smart</h3>
+                    <div className="rounded-md bg-muted p-3">
+                        <h3 className="mb-1 text-sm font-medium text-foreground">Cost-Smart</h3>
                         <p className="text-xs text-muted-foreground leading-relaxed">Avoid pay-per-minute bills by running models locally.</p>
                     </div>
-                    <div className="bg-muted rounded p-3">
-                        <h3 className="font-bold text-sm text-foreground mb-1">Works everywhere</h3>
+                    <div className="rounded-md bg-muted p-3">
+                        <h3 className="mb-1 text-sm font-medium text-foreground">Works everywhere</h3>
                         <p className="text-xs text-muted-foreground leading-relaxed">Google Meet, Zoom, Teams — online or offline.</p>
                     </div>
                 </div>

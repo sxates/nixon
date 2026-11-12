@@ -3,16 +3,7 @@
 import { useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { toast } from 'sonner';
-import { Loader2 } from 'lucide-react';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 
 interface ClearVoiceprintsDialogProps {
   /** Controlled open state. */
@@ -57,26 +48,20 @@ export function ClearVoiceprintsDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={(next) => (isClearing ? undefined : onOpenChange(next))}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>Clear all voiceprints</DialogTitle>
-          <DialogDescription>
-            Delete every stored voice sample, for everyone? This resets cross-meeting voice
-            recognition — the people in your directory and their names stay, but Nixon will have to
-            re-learn voices from scratch. This can&apos;t be undone.
-          </DialogDescription>
-        </DialogHeader>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isClearing}>
-            Cancel
-          </Button>
-          <Button variant="destructive" onClick={handleConfirm} disabled={isClearing}>
-            {isClearing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Clear all voiceprints
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <ConfirmDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title="Clear all voiceprints"
+      body={
+        <>
+          Delete every stored voice sample, for everyone? This resets cross-meeting voice
+          recognition — the people in your directory and their names stay, but Nixon will have to
+          re-learn voices from scratch. This can&apos;t be undone.
+        </>
+      }
+      confirmLabel="Clear all voiceprints"
+      busy={isClearing}
+      onConfirm={handleConfirm}
+    />
   );
 }

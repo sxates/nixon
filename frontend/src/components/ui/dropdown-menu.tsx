@@ -2,8 +2,9 @@
 
 import * as React from "react"
 import * as DropdownMenuPrimitive from "@radix-ui/react-dropdown-menu"
-import { Check, ChevronRight, Circle } from "lucide-react"
+import { Check, ChevronRight, Circle, type LucideIcon } from "./icons"
 
+import { DeckIcon } from "@/components/ui/deck-icon"
 import { cn } from "@/lib/utils"
 
 const DropdownMenu = DropdownMenuPrimitive.Root
@@ -79,17 +80,36 @@ const DropdownMenuItem = React.forwardRef<
   React.ElementRef<typeof DropdownMenuPrimitive.Item>,
   React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Item> & {
     inset?: boolean
+    /**
+     * Leading glyph (docs/design-system.md §Icons), drawn at the standard menu size and
+     * gap so call sites stop repeating `className="mr-2 h-4 w-4"`.
+     */
+    icon?: LucideIcon
+    /** `destructive` tints the item (and its icon) for a delete/remove action. */
+    variant?: "default" | "destructive"
   }
->(({ className, inset, ...props }, ref) => (
+>(({ className, inset, icon, variant = "default", children, ...props }, ref) => (
   <DropdownMenuPrimitive.Item
     ref={ref}
+    data-variant={variant}
     className={cn(
       "relative flex cursor-default select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none transition-colors focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&>svg]:size-4 [&>svg]:shrink-0",
       inset && "pl-8",
+      variant === "destructive" && "text-destructive focus:text-destructive",
       className
     )}
     {...props}
-  />
+  >
+    {/* Only wrap when there is an icon: with `asChild` the Slot needs a single child. */}
+    {icon ? (
+      <>
+        <DeckIcon icon={icon} size={16} className="mr-2" />
+        {children}
+      </>
+    ) : (
+      children
+    )}
+  </DropdownMenuPrimitive.Item>
 ))
 DropdownMenuItem.displayName = DropdownMenuPrimitive.Item.displayName
 

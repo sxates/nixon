@@ -285,17 +285,8 @@ export function canJoinAgendaItem(args: {
   return hasZoomUrl && !recorded && !isRecordingThis && !anyRecordingInProgress;
 }
 
-/** Up to two initials for an attendee/avatar (e.g. "Ada Example" → "BS"). */
-export function initials(nameOrEmail: string): string {
-  const trimmed = nameOrEmail.trim();
-  if (!trimmed) return '?';
-  // If it's an email, use the local part.
-  const base = trimmed.includes('@') ? trimmed.split('@')[0] : trimmed;
-  const parts = base.split(/[\s._-]+/).filter(Boolean);
-  if (parts.length === 0) return base.slice(0, 1).toUpperCase();
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-}
+/** Avatar initials — the one helper lives in `lib/initials` (re-exported by `ui/avatar`). */
+export { initials } from '@/lib/initials';
 
 /**
  * Best display label for an attendee: the human name when present, else the local

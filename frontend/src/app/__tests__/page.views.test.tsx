@@ -75,9 +75,12 @@ import Home from '@/app/page';
 
 const pane = () => screen.getByTestId('pane').textContent;
 const viewButtons = () =>
-  within(screen.getByRole('group', { name: 'Meeting view' }))
-    .getAllByRole('button')
+  within(screen.getByRole('tablist', { name: 'Meeting view' }))
+    .getAllByRole('tab')
     .map((b) => b.textContent?.trim());
+// The views are Tabs (docs/design-system.md: tabs switch the view); Radix selects on mousedown.
+const pickView = (name: string) =>
+  fireEvent.mouseDown(screen.getByRole('tab', { name }), { button: 0 });
 const NUDGE = 'Connect your calendar to see your full day';
 
 beforeEach(() => {
@@ -98,21 +101,21 @@ describe('Meetings page, calendar connected', () => {
 
   it('switches between all four views', () => {
     render(<Home />);
-    fireEvent.click(screen.getByRole('button', { name: 'Week' }));
+    pickView('Week');
     expect(pane()).toBe('agenda:week');
-    fireEvent.click(screen.getByRole('button', { name: 'Month' }));
+    pickView('Month');
     expect(pane()).toBe('month:events');
-    fireEvent.click(screen.getByRole('button', { name: 'List' }));
+    pickView('List');
     expect(pane()).toBe('list');
     // Month and List have their own data: the agenda reads switch off.
     expect(useDayAgendaMock).toHaveBeenLastCalledWith(null);
-    fireEvent.click(screen.getByRole('button', { name: 'Agenda' }));
+    pickView('Agenda');
     expect(pane()).toBe('agenda:day');
   });
 
   it('remembers the view used last', () => {
     const first = render(<Home />);
-    fireEvent.click(screen.getByRole('button', { name: 'Month' }));
+    pickView('Month');
     first.unmount();
     render(<Home />);
     expect(pane()).toBe('month:events');
@@ -133,7 +136,7 @@ describe('Meetings page, calendar connected', () => {
 
   it('falls back to the no-calendar view when the calendar disconnects on Week', () => {
     const view = render(<Home />);
-    fireEvent.click(screen.getByRole('button', { name: 'Week' }));
+    pickView('Week');
     calendar.connected = false;
     view.rerender(<Home />);
     expect(pane()).toBe('list');
@@ -169,7 +172,7 @@ describe('Meetings page, no calendar', () => {
 
   it('switches to a recorded-only Month and remembers it', () => {
     const first = render(<Home />);
-    fireEvent.click(screen.getByRole('button', { name: 'Month' }));
+    pickView('Month');
     expect(pane()).toBe('month:recorded');
     first.unmount();
     render(<Home />);

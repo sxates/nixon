@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { toast } from 'sonner';
 import { useConfig } from '@/contexts/ConfigContext';
+import { Callout } from '@/components/ui/callout';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 export interface Language {
   code: string;
@@ -163,26 +165,29 @@ export function LanguageSelection() {
   return (
     <div className="space-y-4">
       <div className="space-y-2">
-        <select
+        <Select
           value={selectedLanguage}
-          onChange={(e) => handleLanguageChange(e.target.value)}
+          onValueChange={(value) => void handleLanguageChange(value)}
           disabled={saving}
-          className="w-full px-3 py-2 text-sm bg-card border border-input rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-ring focus:border-ring disabled:bg-muted disabled:text-muted-foreground"
         >
-          {availableLanguages.map((language) => (
-            <option key={language.code} value={language.code}>
-              {language.name}
-              {language.code !== 'auto' && language.code !== 'auto-translate' && ` (${language.code})`}
-            </option>
-          ))}
-        </select>
+          <SelectTrigger aria-label="Transcription language" className="bg-card">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {availableLanguages.map((language) => (
+              <SelectItem key={language.code} value={language.code}>
+                {language.name}
+                {language.code !== 'auto' && language.code !== 'auto-translate' && ` (${language.code})`}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
 
         {/* Parakeet language limitation warning */}
         {isParakeet && (
-          <div className="p-2 bg-muted border border-border rounded text-foreground">
-            <p className="font-medium">Parakeet language support</p>
-            <p className="mt-1 text-xs">Parakeet currently only supports automatic language detection. Manual language selection is not available. Use Whisper if you need to specify a particular language.</p>
-          </div>
+          <Callout tone="muted" title="Parakeet language support">
+            Parakeet currently only supports automatic language detection. Manual language selection is not available. Use Whisper if you need to specify a particular language.
+          </Callout>
         )}
 
         {/* Info text */}
@@ -191,16 +196,14 @@ export function LanguageSelection() {
             <strong>Current:</strong> {selectedLanguageName}
           </p>
           {selectedLanguage === 'auto' && (
-            <div className="p-2 bg-brand/10 border border-brand/30 rounded text-foreground">
-              <p className="font-medium">Auto Detect may produce incorrect results</p>
-              <p className="mt-1">For best accuracy, select your specific language (e.g., English, Spanish, etc.)</p>
-            </div>
+            <Callout tone="info" title="Auto Detect may produce incorrect results">
+              For best accuracy, select your specific language (e.g., English, Spanish, etc.)
+            </Callout>
           )}
           {selectedLanguage === 'auto-translate' && (
-            <div className="p-2 bg-brand/10 border border-brand/30 rounded text-foreground">
-              <p className="font-medium">Translation mode active</p>
-              <p className="mt-1">All audio will be automatically translated to English. Best for multilingual meetings where you need English output.</p>
-            </div>
+            <Callout tone="info" title="Translation mode active">
+              All audio will be automatically translated to English. Best for multilingual meetings where you need English output.
+            </Callout>
           )}
           {selectedLanguage !== 'auto' && selectedLanguage !== 'auto-translate' && (
             <p className="text-muted-foreground">

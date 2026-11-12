@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { Button } from '@/components/ui/button';
+import { Callout } from '@/components/ui/callout';
 import { OnboardingContainer } from '../OnboardingContainer';
 import { useOnboarding } from '@/contexts/OnboardingContext';
 import { getParakeetSizeLabel, getSummaryModelSizeLabel } from '@/lib/onboarding-summary-model';
@@ -61,13 +62,13 @@ export function SetupOverviewStep() {
   const steps = [
     {
       number: 1,
-      title: 'Download Transcription Engine',
+      title: 'Download transcription engine',
       size: getParakeetSizeLabel(),
       description: 'On-device speech recognition (Parakeet). Nothing leaves your Mac.',
     },
     {
       number: 2,
-      title: 'Download Summarization Engine',
+      title: 'Download summarization engine',
       size: getSummaryModelSizeLabel(summaryModel),
       description:
         'Prefer OpenAI, Claude, or Ollama? You can switch providers later in Settings › Summary.',
@@ -78,20 +79,20 @@ export function SetupOverviewStep() {
 
   return (
     <OnboardingContainer
-      title="Setup Overview"
+      title="Setup overview"
       description="Nixon requires that you download the Transcription & Summarization AI models for the software to work."
       step={2}
       totalSteps={isMac ? 5 : 4}
     >
       <div className="flex flex-col items-center space-y-10">
         {/* Steps Card */}
-        <div className="w-full max-w-md bg-card rounded-[3px] border border-border p-4">
+        <div className="w-full max-w-lg rounded-lg border border-border bg-card p-4">
           <div className="space-y-4" data-testid="setup-overview-steps">
             {steps.map((step) => (
               <div key={step.number} className="flex items-start gap-4 p-1">
                 <div className="flex-1 ml-1">
                   <h3 className="font-medium text-foreground">
-                    Step {step.number} : {step.title}
+                    Step {step.number}: {step.title}
                   </h3>
                   <p className="text-sm text-muted-foreground">{step.description}</p>
                   <p className="text-xs text-muted-foreground">{step.size}</p>
@@ -104,19 +105,13 @@ export function SetupOverviewStep() {
         {/* CTA Section */}
         <div className="w-full max-w-xs space-y-4">
           {needsMoreSpace && disk && (
-            <div className="flex items-center gap-2 rounded-[3px] border border-border bg-card p-3">
-              <span className="h-2 w-2 flex-shrink-0 rounded-full bg-record" aria-hidden="true" />
-              <span className="text-sm text-foreground">
-                Not enough free space: {formatBytes(disk.free_bytes)} available, about{' '}
-                {formatBytes(disk.required_bytes)} needed. Free some space or download anyway.
-              </span>
-            </div>
+            <Callout tone="warn">
+              Not enough free space: {formatBytes(disk.free_bytes)} available, about{' '}
+              {formatBytes(disk.required_bytes)} needed. Free some space or download anyway.
+            </Callout>
           )}
-          <Button
-            onClick={handleContinue}
-            className="w-full h-11 bg-brand hover:bg-brand/90 text-brand-foreground"
-          >
-            {needsMoreSpace ? 'Download anyway' : "Let's Go"}
+          <Button variant="brand" size="lg" className="w-full" onClick={handleContinue}>
+            {needsMoreSpace ? 'Download anyway' : "Let's go"}
           </Button>
         </div>
       </div>

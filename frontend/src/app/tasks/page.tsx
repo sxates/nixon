@@ -5,8 +5,8 @@
  * on one page.
  *
  * Filter bar: a status segmented control (Open default / Completed / Dismissed), a
- * top-level VIEW segmented control (Mine / Everyone / By person — WS1.c) defaulting to
- * **Mine + Open** (the owner's primary workflow), a SORT control (Manual / Due date /
+ * top-level VIEW segmented control (Mine / Everyone — WS1.c) with a "By person" filter menu
+ * beside it, defaulting to **Mine + Open** (the owner's primary workflow), a SORT control (Manual / Due date /
  * Meeting date — WS1.b, Meeting is the default), and a bulk "Dismiss…" menu in the Open
  * view (WS1.e). Filtering happens server-side via `api_list_action_items`.
  *
@@ -26,19 +26,16 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import { invoke } from '@tauri-apps/api/core';
 import { toast } from 'sonner';
-import {
-  ArrowUpDown,
-  ChevronDown,
-  ChevronRight,
-  GripVertical,
-  ListTodo,
-  Loader2,
-  Users,
-} from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Callout } from '@/components/ui/callout';
+import { DeckIcon } from '@/components/ui/deck-icon';
+import { EmptyState, PageLoading } from '@/components/ui/empty-state';
+import { IconButton } from '@/components/ui/icon-button';
+import { ChevronDown, GripVertical } from '@/components/ui/icons';
+import { LinkRow } from '@/components/ui/list-row';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -67,13 +64,20 @@ import { safeListen } from '@/lib/safe-listen';
 import type { ActionItemWithMeeting, Person } from '@/types';
 import { cn } from '@/lib/utils';
 import { PageHeader } from '@/components/ui/page-header';
-import { PAGE_CONTENT_WIDTH } from '@/lib/page-width';
+import { PAGE_CONTENT_WIDTH, PAGE_GUTTER } from '@/lib/page-width';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 
 const STATUS_SEGMENTS: Array<{ value: StatusFilter; label: string }> = [
   { value: 'open', label: 'Open' },
   { value: 'completed', label: 'Completed' },
   { value: 'dismissed', label: 'Dismissed' },
+];
+
+// WS1.c — whose items. "By person" is its own filter menu beside this switch: it needs a
+// person picked, which a segment can't ask for.
+const WHOSE_SEGMENTS: Array<{ value: 'mine' | 'everyone'; label: string }> = [
+  { value: 'mine', label: 'Mine' },
+  { value: 'everyone', label: 'Everyone' },
 ];
 
 const SORT_OPTIONS: Array<{ value: HubSort; label: string }> = [
@@ -100,15 +104,16 @@ function MeetingChip({
 }) {
   const date = formatMeetingDate(createdAt);
   return (
-    <button
-      type="button"
+    <Button
+      variant="outline"
+      size="xs"
       onClick={onOpen}
       title="Open this meeting"
-      className="inline-flex max-w-[220px] items-center gap-1 rounded-[3px] border border-border bg-muted/60 px-2 py-px text-[11px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className="h-auto max-w-[220px] gap-1 px-2 py-px text-caption font-normal text-muted-foreground shadow-none"
     >
       <span className="truncate">{title}</span>
       {date && <span className="flex-shrink-0 opacity-70">· {date}</span>}
-    </button>
+    </Button>
   );
 }
 
@@ -297,13 +302,10 @@ export default function TasksPage() {
     }) as const;
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.25, ease: 'easeOut' }}
-      className="flex h-page flex-col bg-background"
-    >
+    // A short opacity fade, no travel (docs/design-system.md §Motion).
+    <div className="flex h-page animate-fade-in flex-col bg-background">
       <PageHeader
+        width="page"
         title="Action items"
         subtitle={
           items.length > 0
@@ -313,8 +315,8 @@ export default function TasksPage() {
       />
 
       {/* Filter bar: status · view (Mine/Everyone/By person) · sort · bulk. */}
-      <div className="flex-shrink-0 px-4 min-[900px]:px-7 pb-3">
-        <div className={`mx-auto flex flex-wrap items-center gap-2 ${PAGE_CONTENT_WIDTH}`}>
+      <div className={cn('flex-shrink-0 pb-3', PAGE_GUTTER)}>
+        <div className={cn('mx-auto flex w-full flex-wrap items-center gap-2', PAGE_CONTENT_WIDTH)}>
           <SegmentedControl
             aria-label="Filter by status"
             options={STATUS_SEGMENTS}
@@ -322,86 +324,54 @@ export default function TasksPage() {
             onChange={(value) => setStatus(value as StatusFilter)}
           />
 
-          {/* WS1.c — top-level view: Mine / Everyone / By person. Deliberately NOT a
-              SegmentedControl (spec 0057 §4): the "By person" segment opens a DropdownMenu,
-              which SegmentedControl's roving-tabindex/onChange contract cannot express. */}
-          <div
-            role="group"
+          {/* WS1.c — top-level view: Mine / Everyone, the same SegmentedControl as status
+              (one segmented style on the page). A person filter leaves neither pressed. A
+              hairline divides the two switches, or they read as one five-way control. */}
+          <span aria-hidden="true" className="mx-1 h-5 w-px bg-border" />
+          <SegmentedControl
             aria-label="Whose items"
-            className="inline-flex items-center rounded-lg border border-border bg-muted p-0.5"
-          >
-            <button
-              type="button"
-              aria-pressed={viewSegment === 'mine'}
-              onClick={() => setPerson({ kind: 'me' })}
-              className={cn(
-                'rounded-md px-3 py-1 text-xs font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                viewSegment === 'mine'
-                  ? 'bg-card text-foreground shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground',
+            options={WHOSE_SEGMENTS}
+            value={viewSegment}
+            onChange={(value) => setPerson(value === 'everyone' ? { kind: 'anyone' } : { kind: 'me' })}
+          />
+
+          {/* "By person" — a filter menu; its label is the person once one is picked. */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                aria-label="Filter by a specific person"
+                data-active={viewSegment === 'byPerson' || undefined}
+                className={cn('gap-1.5', viewSegment === 'byPerson' && 'border-brand-edge')}
+              >
+                {viewSegment === 'byPerson' ? personName : 'By person'}
+                <DeckIcon icon={ChevronDown} size={12} className="text-muted-foreground" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start">
+              {people.length === 0 ? (
+                <DropdownMenuItem disabled>No people yet</DropdownMenuItem>
+              ) : (
+                people.map((p) => (
+                  <DropdownMenuItem
+                    key={p.id}
+                    onSelect={() => setPerson({ kind: 'person', personId: p.id })}
+                  >
+                    {p.displayName}
+                  </DropdownMenuItem>
+                ))
               )}
-            >
-              Mine
-            </button>
-            <button
-              type="button"
-              aria-pressed={viewSegment === 'everyone'}
-              onClick={() => setPerson({ kind: 'anyone' })}
-              className={cn(
-                'rounded-md px-3 py-1 text-xs font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                viewSegment === 'everyone'
-                  ? 'bg-card text-foreground shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground',
-              )}
-            >
-              Everyone
-            </button>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  type="button"
-                  aria-label="Filter by a specific person"
-                  aria-pressed={viewSegment === 'byPerson'}
-                  className={cn(
-                    'inline-flex items-center gap-1 rounded-md px-3 py-1 text-xs font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                    viewSegment === 'byPerson'
-                      ? 'bg-card text-foreground shadow-sm'
-                      : 'text-muted-foreground hover:text-foreground',
-                  )}
-                >
-                  {viewSegment === 'byPerson' ? personName : 'By person'}
-                  <ChevronDown size={12} className="opacity-60" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start">
-                {people.length === 0 ? (
-                  <DropdownMenuItem disabled>No people yet</DropdownMenuItem>
-                ) : (
-                  people.map((p) => (
-                    <DropdownMenuItem
-                      key={p.id}
-                      onSelect={() => setPerson({ kind: 'person', personId: p.id })}
-                    >
-                      {p.displayName}
-                    </DropdownMenuItem>
-                  ))
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
+            </DropdownMenuContent>
+          </DropdownMenu>
 
           {/* WS1.b — sort control. */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button
-                type="button"
-                aria-label="Sort"
-                className="inline-flex h-[30px] items-center gap-1.5 rounded-lg border border-border bg-card px-3 text-xs font-semibold text-foreground transition-colors hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <ArrowUpDown size={12} className="text-muted-foreground" />
+              <Button variant="outline" size="sm" aria-label="Sort" className="gap-1.5">
                 {SORT_OPTIONS.find((o) => o.value === sort)?.label}
-                <ChevronDown size={13} className="text-muted-foreground" />
-              </button>
+                <DeckIcon icon={ChevronDown} size={12} className="text-muted-foreground" />
+              </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start">
               {SORT_OPTIONS.map((o) => (
@@ -416,15 +386,10 @@ export default function TasksPage() {
           {canDismiss && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button
-                  type="button"
-                  aria-label="Bulk dismiss"
-                  className="ml-auto inline-flex h-[30px] items-center gap-1.5 rounded-lg border border-border bg-card px-3 text-xs font-semibold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  <Users size={12} />
+                <Button variant="outline" size="sm" aria-label="Bulk dismiss" className="ml-auto gap-1.5">
                   Dismiss
-                  <ChevronDown size={13} />
-                </button>
+                  <DeckIcon icon={ChevronDown} size={12} className="text-muted-foreground" />
+                </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuItem
@@ -461,61 +426,37 @@ export default function TasksPage() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-4 min-[900px]:px-7 pb-12">
-        <div className={`mx-auto ${PAGE_CONTENT_WIDTH}`}>
+      <div className={cn('flex-1 overflow-y-auto pb-12', PAGE_GUTTER)}>
+        <div className={cn('mx-auto w-full', PAGE_CONTENT_WIDTH)}>
           {/* Standalone to-do entry — creates an "Unattached" manual item. */}
           <AddActionItemRow placeholder="New item — add a to-do…" onAdd={add} />
 
           {isLoading ? (
-            <div className="flex h-64 items-center justify-center text-muted-foreground">
-              <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-              <span className="text-sm">Loading action items…</span>
-            </div>
+            <PageLoading fill="pane" label="Loading action items…" />
           ) : error ? (
-            <div className="flex h-64 flex-col items-center justify-center text-center">
-              <p className="text-sm text-muted-foreground">{error}</p>
-            </div>
+            <Callout tone="error" className="mt-4">
+              {error}
+            </Callout>
           ) : items.length === 0 ? (
-            <div className="flex h-[40vh] flex-col items-center justify-center text-center">
-              <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-muted">
-                <ListTodo className="h-6 w-6 text-muted-foreground" />
-              </div>
-              <h2 className="text-base font-semibold text-foreground">
-                {status === 'open' ? 'No action items' : 'Nothing here'}
-              </h2>
-              <p className="mt-1 max-w-sm text-sm text-muted-foreground">
-                {EMPTY_COPY[status]}
-              </p>
-            </div>
+            <EmptyState
+              className="h-[40vh]"
+              title={status === 'open' ? 'No action items' : 'Nothing here'}
+              body={EMPTY_COPY[status]}
+            />
           ) : sort === 'meeting' ? (
             /* Grouped-by-meeting (default). */
             <div className="mt-4 flex flex-col gap-5">
               {groups.map((group) => (
                 <section key={group.key} aria-label={group.title}>
                   {group.meetingId ? (
-                    <button
-                      type="button"
+                    <LinkRow
+                      title={group.title}
+                      meta={formatMeetingDate(group.createdAt) || undefined}
                       onClick={() => router.push(`/meeting-details?id=${group.meetingId}`)}
-                      title="Open this meeting"
-                      className="group/header flex items-baseline gap-1.5 rounded px-2 py-1 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    >
-                      <span className="text-[13.5px] font-semibold text-foreground group-hover/header:text-brand">
-                        {group.title}
-                      </span>
-                      {formatMeetingDate(group.createdAt) && (
-                        <span className="text-xs text-muted-foreground">
-                          {formatMeetingDate(group.createdAt)}
-                        </span>
-                      )}
-                      <ChevronRight
-                        size={13}
-                        className="self-center text-muted-foreground group-hover/header:text-brand"
-                      />
-                    </button>
+                      hint="Open this meeting"
+                    />
                   ) : (
-                    <div className="px-2 py-1 text-[13.5px] font-semibold text-foreground">
-                      {group.title}
-                    </div>
+                    <div className="u-row-title px-2 py-1.5">{group.title}</div>
                   )}
                   <div className="mt-0.5 flex flex-col gap-0.5">
                     {group.items.map((item) => (
@@ -553,7 +494,7 @@ export default function TasksPage() {
                     overId === item.id &&
                       draggingId &&
                       draggingId !== item.id &&
-                      'ring-2 ring-brand/40',
+                      'ring-2 ring-brand-edge',
                   )}
                 >
                   <ActionItemRow
@@ -573,15 +514,16 @@ export default function TasksPage() {
                     }
                     dragHandle={
                       sort === 'manual' ? (
-                        <button
-                          type="button"
-                          aria-label="Drag to reorder"
+                        <IconButton
+                          variant="ghost"
+                          label="Drag to reorder"
                           onMouseDown={() => setArmedId(item.id)}
                           onMouseUp={() => setArmedId(null)}
-                          className="mt-0.5 flex h-[18px] w-4 flex-shrink-0 cursor-grab items-center justify-center text-muted-foreground/40 opacity-0 transition-opacity hover:text-muted-foreground focus:outline-none focus-visible:opacity-100 group-hover:opacity-100 active:cursor-grabbing"
-                        >
-                          <GripVertical size={14} />
-                        </button>
+                          icon={<DeckIcon icon={GripVertical} size={14} />}
+                          // A narrow grip in the row's gutter, not a 28px key: it shows on
+                          // row hover and reads as a handle, not a button.
+                          className="mt-0.5 h-[18px] w-4 cursor-grab text-muted-foreground/40 opacity-0 transition-opacity hover:bg-transparent hover:text-muted-foreground focus-visible:opacity-100 group-hover:opacity-100 active:cursor-grabbing"
+                        />
                       ) : null
                     }
                   />
@@ -591,6 +533,6 @@ export default function TasksPage() {
           )}
         </div>
       </div>
-    </motion.div>
+    </div>
   );
 }

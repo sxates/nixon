@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from "react";
+import { Textarea } from "@/components/ui/textarea";
 
 /**
  * specs/0061 W5 (task 5) — inline correction for one transcript line's text (the
@@ -77,10 +78,11 @@ export function SegmentTextEditor({ initialText, onSave, onCancel }: SegmentText
     };
 
     return (
-        <textarea
+        <Textarea
             ref={textareaRef}
             aria-label="Edit transcript line"
-            className="u-typed w-full resize-none rounded-[3px] border border-input bg-transparent px-2 py-1 focus:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            // The typed transcript face, at the row's own density (no min-height, no shadow).
+            className="u-typed min-h-0 resize-none px-2 py-1 text-body shadow-none md:text-body"
             value={value}
             onChange={(e) => setValue(e.target.value)}
             onKeyDown={handleKeyDown}

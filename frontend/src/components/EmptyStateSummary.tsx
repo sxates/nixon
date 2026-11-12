@@ -1,8 +1,9 @@
 'use client';
 
-import { motion } from 'framer-motion';
-import { FileQuestion, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { DeckIcon } from '@/components/ui/deck-icon';
+import { EmptyState } from '@/components/ui/empty-state';
+import { Sparkles } from '@/components/ui/icons';
 import {
   Tooltip,
   TooltipContent,
@@ -16,49 +17,40 @@ interface EmptyStateSummaryProps {
   isGenerating?: boolean;
 }
 
+/**
+ * The Summary tab before a summary exists. The CTA is the amber primary (`brand`) with the
+ * Sparkles glyph that marks an AI action — never the REC red, which means recording only
+ * (docs/design-system.md §Colour). No icon disc above the heading (§Icons).
+ */
 export function EmptyStateSummary({ onGenerate, hasModel, isGenerating = false }: EmptyStateSummaryProps) {
   return (
-    <motion.div
-      initial={{ opacity: 0, scale: 0.95 }}
-      animate={{ opacity: 1, scale: 1 }}
-      transition={{ duration: 0.3, ease: 'easeOut' }}
-      className="flex flex-col items-center justify-center h-full p-8 text-center"
-    >
-      <FileQuestion className="w-16 h-16 text-muted-foreground/50 mb-4" />
-      <h3 className="font-display text-lg font-semibold text-muted-foreground mb-2">
-        No Summary Generated Yet
-      </h3>
-      <p className="text-sm text-muted-foreground mb-6 max-w-md">
-        Generate an AI-powered summary of your meeting transcript to get key points, action items, and decisions.
-      </p>
-
-      <TooltipProvider>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <div>
-              <Button
-                onClick={onGenerate}
-                disabled={!hasModel || isGenerating}
-                className="gap-2 bg-record text-record-foreground hover:bg-record/90"
-              >
-                <Sparkles className="w-4 h-4" />
-                {isGenerating ? 'Generating...' : 'Generate Summary'}
-              </Button>
-            </div>
-          </TooltipTrigger>
-          {!hasModel && (
-            <TooltipContent>
-              <p>Please select a model in Settings first</p>
-            </TooltipContent>
-          )}
-        </Tooltip>
-      </TooltipProvider>
-
-      {!hasModel && (
-        <p className="text-xs text-brand mt-3">
-          Please select a model in Settings first
-        </p>
-      )}
-    </motion.div>
+    <EmptyState
+      titleAs="h3"
+      className="h-full animate-fade-in p-8"
+      title="No summary generated yet"
+      body="Generate an AI-powered summary of your meeting transcript to get key points, action items, and decisions."
+      action={
+        <div className="flex flex-col items-center gap-3">
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div>
+                  <Button variant="brand" onClick={onGenerate} disabled={!hasModel || isGenerating}>
+                    <DeckIcon icon={Sparkles} size={16} />
+                    {isGenerating ? 'Generating…' : 'Generate summary'}
+                  </Button>
+                </div>
+              </TooltipTrigger>
+              {!hasModel && (
+                <TooltipContent>
+                  <p>Please select a model in Settings first</p>
+                </TooltipContent>
+              )}
+            </Tooltip>
+          </TooltipProvider>
+          {!hasModel && <p className="text-xs text-brand">Please select a model in Settings first</p>}
+        </div>
+      }
+    />
   );
 }

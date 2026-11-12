@@ -51,6 +51,28 @@
 //     prep brief running for it, which must keep its "Join & record" chip — Now outranks
 //     Processing. Omit for the normal idle queue.
 (function () {
+  // Frozen clock: the shots run on "today" at 10:30 local, wherever the real clock is.
+  // The fixture day is today (meetings re-base days_ago/time_of_day onto it), and the
+  // Agenda scrolls to the current time — so a run after midnight scrolled every block
+  // off-screen and a run at 3 PM differed from one at 9 AM. The clock still ticks (an
+  // offset, not a stopped clock), so timers and elapsed-time UI behave; only the anchor
+  // is fixed. Installed first, before anything below or the app reads the time.
+  (function freezeClock() {
+    const RealDate = Date;
+    const anchor = new RealDate();
+    anchor.setHours(10, 30, 0, 0);
+    const offset = anchor.getTime() - RealDate.now();
+    function ShotsDate(...args) {
+      if (!new.target) return new RealDate(RealDate.now() + offset).toString();
+      return args.length === 0 ? new RealDate(RealDate.now() + offset) : new RealDate(...args);
+    }
+    ShotsDate.prototype = RealDate.prototype;
+    ShotsDate.now = () => RealDate.now() + offset;
+    ShotsDate.parse = RealDate.parse;
+    ShotsDate.UTC = RealDate.UTC;
+    window.Date = ShotsDate;
+  })();
+
   const q = new URLSearchParams(location.search);
 
   const step = Number(q.get('onboardingStep') || 0);
@@ -690,7 +712,7 @@
     // ok, models_dir }. Args: { summaryModel }. SetupOverviewStep (specs/0061 W1 Task 1)
     // calls this on mount to decide whether to show the "not enough free space" warning;
     // answering with plenty of free space keeps the onboarding-2 screenshot on its
-    // happy path (no warning, "Let's Go" CTA) rather than the low-disk state.
+    // happy path (no warning, "Let's go" CTA) rather than the low-disk state.
     get_models_disk_check: () => ({
       free_bytes: 200 * 1024 * 1024 * 1024,
       required_bytes: (670 + 1221) * 1024 * 1024,

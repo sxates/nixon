@@ -1,7 +1,13 @@
 'use client';
 
 import { memo, useState } from "react";
-import { Check, Pencil } from "lucide-react";
+import { Pencil } from "@/components/ui/icons";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Avatar } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import { DeckIcon } from "@/components/ui/deck-icon";
+import { IconButton } from "@/components/ui/icon-button";
+import { StatusDot } from "@/components/ui/status-dot";
 import { ConfidenceIndicator } from "./ConfidenceIndicator";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import { MeetingAttendee, Person } from "@/types";
@@ -11,7 +17,6 @@ import { InlineSpeakerAssign } from "./MeetingDetails/InlineSpeakerAssign";
 import type { OwnerActionContext } from "./MeetingDetails/SpeakerOwnerAction";
 import { SegmentSpeakerMenu } from "./MeetingDetails/SegmentSpeakerMenu";
 import { SegmentTextEditor } from "./MeetingDetails/SegmentTextEditor";
-import { PersonAvatar } from "./People/PersonAvatar";
 import type { SpeakerPhotoMap } from "@/lib/speaker-photos";
 
 /** specs/0019 WS2.1 — wiring that lets a transcript line reassign its speaker inline.
@@ -78,7 +83,7 @@ function cleanStopWords(text: string): string {
     return cleanedText.replace(/\s+/g, ' ').trim();
 }
 
-// Speaker avatar: the speaker's directory photo when one is known (the shared PersonAvatar,
+// Speaker avatar: the speaker's directory photo when one is known (the shared Avatar,
 // which falls back to the colored initials chip), a neutral dot when undiarized.
 function SpeakerAvatar({
     speaker,
@@ -96,16 +101,16 @@ function SpeakerAvatar({
                 className="w-7 h-7 flex-shrink-0 rounded-full bg-muted flex items-center justify-center"
                 aria-hidden="true"
             >
-                <div className="w-2 h-2 rounded-full bg-muted-foreground/50" />
+                <StatusDot tone="muted" />
             </div>
         );
     }
 
     return (
-        <PersonAvatar
+        <Avatar
             name={speakerName}
-            photoDataUri={photoDataUri}
-            size="xs"
+            photo={photoDataUri}
+            size={28}
             colorClass={speakerBgClass(speaker)}
         />
     );
@@ -131,28 +136,21 @@ const SelectionCheckbox = memo(function SelectionCheckbox({
 }) {
     return (
         <div className="flex w-4 flex-shrink-0 items-center pt-1.5">
-            <button
-                type="button"
-                role="checkbox"
-                aria-checked={selected}
+            <Checkbox
+                size="sm"
+                checked={selected}
                 aria-label={selected ? 'Deselect this line' : 'Select this line'}
                 onClick={(e) => {
                     // Prevent the click from starting a text selection on shift-click.
                     e.preventDefault();
                     onToggle(id, index, e.shiftKey);
                 }}
-                className={cn(
-                    'flex h-4 w-4 items-center justify-center rounded border transition-opacity',
-                    selected
-                        ? 'border-brand bg-brand text-brand-foreground'
-                        : 'border-muted-foreground/40 bg-transparent hover:border-brand',
+                className={
                     selected || active
                         ? 'opacity-100'
-                        : 'opacity-0 focus-visible:opacity-100 group-hover/segment:opacity-100',
-                )}
-            >
-                {selected && <Check size={11} strokeWidth={3} />}
-            </button>
+                        : 'opacity-0 focus-visible:opacity-100 group-hover/segment:opacity-100'
+                }
+            />
         </div>
     );
 });
@@ -287,11 +285,11 @@ export const TranscriptSegment = memo(function TranscriptSegment({
                             owner={assignment.owner}
                         />
                     ) : speakerName ? (
-                        <span className={`u-typed font-bold uppercase text-[12px] tracking-[0.02em] whitespace-nowrap ${speakerColorClass(speaker)}`}>
+                        <span className={`u-speaker whitespace-nowrap ${speakerColorClass(speaker)}`}>
                             {speakerName}
                         </span>
                     ) : (
-                        <span className="u-typed font-bold uppercase text-[12px] tracking-[0.02em] whitespace-nowrap text-muted-foreground">
+                        <span className="u-speaker whitespace-nowrap text-muted-foreground">
                             Speaker
                         </span>
                     )}
@@ -320,7 +318,7 @@ export const TranscriptSegment = memo(function TranscriptSegment({
                                 onCancel={handleCancel}
                             />
                             {saveError && (
-                                <p className="mt-1 text-[11px] text-destructive">{saveError}</p>
+                                <p className="mt-1 text-caption text-destructive">{saveError}</p>
                             )}
                         </>
                     ) : isStreaming ? (
@@ -339,12 +337,13 @@ export const TranscriptSegment = memo(function TranscriptSegment({
                 {!editing && (
                     <div className="flex flex-shrink-0 items-center gap-0.5 pt-px">
                         {userEdited && (
-                            <span
-                                className="rounded-[2px] border border-border px-1 py-px text-[10px] font-medium text-engrave"
+                            <Badge
+                                tone="outline"
+                                className="px-1 py-px font-medium text-engrave"
                                 title="Manually edited"
                             >
                                 edited
-                            </span>
+                            </Badge>
                         )}
                         {/* WS2.3: move just this line to another speaker (sticky split). */}
                         {speaker && assignment && (
@@ -358,22 +357,20 @@ export const TranscriptSegment = memo(function TranscriptSegment({
                         {/* specs/0061 W5 — hover pencil next to the split icon: correct this
                             line's text in place. Independent of speaker assignment. */}
                         {onEditText && (
-                            <button
-                                type="button"
+                            <IconButton
+                                variant="ghost"
+                                label="Edit this line's text"
                                 onClick={() => {
                                     setSaveError(null);
                                     setEditing(true);
                                 }}
-                                className="rounded-[2px] p-0.5 text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground focus-visible:opacity-100 group-hover/segment:opacity-100"
-                                title="Edit this line's text"
-                                aria-label="Edit this line's text"
-                            >
-                                <Pencil size={12} />
-                            </button>
+                                icon={<DeckIcon icon={Pencil} size={12} />}
+                                className="h-5 w-5 opacity-0 transition-opacity focus-visible:opacity-100 group-hover/segment:opacity-100"
+                            />
                         )}
                         <Tooltip>
                             <TooltipTrigger asChild>
-                                <span className="ml-0.5 font-mono text-[11px] tabular-nums text-muted-foreground">
+                                <span className="ml-0.5 font-mono text-caption tabular-nums text-muted-foreground">
                                     {formatRecordingTime(timestamp)}
                                 </span>
                             </TooltipTrigger>

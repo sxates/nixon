@@ -20,7 +20,7 @@ export function OnboardingFlow({ onComplete: _onComplete }: OnboardingFlowProps)
   // render — see the `isMac === true` / `isMac === false` checks below
   // (specs/0061 W1 Task 3 fix, controller ruling R15). Rendering either one
   // on a guess would let a real Mac user land on the wrong step 4 content —
-  // both this step's actions (Finish Setup / Skip) complete onboarding, so a
+  // both this step's actions (Finish setup / Skip) complete onboarding, so a
   // mistimed click would silently skip requesting mic/system-audio
   // permissions.
   const [isMac, setIsMac] = React.useState<boolean | null>(null);

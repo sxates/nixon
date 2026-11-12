@@ -23,10 +23,12 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import { NavSlotPortal, useHasNavSlot } from '@/components/Meetings/NavSlot';
 import { invoke } from '@tauri-apps/api/core';
-import { Button } from '@/components/ui/button';
+import { Callout } from '@/components/ui/callout';
+import { DateNavigator } from '@/components/ui/date-navigator';
+import { ListRow } from '@/components/ui/list-row';
+import { Spinner } from '@/components/ui/spinner';
 import { cn } from '@/lib/utils';
 import type { DayAgendaItem } from '@/lib/day-agenda';
 import { monthEventItems } from '@/lib/month-events';
@@ -152,7 +154,8 @@ export function MonthCalendar({
     if (e.kind === 'event') {
       return events ? cn('border', blockClasses(itemVisualState(e.item, events.ctx))) : '';
     }
-    if (e.id === activeRecordingMeetingId) return 'bg-destructive/15 text-destructive';
+    // The live recording wears the REC lamp — red is recording only, never `destructive`.
+    if (e.id === activeRecordingMeetingId) return 'bg-record text-record-foreground';
     return e.meeting.hasSummary ? 'bg-chart-1/15 text-foreground' : 'bg-muted text-muted-foreground';
   };
   const todayKey = localDayKey(today);
@@ -170,40 +173,19 @@ export function MonthCalendar({
 
   const selected = selectedDay ? (byDay.get(selectedDay) ?? []) : null;
 
+  // The spinner and Today sit LEFT of the arrows, so neither moves them (the nav is
+  // right-aligned in the view-tab row).
   const nav = (
-    <>
-        {/* Spinner and Today sit LEFT of the arrows, so neither moves them (the nav is
-            right-aligned in the view-tab row). */}
-        <div className="flex items-center gap-2">
-          {isLoading && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
-          <Button variant="outline" size="xs" onClick={goToday}>
-            Today
-          </Button>
-        </div>
-        <div className="flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label="Previous month"
-            onClick={() => step(-1)}
-            className="h-7 w-7"
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <span className="min-w-[9.5rem] text-center text-sm font-semibold text-foreground">
-            {monthLabel(year, monthIndex)}
-          </span>
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label="Next month"
-            onClick={() => step(1)}
-            className="h-7 w-7"
-          >
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-        </div>
-    </>
+    <DateNavigator
+      label={monthLabel(year, monthIndex)}
+      labelClassName="min-w-[9.5rem]"
+      onPrev={() => step(-1)}
+      onNext={() => step(1)}
+      prevLabel="Previous month"
+      nextLabel="Next month"
+      onToday={goToday}
+      leading={isLoading ? <Spinner size="sm" className="text-muted-foreground" /> : null}
+    />
   );
 
   return (
@@ -213,11 +195,11 @@ export function MonthCalendar({
       {hasSlot ? (
         <NavSlotPortal>{nav}</NavSlotPortal>
       ) : (
-        <div className="mb-3 flex flex-shrink-0 items-center justify-between gap-3">{nav}</div>
+        <div className="mb-3 flex flex-shrink-0 items-center justify-end gap-3">{nav}</div>
       )}
 
       {error ? (
-        <p className="py-10 text-center text-sm text-muted-foreground">{error}</p>
+        <Callout tone="error">{error}</Callout>
       ) : (
         <>
           <div className="grid flex-shrink-0 grid-cols-7 gap-px">
@@ -247,7 +229,7 @@ export function MonthCalendar({
               const isToday = key === todayKey;
               const isSelected = key === selectedDay;
               return (
-                <button
+                <button // ui-gate: allow a month-grid day is a `gridcell` with a top-aligned layout; no primitive is a grid cell
                   key={key}
                   type="button"
                   role="gridcell"
@@ -272,9 +254,10 @@ export function MonthCalendar({
                   <span className="flex flex-shrink-0 items-center justify-between gap-1">
                     <span
                       className={cn(
-                        'inline-flex h-5 min-w-5 items-center justify-center rounded-[2px] px-1 text-[11px] tabular-nums',
+                        'inline-flex h-5 min-w-5 items-center justify-center rounded-sm px-1 text-caption tabular-nums',
                         cell.inMonth ? 'text-foreground' : 'text-muted-foreground/60',
-                        isToday && 'bg-primary font-semibold text-primary-foreground',
+                        // Today is the amber lamp, as everywhere else.
+                        isToday && 'border border-brand-edge bg-brand-wash font-semibold text-brand',
                       )}
                     >
                       {cell.date.getDate()}
@@ -283,7 +266,7 @@ export function MonthCalendar({
                         height allows, so this badge — not the chip list — is what
                         tells the truth about how busy the day was. */}
                     {dayMeetings.length > 1 && (
-                      <span className="pr-0.5 text-[10px] tabular-nums text-muted-foreground">
+                      <span className="pr-0.5 text-label tabular-nums text-muted-foreground">
                         {dayMeetings.length}
                       </span>
                     )}
@@ -296,7 +279,8 @@ export function MonthCalendar({
                         title={m.title}
                         data-entry={m.kind}
                         className={cn(
-                          'u-section-label block truncate rounded-[2px] px-1 py-0.5 text-[9px] leading-tight',
+                          // Sentence case at 11px: these are meeting titles, not engraved labels.
+                          'block truncate rounded-sm px-1 py-0.5 text-caption font-semibold leading-tight',
                           chipClass(m),
                         )}
                       >
@@ -322,38 +306,31 @@ export function MonthCalendar({
             })}
           </h3>
           {selected.length === 0 ? (
-            <p className="px-1 py-2 text-[13px] text-muted-foreground">
+            <p className="u-meta px-1 py-2">
               {events ? 'No meetings this day.' : 'No meetings recorded this day.'}
             </p>
           ) : (
-            <div className="space-y-0.5">
-              {selected.map((m) => (
-                <button
-                  key={m.id}
-                  type="button"
-                  onClick={() => openEntry(m)}
-                  className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left hover:bg-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  <span
-                    className={cn(
-                      'min-w-0 flex-1 truncate text-[13.5px] font-semibold',
-                      m.kind === 'event' &&
-                        events &&
-                        itemVisualState(m.item, events.ctx) === 'past-unrecorded'
-                        ? 'text-muted-foreground'
-                        : 'text-foreground',
-                    )}
-                  >
-                    {m.title}
-                  </span>
-                  {m.kind === 'event' && events && (
-                    <StateChip state={itemVisualState(m.item, events.ctx)} />
-                  )}
-                  <span className="flex-shrink-0 text-xs text-muted-foreground">
-                    {entryTime(m.start)}
-                  </span>
-                </button>
-              ))}
+            <div className="flex flex-col gap-0.5">
+              {selected.map((m) => {
+                const state = m.kind === 'event' && events ? itemVisualState(m.item, events.ctx) : null;
+                return (
+                  <ListRow
+                    key={m.id}
+                    onClick={() => openEntry(m)}
+                    title={
+                      <span className={state === 'past-unrecorded' ? 'text-muted-foreground' : undefined}>
+                        {m.title}
+                      </span>
+                    }
+                    trailing={
+                      <>
+                        {state && <StateChip state={state} />}
+                        <span className="u-row-meta tabular-nums">{entryTime(m.start)}</span>
+                      </>
+                    }
+                  />
+                );
+              })}
             </div>
           )}
         </div>

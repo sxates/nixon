@@ -1,0 +1,12 @@
+# ADR-0019 UI-consistency allowlist — hardware-faithful deck parts (docs/design-system.md §3).
+# One entry per line: path<TAB>rule<TAB>reason. A path ending in / covers a directory.
+# Entries are per rule: allow only what the part genuinely needs. A value that maps onto
+# the scale (text-[11px] -> text-caption, rounded-[2px] -> rounded-sm) is migrated, not
+# allowed. A one-off on a single line uses `// ui-gate: allow <reason>` instead.
+frontend/src/components/Transport/TransportKey.tsx	raw-button	the transport key IS the primitive: a hardware key cap with its own lamp bar and pressed state, not a Button variant
+frontend/src/components/Transport/TransportKey.tsx	arbitrary-shadow	key-cap bevel (pressed/unpressed) and the REC/HOLD lamp glow, built from the bevel and lamp tokens
+frontend/src/components/Transport/TapeCounter.tsx	arbitrary-shadow	recessed counter-well bevel behind the odometer wheels
+frontend/src/components/Transport/LampDot.tsx	arbitrary-shadow	panel-lamp glow and the unlit lamp's recess, built from the lamp tokens
+frontend/src/components/Transport/LevelLadder.tsx	arbitrary-shadow	lit LED segments bleed their own colour onto the panel, the way a real meter's lamps do
+frontend/src/components/MeetingDetails/ChannelStrip.tsx	arbitrary-shadow	recessed level-meter well under each channel's bar
+frontend/src/components/MeetingDetails/ChannelStrip.tsx	raw-button	row-select control inside an ARIA grid row (specs/0061 W4 R37); Button chrome would break the strip

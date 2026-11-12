@@ -1,8 +1,40 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Button } from "@/components/ui/button";
+import { DeckIcon } from "@/components/ui/deck-icon";
+import { Check } from "@/components/ui/icons";
+import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 import { LANGUAGE_OPTIONS } from "@/lib/summary-languages";
 import { useRecentLanguages } from "@/hooks/useRecentLanguages";
+
+/** One pick-list row: a full-width ghost Button, brand text + check when it is the choice. */
+function LanguageOption({
+  selected,
+  onSelect,
+  children,
+}: {
+  selected: boolean;
+  onSelect: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      aria-pressed={selected}
+      onClick={onSelect}
+      className={cn(
+        "h-auto w-full justify-between rounded-none px-3 py-1.5 text-left font-normal hover:bg-muted",
+        selected ? "font-medium text-brand hover:text-brand" : "text-foreground",
+      )}
+    >
+      {children}
+      {selected && <DeckIcon icon={Check} size={14} className="text-brand" />}
+    </Button>
+  );
+}
 
 interface LanguagePickerPopoverProps {
   value: string | null;
@@ -86,85 +118,67 @@ export function LanguagePickerPopover({
       aria-label="Pick summary language"
     >
       <div className="flex items-center gap-2 px-3 py-2.5 border-b border-border">
-        <span className="text-muted-foreground text-sm">🔍</span>
-        <input
+        <Input
           ref={inputRef}
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search language..."
-          className="flex-1 text-sm text-foreground bg-transparent border-none outline-none placeholder-muted-foreground"
+          aria-label="Search language"
+          className="h-7 flex-1 border-none px-1 shadow-none"
         />
       </div>
 
       <div className="max-h-80 overflow-y-auto py-1">
         {showRecents && (
           <>
-            <div className="px-3 pt-1 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+            <div className="u-section-label px-3 pb-1 pt-1">
               Recently Used
             </div>
             {recentsResolved.map((opt) => (
-              <button
+              <LanguageOption
                 key={`recent-${opt.code}`}
-                type="button"
-                aria-pressed={value === opt.code}
-                onClick={() => onChange(opt.code)}
-                className={`flex w-full items-center justify-between px-3 py-1.5 text-sm hover:bg-muted text-left ${
-                  value === opt.code ? "text-brand font-medium" : "text-foreground"
-                }`}
+                selected={value === opt.code}
+                onSelect={() => onChange(opt.code)}
               >
                 <span>
                   {opt.label}{" "}
                   <span className="text-xs text-muted-foreground">({opt.code})</span>
                 </span>
-                {value === opt.code && <span className="text-brand" aria-hidden="true">✓</span>}
-              </button>
+              </LanguageOption>
             ))}
             <div className="my-1 h-px bg-border" />
           </>
         )}
 
         {showAuto && (
-          <button
-            type="button"
-            aria-pressed={value === null}
-            onClick={() => onChange(null)}
-            className={`flex w-full items-center justify-between px-3 py-1.5 text-sm hover:bg-muted text-left ${
-              value === null ? "text-brand font-medium" : "text-foreground"
-            }`}
-          >
-            <span className="flex flex-col">
+          <LanguageOption selected={value === null} onSelect={() => onChange(null)}>
+            <span className="flex flex-col items-start">
               <span>Auto</span>
               {autoSubtitle && (
                 <span className="text-xs font-normal text-muted-foreground">{autoSubtitle}</span>
               )}
             </span>
-            {value === null && <span className="text-brand" aria-hidden="true">✓</span>}
-          </button>
+          </LanguageOption>
         )}
 
         {filteredAll.length > 0 && (
-          <div className="px-3 pt-1 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+          <div className="u-section-label px-3 pb-1 pt-1">
             {mode === "meeting" ? "Other Languages" : "All Languages"}
           </div>
         )}
 
         {filteredAll.map((opt) => (
-          <button
+          <LanguageOption
             key={`all-${opt.code}`}
-            type="button"
-            aria-pressed={value === opt.code}
-            onClick={() => onChange(opt.code)}
-            className={`flex w-full items-center justify-between px-3 py-1.5 text-sm hover:bg-muted text-left ${
-              value === opt.code ? "text-brand font-medium" : "text-foreground"
-            }`}
+            selected={value === opt.code}
+            onSelect={() => onChange(opt.code)}
           >
             <span>
               {opt.label}{" "}
               <span className="text-xs text-muted-foreground">({opt.code})</span>
             </span>
-            {value === opt.code && <span className="text-brand" aria-hidden="true">✓</span>}
-          </button>
+          </LanguageOption>
         ))}
 
         {hasNoResults && (

@@ -9,14 +9,16 @@
  * window that can link to them and wrong in a message to someone who can't.
  *
  * Used by both the live answer card and every expanded history row, so "copy" means the
- * same thing wherever you find it.
+ * same thing wherever you find it. A text button (no glyph, §Icons); the check that
+ * confirms the copy is functional, so it stays.
  */
 
 import { useCallback, useState } from 'react';
-import { Check, Copy } from 'lucide-react';
 import { toast } from 'sonner';
+import { Button } from '@/components/ui/button';
+import { DeckIcon } from '@/components/ui/deck-icon';
+import { Check } from '@/components/ui/icons';
 import { answerAsPlainProse } from '@/lib/ask-ai';
-import { cn } from '@/lib/utils';
 
 export function CopyAnswerButton({
   markdown,
@@ -31,7 +33,7 @@ export function CopyAnswerButton({
     try {
       await navigator.clipboard.writeText(answerAsPlainProse(markdown));
       setCopied(true);
-      // Purely a confirmation flash — no toast for the happy path, the icon says it.
+      // Purely a confirmation flash — no toast for the happy path, the check says it.
       setTimeout(() => setCopied(false), 1600);
     } catch (err) {
       console.error('[Ask] Failed to copy the answer:', err);
@@ -40,22 +42,16 @@ export function CopyAnswerButton({
   }, [markdown]);
 
   return (
-    <button
-      type="button"
+    <Button
+      variant="outline"
+      size="xs"
       onClick={() => void onCopy()}
       title="Copy the answer without its meeting references"
       aria-label="Copy answer"
-      className={cn(
-        'inline-flex h-7 flex-shrink-0 items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 text-xs font-semibold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-        className,
-      )}
+      className={className}
     >
-      {copied ? (
-        <Check size={13} aria-hidden="true" className="text-success" />
-      ) : (
-        <Copy size={13} aria-hidden="true" />
-      )}
+      {copied && <DeckIcon icon={Check} size={12} className="text-success" />}
       {copied ? 'Copied' : 'Copy'}
-    </button>
+    </Button>
   );
 }

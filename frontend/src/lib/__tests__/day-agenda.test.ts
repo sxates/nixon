@@ -116,8 +116,8 @@ describe('initials', () => {
     expect(initials('jordan.lee@example.com')).toBe('JL');
   });
 
-  it('handles a single name', () => {
-    expect(initials('Madonna')).toBe('MA');
+  it('handles a single name (one letter, the shared ui/avatar rule)', () => {
+    expect(initials('Madonna')).toBe('M');
   });
 
   it('returns "?" for empty input', () => {

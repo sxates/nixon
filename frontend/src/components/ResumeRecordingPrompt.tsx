@@ -15,7 +15,6 @@ import { useEffect, useState, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { Radio } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -133,10 +132,7 @@ export default function ResumeRecordingPrompt() {
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-[440px]">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Radio className="h-5 w-5 text-record-ink" />
-            Unfinished recording
-          </DialogTitle>
+          <DialogTitle>Unfinished recording</DialogTitle>
           <DialogDescription>
             {title} · {formatStartedAt(current.startedAt)}
           </DialogDescription>
@@ -151,12 +147,7 @@ export default function ResumeRecordingPrompt() {
           <Button variant="outline" onClick={handleDiscard} disabled={busy}>
             Discard
           </Button>
-          <Button
-            onClick={handleResume}
-            disabled={busy}
-            className="bg-brand text-brand-foreground hover:bg-brand/90"
-          >
-            <Radio className="mr-2 h-4 w-4" />
+          <Button variant="brand" onClick={handleResume} disabled={busy}>
             Resume recording
           </Button>
         </DialogFooter>

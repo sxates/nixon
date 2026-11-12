@@ -6,7 +6,13 @@ import { safeListen } from '@/lib/safe-listen';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { cn } from '@/lib/utils';
-import { Download, RefreshCw, BadgeAlert, Trash2 } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { DeckIcon } from '@/components/ui/deck-icon';
+import { IconButton } from '@/components/ui/icon-button';
+import { Trash2 } from '@/components/ui/icons';
+import { Progress } from '@/components/ui/progress';
+import { Spinner } from '@/components/ui/spinner';
+import { StatusDot } from '@/components/ui/status-dot';
 import { toast } from 'sonner';
 import { formatSummaryModelSizeLabelFromMb } from '@/lib/onboarding-summary-model';
 
@@ -245,8 +251,8 @@ export function BuiltInModelManager({
   // Don't show loading spinner if we have downloads in progress - show the model list instead
   if (isLoading && downloadingModels.size === 0) {
     return (
-      <div className="text-center py-8 text-muted-foreground">
-        <RefreshCw className="mx-auto h-8 w-8 animate-spin mb-2" />
+      <div className="flex flex-col items-center gap-2 py-8 text-center text-muted-foreground">
+        <Spinner size="md" />
         Loading models...
       </div>
     );
@@ -266,7 +272,7 @@ export function BuiltInModelManager({
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
-        <h4 className="text-sm font-bold">Built-in AI Models</h4>
+        <h4 className="text-sm font-medium">Built-in AI Models</h4>
       </div>
 
       <div
@@ -307,30 +313,23 @@ export function BuiltInModelManager({
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div className="min-w-0 flex-1">
                   <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-                    <span className="min-w-0 break-words text-base font-bold leading-snug text-foreground">{model.display_name || model.name}</span>
+                    <span className="min-w-0 break-words text-base font-semibold leading-snug text-foreground">{model.display_name || model.name}</span>
                     {isAvailable && (
                       <>
-                        <span className="flex shrink-0 items-center gap-1 text-xs font-medium text-success">
-                          <span className="h-2 w-2 rounded-full bg-success"></span>
+                        <span className="flex shrink-0 items-center gap-1.5 text-xs font-medium text-success">
+                          <StatusDot tone="success" size={6} />
                           Ready
                         </span>
                         {selectedModel === model.name && (
-                          <span className="shrink-0 rounded bg-brand/10 px-2 py-0.5 text-xs font-medium text-brand">
-                            Selected
-                          </span>
+                          <Badge tone="brand">Selected</Badge>
                         )}
                       </>
                     )}
                     {isCorrupted && (
-                      <span className="flex shrink-0 items-center gap-1 rounded bg-destructive/10 px-2 py-0.5 text-xs font-medium text-destructive">
-                        <BadgeAlert className="h-3 w-3" />
-                        Corrupted
-                      </span>
+                      <Badge tone="destructive">Corrupted</Badge>
                     )}
                     {isError && (
-                      <span className="shrink-0 rounded bg-destructive/10 px-2 py-0.5 text-xs font-medium text-destructive">
-                        Error
-                      </span>
+                      <Badge tone="destructive">Error</Badge>
                     )}
                   </div>
                 </div>
@@ -346,7 +345,6 @@ export function BuiltInModelManager({
                         downloadModel(model.name);
                       }}
                     >
-                      <Download className="mr-2 h-4 w-4" />
                       Download
                     </Button>
                   )}
@@ -375,7 +373,6 @@ export function BuiltInModelManager({
                         downloadModel(model.name);
                       }}
                     >
-                      <RefreshCw className="mr-2 h-4 w-4" />
                       Retry
                     </Button>
                   )}
@@ -390,34 +387,33 @@ export function BuiltInModelManager({
                           downloadModel(model.name);
                         }}
                       >
-                        <RefreshCw className="mr-2 h-4 w-4" />
-                        Retry
+                          Retry
                       </Button>
                       <Button
                         variant="outline"
                         size="sm"
+                        className="text-destructive hover:text-destructive"
                         onClick={(e) => {
                           e.stopPropagation();
                           deleteModel(model.name);
                         }}
                       >
-                        <Trash2 className="mr-2 h-4 w-4" />
                         Delete
                       </Button>
                     </>
                   )}
                   {/* Available - Show small trash icon (only if not currently selected) */}
                   {isAvailable && !modelIsDownloading && selectedModel !== model.name && (
-                    <button
-                      className="p-2 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-destructive"
+                    <IconButton
+                      variant="ghost"
+                      label="Delete model"
+                      icon={<DeckIcon icon={Trash2} />}
+                      className="hover:text-destructive"
                       onClick={(e) => {
                         e.stopPropagation();
                         deleteModel(model.name);
                       }}
-                      title="Delete model"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
+                    />
                   )}
                 </div>
               </div>
@@ -463,12 +459,7 @@ export function BuiltInModelManager({
                       <span>{formatSummaryModelSizeLabelFromMb(model.size_mb)}</span>
                     )}
                   </div>
-                  <div className="w-full h-2.5 bg-muted rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-brand rounded-full transition-all duration-300"
-                      style={{ width: `${progress}%` }}
-                    />
-                  </div>
+                  <Progress value={progress} aria-label={`Downloading ${model.display_name || model.name}`} />
                 </div>
               )}
             </div>

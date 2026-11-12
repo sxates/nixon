@@ -64,12 +64,12 @@ function renderInline(
     if (m.index > last) nodes.push(...renderEmphasis(text.slice(last, m.index), `${keyBase}-t${chip}`));
     const title = source.title?.trim() || `M${num}`;
     nodes.push(
-      <button
+      <button // ui-gate: allow inline citation chip that flows inside prose; Button is a block-level control
         key={`${keyBase}-m${chip++}`}
         type="button"
         title={`Open “${title}”`}
         onClick={() => onOpenMeeting(source.meetingId)}
-        className="mx-0.5 inline-flex max-w-[16rem] items-baseline gap-1 rounded-[3px] border border-brand/25 bg-brand/10 px-2 py-px align-baseline text-[11px] font-semibold leading-[1.5] text-brand transition-colors hover:bg-brand/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="mx-0.5 inline-flex max-w-[16rem] items-baseline gap-1 rounded-sm border border-brand-edge bg-brand-wash px-2 py-px align-baseline text-caption font-semibold leading-normal text-brand transition-colors hover:border-brand focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <span className="truncate">{title}</span>
       </button>,
@@ -127,7 +127,7 @@ export function AnswerMarkdown({
 
   const blocks = toBlocks(markdown);
   return (
-    <div className="text-[14.5px] leading-relaxed text-foreground">
+    <div className="text-sm leading-relaxed text-foreground">
       {blocks.map((block, i) => {
         const key = `blk-${i}`;
         switch (block.kind) {

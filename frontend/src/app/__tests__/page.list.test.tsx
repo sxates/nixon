@@ -148,9 +148,10 @@ describe('All Meetings search entry point (specs/0054 W3 follow-up)', () => {
 });
 
 describe('All Meetings view toggle (specs/0057 Task 2)', () => {
-  it('exposes Month/List as an aria-pressed group, and pressing Month flips the state', async () => {
-    // The toggle moved from a pair of Buttons to the shared SegmentedControl.
-    // The pressed contract is what assistive tech reads, so it is what we pin.
+  it('exposes Month/List as view tabs, and choosing Month flips the state', async () => {
+    // The toggle moved from a pair of Buttons to the shared SegmentedControl, then to Tabs
+    // (tabs switch the view). The selected contract is what assistive tech reads, so it is
+    // what we pin.
     invokeMock.mockResolvedValue([]);
     const { getByRole } = render(<AllMeetingsPage />);
 
@@ -158,16 +159,16 @@ describe('All Meetings view toggle (specs/0057 Task 2)', () => {
     // per render, so each state change replaces the DOM subtree and any node
     // captured earlier is detached (same trap the search test above calls out).
     const option = (name: RegExp) =>
-      within(getByRole('group', { name: /meeting view/i })).getByRole('button', { name });
+      within(getByRole('tablist', { name: /meeting view/i })).getByRole('tab', { name });
 
     // List is the default view (specs/0054 W3).
-    expect(option(/list/i).getAttribute('aria-pressed')).toBe('true');
-    expect(option(/month/i).getAttribute('aria-pressed')).toBe('false');
+    expect(option(/list/i).getAttribute('aria-selected')).toBe('true');
+    expect(option(/month/i).getAttribute('aria-selected')).toBe('false');
 
-    fireEvent.click(option(/month/i));
+    fireEvent.mouseDown(option(/month/i), { button: 0 });
 
-    expect(option(/month/i).getAttribute('aria-pressed')).toBe('true');
-    expect(option(/list/i).getAttribute('aria-pressed')).toBe('false');
+    expect(option(/month/i).getAttribute('aria-selected')).toBe('true');
+    expect(option(/list/i).getAttribute('aria-selected')).toBe('false');
   });
 });
 
@@ -195,11 +196,11 @@ describe('All Meetings tape log (specs/0057 Task 6)', () => {
 });
 
 describe('All Meetings row grid tracks (fix round 1, Important 1)', () => {
-  it('keeps 5 direct grid children whether or not the row has attendees', async () => {
-    // display:none on the attendee cell (the old `hidden … sm:flex`) removes a grid
-    // ITEM below `sm`, so a row WITH attendees auto-placed into 4 tracks while a
-    // row without kept 5 — the tape log misaligned. The wrapper must always be a
-    // grid item; only its contents may collapse.
+  it('keeps the same fixed-width columns whether or not the row has attendees', async () => {
+    // A row WITH attendees once auto-placed into 4 grid tracks while a row without kept
+    // 5 — the tape log misaligned. The row is a ListRow now (design-system wave B): the
+    // attendee, duration and time columns are fixed-width cells every row renders, even
+    // when the attendee cell is empty, so the columns line up row to row.
     invokeMock.mockResolvedValue([
       {
         id: 'm-attendees',
@@ -217,8 +218,10 @@ describe('All Meetings row grid tracks (fix round 1, Important 1)', () => {
     const withAttendees = (await screen.findByText('Standup')).closest('button')!;
     const withoutAttendees = (await screen.findByText('Ad hoc')).closest('button')!;
 
-    expect(withAttendees.children).toHaveLength(5);
-    expect(withoutAttendees.children).toHaveLength(5);
+    const columns = (row: HTMLElement) =>
+      Array.from(row.querySelectorAll('[data-col]')).map((el) => el.getAttribute('data-col'));
+    expect(columns(withAttendees)).toEqual(['attendees', 'duration', 'time']);
+    expect(columns(withoutAttendees)).toEqual(['attendees', 'duration', 'time']);
   });
 });
 

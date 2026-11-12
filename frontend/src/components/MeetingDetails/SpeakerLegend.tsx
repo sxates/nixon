@@ -20,7 +20,13 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Check, ChevronDown, MoreVertical, Pencil, Sparkles, Users, X } from 'lucide-react';
+import { Check, ChevronDown, Pencil, Sparkles, X } from '@/components/ui/icons';
+import { DeckIcon } from '@/components/ui/deck-icon';
+import { IconButton } from '@/components/ui/icon-button';
+import { MenuButton } from '@/components/ui/menu-button';
+import { Panel } from '@/components/ui/panel';
+import { PersonOption, PersonPicker, matchesPersonQuery } from '@/components/ui/person-picker';
+import { StatusDot } from '@/components/ui/status-dot';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -45,7 +51,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { PersonFormDialog } from '@/components/People/PersonFormDialog';
-import { PersonAvatar } from '@/components/People/PersonAvatar';
+import { Avatar } from '@/components/ui/avatar';
 import { speakerBgClass, speakerColorClass } from '@/lib/speaker-colors';
 import {
   groupSeconds,
@@ -181,23 +187,15 @@ export function SpeakerLegend({
   const showChips = !collapsed;
 
   return (
-    <div
-      className={cn(
-        'flex flex-col gap-1.5 rounded-[3px] border border-border bg-card px-4 py-3 shadow-[0_1px_2px_hsl(34_12%_12%/0.03)]',
-        className,
-      )}
-    >
-      <div className="flex items-center gap-2">
-        <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
-          <Users size={13} />
-          Speakers
-          {manySpeakers && (
-            <span className="text-muted-foreground">({speakers.length})</span>
-          )}
-        </span>
-        {manySpeakers && (
-          <button
+    <Panel
+      title="Speakers"
+      count={manySpeakers ? speakers.length : null}
+      action={
+        manySpeakers ? (
+          <Button
             type="button"
+            variant="ghost"
+            size="xs"
             onClick={() => setCollapsed((c) => !c)}
             aria-expanded={!collapsed}
             aria-label={
@@ -205,19 +203,24 @@ export function SpeakerLegend({
                 ? `Show all ${speakers.length} speakers`
                 : 'Hide speaker list'
             }
-            className="ml-auto flex items-center gap-0.5 rounded px-1 py-0.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
+            className="gap-0.5 text-muted-foreground"
           >
             {collapsed ? 'Show all' : 'Hide'}
-            <ChevronDown
-              size={13}
+            <DeckIcon
+              icon={ChevronDown}
+              size={12}
               className={cn(
                 'transition-transform',
                 collapsed ? '' : 'rotate-180',
               )}
             />
-          </button>
-        )}
-      </div>
+          </Button>
+        ) : null
+      }
+      // No extra flex gap under the header: the Panel header's own mb-2 is the title→body
+      // spacing, as in Participants (the gap-1.5 on top of it set the strip 6px lower).
+      className={className}
+    >
 
       {/* Channel strip (specs/0057 §3.5). Height-capped + scrollable so a long
           speaker run scrolls WITHIN the legend instead of pushing the transcript
@@ -244,8 +247,8 @@ export function SpeakerLegend({
           />
         </div>
       )}
-      <RoomOwnerHint owner={ownerActionContext(controller)} />
-    </div>
+      <RoomOwnerHint owner={ownerActionContext(controller)} className="mt-1.5" />
+    </Panel>
   );
 }
 
@@ -365,16 +368,9 @@ function SpeakerChip({
   // specs/0019 WS2.7 (note 4) — a search box over the attendee/people assign lists so
   // picking a known person stays fast as the directory grows. Separate from the rename
   // field (which is pre-filled with the speaker's current label).
-  const q = pickQuery.trim().toLowerCase();
   const filteredAttendees = useMemo(
-    () =>
-      !q
-        ? attendees
-        : attendees.filter(
-            (a) =>
-              a.name?.toLowerCase().includes(q) || a.email?.toLowerCase().includes(q),
-          ),
-    [attendees, q],
+    () => attendees.filter((a) => matchesPersonQuery(pickQuery, a.name ?? '', a.email)),
+    [attendees, pickQuery],
   );
   const filteredPeople = useMemo(() => filterPeople(offeredPeople, pickQuery), [offeredPeople, pickQuery]);
 
@@ -405,45 +401,42 @@ function SpeakerChip({
   };
 
   return (
-    <div className="inline-flex flex-col items-start gap-1">
+    <div className="flex w-full min-w-0 flex-col items-start gap-1">
     {/* 0.1.0 canvas feedback: no box around the name — plain text with the pencil shown on
         hover/focus only (`group/chip`), so the strip reads as a list, not a row of buttons. */}
-    <div className="group/chip inline-flex items-center gap-0.5 text-xs">
-      {/* The speaker's directory photo when known (same PersonAvatar as the transcript's
+    {/* Full cell width, so the merge kebab (pushed right) sits in one column on every row. */}
+    <div className="group/chip flex w-full min-w-0 items-center gap-0.5 text-xs">
+      {/* The speaker's directory photo when known (same Avatar as the transcript's
           run header). No photo, or one that fails to load, is the color dot that matches
           the in-transcript name color — never an initials chip. */}
-      <PersonAvatar
+      <Avatar
         name={speaker.displayName}
-        photoDataUri={photoDataUri}
-        size="xxs"
+        photo={photoDataUri}
+        size={16}
         colorClass={speakerBgClass(speaker.speakerKey)}
         fallback={
-          <span
-            data-speaker-dot
-            className={cn(
-              'inline-block h-2.5 w-2.5 flex-shrink-0 rounded-full',
-              speakerBgClass(speaker.speakerKey),
-            )}
-            aria-hidden
-          />
+          <span data-speaker-dot className="inline-flex">
+            <StatusDot size={10} className={speakerBgClass(speaker.speakerKey)} />
+          </span>
         }
       />
 
       {/* Click the name to rename / pick an attendee. */}
       <Popover open={renameOpen} onOpenChange={(o) => { setRenameOpen(o); if (o) setPickQuery(''); }}>
         <PopoverTrigger asChild>
-          <button
+          <button // ui-gate: allow inline speaker-name text trigger for the rename popover: coloured text with a hover pencil, not Button chrome
             type="button"
             className={cn(
-              'flex items-center gap-1 rounded px-1 py-0.5 font-medium hover:bg-muted',
+              'flex min-w-0 items-center gap-1 rounded-md px-1 py-0.5 font-medium hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
               speakerColorClass(speaker.speakerKey),
             )}
             title="Rename speaker"
           >
-            {speaker.displayName}
-            <Pencil
-              size={10}
-              className="text-muted-foreground opacity-0 transition-opacity group-hover/chip:opacity-100 group-has-[:focus-visible]/chip:opacity-100"
+            <span className="truncate">{speaker.displayName}</span>
+            <DeckIcon
+              icon={Pencil}
+              size={12}
+              className="flex-none text-muted-foreground opacity-0 transition-opacity group-hover/chip:opacity-100 group-has-[:focus-visible]/chip:opacity-100"
             />
           </button>
         </PopoverTrigger>
@@ -451,16 +444,18 @@ function SpeakerChip({
           <div className="space-y-2">
             {/* Pre-filled obvious mapping, surfaced as a one-click affordance. */}
             {matchedSuggestion && (
-              <button
+              <Button
                 type="button"
+                variant="outline"
+                size="sm"
                 onClick={() => void acceptSuggestion()}
-                className="flex w-full items-center gap-2 rounded-md border border-brand/30 bg-brand/10 px-2 py-1.5 text-left text-xs text-brand hover:bg-brand/20"
+                className="w-full justify-start border-brand-edge bg-brand-wash font-normal text-brand hover:bg-brand-wash hover:text-brand"
               >
-                <Check size={14} className="flex-shrink-0" />
+                <DeckIcon icon={Check} size={14} className="flex-none" />
                 <span className="truncate">
                   This is <strong>{matchedSuggestion.displayName}</strong>?
                 </span>
-              </button>
+              </Button>
             )}
 
             <SpeakerOwnerAction speakerKey={speaker.speakerKey} isLocal={speaker.isLocal} memberKeys={memberKeys} owner={owner} onBeforeAction={() => setRenameOpen(false)} />
@@ -488,97 +483,72 @@ function SpeakerChip({
               </Button>
             </form>
 
-            {/* WS2.7 — search across the attendee + people assign lists. */}
+            {/* WS2.7 — one search over the attendee + people assign lists. Attendees come
+                only from a linked calendar event; People are durable, cross-meeting
+                identities (specs/0016 1b) and work even for people who've opted out of
+                voice modeling. */}
             {(attendees.length > 0 || offeredPeople.length > 0) && (
-              <Input
-                value={pickQuery}
-                onChange={(e) => setPickQuery(e.target.value)}
+              <PersonPicker
+                query={pickQuery}
+                onQueryChange={setPickQuery}
                 placeholder="Search people…"
-                className="h-7 text-xs"
-                aria-label="Search people to assign"
+                searchLabel="Search people to assign"
+                autoFocus={false}
+                groups={[
+                  ...(attendees.length > 0
+                    ? [
+                        {
+                          label: 'Attendees',
+                          options: filteredAttendees.map((attendee) => (
+                            <PersonOption
+                              key={attendee.email || attendee.name}
+                              name={attendee.name}
+                              email={attendee.email}
+                              suffix={attendee.isCurrentUser ? '(you)' : undefined}
+                              onSelect={() => void pickAttendee(attendee)}
+                            />
+                          )),
+                        },
+                      ]
+                    : []),
+                  ...(offeredPeople.length > 0
+                    ? [
+                        {
+                          label: 'People',
+                          options: filteredPeople.map((person) => (
+                            <PersonOption
+                              key={person.id}
+                              name={person.displayName}
+                              email={person.email}
+                              suffix={person.role ? `· ${person.role}` : undefined}
+                              onSelect={() => void pickPerson(person)}
+                            />
+                          )),
+                        },
+                      ]
+                    : []),
+                ]}
               />
-            )}
-
-            {/* Attendee pick-list — only when the meeting has a linked calendar event. */}
-            {attendees.length > 0 && (
-              <div className="space-y-1">
-                <div className="u-section-label px-1">
-                  Attendees
-                </div>
-                <div className="max-h-44 space-y-0.5 overflow-y-auto">
-                  {filteredAttendees.map((attendee) => (
-                    <button
-                      key={attendee.email || attendee.name}
-                      type="button"
-                      onClick={() => void pickAttendee(attendee)}
-                      className="flex w-full flex-col items-start rounded px-2 py-1 text-left text-xs hover:bg-muted"
-                    >
-                      <span className="font-medium text-foreground">
-                        {attendee.name}
-                        {attendee.isCurrentUser && (
-                          <span className="ml-1 text-muted-foreground">(you)</span>
-                        )}
-                      </span>
-                      {attendee.email && (
-                        <span className="truncate text-[11px] text-muted-foreground">
-                          {attendee.email}
-                        </span>
-                      )}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* People pick-list — durable, cross-meeting identities (specs/0016 1b).
-                An additional assign source alongside calendar attendees; works even
-                for people who've opted out of voice modeling. */}
-            {offeredPeople.length > 0 && (
-              <div className="space-y-1">
-                <div className="u-section-label px-1">
-                  People
-                </div>
-                <div className="max-h-44 space-y-0.5 overflow-y-auto">
-                  {filteredPeople.map((person) => (
-                    <button
-                      key={person.id}
-                      type="button"
-                      onClick={() => void pickPerson(person)}
-                      className="flex w-full flex-col items-start rounded px-2 py-1 text-left text-xs hover:bg-muted"
-                    >
-                      <span className="font-medium text-foreground">
-                        {person.displayName}
-                        {person.role && (
-                          <span className="ml-1 text-muted-foreground">
-                            · {person.role}
-                          </span>
-                        )}
-                      </span>
-                      {person.email && (
-                        <span className="truncate text-[11px] text-muted-foreground">
-                          {person.email}
-                        </span>
-                      )}
-                    </button>
-                  ))}
-                </div>
-              </div>
             )}
 
             {/* Edit the durable Person behind this speaker (specs/0017) — set
                 name/role/notes without leaving the meeting. Only when linked. */}
             {linkedPerson && (
-              <button
-                type="button"
-                onClick={() => {
-                  setRenameOpen(false);
-                  setEditPersonOpen(true);
-                }}
-                className="flex w-full items-center gap-2 rounded-md border-t border-border px-2 pt-2 text-left text-xs text-muted-foreground hover:text-foreground"
-              >
-                <Pencil size={12} className="flex-shrink-0" />
-                Edit {linkedPerson.displayName}
-              </button>
+              <div className="border-t border-border pt-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="xs"
+                  onClick={() => {
+                    setRenameOpen(false);
+                    setEditPersonOpen(true);
+                  }}
+                  className="w-full justify-start gap-2 font-normal text-muted-foreground"
+                >
+                  <DeckIcon icon={Pencil} size={12} className="flex-none" />
+                  Edit {linkedPerson.displayName}
+                </Button>
+              </div>
             )}
           </div>
         </PopoverContent>
@@ -597,11 +567,13 @@ function SpeakerChip({
 
       {/* Merge menu (only meaningful when there's another speaker to merge into). */}
       {mergeTargets.length > 0 && (
-        <MergeMenu
-          speaker={speaker}
-          targets={mergeTargets}
-          onMerge={fanMerge}
-        />
+        <div className="ml-auto flex-none">
+          <MergeMenu
+            speaker={speaker}
+            targets={mergeTargets}
+            onMerge={fanMerge}
+          />
+        </div>
       )}
     </div>
 
@@ -611,15 +583,15 @@ function SpeakerChip({
           reads as the same "we think we know who this is" language. */}
       {crossMeetingSuggestion && (
         <TooltipProvider delayDuration={300}>
-          <div className="inline-flex items-center gap-0.5 rounded-[3px] border border-brand/30 bg-brand/10 pl-1.5 pr-0.5 py-0.5 text-[11px] text-brand">
+          <div className="inline-flex items-center gap-0.5 rounded-md border border-brand-edge bg-brand-wash py-0.5 pl-1.5 pr-0.5 text-caption text-brand">
             <Tooltip>
               <TooltipTrigger asChild>
-                <button
+                <button // ui-gate: allow text half of the brand suggestion chip; Button chrome would double the chip's own border
                   type="button"
                   onClick={() => void acceptCrossMeetingSuggestion()}
-                  className="flex items-center gap-1 rounded-[3px] px-1 py-0.5 font-medium hover:bg-brand/20"
+                  className="flex items-center gap-1 rounded-sm px-1 py-0.5 font-medium hover:bg-brand-wash focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
-                  <Sparkles size={11} className="flex-shrink-0" />
+                  <DeckIcon icon={Sparkles} size={12} className="flex-none" />
                   <span className="truncate">
                     Looks like {crossMeetingSuggestion.suggestedName}
                   </span>
@@ -632,17 +604,15 @@ function SpeakerChip({
                 </span>
               </TooltipContent>
             </Tooltip>
-            <button
-              type="button"
+            <IconButton
+              variant="ghost"
+              label={`Dismiss suggestion for ${speaker.displayName}`}
               onClick={() =>
                 onDismissCrossMeetingSuggestion(speaker.speakerKey)
               }
-              className="flex-shrink-0 rounded-[3px] p-0.5 text-brand/70 hover:bg-brand/20 hover:text-brand"
-              aria-label={`Dismiss suggestion for ${speaker.displayName}`}
-              title="Dismiss"
-            >
-              <X size={11} />
-            </button>
+              icon={<DeckIcon icon={X} size={12} />}
+              className="h-5 w-5 text-brand hover:bg-brand-wash hover:text-brand"
+            />
           </div>
         </TooltipProvider>
       )}
@@ -664,13 +634,7 @@ function MergeMenu({ speaker, targets, onMerge }: MergeMenuProps) {
     <>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <button
-            type="button"
-            className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
-            title="Merge this speaker into another"
-          >
-            <MoreVertical size={13} />
-          </button>
+          <MenuButton label="Merge this speaker into another" />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-52">
           <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
@@ -683,13 +647,7 @@ function MergeMenu({ speaker, targets, onMerge }: MergeMenuProps) {
               onSelect={() => setPendingTarget(target)}
               className="text-sm"
             >
-              <span
-                className={cn(
-                  'mr-2 inline-block h-2.5 w-2.5 rounded-full',
-                  speakerBgClass(target.speakerKey),
-                )}
-                aria-hidden
-              />
+              <StatusDot className={cn('mr-2', speakerBgClass(target.speakerKey))} />
               {target.displayName}
             </DropdownMenuItem>
           ))}

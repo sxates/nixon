@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Loader2, MoreHorizontal } from 'lucide-react';
+import { MenuButton } from '@/components/ui/menu-button';
+import { Spinner } from '@/components/ui/spinner';
 
 import { ModelConfig, ModelSettingsModal } from '@/components/ModelSettingsModal';
 import { Button } from '@/components/ui/button';
@@ -39,6 +40,11 @@ export interface SummaryToolbarProps {
   isModelConfigLoading: boolean;
   onGenerateSummary: () => Promise<void>;
   onStopGeneration: () => void;
+  /**
+   * Leave Generate out (Stop still shows while a run is live): the empty Summary tab has
+   * its own Generate summary CTA right below, and two of the same key read as two actions.
+   */
+  hideGenerate?: boolean;
 
   /* Prompt */
   prompts: SummaryPrompt[];
@@ -85,6 +91,7 @@ export function SummaryToolbar({
   isModelConfigLoading,
   onGenerateSummary,
   onStopGeneration,
+  hideGenerate = false,
   prompts,
   promptState,
   onPromptSelect,
@@ -132,13 +139,13 @@ export function SummaryToolbar({
           <Button
             variant="outline"
             size="xs"
-            className="border-record/30 bg-record/10 text-record-ink hover:bg-record/20 xl:px-4"
+            className="text-destructive xl:px-4"
             onClick={onStopGeneration}
             title="Stop summary generation"
           >
             <span>Stop</span>
           </Button>
-        ) : (
+        ) : hideGenerate ? null : (
           <Button
             variant="outline"
             size="xs"
@@ -159,11 +166,11 @@ export function SummaryToolbar({
           >
             {isCheckingModels || isModelConfigLoading ? (
               <>
-                <Loader2 className="mr-2 animate-spin" size={16} />
+                <Spinner />
                 <span>Processing…</span>
               </>
             ) : (
-              <span>{hasSummary ? 'Regenerate Summary' : 'Generate Summary'}</span>
+              <span>{hasSummary ? 'Regenerate summary' : 'Generate summary'}</span>
             )}
           </Button>
         )}
@@ -173,7 +180,7 @@ export function SummaryToolbar({
           <Button
             variant="outline"
             size="xs"
-            className="bg-brand/20"
+            className="bg-brand-wash"
             title={isSaving ? 'Saving' : 'Save changes'}
             onClick={() => {
               void onSave();
@@ -182,7 +189,7 @@ export function SummaryToolbar({
           >
             {isSaving ? (
               <>
-                <Loader2 className="mr-2 animate-spin" size={16} />
+                <Spinner />
                 <span>Saving…</span>
               </>
             ) : (
@@ -202,14 +209,9 @@ export function SummaryToolbar({
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button
-              variant="outline"
-              size="xs"
-              aria-label="More summary actions"
-              title="More summary actions"
-            >
-              <MoreHorizontal size={14} />
-            </Button>
+            {/* Outline, to match the outline buttons beside it in the group (same trigger as the
+                Transcript tab's toolbar `…`). */}
+            <MenuButton label="More summary actions" variant="outline" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuItem

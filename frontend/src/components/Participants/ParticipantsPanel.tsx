@@ -24,9 +24,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { toast } from 'sonner';
-import { AtSign, ChevronDown, Plus, UserPlus, Users } from 'lucide-react';
+import { ChevronDown, Plus } from '@/components/ui/icons';
 import { Button } from '@/components/ui/button';
+import { DeckIcon } from '@/components/ui/deck-icon';
+import { IconButton } from '@/components/ui/icon-button';
 import { Input } from '@/components/ui/input';
+import { Panel } from '@/components/ui/panel';
+import { PersonOption } from '@/components/ui/person-picker';
 import {
   Popover,
   PopoverContent,
@@ -352,33 +356,21 @@ export function ParticipantsPanel({
   const collapsible = !isCompact && participants.length >= PARTICIPANT_COLLAPSE_THRESHOLD;
   const rosterOpen = !collapsible || (rosterOpenChoice ?? false);
 
-  const header = (
-    <div className="flex items-center gap-2">
-      <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-        <Users size={13} />
-        Participants
-        {participants.length > 0 && (
-          <span className="text-muted-foreground">({participants.length})</span>
-        )}
-      </span>
-      {collapsible && (
-        <button
-          type="button"
-          onClick={() => setRosterOpenChoice(!rosterOpen)}
-          aria-expanded={rosterOpen}
-          aria-label={rosterOpen ? 'Collapse participants' : 'Expand participants'}
-          title={rosterOpen ? 'Collapse participants' : 'Expand participants'}
-          className="inline-flex h-5 w-5 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <ChevronDown
-            size={14}
-            className={cn('transition-transform', rosterOpen && 'rotate-180')}
-          />
-        </button>
-      )}
-      <div className="ml-auto">{addControl}</div>
-    </div>
-  );
+  const count = participants.length > 0 ? participants.length : null;
+  const collapseToggle = collapsible ? (
+    <IconButton
+      variant="ghost"
+      onClick={() => setRosterOpenChoice(!rosterOpen)}
+      aria-expanded={rosterOpen}
+      label={rosterOpen ? 'Collapse participants' : 'Expand participants'}
+      icon={
+        <DeckIcon
+          icon={ChevronDown}
+          className={cn('transition-transform', rosterOpen && 'rotate-180')}
+        />
+      }
+    />
+  ) : null;
 
   const list =
     participants.length === 0 ? (
@@ -423,24 +415,16 @@ export function ParticipantsPanel({
           const { hidden } = splitForDisplay(participants, PARTICIPANT_CAP, expanded);
           if (hidden > 0) {
             return (
-              <button
-                type="button"
-                onClick={() => setExpanded(true)}
-                className="rounded-[3px] border border-dashed border-border px-2.5 py-1 text-xs font-medium text-muted-foreground hover:text-foreground"
-              >
+              <Button type="button" variant="dashed" size="xs" onClick={() => setExpanded(true)}>
                 +{hidden} more
-              </button>
+              </Button>
             );
           }
           if (expanded && participants.length > PARTICIPANT_CAP) {
             return (
-              <button
-                type="button"
-                onClick={() => setExpanded(false)}
-                className="rounded-[3px] border border-dashed border-border px-2.5 py-1 text-xs font-medium text-muted-foreground hover:text-foreground"
-              >
+              <Button type="button" variant="dashed" size="xs" onClick={() => setExpanded(false)}>
                 Show less
-              </button>
+              </Button>
             );
           }
           return null;
@@ -462,41 +446,23 @@ export function ParticipantsPanel({
               key={dl.email || dlLabel}
               className="flex items-center gap-2 rounded-lg border border-dashed border-border bg-muted/40 px-2.5 py-1.5 text-xs"
             >
-              <span
-                className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground"
-                aria-hidden="true"
-              >
-                <AtSign size={12} />
-              </span>
               <div className="min-w-0 flex-1">
                 <div className="truncate font-medium text-foreground">{dlLabel}</div>
-                <div className="text-[11px] text-muted-foreground">
+                <div className="text-caption text-muted-foreground">
                   Distribution list — members added as they RSVP
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={() => setAddOpen(true)}
-                className="flex-shrink-0 rounded-[3px] border border-dashed border-border px-2 py-0.5 text-[11px] font-medium text-muted-foreground hover:border-brand/50 hover:text-brand"
-              >
+              <Button type="button" variant="dashed" size="xs" onClick={() => setAddOpen(true)}>
                 Add members
-              </button>
+              </Button>
             </div>
           );
         })}
       </div>
     ) : null;
 
-  return (
-    <div
-      className={cn(
-        isCompact
-          ? 'flex flex-col gap-2'
-          : 'flex flex-col gap-2 rounded-[3px] border border-border bg-card px-4 py-3 shadow-[0_1px_2px_hsl(34_12%_12%/0.03)]',
-        className,
-      )}
-    >
-      {header}
+  const body = (
+    <>
       {/* Collapsed: faces and a sentence. Expanded: the full grid. The distribution-list
           floor follows the roster — a DL is part of "who is in this meeting", so it
           collapses with it rather than hanging under a collapsed card. */}
@@ -520,7 +486,44 @@ export function ParticipantsPanel({
         person={personToEdit}
         onSaved={handleSaved}
       />
-    </div>
+    </>
+  );
+
+  // The in-recording popover is already a surface of its own, so the compact variant is
+  // the same header and body without the card around them.
+  if (isCompact) {
+    return (
+      <section aria-labelledby={`participants-${meetingId}-title`} className={cn('flex flex-col gap-2', className)}>
+        <div className="flex min-h-6 items-center gap-2">
+          <h2 id={`participants-${meetingId}-title`} className="u-section-label">
+            Participants
+          </h2>
+          {count != null && (
+            <span className="rounded-sm bg-muted px-1 text-caption font-medium tabular-nums text-muted-foreground">
+              {count}
+            </span>
+          )}
+          <div className="ml-auto">{addControl}</div>
+        </div>
+        {body}
+      </section>
+    );
+  }
+
+  return (
+    <Panel
+      title="Participants"
+      count={count}
+      action={
+        <>
+          {collapseToggle}
+          {addControl}
+        </>
+      }
+      className={className}
+    >
+      <div className="flex flex-col gap-2">{body}</div>
+    </Panel>
   );
 }
 
@@ -565,16 +568,10 @@ function AddParticipantPopover({
   return (
     <Popover open={open} onOpenChange={onOpenChange}>
       <PopoverTrigger asChild>
-        <button
-          type="button"
-          className={cn(
-            'inline-flex items-center gap-1 rounded-[3px] border border-dashed border-border px-2 py-0.5 text-xs font-medium text-muted-foreground hover:border-brand/50 hover:text-brand',
-          )}
-          title="Add participant"
-        >
-          <Plus size={12} />
+        <Button type="button" variant="dashed" size="xs" title="Add participant">
+          <Plus />
           {compact ? 'Add' : 'Add participant'}
-        </button>
+        </Button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-72 p-2">
         <div className="space-y-2">
@@ -601,8 +598,7 @@ function AddParticipantPopover({
                 type="email"
                 className="h-8 text-sm"
               />
-              <Button type="submit" size="sm" className="h-8 gap-1 px-2">
-                <UserPlus size={13} />
+              <Button type="submit" size="sm" className="px-2.5">
                 Add
               </Button>
             </div>
@@ -614,30 +610,19 @@ function AddParticipantPopover({
             <div className="space-y-1 border-t border-border pt-2">
               <div className="u-section-label px-1">People</div>
               {filteredPeople.length === 0 ? (
-                <div className="px-2 py-1 text-[11px] text-muted-foreground">
+                <div className="px-2 py-1 text-caption text-muted-foreground">
                   No people match “{name.trim()}”. Add a new one above.
                 </div>
               ) : (
               <div className="max-h-48 space-y-0.5 overflow-y-auto">
                 {filteredPeople.map((person) => (
-                  <button
+                  <PersonOption
                     key={person.id}
-                    type="button"
-                    onClick={() => void onAddExisting(person)}
-                    className="flex w-full flex-col items-start rounded px-2 py-1 text-left text-xs hover:bg-muted"
-                  >
-                    <span className="font-medium text-foreground">
-                      {person.displayName}
-                      {person.role && (
-                        <span className="ml-1 text-muted-foreground">· {person.role}</span>
-                      )}
-                    </span>
-                    {person.email && (
-                      <span className="truncate text-[11px] text-muted-foreground">
-                        {person.email}
-                      </span>
-                    )}
-                  </button>
+                    name={person.displayName}
+                    suffix={person.role ? `· ${person.role}` : undefined}
+                    email={person.email}
+                    onSelect={() => void onAddExisting(person)}
+                  />
                 ))}
               </div>
               )}

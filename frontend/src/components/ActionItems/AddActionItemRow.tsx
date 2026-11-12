@@ -8,7 +8,7 @@
  */
 
 import { useState } from 'react';
-import { Plus } from 'lucide-react';
+import { Plus } from '@/components/ui/icons';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
@@ -64,7 +64,7 @@ export function AddActionItemRow({
         className="h-8 flex-shrink-0 gap-1 px-2.5"
         disabled={!draft.trim() || isSubmitting}
       >
-        <Plus size={13} />
+        <Plus />
         Add
       </Button>
     </form>

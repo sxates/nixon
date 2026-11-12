@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { Loader2 } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -12,6 +11,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { Spinner } from '@/components/ui/spinner';
 import { deleteManualMeeting } from '@/lib/day-agenda';
 
 interface DeleteManualMeetingDialogProps {
@@ -81,7 +81,7 @@ export function DeleteManualMeetingDialog({
             Cancel
           </Button>
           <Button variant="destructive" onClick={handleConfirm} disabled={isDeleting}>
-            {isDeleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {isDeleting && <Spinner size="sm" />}
             Delete
           </Button>
         </DialogFooter>

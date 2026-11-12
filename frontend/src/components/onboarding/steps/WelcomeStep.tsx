@@ -1,6 +1,6 @@
 import React from 'react';
-import { Lock, Sparkles, Cpu } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { StatusDot } from '@/components/ui/status-dot';
 import { OnboardingContainer } from '../OnboardingContainer';
 import { useOnboarding } from '@/contexts/OnboardingContext';
 
@@ -8,18 +8,9 @@ export function WelcomeStep() {
   const { goNext } = useOnboarding();
 
   const features = [
-    {
-      icon: Lock,
-      title: 'Your data never leaves your device',
-    },
-    {
-      icon: Sparkles,
-      title: 'Intelligent summaries & insights',
-    },
-    {
-      icon: Cpu,
-      title: 'Works offline, no cloud required',
-    },
+    'Your data never leaves your device',
+    'Intelligent summaries & insights',
+    'Works offline, no cloud required',
   ];
 
   return (
@@ -34,29 +25,19 @@ export function WelcomeStep() {
         <div className="w-16 h-px bg-border" />
 
         {/* Features Card */}
-        <div className="w-full max-w-md bg-card rounded-[3px] border border-border shadow-sm p-6 space-y-4">
-          {features.map((feature, index) => {
-            const Icon = feature.icon;
-            return (
-              <div key={index} className="flex items-start gap-3">
-                <div className="flex-shrink-0 mt-0.5">
-                  <div className="w-5 h-5 rounded-full bg-muted flex items-center justify-center">
-                    <Icon className="w-3 h-3 text-foreground" />
-                  </div>
-                </div>
-                <p className="text-sm text-foreground leading-relaxed">{feature.title}</p>
-              </div>
-            );
-          })}
-        </div>
+        <ul className="w-full max-w-md space-y-4 rounded-lg border border-border bg-card p-6 shadow-card">
+          {features.map((feature) => (
+            <li key={feature} className="flex items-center gap-3">
+              <StatusDot tone="muted" size={6} />
+              <p className="text-sm leading-relaxed text-foreground">{feature}</p>
+            </li>
+          ))}
+        </ul>
 
         {/* CTA Section */}
         <div className="w-full max-w-xs space-y-3">
-          <Button
-            onClick={goNext}
-            className="w-full h-11 bg-brand hover:bg-brand/90 text-brand-foreground"
-          >
-            Get Started
+          <Button variant="brand" size="lg" className="w-full" onClick={goNext}>
+            Get started
           </Button>
           <p className="text-xs text-center text-muted-foreground">Takes less than 3 minutes</p>
         </div>

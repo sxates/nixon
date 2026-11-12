@@ -86,6 +86,18 @@
     --bevel-hi: 0 0% 100% / 0.85;
     --bevel-lo: 0 0% 0% / 0.14;
 
+    /* Named tints (docs/design-system.md §Tints), derived from the lamps so they track
+       each theme. Consumed as hsl(var(--brand-wash)) etc. via tailwind.config.js. */
+    --brand-wash: var(--brand) / 0.1;
+    --brand-edge: var(--brand) / 0.3;
+    --destructive-wash: var(--destructive) / 0.05;
+    --destructive-edge: var(--destructive) / 0.3;
+    --success-wash: var(--success) / 0.1;
+    --rule: var(--border) / 0.6;       /* soft in-card divider */
+    --shadow-card: 0 1px 2px hsl(34 12% 12% / 0.03);
+    /* Dialog overlay (ui/dialog). A warm ink dim on Faceplate rather than flat black. */
+    --scrim: 34 12% 10% / 0.6;
+
     --rail-h: 3.5rem; /* transport rail height (specs/0057 Plan 2; 56px after specs/0063 W2 grew the keys to 44px so the glyph clears the lamp bar) */
   }
 
@@ -209,6 +221,17 @@
     --meter-vignette: 0 0% 0% / 0.22;
     --bevel-hi: 0 0% 100% / 0.06;
     --bevel-lo: 0 0% 0% / 0.45;
+
+    /* Re-derived here so they pick up Deck's lamps on the element that sets .dark. */
+    --brand-wash: var(--brand) / 0.1;
+    --brand-edge: var(--brand) / 0.3;
+    --destructive-wash: var(--destructive) / 0.05;
+    --destructive-edge: var(--destructive) / 0.3;
+    --success-wash: var(--success) / 0.1;
+    --rule: var(--border) / 0.6;
+    /* Faceplate's 3% warm shadow vanishes on charcoal; a deeper black one reads as lift. */
+    --shadow-card: 0 1px 2px hsl(0 0% 0% / 0.3);
+    --scrim: 0 0% 0% / 0.7;
   }
 
   /* specs/0061 W2: sonner's richColors ship cold web green/blue from node_modules; the
@@ -426,23 +449,51 @@
 @layer components {
   /* Engraved silkscreen label — every place a 1970 panel would have printed caps. */
   .u-section-label {
-    @apply text-[10px] font-semibold uppercase tracking-[0.14em] text-engrave;
+    @apply text-label font-semibold uppercase tracking-[0.14em] text-engrave;
     text-shadow: 0 -1px 0 hsl(0 0% 100% / 0.75);
   }
   .dark .u-section-label {
     text-shadow: 0 1px 0 hsl(0 0% 100% / 0.06);
   }
+  /* The same engraved label at 9px — key caps, chips, table-header legends. Never shrink
+     .u-section-label with text-[…]; use this. */
+  .u-section-label-sm {
+    @apply text-micro font-semibold uppercase tracking-[0.14em] text-engrave;
+    text-shadow: 0 -1px 0 hsl(0 0% 100% / 0.75);
+  }
+  .dark .u-section-label-sm {
+    text-shadow: 0 1px 0 hsl(0 0% 100% / 0.06);
+  }
+  /* Page / meeting title (PageHeader's h1). */
+  .u-page-title {
+    @apply font-display text-title font-semibold text-foreground;
+  }
   /* Section heading inside a document column ("Key points", "Decisions"). */
   .u-doc-heading {
-    @apply font-display text-[18px] font-semibold text-foreground;
+    @apply font-display text-heading font-semibold text-foreground;
+  }
+  /* List-row title (meeting rows, people rows, agenda rows). */
+  .u-row-title {
+    @apply text-body font-semibold text-foreground;
+  }
+  /* Row metadata: times, emails, counts. */
+  .u-row-meta {
+    @apply text-caption text-muted-foreground;
   }
   /* Muted secondary/metadata line (dates, durations, attendee summaries). */
   .u-meta {
-    @apply text-[13px] text-muted-foreground;
+    @apply text-meta text-muted-foreground;
   }
-  /* Typewriter-on-paper: the transcript body and the reel label (specs/0057 decision 4). */
+  /* Typewriter-on-paper: the transcript body and the reel label (specs/0057 decision 4).
+     text-body carries the 1.5 line-height. */
   .u-typed {
-    @apply font-type text-[13.5px] leading-[1.5] text-paper-ink;
+    @apply font-type text-body text-paper-ink;
+  }
+  /* Transcript speaker name: typed, 12px, bold caps. Colour is per-use (speaker colour
+     class or text-muted-foreground) — the only place font-bold belongs. */
+  .u-speaker {
+    @apply font-type text-xs font-bold uppercase tracking-[0.02em] text-paper-ink;
+    line-height: 1.5;
   }
   /* Tape-counter glyph (specs/0057 §3.3). Digits and colons are painted with generated
      content so nothing the counter *draws* lands in its textContent — the readable value is

@@ -3,16 +3,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import { toast } from 'sonner';
-import { Loader2, RefreshCw } from 'lucide-react';
+import { RefreshCw } from '@/components/ui/icons';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { Spinner } from '@/components/ui/spinner';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   type CalendarAccessStatus,
   getCalendarAccessStatus,
@@ -35,7 +31,7 @@ import {
 } from '@/lib/googleCalendar';
 import { describeSyncOutcome } from '@/lib/googleCalendarSyncMessage';
 import { useGoogleCalendarConnect } from '@/hooks/useGoogleCalendarConnect';
-import { SettingsNote, SettingsSection } from '@/components/ui/settings';
+import { SettingsGroup, SettingsNote, SettingsRow, SettingsSection } from '@/components/ui/settings';
 
 /**
  * Anchor for deep links into this section (specs/0066). Today's connect-calendar card
@@ -104,12 +100,8 @@ function CapabilityRow({
   );
 }
 
-/**
- * Badge marking the row that is Nixon's active calendar source — same house
- * style as the "custom" source badge used elsewhere in Settings.
- */
-const ACTIVE_BADGE_CLASS =
-  'flex-shrink-0 rounded-[3px] px-2 py-0.5 text-[11px] font-semibold bg-brand/10 text-brand';
+/** Badge marking the row that is Nixon's active calendar source. */
+const ACTIVE_BADGE = <Badge tone="brand">Active</Badge>;
 
 /**
  * Settings → Calendar card (specs/0032 task 6).
@@ -427,20 +419,16 @@ export function CalendarSettings() {
           from RecordingSettings. Read on-device; zero network egress. Active
           source whenever Google is not connected; de-emphasized (but still
           usable) while Google is the source. */}
-      <div
-        role="group"
-        aria-label="macOS Calendar source"
-        className={`flex items-center justify-between gap-4 rounded-[3px] border border-border bg-card p-4 ${
-          connected ? 'opacity-60' : ''
-        }`}
-      >
-        <div className="flex-1">
-          <div className="flex items-center gap-2 font-medium">
-            macOS Calendar
-            {!connected && <span className={ACTIVE_BADGE_CLASS}>Active</span>}
-          </div>
-          <div className="text-sm text-muted-foreground">
-            {connected ? (
+      <SettingsGroup>
+        <SettingsRow
+          role="group"
+          aria-label="macOS Calendar source"
+          data-lapsed={connected || undefined}
+          label="macOS Calendar"
+          muted={connected}
+          aside={!connected ? ACTIVE_BADGE : undefined}
+          description={
+            connected ? (
               <>
                 Not used while Google Calendar is connected
                 {' · '}
@@ -451,251 +439,236 @@ export function CalendarSettings() {
                 {calendarStatus ? CALENDAR_STATUS_LABEL[calendarStatus] : 'Checking…'}
                 {' — '}read on-device; your calendar data never leaves this Mac.
               </>
-            )}
-          </div>
-        </div>
-        {calendarStatus !== 'authorized' && (
-          <Button
-            variant={connected ? 'outline' : 'brand'}
-            size="sm"
-            onClick={handleConnectCalendar}
-            disabled={connectingCalendar || calendarStatus === 'restricted'}
-          >
-            {connectingCalendar ? 'Connecting…' : 'Connect Calendar'}
-          </Button>
-        )}
-      </div>
-
-      {/* Google Calendar (specs/0032, ADR-0010) — connecting makes it the
-          active (and only) calendar source. */}
-      <div role="group" aria-label="Google Calendar source" className="rounded-[3px] border border-border bg-card p-4">
-        <div className="flex items-center justify-between gap-4">
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2 font-medium">
-              Google Calendar
-              {connected && <span className={ACTIVE_BADGE_CLASS}>Active</span>}
-            </div>
-            <div className="text-sm text-muted-foreground">
-              {googleStatus === null
-                ? 'Checking…'
-                : !configured
-                  ? // State (a): no OAuth client id baked into this build — inert.
-                    "Google Calendar isn't configured in this build."
-                  : googleConnecting
-                    ? 'Complete the connection in your browser…'
-                    : connected
-                      ? `Connected as ${googleStatus.email ?? 'your Google account'} · ${formatLastSynced(googleStatus.lastSyncedAt)}`
-                      : 'Not connected'}
-            </div>
-          </div>
-
-          {/* State (c): connect in flight — cancel/dismiss affordance. */}
-          {configured && googleConnecting && (
-            <div className="flex flex-shrink-0 items-center gap-2">
-              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" aria-hidden />
-              <Button variant="outline" size="sm" onClick={handleGoogleConnectDismiss}>
-                Cancel
-              </Button>
-            </div>
-          )}
-
-          {/* State (b): disconnected — Connect. */}
-          {configured && !googleConnecting && !connected && (
-            <Button
-              variant="brand"
-              size="sm"
-              className="flex-shrink-0"
-              onClick={handleGoogleConnect}
-            >
-              Connect Google Calendar
-            </Button>
-          )}
-
-          {/* State (d): connected — Sync now + Disconnect. */}
-          {configured && !googleConnecting && connected && (
-            <div className="flex flex-shrink-0 items-center gap-2">
+            )
+          }
+          control={
+            calendarStatus !== 'authorized' ? (
               <Button
-                variant="outline"
+                variant={connected ? 'outline' : 'brand'}
                 size="sm"
-                onClick={handleSyncNow}
-                disabled={googleSyncing}
+                onClick={handleConnectCalendar}
+                disabled={connectingCalendar || calendarStatus === 'restricted'}
               >
-                <RefreshCw className={`h-4 w-4 ${googleSyncing ? 'animate-spin' : ''}`} />
-                {googleSyncing ? 'Syncing…' : 'Sync now'}
+                {connectingCalendar ? 'Connecting…' : 'Connect Calendar'}
               </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="text-destructive hover:text-destructive"
-                onClick={() => setDisconnectOpen(true)}
-              >
-                Disconnect
-              </Button>
-            </div>
-          )}
-        </div>
+            ) : undefined
+          }
+        />
 
-        {/* State (b) details: source-switch note + privacy copy (ADR-0010,
-            verbatim) + first-connect note. */}
-        {configured && !connected && !googleConnecting && (
-          <div className="mt-3 space-y-2 border-t pt-3">
-            <p className="text-sm text-muted-foreground">
-              Connecting switches Nixon&apos;s calendar source to Google Calendar.
-            </p>
-            <p className="text-sm text-muted-foreground">{GOOGLE_PRIVACY_COPY}</p>
-            <p className="text-sm text-muted-foreground">{GOOGLE_ENRICHMENT_COPY}</p>
-            <p className="text-xs text-muted-foreground">
-              First time connecting: Google shows an &quot;unverified app&quot; warning —
-              expected for a personal build. Click Advanced → Continue.
-            </p>
-          </div>
-        )}
-
-        {/* State (c) details: waiting on browser consent. */}
-        {configured && googleConnecting && (
-          <div className="mt-3 border-t pt-3">
-            <p className="text-sm text-muted-foreground">
-              Finish signing in with Google in the browser window that just opened. This
-              times out after 5 minutes.
-            </p>
-          </div>
-        )}
-
-        {/* State (d) details: per-calendar sync toggles. */}
-        {configured && connected && !googleConnecting && googleStatus && (
-          <div className="mt-3 border-t pt-3">
-            <div className="mb-2 flex items-center justify-between gap-3">
-              <div className="text-sm font-medium">Calendars to sync</div>
-              {googleStatus.calendars.length > 1 && (
-                <div className="flex items-center gap-1 text-xs">
-                  <button
-                    type="button"
-                    onClick={() => void handleBulkToggle(true)}
-                    disabled={bulkToggling}
-                    className="rounded px-1.5 py-0.5 font-medium text-brand hover:underline disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  >
-                    Select all
-                  </button>
-                  <span className="text-border" aria-hidden="true">
-                    ·
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => void handleBulkToggle(false)}
-                    disabled={bulkToggling}
-                    className="rounded px-1.5 py-0.5 font-medium text-brand hover:underline disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  >
-                    Select none
-                  </button>
+        {/* Google Calendar (specs/0032, ADR-0010) — connecting makes it the
+            active (and only) calendar source. */}
+        <SettingsRow
+          role="group"
+          aria-label="Google Calendar source"
+          label="Google Calendar"
+          aside={connected ? ACTIVE_BADGE : undefined}
+          description={
+            googleStatus === null
+              ? 'Checking…'
+              : !configured
+                ? // State (a): no OAuth client id baked into this build — inert.
+                  "Google Calendar isn't configured in this build."
+                : googleConnecting
+                  ? 'Complete the connection in your browser…'
+                  : connected
+                    ? `Connected as ${googleStatus.email ?? 'your Google account'} · ${formatLastSynced(googleStatus.lastSyncedAt)}`
+                    : 'Not connected'
+          }
+          control={
+            <>
+              {/* State (c): connect in flight — cancel/dismiss affordance. */}
+              {configured && googleConnecting && (
+                <div className="flex flex-shrink-0 items-center gap-2">
+                  <Spinner className="text-muted-foreground" />
+                  <Button variant="outline" size="sm" onClick={handleGoogleConnectDismiss}>
+                    Cancel
+                  </Button>
                 </div>
               )}
-            </div>
-            {googleStatus.calendars.length > 0 ? (
-              <ul className="space-y-1.5">
-                {googleStatus.calendars.map((calendar) => {
-                  const line = calendarSyncLine(calendar);
-                  return (
-                    <li key={calendar.id} className="flex items-center gap-3">
-                      <label className="flex min-w-0 cursor-pointer items-center gap-2 text-sm text-foreground">
-                        <input
-                          type="checkbox"
-                          checked={calendar.selected}
-                          onChange={(e) =>
-                            void handleCalendarToggle(calendar.id, e.target.checked)
-                          }
-                          className="h-4 w-4 accent-brand"
-                        />
-                        <span className="truncate">{calendar.summary}</span>
-                      </label>
-                      {/* specs/0074 W2: per-calendar freshness, so one stale or failing
-                          calendar can't hide behind the account's newest sync time. */}
-                      {line && (
-                        <span
-                          data-testid={`calendar-sync-line-${calendar.id}`}
-                          title={line.text}
-                          className={`ml-auto min-w-0 max-w-[60%] flex-shrink truncate text-xs ${
-                            line.failed ? 'text-destructive' : 'text-muted-foreground'
-                          }`}
-                        >
-                          {line.text}
-                        </span>
-                      )}
-                    </li>
-                  );
-                })}
-              </ul>
-            ) : (
+
+              {/* State (b): disconnected — Connect. */}
+              {configured && !googleConnecting && !connected && (
+                <Button
+                  variant="brand"
+                  size="sm"
+                  className="flex-shrink-0"
+                  onClick={handleGoogleConnect}
+                >
+                  Connect Google Calendar
+                </Button>
+              )}
+
+              {/* State (d): connected — Sync now + Disconnect. */}
+              {configured && !googleConnecting && connected && (
+                <div className="flex flex-shrink-0 items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleSyncNow}
+                    disabled={googleSyncing}
+                  >
+                    <RefreshCw className={`h-4 w-4 ${googleSyncing ? 'animate-spin' : ''}`} />
+                    {googleSyncing ? 'Syncing…' : 'Sync now'}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-destructive hover:text-destructive"
+                    onClick={() => setDisconnectOpen(true)}
+                  >
+                    Disconnect
+                  </Button>
+                </div>
+              )}
+            </>
+          }
+        >
+          {/* State (b) details: source-switch note + privacy copy (ADR-0010,
+              verbatim) + first-connect note. */}
+          {configured && !connected && !googleConnecting && (
+            <div className="space-y-2 border-t border-border pt-3">
               <p className="text-sm text-muted-foreground">
-                No calendars found on this account yet. Try &quot;Sync now&quot;.
+                Connecting switches Nixon&apos;s calendar source to Google Calendar.
               </p>
-            )}
-            {/* Enhanced attendee details (specs/0038 WS3): honest per-account status
-                for the two best-effort scopes. `checking…` while the fire-and-forget
-                probe is still running (the effect re-fetches until it lands). */}
-            <div className="mt-4 border-t pt-3">
-              <div className="mb-1.5 text-sm font-medium">Enhanced attendee details</div>
-              <div className="space-y-1">
-                <CapabilityRow
-                  label="Distribution lists"
-                  flag={capabilities?.canExpandGroups ?? null}
-                  onCopy="expanding to members"
-                  offCopy="not available on this account"
-                />
-                <CapabilityRow
-                  label="Attendee photos"
-                  flag={capabilities?.canFetchPhotos ?? null}
-                  onCopy="on"
-                  offCopy="not available"
-                />
+              <p className="text-sm text-muted-foreground">{GOOGLE_PRIVACY_COPY}</p>
+              <p className="text-sm text-muted-foreground">{GOOGLE_ENRICHMENT_COPY}</p>
+              <p className="text-xs text-muted-foreground">
+                First time connecting: Google shows an &quot;unverified app&quot; warning —
+                expected for a personal build. Click Advanced → Continue.
+              </p>
+            </div>
+          )}
+
+          {/* State (c) details: waiting on browser consent. */}
+          {configured && googleConnecting && (
+            <div className="border-t border-border pt-3">
+              <p className="text-sm text-muted-foreground">
+                Finish signing in with Google in the browser window that just opened. This
+                times out after 5 minutes.
+              </p>
+            </div>
+          )}
+
+          {/* State (d) details: per-calendar sync toggles. */}
+          {configured && connected && !googleConnecting && googleStatus && (
+            <div className="border-t border-border pt-3">
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <div className="text-sm font-medium">Calendars to sync</div>
+                {googleStatus.calendars.length > 1 && (
+                  <div className="flex items-center gap-1 text-xs">
+                    <Button
+                      variant="ghost"
+                      size="xs"
+                      onClick={() => void handleBulkToggle(true)}
+                      disabled={bulkToggling}
+                    >
+                      Select all
+                    </Button>
+                    <span className="text-border" aria-hidden="true">
+                      ·
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="xs"
+                      onClick={() => void handleBulkToggle(false)}
+                      disabled={bulkToggling}
+                    >
+                      Select none
+                    </Button>
+                  </div>
+                )}
               </div>
-              {/* RC-2: break the silence when the org restricts group expansion —
-                  an explicit "why" so the `off` state isn't a bare label. */}
-              {capabilityState(capabilities?.canExpandGroups ?? null) === 'off' && (
-                <p className="mt-2 text-xs text-muted-foreground">
-                  Your organization restricts Google group access, so distribution lists
-                  can&apos;t be expanded to their members. Everything else (attendee names,
-                  photos) still works.
+              {googleStatus.calendars.length > 0 ? (
+                <ul className="space-y-1.5">
+                  {googleStatus.calendars.map((calendar) => {
+                    const line = calendarSyncLine(calendar);
+                    return (
+                      <li key={calendar.id} className="flex items-center gap-3">
+                        <Checkbox
+                          size="sm"
+                          label={<span className="block truncate">{calendar.summary}</span>}
+                          checked={calendar.selected}
+                          onCheckedChange={(checked) =>
+                            void handleCalendarToggle(calendar.id, checked)
+                          }
+                        />
+                        {/* specs/0074 W2: per-calendar freshness, so one stale or failing
+                            calendar can't hide behind the account's newest sync time. */}
+                        {line && (
+                          <span
+                            data-testid={`calendar-sync-line-${calendar.id}`}
+                            title={line.text}
+                            className={`ml-auto min-w-0 max-w-[60%] flex-shrink truncate text-xs ${
+                              line.failed ? 'text-destructive' : 'text-muted-foreground'
+                            }`}
+                          >
+                            {line.text}
+                          </span>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  No calendars found on this account yet. Try &quot;Sync now&quot;.
                 </p>
               )}
-              <p className="mt-2 text-xs text-muted-foreground">
-                Availability depends on your organization&apos;s directory and group-visibility
-                policy — a granted permission isn&apos;t access if your admin restricts it.
-              </p>
+              {/* Enhanced attendee details (specs/0038 WS3): honest per-account status
+                  for the two best-effort scopes. `checking…` while the fire-and-forget
+                  probe is still running (the effect re-fetches until it lands). */}
+              <div className="mt-4 border-t pt-3">
+                <div className="mb-1.5 text-sm font-medium">Enhanced attendee details</div>
+                <div className="space-y-1">
+                  <CapabilityRow
+                    label="Distribution lists"
+                    flag={capabilities?.canExpandGroups ?? null}
+                    onCopy="expanding to members"
+                    offCopy="not available on this account"
+                  />
+                  <CapabilityRow
+                    label="Attendee photos"
+                    flag={capabilities?.canFetchPhotos ?? null}
+                    onCopy="on"
+                    offCopy="not available"
+                  />
+                </div>
+                {/* RC-2: break the silence when the org restricts group expansion —
+                    an explicit "why" so the `off` state isn't a bare label. */}
+                {capabilityState(capabilities?.canExpandGroups ?? null) === 'off' && (
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Your organization restricts Google group access, so distribution lists
+                    can&apos;t be expanded to their members. Everything else (attendee names,
+                    photos) still works.
+                  </p>
+                )}
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Availability depends on your organization&apos;s directory and group-visibility
+                  policy — a granted permission isn&apos;t access if your admin restricts it.
+                </p>
+              </div>
+              <p className="mt-3 text-xs text-muted-foreground">{GOOGLE_PRIVACY_COPY}</p>
+              <p className="mt-2 text-xs text-muted-foreground">{GOOGLE_ENRICHMENT_COPY}</p>
             </div>
-            <p className="mt-3 text-xs text-muted-foreground">{GOOGLE_PRIVACY_COPY}</p>
-            <p className="mt-2 text-xs text-muted-foreground">{GOOGLE_ENRICHMENT_COPY}</p>
-          </div>
-        )}
-      </div>
+          )}
+        </SettingsRow>
+      </SettingsGroup>
 
-      {/* Disconnect confirm (house dialog pattern — DeleteTemplateDialog). */}
-      <Dialog
+      {/* Disconnect confirm. */}
+      <ConfirmDialog
         open={disconnectOpen}
-        onOpenChange={(next) => (disconnecting ? undefined : setDisconnectOpen(next))}
-      >
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Disconnect Google Calendar?</DialogTitle>
-            <DialogDescription>
-              Nixon will go back to using your Mac&apos;s calendar. The local copy of
-              your Google events is deleted. You can reconnect anytime.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setDisconnectOpen(false)}
-              disabled={disconnecting}
-            >
-              Cancel
-            </Button>
-            <Button variant="destructive" onClick={handleDisconnect} disabled={disconnecting}>
-              {disconnecting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Disconnect Google Calendar
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        onOpenChange={setDisconnectOpen}
+        title="Disconnect Google Calendar?"
+        body={
+          <>
+            Nixon will go back to using your Mac&apos;s calendar. The local copy of
+            your Google events is deleted. You can reconnect anytime.
+          </>
+        }
+        confirmLabel="Disconnect Google Calendar"
+        busy={disconnecting}
+        onConfirm={handleDisconnect}
+      />
     </SettingsSection>
   );
 }

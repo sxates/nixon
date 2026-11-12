@@ -18,6 +18,7 @@
  * 800-line cap.
  */
 
+import { Button } from '@/components/ui/button';
 import { AvatarStack } from '@/components/AvatarStack';
 import type { AgendaAttendee } from '@/lib/day-agenda';
 import type { MeetingParticipant } from '@/types';
@@ -67,17 +68,18 @@ export function ParticipantsSummary({
   onExpand: () => void;
 }) {
   return (
-    <button
+    <Button
       type="button"
+      variant="ghost"
       onClick={onExpand}
       aria-expanded={false}
-      className="flex w-full items-center gap-2.5 rounded-[3px] px-1 py-0.5 text-left transition-colors hover:bg-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className="h-auto w-full justify-start gap-2.5 px-1 py-0.5 text-left font-normal"
     >
       <AvatarStack attendees={asAttendees(participants)} size="sm" max={4} />
       <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
         {participantSummaryText(participants)}
       </span>
       <span className="flex-shrink-0 text-xs font-medium text-muted-foreground">Show all</span>
-    </button>
+    </Button>
   );
 }

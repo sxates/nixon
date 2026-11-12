@@ -2,14 +2,14 @@
 
 import { useRef, useReducer, useState, useMemo, useCallback, startTransition, useEffect } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { ArrowDown } from "lucide-react";
+import { Spinner } from "@/components/ui/spinner";
+import { StatusDot } from "@/components/ui/status-dot";
 import { useAutoScroll } from "@/hooks/useAutoScroll";
 import { showJumpToLatest } from "@/lib/auto-scroll";
 import { useTranscriptStreaming } from "@/hooks/useTranscriptStreaming";
 import { TranscriptEmptyState } from "./TranscriptEmptyState";
 import { motion } from "framer-motion";
 import { TranscriptSegmentData } from "@/types";
-import { cn } from "@/lib/utils";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { SelectionActionBar, SELECTION_BAR_CLEARANCE } from "./MeetingDetails/SelectionActionBar";
@@ -609,7 +609,7 @@ export const VirtualizedTranscriptView: React.FC<VirtualizedTranscriptViewProps>
                                     key={segment.id}
                                     data-index={virtualRow.index}
                                     ref={virtualizer.measureElement}
-                                    className={`rounded-md transition-colors duration-1000 ${segment.id === flashSegmentId ? 'bg-brand/15' : ''}`}
+                                    className={`rounded-md transition-colors duration-1000 ${segment.id === flashSegmentId ? 'bg-brand-wash' : ''}`}
                                     style={{
                                         position: "absolute",
                                         top: 0,
@@ -647,7 +647,7 @@ export const VirtualizedTranscriptView: React.FC<VirtualizedTranscriptViewProps>
                         <div ref={loadMoreTriggerRef} className="flex justify-center items-center py-4 mt-2">
                             {isLoadingMore ? (
                                 <div className="flex items-center gap-2 text-muted-foreground">
-                                    <div className="w-4 h-4 border-2 border-border border-t-muted-foreground rounded-full animate-spin" />
+                                    <Spinner />
                                     <span className="text-sm">Loading more...</span>
                                 </div>
                             ) : hasMore && totalCount > 0 ? (
@@ -668,12 +668,10 @@ export const VirtualizedTranscriptView: React.FC<VirtualizedTranscriptViewProps>
                             exit={{ opacity: 0 }}
                             className="flex items-center gap-2 mt-4 text-muted-foreground"
                         >
-                            <div
-                                className={cn(
-                                    'w-2 h-2 rounded-full',
-                                    liveTranscription ? 'bg-brand animate-pulse' : 'bg-muted-foreground/50',
-                                )}
-                            ></div>
+                            <StatusDot
+                                tone={liveTranscription ? 'brand' : 'muted'}
+                                className={liveTranscription ? 'animate-pulse' : undefined}
+                                />
                             <span className="text-sm">
                                 {liveTranscription
                                     ? 'Listening...'
@@ -692,10 +690,10 @@ export const VirtualizedTranscriptView: React.FC<VirtualizedTranscriptViewProps>
                             return (
                                 <motion.div
                                     key={segment.id}
-                                    initial={{ opacity: 0, y: 5 }}
-                                    animate={{ opacity: 1, y: 0 }}
+                                    initial={{ opacity: 0 }}
+                                    animate={{ opacity: 1 }}
                                     transition={{ duration: 0.15 }}
-                                    className={`rounded-md transition-colors duration-1000 ${segment.id === flashSegmentId ? 'bg-brand/15' : ''}`}
+                                    className={`rounded-md transition-colors duration-1000 ${segment.id === flashSegmentId ? 'bg-brand-wash' : ''}`}
                                 >
                                     <TranscriptSegment
                                         id={segment.id}
@@ -726,7 +724,7 @@ export const VirtualizedTranscriptView: React.FC<VirtualizedTranscriptViewProps>
                         <div ref={loadMoreTriggerRef} className="flex justify-center items-center py-4 mt-2">
                             {isLoadingMore ? (
                                 <div className="flex items-center gap-2 text-muted-foreground">
-                                    <div className="w-4 h-4 border-2 border-border border-t-muted-foreground rounded-full animate-spin" />
+                                    <Spinner />
                                     <span className="text-sm">Loading more...</span>
                                 </div>
                             ) : hasMore && totalCount > 0 ? (
@@ -747,12 +745,10 @@ export const VirtualizedTranscriptView: React.FC<VirtualizedTranscriptViewProps>
                             exit={{ opacity: 0 }}
                             className="flex items-center gap-2 mt-4 text-muted-foreground"
                         >
-                            <div
-                                className={cn(
-                                    'w-2 h-2 rounded-full',
-                                    liveTranscription ? 'bg-brand animate-pulse' : 'bg-muted-foreground/50',
-                                )}
-                            ></div>
+                            <StatusDot
+                                tone={liveTranscription ? 'brand' : 'muted'}
+                                className={liveTranscription ? 'animate-pulse' : undefined}
+                                />
                             <span className="text-sm">
                                 {liveTranscription
                                     ? 'Listening...'
@@ -824,14 +820,15 @@ export const VirtualizedTranscriptView: React.FC<VirtualizedTranscriptViewProps>
         {/* specs/0029 WS4.1 — detached during a live recording: offer a way back to
             the tail without hijacking the user's reading position. */}
         {jumpToLatestVisible && (
-            <button
+            <Button
                 type="button"
+                variant="outline"
+                size="xs"
                 onClick={scrollToBottom}
-                className="absolute bottom-3 left-1/2 z-10 flex -translate-x-1/2 items-center gap-1.5 rounded-[3px] bg-panel border border-border px-3 py-1.5 text-xs font-medium text-foreground shadow-md transition-colors hover:bg-muted"
+                className="absolute bottom-3 left-1/2 z-10 -translate-x-1/2 bg-panel shadow-md hover:bg-muted"
             >
-                <ArrowDown className="h-3.5 w-3.5" />
                 Jump to latest
-            </button>
+            </Button>
         )}
         </div>
     );

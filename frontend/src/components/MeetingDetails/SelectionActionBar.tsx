@@ -1,7 +1,10 @@
 'use client';
 
 import { useEffect, type RefObject } from 'react';
-import { UserPlus, X } from 'lucide-react';
+import { UserPlus, X } from '@/components/ui/icons';
+import { DeckIcon } from '@/components/ui/deck-icon';
+import { IconButton } from '@/components/ui/icon-button';
+import { StatusDot } from '@/components/ui/status-dot';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -101,14 +104,14 @@ export function SelectionActionBar({
       <div
         role="toolbar"
         aria-label="Selected transcript lines"
-        className="pointer-events-auto absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-1.5 whitespace-nowrap rounded-[3px] border border-border bg-panel px-2 py-1.5 shadow-lg"
+        className="pointer-events-auto absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-1.5 whitespace-nowrap rounded-lg border border-border bg-panel px-2 py-1.5 shadow-lg"
       >
         <span className="pl-1.5 text-xs font-medium tabular-nums text-foreground">
           {lines} selected
         </span>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button size="sm" className="h-7 px-2.5 text-xs">
+            <Button size="xs">
               Reassign to…
             </Button>
           </DropdownMenuTrigger>
@@ -124,10 +127,7 @@ export function SelectionActionBar({
                   onSelect={() => onReassign(s.speakerKey, s.displayName)}
                   className="text-sm"
                 >
-                  <span
-                    className={`mr-2 inline-block h-2.5 w-2.5 flex-shrink-0 rounded-full ${speakerBgClass(s.speakerKey)}`}
-                    aria-hidden
-                  />
+                  <StatusDot className={`mr-2 ${speakerBgClass(s.speakerKey)}`} />
                   <span className="flex-1 truncate">{s.displayName}</span>
                 </DropdownMenuItem>
               ))}
@@ -140,21 +140,19 @@ export function SelectionActionBar({
                 onNewSpeaker();
               }}
               className="text-sm"
+              icon={UserPlus}
             >
-              <UserPlus size={13} className="mr-2 flex-shrink-0 text-muted-foreground" />
               New speaker…
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-        <button
-          type="button"
-          onClick={onClear}
-          className="rounded-[3px] p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+        <IconButton
+          variant="ghost"
+          label="Clear selection (Esc)"
           aria-label="Clear selection"
-          title="Clear selection (Esc)"
-        >
-          <X size={14} />
-        </button>
+          onClick={onClear}
+          icon={<DeckIcon icon={X} size={14} />}
+        />
       </div>
     </div>
   );

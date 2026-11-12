@@ -12,18 +12,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import * as SelectPrimitive from '@radix-ui/react-select';
-import { AlertTriangle, CheckCircle2, Loader2, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { Callout } from '@/components/ui/callout';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { SelectGroup, SelectLabel } from '@/components/ui/select';
-import { cn } from '@/lib/utils';
+import { Spinner } from '@/components/ui/spinner';
+import { StatusDot } from '@/components/ui/status-dot';
 import type { CliProviderId } from '@/lib/llm-providers';
 
 type CliState = 'notFound' | 'tooOld' | 'needsSignIn' | 'ready';
@@ -157,34 +151,29 @@ export function CliProviderPanel({ provider, onSave }: CliProviderPanelProps) {
   return <ClaudeCodePanel onSave={onSave} />;
 }
 
-function StatusLine({ status }: { status: CliProviderStatus }) {
+/** Is Claude reachable? Only `ready` with no probe error is. */
+function isReady(status: CliProviderStatus) {
+  return !status.probeError && status.state === 'ready';
+}
+
+/** The one-line status sentence for the current state. */
+function statusText(status: CliProviderStatus): string {
   const { state, probeError } = status;
-  let Icon = CheckCircle2;
-  let tone = 'text-success';
-  let text: string;
-  if (probeError) {
-    Icon = AlertTriangle;
-    tone = 'text-record';
-    text = probeError;
-  } else if (state === 'ready') {
-    text = 'Ready. Nixon can reach Claude with your account.';
-  } else if (state === 'needsSignIn') {
-    Icon = XCircle;
-    tone = 'text-record';
-    text = AUTH_COPY;
-  } else if (state === 'tooOld') {
-    Icon = AlertTriangle;
-    tone = 'text-record';
-    text = `Update Claude Code, then Check again. Nixon needs version ${status.minVersion} or newer.`;
-  } else {
-    Icon = XCircle;
-    tone = 'text-record';
-    text = "Nixon couldn't find Claude Code on this Mac. Install it, or choose where it lives with Locate…";
+  if (probeError) return probeError;
+  if (state === 'ready') return 'Ready. Nixon can reach Claude with your account.';
+  if (state === 'needsSignIn') return AUTH_COPY;
+  if (state === 'tooOld') {
+    return `Update Claude Code, then Check again. Nixon needs version ${status.minVersion} or newer.`;
   }
+  return "Nixon couldn't find Claude Code on this Mac. Install it, or choose where it lives with Locate…";
+}
+
+/** Ready: a green dot and the sentence, as a flat row (no box inside the dialog's card). */
+function StatusLine({ status }: { status: CliProviderStatus }) {
   return (
-    <div className="flex items-start gap-2 text-sm">
-      <Icon className={cn('mt-0.5 h-4 w-4 shrink-0', tone)} aria-hidden />
-      <span>{text}</span>
+    <div className="flex items-start gap-2 text-sm" data-ok>
+      <StatusDot tone="success" className="mt-1.5" />
+      <span>{statusText(status)}</span>
     </div>
   );
 }
@@ -259,28 +248,34 @@ function ClaudeCodePanel({ onSave }: { onSave: () => void }) {
 
   return (
     <div className="mt-4 space-y-4" data-testid="cli-provider-panel">
-      <div className="space-y-2 rounded-[3px] border border-border bg-card p-3">
+      {/* Status, then the keys as flat rows (no box inside the dialog's card). Ready is a
+          green-dot line; anything else is an error Callout — status is the Callout's tone,
+          not a red dot in a neutral box. The keys stay in one stable block below, so a
+          status change never remounts them. */}
+      <div className="space-y-2">
         {status ? (
-          <>
+          isReady(status) ? (
             <StatusLine status={status} />
-            {(status.path || status.version) && (
-              <p className="break-all text-xs text-muted-foreground">
-                {status.path}
-                {status.path && status.version ? ' · ' : ''}
-                {status.version ? `version ${status.version}` : ''}
-              </p>
-            )}
-            {status.authNote && <p className="text-xs text-muted-foreground">{status.authNote}</p>}
-          </>
+          ) : (
+            <Callout tone="error" data-ok={false}>
+              {statusText(status)}
+            </Callout>
+          )
+        ) : error ? (
+          <Callout tone="error">{error}</Callout>
         ) : (
           <p className="flex items-center gap-2 text-sm text-muted-foreground">
-            {error ? error : (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> Checking Claude Code…
-              </>
-            )}
+            <Spinner /> Checking Claude Code…
           </p>
         )}
+        {status && (status.path || status.version) && (
+          <p className="break-all text-xs text-muted-foreground">
+            {status.path}
+            {status.path && status.version ? ' · ' : ''}
+            {status.version ? `version ${status.version}` : ''}
+          </p>
+        )}
+        {status?.authNote && <p className="text-xs text-muted-foreground">{status.authNote}</p>}
         <div className="flex flex-wrap items-center gap-2 pt-1">
           <Button type="button" variant="outline" size="sm" onClick={() => void refresh()} disabled={checking}>
             {checking ? 'Checking…' : 'Check again'}
@@ -304,16 +299,18 @@ function ClaudeCodePanel({ onSave }: { onSave: () => void }) {
           Signed in somewhere else? Choose the program you use with Locate…
         </p>
         {status?.overridePath && (
-          <button
+          <Button
             type="button"
-            className="text-xs text-muted-foreground underline"
+            variant="link"
+            size="xs"
+            className="h-auto px-0 text-muted-foreground underline"
             onClick={() => void applyPath(null)}
             disabled={applyingPath}
           >
             Use default
-          </button>
+          </Button>
         )}
-        {pathError && <p className="text-sm text-record">{pathError}</p>}
+        {pathError && <p className="text-sm text-destructive">{pathError}</p>}
       </div>
 
       <p className="text-sm">Model: Sonnet</p>
@@ -332,13 +329,13 @@ function ClaudeCodePanel({ onSave }: { onSave: () => void }) {
       {testResult?.ok && (
         <p className="text-sm text-success">Claude answered in {(testResult.latencyMs / 1000).toFixed(1)} s.</p>
       )}
-      {testResult && !testResult.ok && <p className="text-sm text-record">{testResult.error ?? AUTH_COPY}</p>}
-      {testError && <p className="text-sm text-record">{testError}</p>}
+      {testResult && !testResult.ok && <p className="text-sm text-destructive">{testResult.error ?? AUTH_COPY}</p>}
+      {testError && <p className="text-sm text-destructive">{testError}</p>}
 
       <div className="flex justify-end">
         <Button
           type="button"
-          className={cn(!ready ? 'bg-muted text-muted-foreground' : 'bg-brand text-brand-foreground hover:bg-brand/90')}
+          variant="brand"
           disabled={!ready}
           onClick={handleSave}
         >
@@ -346,26 +343,20 @@ function ClaudeCodePanel({ onSave }: { onSave: () => void }) {
         </Button>
       </div>
 
-      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Use Claude Code for your meetings?</DialogTitle>
-            <DialogDescription>{PRIVACY}</DialogDescription>
-          </DialogHeader>
-          <p className="text-sm text-muted-foreground">{PRIVACY_EXTRA}</p>
-          <p className="text-sm">
-            Nixon runs Claude Code with its tools turned off. It can&apos;t read or change files on your Mac.
-          </p>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setConfirmOpen(false)}>
-              Cancel
-            </Button>
-            <Button type="button" onClick={confirm}>
-              Use Claude Code
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ConfirmDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        title="Use Claude Code for your meetings?"
+        body={PRIVACY}
+        tone="brand"
+        confirmLabel="Use Claude Code"
+        onConfirm={confirm}
+      >
+        <p className="text-sm text-muted-foreground">{PRIVACY_EXTRA}</p>
+        <p className="text-sm">
+          Nixon runs Claude Code with its tools turned off. It can&apos;t read or change files on your Mac.
+        </p>
+      </ConfirmDialog>
     </div>
   );
 }

@@ -49,8 +49,8 @@ describe('MeetingIdentityHeader', () => {
     render(<MeetingIdentityHeader {...base} reelNumber={412} source="Zoom" voices={4} />);
 
     const heading = await screen.findByRole('heading', { name: 'Quarterly planning' });
-    expect(heading.className).toContain('font-display');
-    expect(heading.className).toContain('text-[22px]');
+    // The PageHeader h1: `.u-page-title` is the 22px display role (font-display text-title).
+    expect(heading.className).toContain('u-page-title');
     // 0.1.0 canvas feedback: the typed card is gone; the identity line carries everything,
     // including the voice count that only the card used to show.
     expect(screen.queryByTestId('reel-label-header')).not.toBeInTheDocument();

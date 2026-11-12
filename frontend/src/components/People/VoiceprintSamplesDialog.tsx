@@ -23,7 +23,7 @@ interface VoiceprintSamplesDialogProps {
  * Per-sample voice gallery management for one person, in a dialog (specs/0039 WS3, task 9).
  *
  * The gallery body (list + quarantine/restore/delete) lives in the reusable
- * `VoiceprintSamplesList` (shared with the person-detail page's "Voice Samples" tab,
+ * `VoiceprintSamplesList` (shared with the person-detail page's "Voice samples" tab,
  * specs/0038 dogfood feedback #3); this shell just frames it in a modal. Radix unmounts the
  * content on close, so the list remounts — and refetches a fresh gallery — on each open.
  * `bounded` caps the list at 52vh with native scrolling so a long gallery scrolls inside the

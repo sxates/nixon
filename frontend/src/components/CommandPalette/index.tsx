@@ -8,7 +8,17 @@ import { invoke } from '@tauri-apps/api/core';
 // threshold (specs/0033).
 import { defaultFilter } from 'cmdk';
 import { toast } from 'sonner';
-import { Mic, LayoutList, Settings, Calendar, AudioLines, FileText, NotebookPen, Sparkles, ListPlus } from 'lucide-react';
+import {
+  AudioLines,
+  Calendar,
+  FileText,
+  LayoutList,
+  ListPlus,
+  Mic,
+  NotebookPen,
+  Settings,
+  Sparkles,
+} from '@/components/ui/icons';
 import {
   CommandDialog,
   CommandInput,
@@ -90,7 +100,7 @@ export function renderSnippet(snippet: string): ReactNode[] {
     const marked = rest.slice(start + 1, end);
     if (marked) {
       nodes.push(
-        <mark key={key++} className="rounded-[2px] bg-brand/15 px-px font-medium text-foreground">
+        <mark key={key++} className="rounded-sm bg-brand-wash px-px font-medium text-foreground">
           {marked}
         </mark>,
       );

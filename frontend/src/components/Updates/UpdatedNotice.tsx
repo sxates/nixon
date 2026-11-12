@@ -72,7 +72,7 @@ export function UpdatedNotice() {
           <DialogTitle>Nixon updated to v{receipt.version}</DialogTitle>
         </DialogHeader>
         {notes.length > 0 ? (
-          <div className="max-h-[50vh] overflow-y-auto text-sm [&_h3]:text-[12px] [&_li]:text-sm [&_p]:text-sm">
+          <div className="max-h-[50vh] overflow-y-auto text-sm [&_h3]:text-xs [&_li]:text-sm [&_p]:text-sm">
             <AnswerMarkdown markdown={notes} />
           </div>
         ) : (

@@ -2,14 +2,15 @@ import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Input } from './ui/input';
-import { Button } from './ui/button';
 import {
     SettingsGroup,
     SettingsRow,
     SettingsSection,
 } from './ui/settings';
 import { ResolvedSettingRow } from './ResolvedSettingRow';
-import { Eye, EyeOff, Lock, Unlock } from 'lucide-react';
+import { DeckIcon } from './ui/deck-icon';
+import { IconButton } from './ui/icon-button';
+import { Eye, EyeOff, Lock, Unlock } from './ui/icons';
 
 /** Mirrors `config.rs::DEFAULT_PARAKEET_MODEL`; the engine+model Nixon ships with. */
 const DEFAULT_PARAKEET_MODEL = 'parakeet-tdt-0.6b-v3-int8';
@@ -203,25 +204,19 @@ export function TranscriptSettings({ transcriptModelConfig, setTranscriptModelCo
                                         placeholder="Enter your API key"
                                     />
                                     <div className="absolute inset-y-0 right-0 flex items-center pr-1">
-                                        <Button
-                                            type="button"
+                                        <IconButton
                                             variant="ghost"
-                                            size="icon"
                                             onClick={() => setIsApiKeyLocked(!isApiKeyLocked)}
                                             className={`transition-colors duration-200 ${isLockButtonVibrating ? 'text-destructive' : ''}`}
-                                            title={isApiKeyLocked ? 'Unlock to edit' : 'Lock to prevent editing'}
-                                        >
-                                            {isApiKeyLocked ? <Lock className="h-4 w-4" /> : <Unlock className="h-4 w-4" />}
-                                        </Button>
-                                        <Button
-                                            type="button"
+                                            label={isApiKeyLocked ? 'Unlock to edit' : 'Lock to prevent editing'}
+                                            icon={<DeckIcon icon={isApiKeyLocked ? Lock : Unlock} size={16} />}
+                                        />
+                                        <IconButton
                                             variant="ghost"
-                                            size="icon"
                                             onClick={() => setShowApiKey(!showApiKey)}
-                                            title={showApiKey ? 'Hide API key' : 'Show API key'}
-                                        >
-                                            {showApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                                        </Button>
+                                            label={showApiKey ? 'Hide API key' : 'Show API key'}
+                                            icon={<DeckIcon icon={showApiKey ? EyeOff : Eye} size={16} />}
+                                        />
                                     </div>
                                 </div>
                             }

@@ -6,7 +6,7 @@ import type { Person } from '@/types';
 
 // specs/0038 dogfood feedback #3 — the dedicated person-detail page. These lock:
 // (a) it loads the person via api_get_person and renders the three tabs (Summary default,
-// Recent meetings, Voice Samples), (b) switching to a tab mounts its content, and
+// Recent meetings, Voice samples), (b) switching to a tab mounts its content, and
 // (c) inline-editing the name persists via api_update_person.
 
 const pushMock = vi.fn();
@@ -66,7 +66,7 @@ describe('PersonDetailsPage (specs/0038 dogfood feedback #3)', () => {
     expect(await screen.findByText('Summarize recent activity')).toBeInTheDocument();
   });
 
-  it('switches tabs — Recent meetings then Voice Samples mount their content', async () => {
+  it('switches tabs — Recent meetings then Voice samples mount their content', async () => {
     routeInvoke();
     const user = userEvent.setup();
     render(<PersonDetailsPage />);
@@ -80,7 +80,7 @@ describe('PersonDetailsPage (specs/0038 dogfood feedback #3)', () => {
     );
     expect(await screen.findByText(/No meetings with Alice Chen yet/)).toBeInTheDocument();
 
-    await user.click(screen.getByRole('tab', { name: 'Voice Samples' }));
+    await user.click(screen.getByRole('tab', { name: 'Voice samples' }));
     await waitFor(() =>
       expect(invokeMock).toHaveBeenCalledWith('api_list_person_voiceprints', {
         personId: 'p1',

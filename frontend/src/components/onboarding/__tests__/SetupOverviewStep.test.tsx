@@ -95,7 +95,7 @@ describe('SetupOverviewStep', () => {
     routeInvoke({ free_bytes: 3e9, required_bytes: 2e9, ok: true, models_dir: '/x' });
     render(<SetupOverviewStep />);
 
-    expect(await screen.findByRole('button', { name: /Let's Go/ })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /Let's go/ })).toBeInTheDocument();
     expect(screen.queryByText(/Not enough free space/)).not.toBeInTheDocument();
   });
 });

@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { LoaderIcon } from 'lucide-react';
+import { PageLoading } from '@/components/ui/empty-state';
 import { invoke } from '@tauri-apps/api/core';
 import { TranscriptSettings } from '@/components/TranscriptSettings';
 import { SpeakerSettings } from '@/components/SpeakerSettings';
@@ -21,6 +21,8 @@ import { About } from '@/components/About';
 import { useConfig } from '@/contexts/ConfigContext';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { PageHeader } from '@/components/ui/page-header';
+import { PAGE_CONTENT_WIDTH, PAGE_GUTTER } from '@/lib/page-width';
+import { cn } from '@/lib/utils';
 
 // Tabs configuration (constant)
 /**
@@ -124,13 +126,12 @@ function SettingsPageContent() {
     >
       {/* Fixed header — the shared PageHeader. The tab strip sits directly under
           the title so it stays visible while the tab content scrolls. */}
-      <PageHeader title="Settings" className="pb-0" />
+      <PageHeader width="page" title="Settings" className="pb-0" />
 
-      <div className="flex-shrink-0 px-4 min-[900px]:px-7">
-        {/* Pure-CSS underline (specs/0057 Task 2): the active tab owns a 2px brand
-            border-bottom, the same formula as the meeting-details tab bar. The old
-            measured framer-motion bar could land in the wrong place on first paint. */}
-        <TabsList className="mt-3 h-auto rounded-none border-b border-border bg-transparent p-0">
+      <div className={cn('flex-shrink-0', PAGE_GUTTER)}>
+        {/* Underline tabs are the Tabs primitive's default style (docs/design-system.md).
+            In the page column, like the title above and the content below. */}
+        <TabsList className={cn('mx-auto mt-3 w-full', PAGE_CONTENT_WIDTH)}>
           {[...TABS, ...(devToolsAvailable ? [DEV_TAB] : [])].map((tab) => (
             <TabsTrigger
               key={tab.value}
@@ -138,7 +139,6 @@ function SettingsPageContent() {
               // Hidden while a screenshot driver is attached (`data-shot="1"`, globals.css):
               // this tab exists only in debug builds, so a README capture must not show it.
               {...(tab.value === DEV_TAB.value ? { 'data-dev-only': '' } : {})}
-              className="-mb-px rounded-none border-0 border-b-2 border-transparent bg-transparent px-3 py-1.5 text-sm font-semibold text-muted-foreground transition-colors [transition-duration:140ms] hover:text-foreground data-[state=active]:border-brand data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
             >
               {tab.label}
             </TabsTrigger>
@@ -147,8 +147,8 @@ function SettingsPageContent() {
       </div>
 
       {/* Scrollable content — only this area scrolls. */}
-      <div className="flex-1 overflow-y-auto px-4 min-[900px]:px-7 pb-12">
-        <div className="mx-auto max-w-[1080px] pt-6">
+      <div className={cn('flex-1 overflow-y-auto pb-12', PAGE_GUTTER)}>
+        <div className={cn('mx-auto pt-6', PAGE_CONTENT_WIDTH)}>
           <TabsContent value="general" className="space-y-8">
             {/* General order: Appearance → Notifications → Recording permissions →
                 Calendar → Your email → the rest. */}
@@ -210,11 +210,7 @@ function SettingsPageContent() {
 
 export default function SettingsPage() {
   return (
-    <Suspense fallback={
-      <div className="flex items-center justify-center h-page">
-        <LoaderIcon className="animate-spin size-6" />
-      </div>
-    }>
+    <Suspense fallback={<PageLoading hideLabel />}>
       <SettingsPageContent />
     </Suspense>
   );

@@ -2,20 +2,25 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { Calendar, Check, Loader2, Mic, Volume2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogClose,
   DialogContent,
   DialogDescription,
+  DialogFooter,
+  DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { cn } from '@/lib/utils';
+import { PermissionRow, type PermissionState } from '@/components/ui/permission-row';
+import { Spinner } from '@/components/ui/spinner';
+import { StatusDot } from '@/components/ui/status-dot';
 import {
   type CalendarAccessStatus,
   getCalendarAccessStatus,
   requestCalendarAccess,
 } from '@/lib/calendar';
+import { openPrivacySettings } from '@/lib/system-settings';
 import { usePermissionsModal } from '@/contexts/PermissionsModalContext';
 import { useSidebar } from '@/components/Sidebar/SidebarProvider';
 import { SILENT_AUDIO_CAPTURE_COPY } from '@/components/onboarding/shared/PermissionRow';
@@ -88,7 +93,7 @@ export default function PermissionsModal() {
     if (microphone === 'denied') {
       // Already denied → the OS won't re-prompt; deep-link to System Settings.
       try {
-        await invoke('open_system_settings');
+        await openPrivacySettings('microphone');
       } catch (err) {
         console.warn('[PermissionsModal] open_system_settings failed:', err);
       }
@@ -110,7 +115,7 @@ export default function PermissionsModal() {
   const handleSystemAudio = async () => {
     if (systemAudio === 'denied') {
       try {
-        await invoke('open_system_settings');
+        await openPrivacySettings('systemAudio');
       } catch (err) {
         console.warn('[PermissionsModal] open_system_settings failed:', err);
       }
@@ -154,140 +159,92 @@ export default function PermissionsModal() {
       key: 'cal' as const,
       label: 'Calendar',
       sub: 'Pull meeting titles & participants',
-      icon: <Calendar className="h-4 w-4 text-muted-foreground" aria-hidden="true" />,
       state: calendar,
-      primary: false,
-      bordered: true,
       onAllow: handleCalendar,
     },
     {
       key: 'mic' as const,
       label: 'Microphone',
       sub: 'Capture your voice in the room',
-      icon: <Mic className="h-4 w-4 text-muted-foreground" aria-hidden="true" />,
       state: microphone,
-      primary: true,
-      bordered: true,
       onAllow: handleMicrophone,
     },
     {
       key: 'sys' as const,
       label: 'Audio capture',
       sub: 'Record other participants on the call',
-      icon: <Volume2 className="h-4 w-4 text-muted-foreground" aria-hidden="true" />,
       state: systemAudio,
-      primary: true,
-      bordered: false,
       onAllow: handleSystemAudio,
     },
   ];
 
+  /** Row state onto the shared PermissionStatus: not asked yet and silent both read "Not yet". */
+  const toPermissionState = (state: RowState): PermissionState =>
+    state === 'granted' ? 'granted' : state === 'denied' ? 'denied' : 'silent';
+
   return (
     <Dialog open={isOpen} onOpenChange={setOpen}>
-      <DialogContent
-        className="max-w-[440px] gap-0 overflow-hidden rounded-lg border-border bg-card p-0 shadow-[0_24px_60px_rgba(40,33,28,0.30)]"
-      >
-        {/* Header — record-dot badge + serif title + local-processing subtitle */}
-        <div className="px-6 pb-2 pt-[22px]">
-          <div className="flex items-center gap-2.5">
-            <span
-              className="flex h-[34px] w-[34px] flex-shrink-0 items-center justify-center rounded-[9px] bg-record/10"
-              aria-hidden="true"
-            >
-              <span className="h-[11px] w-[11px] rounded-full bg-record" />
-            </span>
-            <DialogTitle className="font-display text-xl font-semibold tracking-tight text-foreground">
-              Enable recording
-            </DialogTitle>
-          </div>
-          <DialogDescription className="mt-2 text-[13.5px] leading-relaxed text-muted-foreground">
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Enable recording</DialogTitle>
+          <DialogDescription>
             Nixon needs a few permissions to record &amp; transcribe this meeting. Everything is
             processed locally on your Mac.
           </DialogDescription>
-        </div>
+        </DialogHeader>
 
-        {/* Permission rows */}
-        <div className="px-4 py-2">
+        {/* Permission rows — the shared PermissionRow, ruled like a SettingsGroup. */}
+        <div className="divide-y divide-border">
           {rows.map((row) => {
             const isGranted = row.state === 'granted';
             const isDenied = row.state === 'denied';
             const isSilent = row.state === 'silent';
             const isPending = pendingRow === row.key;
             return (
-              <div
+              <PermissionRow
                 key={row.key}
-                className={cn(
-                  'flex items-center gap-3 px-2 py-3',
-                  row.bordered && 'border-b border-border'
-                )}
-              >
-                <span className="flex h-[30px] w-[30px] flex-shrink-0 items-center justify-center rounded-lg bg-secondary">
-                  {row.icon}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <div className="text-[13.5px] font-semibold text-foreground">{row.label}</div>
-                  <div className="text-xs text-muted-foreground">
-                    {isDenied
-                      ? 'Denied — open System Settings to allow'
-                      : isSilent
-                        ? SILENT_AUDIO_CAPTURE_COPY
-                        : row.sub}
-                  </div>
-                </div>
-                {isGranted ? (
-                  <span className="flex items-center gap-1.5 text-[12.5px] font-semibold text-chart-4">
-                    <Check className="h-3.5 w-3.5" aria-hidden="true" strokeWidth={2.5} />
-                    Allowed
-                  </span>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={row.onAllow}
-                    disabled={isPending}
-                    className={cn(
-                      'inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12.5px] font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60',
-                      row.primary
-                        ? 'bg-brand text-brand-foreground hover:bg-brand/90'
-                        : 'border border-border bg-transparent text-foreground hover:bg-accent'
-                    )}
-                  >
-                    {isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />}
-                    {isDenied ? 'Open Settings' : 'Allow'}
-                  </button>
-                )}
-              </div>
+                title={row.label}
+                description={
+                  isDenied
+                    ? 'Denied — open System Settings to allow'
+                    : isSilent
+                      ? SILENT_AUDIO_CAPTURE_COPY
+                      : row.sub
+                }
+                state={toPermissionState(row.state)}
+                action={
+                  isGranted ? undefined : (
+                    <Button variant="outline" size="sm" onClick={row.onAllow} disabled={isPending}>
+                      {isPending ? <Spinner /> : null}
+                      {isDenied ? 'Open Settings' : 'Allow'}
+                    </Button>
+                  )
+                }
+              />
             );
           })}
         </div>
 
         {/* Footer — Not now + Start recording (gated on real mic+system grants) */}
-        <div className="flex items-center gap-2.5 px-5 pb-5 pt-3.5">
+        <DialogFooter className="gap-2 sm:space-x-0">
           <DialogClose asChild>
-            <button
-              type="button"
-              className="rounded-[10px] border border-border bg-transparent px-3.5 py-2.5 text-[13px] font-semibold text-foreground transition-colors hover:bg-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              Not now
-            </button>
+            <Button variant="outline">Not now</Button>
           </DialogClose>
           {recordReady ? (
-            <button
-              type="button"
-              onClick={handleStartRecording}
-              className="flex flex-1 items-center justify-center gap-2 rounded-[10px] bg-record px-3.5 py-2.5 text-[13px] font-semibold text-record-foreground transition-colors hover:bg-record/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <span className="h-2 w-2 rounded-full bg-current" aria-hidden="true" />
+            // REC red is right here: this button starts a recording.
+            <Button variant="record" className="sm:flex-1" onClick={handleStartRecording}>
+              <StatusDot className="bg-current" />
               Start recording
-            </button>
+            </Button>
           ) : (
             <div
-              className="flex flex-1 items-center justify-center rounded-[10px] bg-secondary px-3.5 py-2.5 text-center text-[13px] font-semibold text-muted-foreground"
+              className="flex items-center justify-center rounded-md bg-secondary px-3.5 py-2 text-center text-sm font-semibold text-muted-foreground sm:flex-1"
               aria-disabled="true"
             >
               Allow microphone &amp; system audio to continue
             </div>
           )}
-        </div>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

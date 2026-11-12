@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import { Callout } from '@/components/ui/callout';
 import { cn } from '@/lib/utils';
 
 /**
@@ -12,7 +13,7 @@ import { cn } from '@/lib/utils';
  * (TranscriptSettings). Same idea, three different text/box styles per tab.
  *
  * The shape that survived is the ruled row inside a bordered group card, under an
- * engraved caps section label — the Nixon Faceplate/Deck geometry (`rounded-[3px]`,
+ * engraved caps section label — the Nixon Faceplate/Deck geometry (`rounded-lg`, 4px, a card,
  * token colors only, `u-section-label` reserved for SECTION titles, never row labels).
  *
  *   <SettingsSection title="Recording" description="…">
@@ -29,6 +30,11 @@ export interface SettingsSectionProps {
   title: React.ReactNode;
   /** One-line purpose statement under the title. */
   description?: React.ReactNode;
+  /**
+   * A control on the title line, right-aligned ("New prompt", "Refresh"). Use
+   * `Button variant="outline" size="sm"` (or `dashed` for "+ Add …").
+   */
+  action?: React.ReactNode;
   children?: React.ReactNode;
   /**
    * Id for the title element. The `<section>` points at it with `aria-labelledby`,
@@ -42,6 +48,7 @@ export interface SettingsSectionProps {
 export function SettingsSection({
   title,
   description,
+  action,
   children,
   id,
   className,
@@ -50,12 +57,25 @@ export function SettingsSection({
   const labelId = id ?? `settings-section-${generatedId}`;
   return (
     <section aria-labelledby={labelId} className={cn('space-y-3', className)}>
-      <div>
-        <h2 id={labelId} className="u-section-label">
-          {title}
-        </h2>
-        {description ? <p className="u-meta mt-1">{description}</p> : null}
-      </div>
+      {action ? (
+        // A grid, so the action has its own column beside the title AND the description,
+        // and `-my-2.5` takes the 32px key out of the row height: the header keeps the
+        // rhythm of a section without an action (it used to stretch the title row to 32px).
+        <div data-section-header="" className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3">
+          <h2 id={labelId} className="u-section-label">
+            {title}
+          </h2>
+          <div className="row-span-2 -my-2.5 flex flex-none items-center gap-2 self-start">{action}</div>
+          {description ? <p className="u-meta mt-1">{description}</p> : null}
+        </div>
+      ) : (
+        <div data-section-header="">
+          <h2 id={labelId} className="u-section-label">
+            {title}
+          </h2>
+          {description ? <p className="u-meta mt-1">{description}</p> : null}
+        </div>
+      )}
       {children}
     </section>
   );
@@ -69,15 +89,23 @@ export interface SettingsGroupProps {
 /** The ruled-row card: rows inside it are separated by hairlines, last one unruled. */
 export function SettingsGroup({ children, className }: SettingsGroupProps) {
   return (
-    <div className={cn('rounded-[3px] border border-border bg-card px-4', className)}>
+    <div className={cn('rounded-lg border border-border bg-card px-4', className)}>
       {children}
     </div>
   );
 }
 
-export interface SettingsRowProps {
+export interface SettingsRowProps
+  extends Omit<React.HTMLAttributes<HTMLDivElement>, 'children' | 'className'> {
   /** The setting's name — one `text-sm font-medium` line. */
   label: React.ReactNode;
+  /**
+   * Status beside the label on its line: an "Active" / "Default" `Badge`, a count. Keeps
+   * the label's weight; the label truncates before the aside wraps.
+   */
+  aside?: React.ReactNode;
+  /** De-emphasise the label (a source that is present but not in use). */
+  muted?: boolean;
   /** What the setting does / what happens when it is on. */
   description?: React.ReactNode;
   /** Right-aligned control (Switch, Select, Button, small input). */
@@ -102,11 +130,21 @@ export function SettingsRow({
   htmlFor,
   children,
   align = 'center',
+  aside,
+  muted = false,
   className,
+  ...rest
 }: SettingsRowProps) {
-  const labelClass = 'text-sm font-medium text-foreground';
+  const labelClass = cn('text-sm font-medium', muted ? 'text-muted-foreground' : 'text-foreground');
+  const labelEl = htmlFor ? (
+    <label htmlFor={htmlFor} className={cn(labelClass, aside != null && 'min-w-0 truncate')}>
+      {label}
+    </label>
+  ) : (
+    <div className={cn(labelClass, aside != null && 'min-w-0 truncate')}>{label}</div>
+  );
   return (
-    <div className={cn('border-b border-border py-3 last:border-b-0', className)}>
+    <div className={cn('border-b border-border py-3 last:border-b-0', className)} {...rest}>
       <div
         className={cn(
           'flex items-center justify-between gap-4',
@@ -114,12 +152,15 @@ export function SettingsRow({
         )}
       >
         <div className="min-w-0 flex-1 pr-4">
-          {htmlFor ? (
-            <label htmlFor={htmlFor} className={labelClass}>
-              {label}
-            </label>
+          {aside != null ? (
+            <div className="flex min-w-0 items-center gap-2">
+              {labelEl}
+              <div data-settings-row-aside="" className="flex flex-none items-center gap-1.5">
+                {aside}
+              </div>
+            </div>
           ) : (
-            <div className={labelClass}>{label}</div>
+            labelEl
           )}
           {description ? (
             <div className="text-sm text-muted-foreground">{description}</div>
@@ -127,18 +168,14 @@ export function SettingsRow({
         </div>
         {control ? <div className="flex-none">{control}</div> : null}
       </div>
-      {children ? <div className="mt-3">{children}</div> : null}
+      {/* `Children.toArray` drops `false`/`null`, so a row whose conditional details are all
+          off draws no empty 12px gap. */}
+      {React.Children.toArray(children).length > 0 ? <div className="mt-3">{children}</div> : null}
     </div>
   );
 }
 
 export type SettingsNoteTone = 'info' | 'warn' | 'muted';
-
-const NOTE_TONE_CLASS: Record<SettingsNoteTone, string> = {
-  info: 'border-brand/30 bg-brand/10',
-  warn: 'border-record/30 bg-record/10',
-  muted: 'bg-muted',
-};
 
 export interface SettingsNoteProps {
   tone?: SettingsNoteTone;
@@ -148,7 +185,12 @@ export interface SettingsNoteProps {
   role?: string;
 }
 
-/** The callout box used for banners and explanatory notes. */
+/**
+ * The Settings note — a thin alias of `Callout` (design-system wave 0b) with Callout's own
+ * geometry (`rounded-lg`, `px-4 py-3`), like every other card and callout. `warn` used to be the REC
+ * red wash; red is recording-only, so it is `Callout`'s amber `warn` now. New code uses
+ * `Callout` directly (and `tone="error"` for a load failure).
+ */
 export function SettingsNote({
   tone = 'muted',
   children,
@@ -156,16 +198,8 @@ export function SettingsNote({
   role,
 }: SettingsNoteProps) {
   return (
-    <div
-      role={role}
-      data-tone={tone}
-      className={cn(
-        'rounded-[3px] border border-border p-4 text-sm text-foreground',
-        NOTE_TONE_CLASS[tone],
-        className,
-      )}
-    >
+    <Callout tone={tone} role={role} className={className}>
       {children}
-    </div>
+    </Callout>
   );
 }

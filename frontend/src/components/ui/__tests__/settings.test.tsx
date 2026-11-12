@@ -75,16 +75,21 @@ describe('SettingsNote', () => {
   it('applies the info tone classes', () => {
     render(<SettingsNote tone="info">Heads up</SettingsNote>);
     const note = screen.getByText('Heads up');
-    expect(note).toHaveClass('bg-brand/10');
-    expect(note).toHaveClass('border-brand/30');
-    expect(note).toHaveClass('rounded-[3px]');
+    // Callout's info tone: the same 10% / 30% brand values, spelled as the named washes.
+    expect(note).toHaveClass('bg-brand-wash');
+    expect(note).toHaveClass('border-brand-edge');
+    // Callout's own geometry, like every callout (docs/design-system.md §Radius).
+    expect(note).toHaveClass('rounded-lg', 'px-4', 'py-3');
+    expect(note).not.toHaveClass('rounded-md');
+    expect(note).not.toHaveClass('p-4');
   });
 
-  it('applies the warn tone classes', () => {
+  it('applies the warn tone classes (amber, never the REC red)', () => {
     render(<SettingsNote tone="warn">Careful</SettingsNote>);
     const note = screen.getByText('Careful');
-    expect(note).toHaveClass('bg-record/10');
-    expect(note).toHaveClass('border-record/30');
+    expect(note).toHaveClass('bg-brand-wash');
+    expect(note).toHaveClass('border-brand');
+    expect(note.className).not.toMatch(/record/);
   });
 
   it('defaults to the muted tone', () => {
@@ -111,6 +116,24 @@ describe('SettingsSection', () => {
     expect(screen.getByText('How meetings are captured.')).toHaveClass('u-meta');
   });
 
+  it('puts an action on the title line', () => {
+    render(
+      <SettingsSection title="Summary prompts" action={<button type="button">New prompt</button>}>
+        <div>body</div>
+      </SettingsSection>,
+    );
+    const heading = screen.getByRole('heading', { name: 'Summary prompts' });
+    const action = screen.getByRole('button', { name: 'New prompt' });
+    // Same header: the heading and the action share it, the action in its own column.
+    expect(heading.parentElement).toHaveAttribute('data-section-header');
+    expect(heading.parentElement).toContainElement(action);
+    // The 32px action must not stretch the title row: negative margins take it out of the
+    // row height, so the rhythm matches a section without an action.
+    expect(action.parentElement).toHaveClass('-my-2.5');
+    // The region is still named by the heading alone.
+    expect(screen.getByRole('region', { name: 'Summary prompts' })).toBeInTheDocument();
+  });
+
   it('uses an explicit id when one is given', () => {
     render(<SettingsSection id="appearance-label" title="Appearance" />);
     expect(screen.getByRole('heading', { name: 'Appearance' })).toHaveAttribute(
@@ -121,5 +144,42 @@ describe('SettingsSection', () => {
       'aria-labelledby',
       'appearance-label',
     );
+  });
+});
+
+describe('SettingsGroup', () => {
+  it('is a 4px card like every other card (rounded-lg)', () => {
+    const { container } = render(<SettingsGroup>rows</SettingsGroup>);
+    expect(container.firstElementChild).toHaveClass('rounded-lg', 'border-border', 'bg-card');
+    expect(container.firstElementChild).not.toHaveClass('rounded-md');
+  });
+});
+
+describe('SettingsRow aside, muted, attributes', () => {
+  it('puts the aside on the label line and keeps the label at text-sm', () => {
+    render(<SettingsRow label="Standard" aside={<span>Default</span>} description="Body" />);
+    const label = screen.getByText('Standard');
+    expect(label).toHaveClass('text-sm', 'font-medium', 'text-foreground', 'truncate');
+    expect(label.parentElement).toContainElement(screen.getByText('Default'));
+  });
+
+  it('mutes the label', () => {
+    render(<SettingsRow label="macOS Calendar" muted />);
+    expect(screen.getByText('macOS Calendar')).toHaveClass('text-muted-foreground');
+  });
+
+  it('passes role and aria-label to the row', () => {
+    render(<SettingsRow role="group" aria-label="Google Calendar source" label="Google Calendar" />);
+    expect(screen.getByRole('group', { name: 'Google Calendar source' })).toBeInTheDocument();
+  });
+
+  it('draws no details gap when every child is off', () => {
+    const { container } = render(
+      <SettingsRow label="x">
+        {false}
+        {null}
+      </SettingsRow>,
+    );
+    expect(container.querySelector('.mt-3')).toBeNull();
   });
 });

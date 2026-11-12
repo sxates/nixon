@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { Loader2 } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -12,6 +11,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { Spinner } from '@/components/ui/spinner';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -254,7 +254,7 @@ export function AddMeetingDialog({
               Cancel
             </Button>
             <Button type="submit" variant="brand" disabled={isSaving}>
-              {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {isSaving && <Spinner size="sm" />}
               {isEdit ? 'Save' : 'Add meeting'}
             </Button>
           </DialogFooter>

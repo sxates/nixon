@@ -14,7 +14,8 @@
  * dead control.
  */
 
-import { Circle, EyeOff, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
+import { Circle, EyeOff, Pencil, Trash2 } from '@/components/ui/icons';
+import { MenuButton } from '@/components/ui/menu-button';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -29,6 +30,7 @@ import {
   showsManualRecordButton,
   type TimelineContext,
 } from '@/lib/today-timeline';
+import { cn } from '@/lib/utils';
 
 export interface AgendaRowActions {
   onHide: (item: DayAgendaItem) => void;
@@ -55,10 +57,17 @@ export function AgendaRowMenu({
   item,
   ctx,
   actions,
+  triggerClassName,
 }: {
   item: DayAgendaItem;
   ctx: TimelineContext;
   actions: AgendaRowActions;
+  /**
+   * Extra classes for the trigger (and the empty slot that stands in for it). A `ListRow`
+   * reveals its menu on hover by itself; the day grid's blocks pass their own reveal and a
+   * negative margin so the 28px key doesn't grow a 20px title line.
+   */
+  triggerClassName?: string;
 }) {
   const canEdit = canEditManualItem(item);
   const canHide = canHideItem(item, ctx);
@@ -68,7 +77,9 @@ export function AgendaRowMenu({
   const canRecordEarly = canRecordManualItem(item, ctx) && !showsManualRecordButton(item, ctx);
   // Nothing to offer — but keep the slot, so the chips of rows with and without a menu line
   // up (owner report 2026-09-23: the Week view's RECORDED chips stepped in and out).
-  if (!canEdit && !canHide && !canDelete && !canRecordEarly) return <span aria-hidden="true" className="h-5 w-5 flex-shrink-0" />;
+  if (!canEdit && !canHide && !canDelete && !canRecordEarly) {
+    return <span aria-hidden="true" className={cn('h-7 w-7 flex-none', triggerClassName)} />;
+  }
 
   return (
     // The row itself is clickable (it opens the meeting), so the menu swallows its own
@@ -80,49 +91,31 @@ export function AgendaRowMenu({
     >
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <button
-            type="button"
-            aria-label="Event options"
-            title="Event options"
-            className="inline-flex h-5 w-5 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100"
-          >
-            <MoreHorizontal className="h-3.5 w-3.5" />
-          </button>
+          <MenuButton label="Event options" className={triggerClassName} />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
           {canRecordEarly && (
-            <DropdownMenuItem onSelect={() => actions.onRecord(item)}>
-              <Circle className="mr-2 h-4 w-4" />
+            <DropdownMenuItem icon={Circle} onSelect={() => actions.onRecord(item)}>
               Record now
             </DropdownMenuItem>
           )}
           {canEdit && (
             <>
-              <DropdownMenuItem onSelect={() => actions.onEdit(item)}>
-                <Pencil className="mr-2 h-4 w-4" />
+              <DropdownMenuItem icon={Pencil} onSelect={() => actions.onEdit(item)}>
                 Edit
               </DropdownMenuItem>
-              <DropdownMenuItem
-                onSelect={() => actions.onDelete(item)}
-                className="text-destructive focus:text-destructive"
-              >
-                <Trash2 className="mr-2 h-4 w-4" />
+              <DropdownMenuItem icon={Trash2} variant="destructive" onSelect={() => actions.onDelete(item)}>
                 Delete
               </DropdownMenuItem>
             </>
           )}
           {canDelete && (
-            <DropdownMenuItem
-              onSelect={() => actions.onDelete(item)}
-              className="text-destructive focus:text-destructive"
-            >
-              <Trash2 className="mr-2 h-4 w-4" />
+            <DropdownMenuItem icon={Trash2} variant="destructive" onSelect={() => actions.onDelete(item)}>
               Delete meeting
             </DropdownMenuItem>
           )}
           {canHide && (
-            <DropdownMenuItem onSelect={() => actions.onHide(item)}>
-              <EyeOff className="mr-2 h-4 w-4" />
+            <DropdownMenuItem icon={EyeOff} onSelect={() => actions.onHide(item)}>
               Hide from timeline
             </DropdownMenuItem>
           )}

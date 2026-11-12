@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, within, fireEvent } from '@testing-library/react';
+import { render, screen, within, fireEvent, waitFor } from '@testing-library/react';
 
 vi.mock('@/components/CommandPalette/SearchMeetingsButton', () => ({
   SearchMeetingsButton: vi.fn(() => null),
@@ -31,8 +31,8 @@ function renderHeader(view: MeetingsView, calendarConnected: boolean) {
     </>,
   );
   const labels = () =>
-    within(screen.getByRole('group', { name: 'Meeting view' }))
-      .getAllByRole('button')
+    within(screen.getByRole('tablist', { name: 'Meeting view' }))
+      .getAllByRole('tab')
       .map((b) => b.textContent?.trim());
   return { onChooseView, onAddMeeting, labels };
 }
@@ -46,15 +46,15 @@ describe('MeetingsHeader', () => {
   it('offers Agenda | Week | Month | List with a calendar connected', () => {
     const { labels } = renderHeader('agenda', true);
     expect(labels()).toEqual(['Agenda', 'Week', 'Month', 'List']);
-    expect(screen.getByRole('button', { name: 'Agenda' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('tab', { name: 'Agenda' })).toHaveAttribute('aria-selected', 'true');
   });
 
-  it('gives every view option the same-size icon', () => {
+  // Design-system icon policy (docs/design-system.md §Icons, owner decision 2026-11-11):
+  // view tabs are text-only — the per-tab calendar/list glyphs were decorative.
+  it('draws the view options as text, with no per-tab icons', () => {
     renderHeader('agenda', true);
     for (const name of ['Agenda', 'Week', 'Month', 'List']) {
-      const icon = screen.getByRole('button', { name }).querySelector('svg');
-      expect(icon, `${name} has no icon`).not.toBeNull();
-      expect(icon!.getAttribute('class')).toContain('h-3.5 w-3.5');
+      expect(screen.getByRole('tab', { name }).querySelector('svg')).toBeNull();
     }
   });
 
@@ -63,10 +63,27 @@ describe('MeetingsHeader', () => {
     expect(labels()).toEqual(['Month', 'List']);
   });
 
+  // Radix tabs select on mousedown (and on focus via the arrow keys), not on click.
   it('reports the chosen view', () => {
     const { onChooseView } = renderHeader('agenda', true);
-    fireEvent.click(screen.getByRole('button', { name: 'Month' }));
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Month' }), { button: 0 });
     expect(onChooseView).toHaveBeenCalledWith('month');
+  });
+
+  // Tabs switch the view (docs/design-system.md): a tablist, one Tab stop, arrow keys move.
+  it('is a tablist with roving focus that selects on arrow keys', async () => {
+    const { onChooseView } = renderHeader('agenda', true);
+    const agenda = screen.getByRole('tab', { name: 'Agenda' });
+    agenda.focus();
+    fireEvent.keyDown(agenda, { key: 'ArrowRight' });
+    // Radix moves focus on the next tick; focusing a tab selects it (automatic activation).
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('tab', { name: 'Week' })));
+    expect(onChooseView).toHaveBeenCalledWith('week');
+  });
+
+  it('does not point aria-controls at panels that are not rendered', () => {
+    renderHeader('agenda', true);
+    expect(screen.getByRole('tab', { name: 'Agenda' })).not.toHaveAttribute('aria-controls');
   });
 
   // specs/0069 W3 — one primary Add meeting; Record and New note stay gone.

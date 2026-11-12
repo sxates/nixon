@@ -17,6 +17,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { toast } from 'sonner';
 import { NoteEditor } from '@/components/NoteEditor/NoteEditor';
+import { Panel } from '@/components/ui/panel';
 import { htmlToMarkdown, markdownToHtml, sanitizeNotesHtml, looksLikeHtml } from '@/lib/notes-html';
 
 /** Debounce interval (ms) for autosaving prep notes after the user stops typing. */
@@ -84,13 +85,19 @@ export function PrepNotesEditor({ meetingId, initialMarkdown, initialJson }: Pre
   );
 
   return (
+    // A Panel like every card: the title is the panel's own engraved heading (on the card's
+    // 16px inset, not NoteEditor's label row with its extra px-1) and the formatting
+    // toolbar sits in the panel's action slot.
     <NoteEditor
       initialHtml={initialHtml}
       onChange={handleChange}
-      label="Agenda — what I plan to cover"
       placeholder="What do you want to cover? Jot your agenda — it stays in view during the call and shapes the summary."
-      className="rounded-lg border border-border bg-card px-4 pb-3 pt-3"
       bodyClassName="min-h-[180px] pb-4"
+      frame={({ toolbar, body }) => (
+        <Panel title="Agenda — what I plan to cover" action={toolbar} className="flex min-h-0 flex-col">
+          {body}
+        </Panel>
+      )}
     />
   );
 }

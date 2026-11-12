@@ -27,7 +27,7 @@ describe('SaveOneOffDialog (specs/0079 W4)', () => {
   it('omits the series checkbox when the meeting has no series', () => {
     setup(false);
     expect(screen.queryByLabelText('Use for future meetings in this series')).toBeNull();
-    expect(screen.getByLabelText('Save to my prompt library')).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'Save to my prompt library' })).not.toBeChecked();
   });
 
   it('disables Save until something is checked', async () => {
@@ -51,8 +51,10 @@ describe('SaveOneOffDialog (specs/0079 W4)', () => {
 
   it('passes { name, toLibrary, toSeries } to onSave', async () => {
     const { onSave } = setup(true);
-    await userEvent.click(screen.getByLabelText('Use for future meetings in this series'));
-    await userEvent.click(screen.getByLabelText('Save to my prompt library'));
+    // Two independent destinations: checkboxes (docs/design-system.md, Checkbox vs Switch).
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Use for future meetings in this series' }));
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Save to my prompt library' }));
+    expect(screen.getByRole('checkbox', { name: 'Save to my prompt library' })).toBeChecked();
     await userEvent.click(save());
     expect(onSave).toHaveBeenCalledWith({
       name: 'Focus on decisions',
