@@ -39,7 +39,7 @@ export { Circle, EyeOff, MicOff, Radio, RotateCcw, UserCheck, UserPlus, Waves } 
 // Icon-only controls whose glyph IS the label (the tooltip carries the words): search,
 // import audio, the agenda's jump-to-date picker, the manual-sort drag handle, and the
 // sidebar's update download / restart glyph.
-export { CalendarDays, Download, FileAudio, GripVertical, RotateCw, Search } from 'lucide-react';
+export { CalendarDays, Download, FileAudio, GripVertical, RotateCw } from 'lucide-react';
 
 // Sidebar navigation. The collapsed rail is icon-only, so each destination's glyph is its
 // only visible wayfinding; the hamburger toggles the rail.
