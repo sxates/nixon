@@ -45,6 +45,7 @@ import { InboxRow } from '@/components/ActionItems/InboxRow';
 import { useActionItemMutations } from '@/hooks/useActionItemMutations';
 import { useTodoViews } from '@/hooks/useTodoViews';
 import {
+  adoptedFromName,
   assigneeLabel,
   reorderIds,
   updateAssigneeArgs,
@@ -255,24 +256,24 @@ function TasksPageContent() {
         actions={
           // The slot exists on every tab so the header doesn't jump when the menu appears.
           <div className="size-7">
-          {tab === 'inbox' && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <MenuButton label="Inbox options" />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                {([14, 30, 60] as const).map((days) => (
-                  <DropdownMenuItem key={days} onSelect={() => void handleDismissOlder(days)}>
-                    Dismiss suggestions older than {days} days
+            {tab === 'inbox' && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <MenuButton label="Inbox options" />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {([14, 30, 60] as const).map((days) => (
+                    <DropdownMenuItem key={days} onSelect={() => void handleDismissOlder(days)}>
+                      Dismiss suggestions older than {days} days
+                    </DropdownMenuItem>
+                  ))}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onSelect={() => setShowDismissed((v) => !v)}>
+                    {showDismissed ? 'Hide dismissed' : 'Show dismissed'}
                   </DropdownMenuItem>
-                ))}
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onSelect={() => setShowDismissed((v) => !v)}>
-                  {showDismissed ? 'Hide dismissed' : 'Show dismissed'}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
           </div>
         }
       />
@@ -348,7 +349,8 @@ function TasksPageContent() {
                             onAssign={assign}
                             onDelete={handleDelete}
                             onOpen={openItem}
-                            hideAssignee={item.assigneeIsSelf}
+                            hideAssignee
+                            adoptedFrom={adoptedFromName(item, nameById)}
                             onSetDueDate={setDueDate}
                             dragHandle={
                               <IconButton

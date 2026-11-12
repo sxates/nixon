@@ -155,6 +155,16 @@ const inboxRow = (id: string, description: string, over: Partial<TodoRow> = {}) 
   todoRow({ id, description, triage: 'suggested', ...over });
 
 describe('TasksPage (specs/0088 To-do / Inbox / Done)', () => {
+  it('shows "adopted from" and no assignee chip for an adopted item on the To-do tab', async () => {
+    stubInvoke({
+      rows: [todoRow({ id: 'ad', description: 'Send the deck', assigneePersonId: 'p1' })],
+    });
+    render(<TasksPage />);
+    expect(await screen.findByText('adopted from Alice Chen')).toBeInTheDocument();
+    expect(screen.queryByTitle(/Assigned to/)).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Alice Chen' })).toBeNull();
+  });
+
   it('renders three tabs with inbox count', async () => {
     stubInvoke({ rows: [inboxRow('a', 'Draft the plan'), inboxRow('b', 'Book the room')] });
     render(<TasksPage />);
