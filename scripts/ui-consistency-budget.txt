@@ -1,11 +1,11 @@
 # ADR-0019 UI-consistency budget — maximum allowed hits per rule.
 # Lowered by scripts/check-ui-consistency.sh --update; never raised by it.
-raw-button=107
-raw-input=11
-arbitrary-text-size=96
-arbitrary-radius=87
-label-override=13
-arbitrary-shadow=4
-lucide-import=54
-motion-travel=6
-handrolled-hover=16
+raw-button=0
+raw-input=0
+arbitrary-text-size=0
+arbitrary-radius=0
+label-override=0
+arbitrary-shadow=0
+lucide-import=0
+motion-travel=0
+handrolled-hover=0
