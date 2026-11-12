@@ -210,7 +210,7 @@ describe('to-do detail page', () => {
   it('title editing picks a person and saves the token', async () => {
     stub(detail());
     render(<TaskItemPage />);
-    const title = (await screen.findByLabelText('Title')) as HTMLInputElement;
+    const title = (await screen.findByLabelText('To-do title')) as HTMLTextAreaElement;
     expect(title.value).toBe('Send the deck');
     fireEvent.change(title, { target: { value: 'Send the deck to @sa' } });
     fireEvent.click(await screen.findByText('Sam Rivera'));
@@ -266,5 +266,41 @@ describe('to-do detail page', () => {
     await waitFor(() => expect(vi.mocked(toast.error)).toHaveBeenCalled());
     expect(screen.getByLabelText('Notes')).toBeTruthy();
     expect(screen.queryByText('Could not load this to-do')).toBeNull();
+  });
+
+  it('a due-date-only title shows the cleaned title after save', async () => {
+    stub(detail(), { api_set_action_item_due_date: () => item({ dueDate: '2026-11-20' }) });
+    render(<TaskItemPage />);
+    const title = (await screen.findByLabelText('To-do title')) as HTMLTextAreaElement;
+    fireEvent.change(title, { target: { value: 'Send the deck (Nov 20)' } });
+    fireEvent.keyDown(title, { key: 'Enter' });
+    await waitFor(() => expect(title.value).toBe('Send the deck'));
+  });
+
+  it('an emptied title reverts; Esc reverts an edit; Shift+Enter adds no newline', async () => {
+    stub(detail());
+    render(<TaskItemPage />);
+    const title = (await screen.findByLabelText('To-do title')) as HTMLTextAreaElement;
+    fireEvent.change(title, { target: { value: '  ' } });
+    fireEvent.keyDown(title, { key: 'Enter' });
+    await waitFor(() => expect(title.value).toBe('Send the deck'));
+    expect(callsTo('api_update_action_item')).toHaveLength(0);
+    fireEvent.change(title, { target: { value: 'Something else' } });
+    fireEvent.keyDown(title, { key: 'Escape' });
+    await waitFor(() => expect(title.value).toBe('Send the deck'));
+    fireEvent.blur(title);
+    expect(callsTo('api_update_action_item')).toHaveLength(0);
+    const ev = fireEvent.keyDown(title, { key: 'Enter', shiftKey: true });
+    expect(ev).toBe(false); // default prevented
+  });
+
+  it('Enter then blur saves the title once', async () => {
+    stub(detail());
+    render(<TaskItemPage />);
+    const title = (await screen.findByLabelText('To-do title')) as HTMLTextAreaElement;
+    fireEvent.change(title, { target: { value: 'Renamed' } });
+    fireEvent.keyDown(title, { key: 'Enter' });
+    fireEvent.blur(title);
+    await waitFor(() => expect(callsTo('api_update_action_item')).toHaveLength(1));
   });
 });

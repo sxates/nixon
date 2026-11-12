@@ -137,12 +137,18 @@ export function ItemDetail({ id }: { id: string }) {
   };
 
   // ---- title ----
+  const [titleReset, setTitleReset] = useState(0);
   const finishTitle = async (serialized: string) => {
     if (!item) return;
-    const { title, dueDate } = parseTodoText(serialized.trim(), new Date());
-    if (!title) return;
-    if (title !== item.description) await editDescription(item, title);
-    if (dueDate) await setDueDate(item, dueDate);
+    try {
+      const { title, dueDate } = parseTodoText(serialized.trim(), new Date());
+      if (!title) return; // empty title: revert (below)
+      if (title !== item.description) await editDescription(item, title);
+      if (dueDate) await setDueDate(item, dueDate);
+    } finally {
+      // Always show the saved text: a parsed `(Nov 20)` leaves the field, an empty title reverts.
+      setTitleReset((n) => n + 1);
+    }
   };
 
   // ---- notes autosave ----
@@ -289,11 +295,14 @@ export function ItemDetail({ id }: { id: string }) {
             <MentionInput
               value={item.description}
               onSubmit={(v) => void finishTitle(v)}
+              onCancel={() => setTitleReset((n) => n + 1)}
+              resetKey={titleReset}
               submitOnBlur
-              ariaLabel="Title"
+              multiline
+              ariaLabel="To-do title"
               placeholder="Title"
               className={cn(
-                'h-auto border-transparent bg-transparent px-1 py-1 text-xl font-semibold shadow-none hover:bg-muted md:text-xl',
+                'min-h-0 resize-none overflow-hidden border-transparent bg-transparent px-1 py-1 text-xl font-semibold leading-snug shadow-none hover:bg-muted md:text-xl',
                 completed && 'text-muted-foreground line-through',
               )}
             />

@@ -13,10 +13,11 @@
  * (`{ heading, items }[]`) so a Topics group can sit above People without a rewrite.
  */
 
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type ComponentProps, forwardRef, type KeyboardEvent, type SyntheticEvent } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { Command, CommandGroup, CommandItem, CommandList } from '@/components/ui/command';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover';
 import { deserializeMentions, serializeMentions, type PickedMention } from '@/lib/todo-parse';
 import type { Person } from '@/types';
@@ -52,6 +53,12 @@ interface MentionInputProps {
   ariaLabel?: string;
   className?: string;
   autoFocus?: boolean;
+  /** Auto-growing textarea (the detail-page title). Enter still submits; Shift+Enter is
+   *  ignored — titles never hold newlines. */
+  multiline?: boolean;
+  /** Bump to force the field back to `value` even when `value` itself didn't change
+   *  (after a save that normalised the text, or a cancel). */
+  resetKey?: number;
 }
 
 export function MentionInput({
@@ -64,7 +71,13 @@ export function MentionInput({
   ariaLabel,
   className,
   autoFocus,
+  multiline = false,
+  resetKey = 0,
 }: MentionInputProps) {
+  // cmdk owns the listbox's id, so read it back from the DOM once the list mounts.
+  const [listId, setListId] = useState<string | undefined>(undefined);
+  const listRef = useRef<HTMLDivElement | null>(null);
+  const [activeOptionId, setActiveOptionId] = useState<string | undefined>(undefined);
   const initial = useMemo(() => deserializeMentions(value), []); // eslint-disable-line react-hooks/exhaustive-deps
   const [text, setText] = useState(initial.text);
   const [picked, setPicked] = useState<PickedMention[]>(initial.picked);
@@ -72,7 +85,9 @@ export function MentionInput({
   const [people, setPeople] = useState<Person[]>([]);
   const [active, setActive] = useState(0);
   const [dismissedAt, setDismissedAt] = useState<number | null>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLInputElement & HTMLTextAreaElement>(null);
+  // Set by Enter/Esc so the blur that follows (unmount, focus move) can't submit again.
+  const settled = useRef(false);
   const pendingCaret = useRef<number | null>(null);
 
   // A different `value` from outside (cleared after an add, saved elsewhere) replaces the field.
@@ -98,6 +113,36 @@ export function MentionInput({
       cancelled = true;
     };
   }, []);
+
+  const firstReset = useRef(true);
+  useEffect(() => {
+    if (firstReset.current) {
+      firstReset.current = false;
+      return;
+    }
+    const d = deserializeMentions(value);
+    setText(d.text);
+    setPicked(d.picked);
+    setCaret(d.text.length);
+    setDismissedAt(null);
+  }, [resetKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Show each picked person's CURRENT name (a rename since the token was written).
+  useEffect(() => {
+    if (!people.length) return;
+    const names = new Map(people.map((p) => [p.id, p.displayName]));
+    const stale = picked.filter((p) => names.has(p.personId) && names.get(p.personId) !== p.name);
+    if (!stale.length) return;
+    let nextText = text;
+    const nextPicked = picked.map((p) => {
+      const cur = names.get(p.personId);
+      if (!cur || cur === p.name) return p;
+      nextText = nextText.split(`@${p.name}`).join(`@${cur}`);
+      return { ...p, name: cur };
+    });
+    setText(nextText);
+    setPicked(nextPicked);
+  }, [people]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (pendingCaret.current != null && inputRef.current) {
@@ -127,6 +172,11 @@ export function MentionInput({
   const open = flat.length > 0 && dismissedAt !== atIndex;
   const activeIndex = Math.min(active, Math.max(flat.length - 1, 0));
 
+  useEffect(() => {
+    const opts = listRef.current?.querySelectorAll('[role="option"]');
+    setActiveOptionId(open ? (opts?.[activeIndex] as HTMLElement | undefined)?.id : undefined);
+  }, [open, activeIndex, flat.length, listId]);
+
   const emit = (nextText: string, nextPicked: PickedMention[]) => {
     onChange?.(serializeMentions(nextText, nextPicked));
   };
@@ -148,7 +198,14 @@ export function MentionInput({
 
   const submit = () => onSubmit(serializeMentions(text, picked));
 
-  const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+  const onKeyDown = (e: KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    // Enter/Esc during IME composition belong to the IME.
+    if (e.nativeEvent.isComposing || e.keyCode === 229) return;
+    if (e.key === 'Tab' && open) setDismissedAt(atIndex);
+    if (e.key === 'Enter' && e.shiftKey && multiline) {
+      e.preventDefault();
+      return;
+    }
     if (open) {
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
         e.preventDefault();
@@ -170,39 +227,97 @@ export function MentionInput({
     }
     if (e.key === 'Enter') {
       e.preventDefault();
+      settled.current = true;
       submit();
     } else if (e.key === 'Escape' && onCancel) {
       e.preventDefault();
+      settled.current = true;
       onCancel();
     }
   };
 
   let flatIndex = -1;
   return (
-    <Popover open={open}>
+    <Popover open={open} onOpenChange={(o) => !o && setDismissedAt(atIndex)}>
       <PopoverAnchor asChild>
-        <Input
-          ref={inputRef}
+        {multiline ? (
+        <AutoGrowTextarea
+          ref={inputRef as never}
           value={text}
           autoFocus={autoFocus}
           placeholder={placeholder}
           aria-label={ariaLabel ?? placeholder}
+          role="combobox"
           aria-autocomplete="list"
+          aria-haspopup="listbox"
+          aria-controls={listId}
           aria-expanded={open}
+          aria-activedescendant={open ? activeOptionId : undefined}
           className={className}
-          onChange={(e) => {
-            setText(e.target.value);
-            setCaret(e.target.selectionStart ?? e.target.value.length);
+          onChange={(e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+            settled.current = false;
+            const v = multiline ? e.target.value.replace(/\n/g, ' ') : e.target.value;
+            setText(v);
+            setCaret(e.target.selectionStart ?? v.length);
             setActive(0);
             setDismissedAt(null);
-            emit(e.target.value, picked);
+            emit(v, picked);
           }}
-          onSelect={(e) => setCaret(e.currentTarget.selectionStart ?? e.currentTarget.value.length)}
+          onFocus={() => {
+            settled.current = false;
+          }}
+          onSelect={(e: SyntheticEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+            setCaret(e.currentTarget.selectionStart ?? e.currentTarget.value.length)
+          }
           onKeyDown={onKeyDown}
           onBlur={() => {
-            if (submitOnBlur) submit();
+            if (open) setDismissedAt(atIndex);
+            if (submitOnBlur && !settled.current) {
+              settled.current = true;
+              submit();
+            }
+          }}
+          rows={1}
+        />
+        ) : (
+        <Input
+          ref={inputRef as never}
+          value={text}
+          autoFocus={autoFocus}
+          placeholder={placeholder}
+          aria-label={ariaLabel ?? placeholder}
+          role="combobox"
+          aria-autocomplete="list"
+          aria-haspopup="listbox"
+          aria-controls={listId}
+          aria-expanded={open}
+          aria-activedescendant={open ? activeOptionId : undefined}
+          className={className}
+          onChange={(e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+            settled.current = false;
+            const v = multiline ? e.target.value.replace(/\n/g, ' ') : e.target.value;
+            setText(v);
+            setCaret(e.target.selectionStart ?? v.length);
+            setActive(0);
+            setDismissedAt(null);
+            emit(v, picked);
+          }}
+          onFocus={() => {
+            settled.current = false;
+          }}
+          onSelect={(e: SyntheticEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+            setCaret(e.currentTarget.selectionStart ?? e.currentTarget.value.length)
+          }
+          onKeyDown={onKeyDown}
+          onBlur={() => {
+            if (open) setDismissedAt(atIndex);
+            if (submitOnBlur && !settled.current) {
+              settled.current = true;
+              submit();
+            }
           }}
         />
+        )}
       </PopoverAnchor>
       <PopoverContent
         align="start"
@@ -212,8 +327,15 @@ export function MentionInput({
         // Keep focus in the field so picking with the mouse doesn't blur (and submit) it.
         onMouseDown={(e) => e.preventDefault()}
       >
-        <Command shouldFilter={false} value={`mention-${activeIndex}`}>
-          <CommandList>
+        <Command
+          shouldFilter={false}
+          value={`mention-${activeIndex}`}
+          onValueChange={(v) => {
+            const n = Number(v.replace('mention-', ''));
+            if (Number.isInteger(n)) setActive(n);
+          }}
+        >
+          <CommandList ref={(el) => { listRef.current = el; if (el && el.id !== listId) setListId(el.id); }}>
             {groups.map((group) => (
               <CommandGroup key={group.heading} heading={group.heading}>
                 {group.items.map((item) => {
@@ -232,3 +354,26 @@ export function MentionInput({
     </Popover>
   );
 }
+
+/** Textarea that grows with its content, so a long title wraps instead of scrolling. */
+const AutoGrowTextarea = forwardRef<HTMLTextAreaElement, ComponentProps<typeof Textarea>>(
+  function AutoGrowTextarea(props, ref) {
+    const local = useRef<HTMLTextAreaElement | null>(null);
+    useEffect(() => {
+      const el = local.current;
+      if (!el) return;
+      el.style.height = 'auto';
+      el.style.height = `${el.scrollHeight}px`;
+    }, [props.value]);
+    return (
+      <Textarea
+        {...props}
+        ref={(el) => {
+          local.current = el;
+          if (typeof ref === 'function') ref(el);
+          else if (ref) ref.current = el;
+        }}
+      />
+    );
+  },
+);

@@ -100,4 +100,59 @@ describe('MentionInput', () => {
     fireEvent.keyDown(input, { key: 'Enter' });
     expect(onSubmit).toHaveBeenCalledWith('Check in with @[Sam Rivera](person:p-1) (Friday)');
   });
+
+  it('exposes combobox/listbox/option semantics', async () => {
+    const { input } = await setup();
+    expect(input.getAttribute('role')).toBe('combobox');
+    expect(input.getAttribute('aria-expanded')).toBe('false');
+    type(input, '@sa');
+    await screen.findByText('Sam Rivera');
+    expect(input.getAttribute('aria-expanded')).toBe('true');
+    const list = screen.getByRole('listbox');
+    expect(input.getAttribute('aria-controls')).toBe(list.id);
+    const options = screen.getAllByRole('option');
+    expect(options).toHaveLength(2);
+    expect(input.getAttribute('aria-activedescendant')).toBe(options[0].id);
+    fireEvent.keyDown(input, { key: 'ArrowDown' });
+    expect(input.getAttribute('aria-activedescendant')).toBe(options[1].id);
+  });
+
+  it('ignores Enter while an IME composition is in progress', async () => {
+    const { input, onSubmit } = await setup();
+    type(input, '@sa');
+    await screen.findByText('Sam Rivera');
+    fireEvent.keyDown(input, { key: 'Enter', keyCode: 229 });
+    expect(input.value).toBe('@sa');
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it('closes on blur and on Tab', async () => {
+    const { input } = await setup();
+    type(input, '@sa');
+    await screen.findByText('Sam Rivera');
+    fireEvent.blur(input);
+    await waitFor(() => expect(screen.queryByText('Sam Rivera')).toBeNull());
+    type(input, '@sam');
+    await screen.findByText('Sam Rivera');
+    fireEvent.keyDown(input, { key: 'Tab' });
+    await waitFor(() => expect(screen.queryByText('Sam Rivera')).toBeNull());
+  });
+
+  it('Enter then blur submits once; Esc then blur never submits', async () => {
+    const { input, onSubmit } = await setup({ submitOnBlur: true });
+    type(input, 'Hello');
+    fireEvent.keyDown(input, { key: 'Enter' });
+    fireEvent.blur(input);
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    fireEvent.focus(input);
+    type(input, 'Changed');
+    fireEvent.keyDown(input, { key: 'Escape' });
+    fireEvent.blur(input);
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows a renamed person by their current name', async () => {
+    const { input } = await setup({ value: 'Ask @[Sammy](person:p-1)' });
+    await waitFor(() => expect(input.value).toBe('Ask @Sam Rivera'));
+  });
 });
