@@ -13,6 +13,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import * as SelectPrimitive from '@radix-ui/react-select';
 import { Button } from '@/components/ui/button';
+import { Callout } from '@/components/ui/callout';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { SelectGroup, SelectLabel } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
@@ -150,26 +151,29 @@ export function CliProviderPanel({ provider, onSave }: CliProviderPanelProps) {
   return <ClaudeCodePanel onSave={onSave} />;
 }
 
-function StatusLine({ status }: { status: CliProviderStatus }) {
+/** Is Claude reachable? Only `ready` with no probe error is. */
+function isReady(status: CliProviderStatus) {
+  return !status.probeError && status.state === 'ready';
+}
+
+/** The one-line status sentence for the current state. */
+function statusText(status: CliProviderStatus): string {
   const { state, probeError } = status;
-  // Status is a dot, not a glyph: green when Claude is reachable, destructive otherwise.
-  const ok = !probeError && state === 'ready';
-  let text: string;
-  if (probeError) {
-    text = probeError;
-  } else if (state === 'ready') {
-    text = 'Ready. Nixon can reach Claude with your account.';
-  } else if (state === 'needsSignIn') {
-    text = AUTH_COPY;
-  } else if (state === 'tooOld') {
-    text = `Update Claude Code, then Check again. Nixon needs version ${status.minVersion} or newer.`;
-  } else {
-    text = "Nixon couldn't find Claude Code on this Mac. Install it, or choose where it lives with Locate…";
+  if (probeError) return probeError;
+  if (state === 'ready') return 'Ready. Nixon can reach Claude with your account.';
+  if (state === 'needsSignIn') return AUTH_COPY;
+  if (state === 'tooOld') {
+    return `Update Claude Code, then Check again. Nixon needs version ${status.minVersion} or newer.`;
   }
+  return "Nixon couldn't find Claude Code on this Mac. Install it, or choose where it lives with Locate…";
+}
+
+/** Ready: a green dot and the sentence, as a flat row (no box inside the dialog's card). */
+function StatusLine({ status }: { status: CliProviderStatus }) {
   return (
-    <div className="flex items-start gap-2 text-sm" data-ok={ok}>
-      <StatusDot tone={ok ? 'success' : 'destructive'} className="mt-1.5" />
-      <span>{text}</span>
+    <div className="flex items-start gap-2 text-sm" data-ok>
+      <StatusDot tone="success" className="mt-1.5" />
+      <span>{statusText(status)}</span>
     </div>
   );
 }
@@ -244,28 +248,34 @@ function ClaudeCodePanel({ onSave }: { onSave: () => void }) {
 
   return (
     <div className="mt-4 space-y-4" data-testid="cli-provider-panel">
-      <div className="space-y-2 rounded-md border border-border bg-card p-3">
+      {/* Status, then the keys as flat rows (no box inside the dialog's card). Ready is a
+          green-dot line; anything else is an error Callout — status is the Callout's tone,
+          not a red dot in a neutral box. The keys stay in one stable block below, so a
+          status change never remounts them. */}
+      <div className="space-y-2">
         {status ? (
-          <>
+          isReady(status) ? (
             <StatusLine status={status} />
-            {(status.path || status.version) && (
-              <p className="break-all text-xs text-muted-foreground">
-                {status.path}
-                {status.path && status.version ? ' · ' : ''}
-                {status.version ? `version ${status.version}` : ''}
-              </p>
-            )}
-            {status.authNote && <p className="text-xs text-muted-foreground">{status.authNote}</p>}
-          </>
+          ) : (
+            <Callout tone="error" data-ok={false}>
+              {statusText(status)}
+            </Callout>
+          )
+        ) : error ? (
+          <Callout tone="error">{error}</Callout>
         ) : (
           <p className="flex items-center gap-2 text-sm text-muted-foreground">
-            {error ? error : (
-              <>
-                <Spinner /> Checking Claude Code…
-              </>
-            )}
+            <Spinner /> Checking Claude Code…
           </p>
         )}
+        {status && (status.path || status.version) && (
+          <p className="break-all text-xs text-muted-foreground">
+            {status.path}
+            {status.path && status.version ? ' · ' : ''}
+            {status.version ? `version ${status.version}` : ''}
+          </p>
+        )}
+        {status?.authNote && <p className="text-xs text-muted-foreground">{status.authNote}</p>}
         <div className="flex flex-wrap items-center gap-2 pt-1">
           <Button type="button" variant="outline" size="sm" onClick={() => void refresh()} disabled={checking}>
             {checking ? 'Checking…' : 'Check again'}

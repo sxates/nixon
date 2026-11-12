@@ -792,10 +792,10 @@ export function ModelSettingsModal({
     <div>
       {/* The settings tab names this section already; only the meeting page's dialog needs
           a visible heading (its DialogTitle is visually hidden). */}
-      {layout === 'dialog' && <h3 className="mb-4 text-heading font-semibold">Model Settings</h3>}
+      {layout === 'dialog' && <h3 className="mb-4 text-heading font-semibold">Model settings</h3>}
 
       <div>
-        <SettingsRow label="Summarization Model" htmlFor="summary-provider">
+        <SettingsRow label="Summarization model" htmlFor="summary-provider">
           <div className="flex space-x-2">
             <Select
               value={modelConfig.provider}
@@ -861,9 +861,9 @@ export function ModelSettingsModal({
                 <SelectValue placeholder="Select provider" />
               </SelectTrigger>
               <SelectContent className="max-h-64 overflow-y-auto">
-                <SelectItem value="builtin-ai">Built-in AI (Offline, No API needed)</SelectItem>
+                <SelectItem value="builtin-ai">Built-in AI (offline, no API needed)</SelectItem>
                 <SelectItem value="claude">Claude</SelectItem>
-                <SelectItem value="custom-openai">Custom Server (OpenAI)</SelectItem>
+                <SelectItem value="custom-openai">Custom server (OpenAI)</SelectItem>
                 <SelectItem value="groq">Groq</SelectItem>
                 <SelectItem value="ollama">Ollama</SelectItem>
                 <SelectItem value="openai">OpenAI</SelectItem>
@@ -957,7 +957,7 @@ export function ModelSettingsModal({
             </div>
 
             <div>
-              <Label htmlFor="custom-model">Model Name *</Label>
+              <Label htmlFor="custom-model">Model name *</Label>
               <Input
                 id="custom-model"
                 value={customOpenAIModel}
@@ -971,7 +971,7 @@ export function ModelSettingsModal({
             </div>
 
             <div>
-              <Label htmlFor="custom-api-key">API Key (optional)</Label>
+              <Label htmlFor="custom-api-key">API key (optional)</Label>
               <Input
                 id="custom-api-key"
                 type="password"
@@ -999,7 +999,7 @@ export function ModelSettingsModal({
               {isCustomOpenAIAdvancedOpen && (
                 <div className="space-y-3 pl-2 border-l-2 border-muted mt-2">
                   <div>
-                    <Label htmlFor="custom-max-tokens">Max Tokens</Label>
+                    <Label htmlFor="custom-max-tokens">Max tokens</Label>
                     <Input
                       id="custom-max-tokens"
                       type="number"
@@ -1063,7 +1063,7 @@ export function ModelSettingsModal({
         )}
 
         {requiresApiKey && (
-          <SettingsRow label="API Key" htmlFor="summary-api-key">
+          <SettingsRow label="API key" htmlFor="summary-api-key">
             <div className="relative">
               <Input
                 id="summary-api-key"
@@ -1123,7 +1123,7 @@ export function ModelSettingsModal({
 
         {modelConfig.provider === 'ollama' && (
           <SettingsRow
-            label="Custom Endpoint (optional)"
+            label="Custom endpoint (optional)"
             control={
               <Button
                 type="button"
@@ -1201,7 +1201,7 @@ export function ModelSettingsModal({
 
         {modelConfig.provider === 'ollama' && (
           <SettingsRow
-            label="Available Ollama Models"
+            label="Available Ollama models"
             control={
               lastFetchedEndpoint && models.length > 0 ? (
                 <div className="flex items-center gap-2 text-sm">

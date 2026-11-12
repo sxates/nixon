@@ -79,6 +79,15 @@ describe('CliProviderPanel (specs/0085)', () => {
     expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
   });
 
+  // The failure state is an error Callout, not a red dot inside a neutral box-in-a-box.
+  it('shows a not-ready status as an error callout', async () => {
+    arrange({ ...BASE, state: 'notFound' });
+    render(<CliProviderPanel provider="claude-code" onSave={vi.fn()} />);
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveAttribute('data-tone', 'error');
+    expect(alert.textContent).toMatch(/couldn't find Claude Code/);
+  });
+
   it('asks for an update when the CLI is too old', async () => {
     arrange({ ...BASE, state: 'tooOld', path: '/usr/local/bin/claude', version: '1.0.0' });
     render(<CliProviderPanel provider="claude-code" onSave={vi.fn()} />);
