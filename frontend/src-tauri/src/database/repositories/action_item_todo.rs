@@ -277,7 +277,7 @@ impl ActionItemTodoRepository {
             "SELECT id, meeting_id, description FROM action_items WHERE \
                (triage IN ('listed', 'suggested') AND status = 'open') \
                OR (status = 'dismissed' AND triage != 'record') \
-               OR (status = 'completed' AND completed_at IS NOT NULL \
+               OR (status = 'completed' AND triage != 'record' AND completed_at IS NOT NULL \
                    AND julianday(completed_at) >= julianday(?)) \
              ORDER BY CASE WHEN status = 'open' AND triage = 'listed' THEN 0 \
                            WHEN status = 'open' THEN 1 \

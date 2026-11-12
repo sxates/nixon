@@ -42,10 +42,10 @@ pub struct ActionItemCandidate {
     #[serde(default)]
     pub due: Option<String>,
     /// What this meeting said about the task (specs/0088); absent in old-shape replies.
-    #[serde(default)]
+    #[serde(default, deserialize_with = "super::merge::lenient_context")]
     pub context: Option<String>,
     /// 1-based number of the TRACKED task this is the same as, else null.
-    #[serde(default)]
+    #[serde(default, deserialize_with = "super::merge::lenient_same_as")]
     pub same_as: Option<u32>,
 }
 
@@ -260,8 +260,9 @@ const RETRY_REMINDER: &str = "\n\nIMPORTANT: Your previous reply could not be pa
 /// Cap on the TRACKED TASKS list embedded in the user prompt: bounds prompt size for
 /// long-lived meetings that accumulate many protected items (~50 one-line descriptions ≈
 /// a few hundred tokens — negligible next to the summary itself, even on small local
-/// models). Overflow items simply lose prompt-level dedup and fall back to the diff's
-/// token matcher + protected rules, which remain the hard safety guarantee.
+/// models). Overflow items are never shown, so they get NO cross-meeting matching
+/// (`merge::route_candidates` scans only the shown entries); they fall back to the diff's
+/// token matcher + protected rules within their own meeting.
 pub const ALREADY_TRACKED_CAP: usize = 50;
 
 /// Header + instruction for the TRACKED TASKS section of the user prompt (specs/0088).
@@ -803,6 +804,10 @@ mod tests {
             prompt.find("MEETING OWNER'S NOTES").unwrap() < prompt.find("TRACKED TASKS:").unwrap()
         );
         assert!(prompt.ends_with("Return ONLY the JSON array of action items."));
+        assert!(
+            prompt.find("[2] Order pizza").unwrap() < prompt.find(TRACKED_INSTRUCTION).unwrap(),
+            "the instruction follows the list"
+        );
         // Empty list: no section at all.
         assert!(!build_user_prompt("## Summary", None, &[]).contains("TRACKED"));
     }
@@ -844,6 +849,30 @@ mod tests {
             Some("Priya said she would send it")
         );
         assert_eq!(parsed[0].same_as, Some(2));
+    }
+
+    #[test]
+    fn malformed_same_as_and_context_never_fail_the_reply() {
+        let parse = |extra: &str| -> ActionItemCandidate {
+            let json =
+                format!(r#"[{{"description": "x", "assignee": null, "due": null, {extra}}}]"#);
+            serde_json::from_str::<Vec<ActionItemCandidate>>(&json)
+                .unwrap()
+                .remove(0)
+        };
+        assert_eq!(parse(r#""same_as": "2""#).same_as, Some(2));
+        assert_eq!(parse(r#""same_as": 2.0"#).same_as, Some(2));
+        assert_eq!(parse(r#""same_as": -1"#).same_as, None);
+        assert_eq!(parse(r#""same_as": "none""#).same_as, None);
+        assert_eq!(parse(r#""same_as": "[2]""#).same_as, None);
+        assert_eq!(parse(r#""same_as": 2.5"#).same_as, None);
+        assert_eq!(parse(r#""same_as": {"n": 1}"#).same_as, None);
+        assert_eq!(parse(r#""context": 7, "same_as": null"#).context, None);
+        assert_eq!(parse(r#""context": ["a"]"#).context, None);
+        assert_eq!(
+            parse(r#""context": "said so""#).context.as_deref(),
+            Some("said so")
+        );
     }
 
     #[test]

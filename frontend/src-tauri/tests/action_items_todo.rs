@@ -494,6 +494,13 @@ async fn tracked_for_merge_orders_groups_strips_tokens_and_windows_completed() {
             .await
             .unwrap();
     }
+    let done_record = extracted(pool, "m1", "Others finished", "record", "completed").await;
+    sqlx::query("UPDATE action_items SET completed_at = ? WHERE id = ?")
+        .bind(Utc::now().to_rfc3339())
+        .bind(&done_record)
+        .execute(pool)
+        .await
+        .unwrap();
     let got = Todo::tracked_for_merge(pool).await.unwrap();
     let got_ids: Vec<&str> = got.iter().map(|t| t.id.as_str()).collect();
     assert_eq!(
@@ -506,6 +513,7 @@ async fn tracked_for_merge_orders_groups_strips_tokens_and_windows_completed() {
         ]
     );
     assert!(!got_ids.contains(&record.as_str()) && !got_ids.contains(&stale.as_str()));
+    assert!(!got_ids.contains(&done_record.as_str()));
     assert_eq!(got[0].description, "Check in with Sam");
     assert_eq!(got[0].meeting_id.as_deref(), Some("m1"));
 }

@@ -190,6 +190,20 @@ fn similarity(a: &HashSet<String>, b: &HashSet<String>) -> f64 {
     jaccard.max(overlap)
 }
 
+/// Plain token-set Jaccard of two descriptions (no overlap coefficient): the cross-meeting
+/// backstop must not treat a short title as a subset-match of a longer, different task.
+pub(crate) fn token_jaccard(a: &str, b: &str) -> f64 {
+    let (a, b) = (
+        token_set(&normalize_description(a)),
+        token_set(&normalize_description(b)),
+    );
+    if a.is_empty() || b.is_empty() {
+        return 0.0;
+    }
+    let inter = a.intersection(&b).count() as f64;
+    inter / ((a.len() + b.len()) as f64 - inter)
+}
+
 /// Fuzzy similarity of two descriptions (normalized, person tokens stripped).
 pub(crate) fn token_similarity(a: &str, b: &str) -> f64 {
     similarity(
@@ -220,15 +234,17 @@ pub(crate) fn token_similarity(a: &str, b: &str) -> f64 {
 ///   already represented by a row the user owns. Matched PRISTINE rows don't block:
 ///   they are being rewritten to their own candidate's key, so their old key is vacated.
 pub fn compute_diff(existing: &[ActionItem], candidates: &[ResolvedCandidate]) -> ExtractionDiff {
-    compute_diff_with_kept(existing, candidates, &HashSet::new())
+    compute_diff_with_forced(existing, candidates, &[])
 }
 
-/// [`compute_diff`] where rows in `kept_ids` (re-mentioned this run, per `merge`) count as
-/// matched up front, so unmatched-pristine deletion spares them.
-pub fn compute_diff_with_kept(
+/// [`compute_diff`] with forced matches: each `(row id, candidate)` pair is matched up
+/// front (the model said the candidate IS that row, per `merge`), under the ordinary
+/// rules: a pristine row is rewritten from the candidate, a protected row absorbs it.
+/// Either way the row is spared from deletion and its key blocks later look-alikes.
+pub fn compute_diff_with_forced(
     existing: &[ActionItem],
     candidates: &[ResolvedCandidate],
-    kept_ids: &HashSet<String>,
+    forced: &[(String, ResolvedCandidate)],
 ) -> ExtractionDiff {
     struct Entry<'a> {
         item: &'a ActionItem,
@@ -243,12 +259,27 @@ pub fn compute_diff_with_kept(
             item,
             protected: is_protected(item),
             tokens: token_set(&normalize_description(&item.description)),
-            matched: kept_ids.contains(&item.id),
+            matched: false,
         })
         .collect();
 
     let mut diff = ExtractionDiff::default();
     let mut seen_keys: HashSet<String> = HashSet::new();
+
+    for (id, candidate) in forced {
+        let Some(entry) = entries.iter_mut().find(|e| e.item.id == *id && !e.matched) else {
+            continue;
+        };
+        entry.matched = true;
+        let key = content_key(&candidate.description);
+        if !entry.protected && seen_keys.insert(key.clone()) {
+            diff.updates.push(PristineUpdate {
+                id: id.clone(),
+                candidate: candidate.clone(),
+                content_key: key,
+            });
+        }
+    }
 
     for candidate in candidates {
         let key = content_key(&candidate.description);
@@ -385,9 +416,43 @@ mod tests {
     fn kept_ids_spare_a_pristine_row_from_deletion() {
         let existing = [pristine("a", "Book the venue")];
         assert_eq!(compute_diff(&existing, &[]).delete_ids, ["a"]);
-        let kept: HashSet<String> = ["a".to_string()].into();
-        let plan = compute_diff_with_kept(&existing, &[], &kept);
+        let forced = [("a".to_string(), candidate("Reserve the venue"))];
+        let plan = compute_diff_with_forced(&existing, &[], &forced);
         assert!(plan.delete_ids.is_empty() && plan.inserts.is_empty());
+        // A pristine forced row is rewritten from the candidate.
+        assert_eq!(plan.updates.len(), 1);
+        assert_eq!(plan.updates[0].id, "a");
+        assert_eq!(
+            plan.updates[0].content_key,
+            content_key("Reserve the venue")
+        );
+    }
+
+    #[test]
+    fn forced_protected_row_absorbs_and_blocks_its_key() {
+        let existing = [row("x", "Book the venue", "open", "manual", false)];
+        let forced = [("x".to_string(), candidate("Reserve the venue"))];
+        let plan = compute_diff_with_forced(&existing, &[candidate("Book the venue")], &forced);
+        assert!(plan.inserts.is_empty() && plan.updates.is_empty() && plan.delete_ids.is_empty());
+    }
+
+    #[test]
+    fn forced_pristine_row_vacates_its_old_key() {
+        let existing = [pristine("x", "Book the venue")];
+        let forced = [("x".to_string(), candidate("Reserve the main hall"))];
+        let plan = compute_diff_with_forced(&existing, &[candidate("Book the venue")], &forced);
+        assert_eq!(plan.updates.len(), 1);
+        assert_eq!(plan.inserts.len(), 1);
+        assert_ne!(plan.inserts[0].content_key, plan.updates[0].content_key);
+    }
+
+    #[test]
+    fn token_jaccard_ignores_the_overlap_coefficient() {
+        assert!(
+            token_jaccard("Call Sam", "Call Sam about the invoice dispute") < FUZZY_MATCH_THRESHOLD
+        );
+        assert!(token_similarity("Call Sam about it", "Call Sam about it now please") >= 0.0);
+        assert_eq!(token_jaccard("", "x"), 0.0);
     }
 
     // ---- normalization + content_key ------------------------------------------------
