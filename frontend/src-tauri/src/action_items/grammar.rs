@@ -224,6 +224,7 @@ mod tests {
             description: "Book the room".to_string(),
             assignee: None,
             due: None,
+            ..Default::default()
         };
         let json = serde_json::to_string(&std::slice::from_ref(&candidate)).unwrap();
         assert_eq!(parse_candidates(&json).unwrap(), vec![candidate]);

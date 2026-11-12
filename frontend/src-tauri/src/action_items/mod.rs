@@ -18,6 +18,7 @@ pub mod due;
 pub mod extractor;
 pub mod grammar;
 pub mod mentions;
+pub mod merge;
 mod reply_parse;
 pub mod schema;
 pub mod todo_commands;
@@ -311,7 +312,15 @@ async fn run_extraction_inner<R: Runtime>(
     let existing = ActionItemsRepository::get_for_meeting(pool, meeting_id)
         .await
         .context("Failed to load existing action items")?;
-    let already_tracked = already_tracked_descriptions(&existing);
+    // Interim wiring (Task 6 swaps in `tracked_for_merge`): this meeting's protected rows.
+    let already_tracked: Vec<merge::TrackedItem> = already_tracked_descriptions(&existing)
+        .into_iter()
+        .map(|d| merge::TrackedItem {
+            id: String::new(),
+            meeting_id: Some(meeting_id.to_string()),
+            description: mentions::plain_description(d),
+        })
+        .collect();
 
     let client = reqwest::Client::new();
     let app_data_dir = app.path().app_data_dir().ok();

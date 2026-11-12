@@ -19,6 +19,7 @@ fn cand(desc: &str) -> ResolvedCandidate {
         assignee_raw: None,
         due_hint: None,
         due_date: None,
+        ..Default::default()
     }
 }
 
@@ -389,7 +390,10 @@ async fn person_delete_removes_mentions_keeps_title() {
     Todo::sync_mentions(pool, &id, desc).await.unwrap();
     PeopleRepository::delete(pool, "p-1").await.unwrap();
     assert!(mention_ids(pool, &id).await.is_empty());
-    let item = ActionItemsRepository::get(pool, &id).await.unwrap().unwrap();
+    let item = ActionItemsRepository::get(pool, &id)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(item.description, desc);
 }
 
@@ -462,4 +466,46 @@ async fn meeting_delete_removes_single_source_suggestion() {
     delete_meeting(pool, "m1").await;
     assert_eq!(meeting_id_of(pool, &id).await, None);
     assert!(mention_ids(pool, &id).await.is_empty());
+}
+
+#[tokio::test]
+async fn tracked_for_merge_orders_groups_strips_tokens_and_windows_completed() {
+    let (_d, db) = fresh_db().await;
+    let pool = db.pool();
+    meeting(pool, "m1", 1).await;
+    let sugg = extracted(pool, "m1", "Suggested one", "suggested", "open").await;
+    let listed = extracted(
+        pool,
+        "m1",
+        "Check in with @[Sam](person:p-1)",
+        "listed",
+        "open",
+    )
+    .await;
+    let dismissed = extracted(pool, "m1", "Dismissed one", "suggested", "dismissed").await;
+    let record = extracted(pool, "m1", "Someone else's", "record", "dismissed").await;
+    let fresh = extracted(pool, "m1", "Finished lately", "listed", "completed").await;
+    let stale = extracted(pool, "m1", "Finished ages ago", "listed", "completed").await;
+    for (id, days) in [(&fresh, 5), (&stale, 90)] {
+        sqlx::query("UPDATE action_items SET completed_at = ? WHERE id = ?")
+            .bind((Utc::now() - Duration::days(days)).to_rfc3339())
+            .bind(id)
+            .execute(pool)
+            .await
+            .unwrap();
+    }
+    let got = Todo::tracked_for_merge(pool).await.unwrap();
+    let got_ids: Vec<&str> = got.iter().map(|t| t.id.as_str()).collect();
+    assert_eq!(
+        got_ids,
+        [
+            listed.as_str(),
+            sugg.as_str(),
+            dismissed.as_str(),
+            fresh.as_str()
+        ]
+    );
+    assert!(!got_ids.contains(&record.as_str()) && !got_ids.contains(&stale.as_str()));
+    assert_eq!(got[0].description, "Check in with Sam");
+    assert_eq!(got[0].meeting_id.as_deref(), Some("m1"));
 }

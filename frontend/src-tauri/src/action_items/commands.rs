@@ -195,6 +195,7 @@ pub async fn api_create_action_item<R: Runtime>(
             due_date: due_date
                 .map(|d| d.trim().to_string())
                 .filter(|d| !d.is_empty()),
+            ..Default::default()
         },
         "manual",
         &key,

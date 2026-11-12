@@ -8,7 +8,10 @@ use chrono::{Duration, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, SqliteConnection, SqlitePool};
 
-use crate::action_items::mentions::person_ids_in;
+use crate::action_items::extractor::ALREADY_TRACKED_CAP;
+use crate::action_items::mentions::{person_ids_in, plain_description};
+use crate::action_items::merge::TrackedItem;
+use crate::action_items::triage::ABSORB_COMPLETED_WITHIN_DAYS;
 
 use super::action_item::{ActionItem, ActionItemsRepository};
 
@@ -261,6 +264,38 @@ impl ActionItemTodoRepository {
         .bind(meeting_id)
         .fetch_all(pool)
         .await
+    }
+
+    /// The TRACKED list for cross-meeting merging (specs/0088), in prompt order: listed+open,
+    /// suggested+open, dismissed (not `record`), then completed within
+    /// [`ABSORB_COMPLETED_WITHIN_DAYS`]; each group newest-updated first, capped at
+    /// [`ALREADY_TRACKED_CAP`]. Descriptions go through `plain_description`, so mention
+    /// tokens never reach the model. The caller must route against this same order.
+    pub async fn tracked_for_merge(pool: &SqlitePool) -> Result<Vec<TrackedItem>, SqlxError> {
+        let cutoff = (Utc::now() - Duration::days(ABSORB_COMPLETED_WITHIN_DAYS)).to_rfc3339();
+        let rows: Vec<(String, Option<String>, String)> = sqlx::query_as(
+            "SELECT id, meeting_id, description FROM action_items WHERE \
+               (triage IN ('listed', 'suggested') AND status = 'open') \
+               OR (status = 'dismissed' AND triage != 'record') \
+               OR (status = 'completed' AND completed_at IS NOT NULL \
+                   AND julianday(completed_at) >= julianday(?)) \
+             ORDER BY CASE WHEN status = 'open' AND triage = 'listed' THEN 0 \
+                           WHEN status = 'open' THEN 1 \
+                           WHEN status = 'dismissed' THEN 2 ELSE 3 END, \
+                      updated_at DESC, id LIMIT ?",
+        )
+        .bind(&cutoff)
+        .bind(ALREADY_TRACKED_CAP as i64)
+        .fetch_all(pool)
+        .await?;
+        Ok(rows
+            .into_iter()
+            .map(|(id, meeting_id, description)| TrackedItem {
+                id,
+                meeting_id,
+                description: plain_description(&description),
+            })
+            .collect())
     }
 
     /// Replace the item's `action_item_people` rows with the people mentioned in

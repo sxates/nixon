@@ -214,6 +214,7 @@ fn cand(description: &str, is_self: bool, person: Option<&str>) -> ResolvedCandi
         assignee_raw: None,
         due_hint: None,
         due_date: None,
+        ..Default::default()
     }
 }
 

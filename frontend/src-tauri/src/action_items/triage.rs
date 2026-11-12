@@ -62,6 +62,7 @@ mod tests {
             assignee_raw: raw.map(String::from),
             due_hint: None,
             due_date: None,
+            ..Default::default()
         }
     }
 

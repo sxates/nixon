@@ -562,6 +562,7 @@ async fn seed_meeting_rest(
             assignee_raw: None,
             due_hint: ai.due_hint.clone(),
             due_date: None,
+            ..Default::default()
         };
         let item = ActionItemsRepository::create(
             pool,

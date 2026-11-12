@@ -95,7 +95,7 @@ pub fn extraction_fingerprint(summary_markdown: &str, user_notes: Option<&str>) 
 /// A candidate AFTER owner resolution (`extractor::resolve_candidates`): assignee strings
 /// have been turned into a `people` FK, the self flag, or a raw display fallback. This is
 /// the write-shape the diff and the repository share.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct ResolvedCandidate {
     pub description: String,
     pub assignee_person_id: Option<String>,
@@ -106,6 +106,10 @@ pub struct ResolvedCandidate {
     /// is unambiguously a date (specs/0038 WS1.a). `None` on the common path — the user
     /// sets this via the row's date control, which goes through `update_content`.
     pub due_date: Option<String>,
+    /// One sentence on what this meeting said about the task (specs/0088).
+    pub context: Option<String>,
+    /// 1-based TRACKED number the model says this is the same task as; routed by `merge`.
+    pub same_as: Option<u32>,
 }
 
 /// An unmatched candidate → new `action_items` row (`source = 'extracted'`).
@@ -186,6 +190,14 @@ fn similarity(a: &HashSet<String>, b: &HashSet<String>) -> f64 {
     jaccard.max(overlap)
 }
 
+/// Fuzzy similarity of two descriptions (normalized, person tokens stripped).
+pub(crate) fn token_similarity(a: &str, b: &str) -> f64 {
+    similarity(
+        &token_set(&normalize_description(a)),
+        &token_set(&normalize_description(b)),
+    )
+}
+
 /// Computes the regeneration-safe diff between the rows already stored for a meeting and
 /// the freshly extracted candidates.
 ///
@@ -208,6 +220,16 @@ fn similarity(a: &HashSet<String>, b: &HashSet<String>) -> f64 {
 ///   already represented by a row the user owns. Matched PRISTINE rows don't block:
 ///   they are being rewritten to their own candidate's key, so their old key is vacated.
 pub fn compute_diff(existing: &[ActionItem], candidates: &[ResolvedCandidate]) -> ExtractionDiff {
+    compute_diff_with_kept(existing, candidates, &HashSet::new())
+}
+
+/// [`compute_diff`] where rows in `kept_ids` (re-mentioned this run, per `merge`) count as
+/// matched up front, so unmatched-pristine deletion spares them.
+pub fn compute_diff_with_kept(
+    existing: &[ActionItem],
+    candidates: &[ResolvedCandidate],
+    kept_ids: &HashSet<String>,
+) -> ExtractionDiff {
     struct Entry<'a> {
         item: &'a ActionItem,
         protected: bool,
@@ -221,7 +243,7 @@ pub fn compute_diff(existing: &[ActionItem], candidates: &[ResolvedCandidate]) -
             item,
             protected: is_protected(item),
             tokens: token_set(&normalize_description(&item.description)),
-            matched: false,
+            matched: kept_ids.contains(&item.id),
         })
         .collect();
 
@@ -319,6 +341,7 @@ mod tests {
             assignee_raw: None,
             due_hint: None,
             due_date: None,
+            ..Default::default()
         }
     }
 
@@ -356,6 +379,15 @@ mod tests {
 
     fn pristine(id: &str, description: &str) -> ActionItem {
         row(id, description, "open", "extracted", false)
+    }
+
+    #[test]
+    fn kept_ids_spare_a_pristine_row_from_deletion() {
+        let existing = [pristine("a", "Book the venue")];
+        assert_eq!(compute_diff(&existing, &[]).delete_ids, ["a"]);
+        let kept: HashSet<String> = ["a".to_string()].into();
+        let plan = compute_diff_with_kept(&existing, &[], &kept);
+        assert!(plan.delete_ids.is_empty() && plan.inserts.is_empty());
     }
 
     // ---- normalization + content_key ------------------------------------------------

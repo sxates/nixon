@@ -93,6 +93,7 @@ fn cand(description: &str) -> ResolvedCandidate {
         assignee_raw: None,
         due_hint: None,
         due_date: None,
+        ..Default::default()
     }
 }
 
@@ -135,16 +136,19 @@ async fn fresh_extraction_inserts_rows_and_ledger() {
             description: "Send the revised deck to the client".into(),
             assignee: Some("Alice".into()),
             due: Some("Friday".into()),
+            ..Default::default()
         },
         ActionItemCandidate {
             description: "Draft the beta announcement".into(),
             assignee: Some("Bob".into()),
             due: None,
+            ..Default::default()
         },
         ActionItemCandidate {
             description: "Book the retro room".into(),
             assignee: Some("me".into()),
             due: None,
+            ..Default::default()
         },
     ];
     let candidates = resolve_candidates(

@@ -642,6 +642,7 @@ mod action_items_tests {
             assignee_raw: None,
             due_hint: None,
             due_date: None,
+            ..Default::default()
         }
     }
 
