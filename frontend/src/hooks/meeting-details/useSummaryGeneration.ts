@@ -154,7 +154,7 @@ export function useSummaryGeneration({
     // specs/0063 W3 Task 6b: true only for the auto-summary that fires by itself after a
     // recording stops. It registers as background work so it appears in the rail's Queue
     // and survives the user navigating away; a run the user asked for stays foreground,
-    // because this view already shows it its own ChunkProgressDisplay.
+    // because this view already shows its own progress.
     background?: boolean;
   }) => {
     setSummaryStatus(isRegeneration ? 'regenerating' : 'processing');

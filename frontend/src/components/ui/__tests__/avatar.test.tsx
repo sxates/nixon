@@ -3,7 +3,6 @@ import { render, fireEvent } from '@testing-library/react';
 
 import { Avatar, AvatarStack, initials } from '@/components/ui/avatar';
 import { initials as dayAgendaInitials } from '@/lib/day-agenda';
-import { initials as personAvatarInitials } from '@/components/People/PersonAvatar';
 
 const URI = 'data:image/png;base64,iVBORw0KGgo=';
 
@@ -18,7 +17,6 @@ describe('initials()', () => {
 
   it('is the one helper (the old import paths re-export it)', () => {
     expect(dayAgendaInitials).toBe(initials);
-    expect(personAvatarInitials).toBe(initials);
   });
 });
 

@@ -3,6 +3,7 @@
 import { memo, useState } from "react";
 import { Pencil } from "@/components/ui/icons";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { DeckIcon } from "@/components/ui/deck-icon";
 import { IconButton } from "@/components/ui/icon-button";
@@ -16,7 +17,6 @@ import { InlineSpeakerAssign } from "./MeetingDetails/InlineSpeakerAssign";
 import type { OwnerActionContext } from "./MeetingDetails/SpeakerOwnerAction";
 import { SegmentSpeakerMenu } from "./MeetingDetails/SegmentSpeakerMenu";
 import { SegmentTextEditor } from "./MeetingDetails/SegmentTextEditor";
-import { PersonAvatar } from "./People/PersonAvatar";
 import type { SpeakerPhotoMap } from "@/lib/speaker-photos";
 
 /** specs/0019 WS2.1 — wiring that lets a transcript line reassign its speaker inline.
@@ -83,7 +83,7 @@ function cleanStopWords(text: string): string {
     return cleanedText.replace(/\s+/g, ' ').trim();
 }
 
-// Speaker avatar: the speaker's directory photo when one is known (the shared PersonAvatar,
+// Speaker avatar: the speaker's directory photo when one is known (the shared Avatar,
 // which falls back to the colored initials chip), a neutral dot when undiarized.
 function SpeakerAvatar({
     speaker,
@@ -107,10 +107,10 @@ function SpeakerAvatar({
     }
 
     return (
-        <PersonAvatar
+        <Avatar
             name={speakerName}
-            photoDataUri={photoDataUri}
-            size="xs"
+            photo={photoDataUri}
+            size={28}
             colorClass={speakerBgClass(speaker)}
         />
     );

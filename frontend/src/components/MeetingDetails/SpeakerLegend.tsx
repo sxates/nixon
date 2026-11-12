@@ -51,7 +51,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { PersonFormDialog } from '@/components/People/PersonFormDialog';
-import { PersonAvatar } from '@/components/People/PersonAvatar';
+import { Avatar } from '@/components/ui/avatar';
 import { speakerBgClass, speakerColorClass } from '@/lib/speaker-colors';
 import {
   groupSeconds,
@@ -404,13 +404,13 @@ function SpeakerChip({
         hover/focus only (`group/chip`), so the strip reads as a list, not a row of buttons. */}
     {/* Full cell width, so the merge kebab (pushed right) sits in one column on every row. */}
     <div className="group/chip flex w-full min-w-0 items-center gap-0.5 text-xs">
-      {/* The speaker's directory photo when known (same PersonAvatar as the transcript's
+      {/* The speaker's directory photo when known (same Avatar as the transcript's
           run header). No photo, or one that fails to load, is the color dot that matches
           the in-transcript name color — never an initials chip. */}
-      <PersonAvatar
+      <Avatar
         name={speaker.displayName}
-        photoDataUri={photoDataUri}
-        size="xxs"
+        photo={photoDataUri}
+        size={16}
         colorClass={speakerBgClass(speaker.speakerKey)}
         fallback={
           <span data-speaker-dot className="inline-flex">

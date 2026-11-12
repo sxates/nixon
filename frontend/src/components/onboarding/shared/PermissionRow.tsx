@@ -2,7 +2,7 @@ import React from 'react';
 import { Button } from '@/components/ui/button';
 import { PermissionRow as UiPermissionRow, type PermissionState } from '@/components/ui/permission-row';
 import { Spinner } from '@/components/ui/spinner';
-import type { PermissionRowProps as OnboardingPermissionRowProps, PermissionStatus } from '@/types/onboarding';
+import type { PermissionRowProps, PermissionStatus } from '@/types/onboarding';
 
 /** specs/0061 W3: exact onboarding copy for a tap that opened but only heard silence. */
 export const SILENT_AUDIO_CAPTURE_COPY = 'Not yet — macOS may ask again when you first record.';
@@ -15,10 +15,6 @@ function toPermissionState(status: PermissionStatus): PermissionState {
   // `silent` (tap heard nothing) and `not_determined` (never asked) both read "Not yet".
   return 'silent';
 }
-
-// The decorative `icon` is gone (docs/design-system.md §Icons: no icon avatars in
-// onboarding); callers no longer pass one.
-type PermissionRowProps = Omit<OnboardingPermissionRowProps, 'icon'>;
 
 /**
  * Onboarding's permission card: the shared `ui/PermissionRow` in its `card` variant, so

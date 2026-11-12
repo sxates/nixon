@@ -35,7 +35,6 @@ export interface OnboardingContainerProps {
 }
 
 export interface PermissionRowProps {
-  icon: React.ReactNode;
   title: string;
   description: string;
   status: PermissionStatus;
@@ -43,7 +42,3 @@ export interface PermissionRowProps {
   onAction: () => void;
 }
 
-export interface StatusIndicatorProps {
-  status: 'idle' | 'checking' | 'success' | 'error';
-  size?: 'sm' | 'md' | 'lg';
-}
