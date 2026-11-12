@@ -16,7 +16,7 @@
  *    Only when the meeting actually has a "You" speaker row.
  */
 
-import { UserCheck, UserX } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { isRoomSetup, type AudioSetupResolved } from '@/hooks/useAudioSetup';
 
 const LOCAL_KEY = 'local';
@@ -88,21 +88,22 @@ export function SpeakerOwnerAction({
     else void owner.unmarkMe();
   };
 
-  const Icon = action === 'mark' ? UserCheck : UserX;
+  // No leading glyph: icons on text buttons are decorative (docs/design-system.md §Icons).
   return (
-    <button
+    <Button
       type="button"
+      variant="ghost"
+      size="xs"
       onClick={run}
-      className="flex w-full items-center gap-2 rounded px-2 py-1 text-left text-xs text-foreground hover:bg-muted"
+      className="w-full justify-start px-2 font-normal text-foreground"
       title={
         action === 'mark'
           ? 'Make this speaker "You" in this meeting'
           : 'This speaker becomes a numbered speaker again'
       }
     >
-      <Icon size={13} className="flex-shrink-0 text-muted-foreground" />
       {action === 'mark' ? 'This is me' : "This isn't me"}
-    </button>
+    </Button>
   );
 }
 

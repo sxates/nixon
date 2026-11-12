@@ -1,7 +1,11 @@
 'use client';
 
 import { memo, useState } from "react";
-import { Check, Pencil } from "lucide-react";
+import { Check, Pencil } from "@/components/ui/icons";
+import { Badge } from "@/components/ui/badge";
+import { DeckIcon } from "@/components/ui/deck-icon";
+import { IconButton } from "@/components/ui/icon-button";
+import { StatusDot } from "@/components/ui/status-dot";
 import { ConfidenceIndicator } from "./ConfidenceIndicator";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import { MeetingAttendee, Person } from "@/types";
@@ -96,7 +100,7 @@ function SpeakerAvatar({
                 className="w-7 h-7 flex-shrink-0 rounded-full bg-muted flex items-center justify-center"
                 aria-hidden="true"
             >
-                <div className="w-2 h-2 rounded-full bg-muted-foreground/50" />
+                <StatusDot tone="muted" />
             </div>
         );
     }
@@ -131,7 +135,7 @@ const SelectionCheckbox = memo(function SelectionCheckbox({
 }) {
     return (
         <div className="flex w-4 flex-shrink-0 items-center pt-1.5">
-            <button
+            <button // ui-gate: allow the line's role="checkbox" box; there is no Checkbox primitive and Button chrome is not a check box
                 type="button"
                 role="checkbox"
                 aria-checked={selected}
@@ -142,7 +146,7 @@ const SelectionCheckbox = memo(function SelectionCheckbox({
                     onToggle(id, index, e.shiftKey);
                 }}
                 className={cn(
-                    'flex h-4 w-4 items-center justify-center rounded border transition-opacity',
+                    'flex h-4 w-4 items-center justify-center rounded-sm border transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                     selected
                         ? 'border-brand bg-brand text-brand-foreground'
                         : 'border-muted-foreground/40 bg-transparent hover:border-brand',
@@ -287,11 +291,11 @@ export const TranscriptSegment = memo(function TranscriptSegment({
                             owner={assignment.owner}
                         />
                     ) : speakerName ? (
-                        <span className={`u-typed font-bold uppercase text-[12px] tracking-[0.02em] whitespace-nowrap ${speakerColorClass(speaker)}`}>
+                        <span className={`u-speaker whitespace-nowrap ${speakerColorClass(speaker)}`}>
                             {speakerName}
                         </span>
                     ) : (
-                        <span className="u-typed font-bold uppercase text-[12px] tracking-[0.02em] whitespace-nowrap text-muted-foreground">
+                        <span className="u-speaker whitespace-nowrap text-muted-foreground">
                             Speaker
                         </span>
                     )}
@@ -320,7 +324,7 @@ export const TranscriptSegment = memo(function TranscriptSegment({
                                 onCancel={handleCancel}
                             />
                             {saveError && (
-                                <p className="mt-1 text-[11px] text-destructive">{saveError}</p>
+                                <p className="mt-1 text-caption text-destructive">{saveError}</p>
                             )}
                         </>
                     ) : isStreaming ? (
@@ -339,12 +343,13 @@ export const TranscriptSegment = memo(function TranscriptSegment({
                 {!editing && (
                     <div className="flex flex-shrink-0 items-center gap-0.5 pt-px">
                         {userEdited && (
-                            <span
-                                className="rounded-[2px] border border-border px-1 py-px text-[10px] font-medium text-engrave"
+                            <Badge
+                                tone="outline"
+                                className="px-1 py-px font-medium text-engrave"
                                 title="Manually edited"
                             >
                                 edited
-                            </span>
+                            </Badge>
                         )}
                         {/* WS2.3: move just this line to another speaker (sticky split). */}
                         {speaker && assignment && (
@@ -358,22 +363,20 @@ export const TranscriptSegment = memo(function TranscriptSegment({
                         {/* specs/0061 W5 — hover pencil next to the split icon: correct this
                             line's text in place. Independent of speaker assignment. */}
                         {onEditText && (
-                            <button
-                                type="button"
+                            <IconButton
+                                variant="ghost"
+                                label="Edit this line's text"
                                 onClick={() => {
                                     setSaveError(null);
                                     setEditing(true);
                                 }}
-                                className="rounded-[2px] p-0.5 text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground focus-visible:opacity-100 group-hover/segment:opacity-100"
-                                title="Edit this line's text"
-                                aria-label="Edit this line's text"
-                            >
-                                <Pencil size={12} />
-                            </button>
+                                icon={<DeckIcon icon={Pencil} size={12} />}
+                                className="h-5 w-5 opacity-0 transition-opacity focus-visible:opacity-100 group-hover/segment:opacity-100"
+                            />
                         )}
                         <Tooltip>
                             <TooltipTrigger asChild>
-                                <span className="ml-0.5 font-mono text-[11px] tabular-nums text-muted-foreground">
+                                <span className="ml-0.5 font-mono text-caption tabular-nums text-muted-foreground">
                                     {formatRecordingTime(timestamp)}
                                 </span>
                             </TooltipTrigger>

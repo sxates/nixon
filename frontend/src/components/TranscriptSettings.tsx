@@ -9,7 +9,7 @@ import {
     SettingsSection,
 } from './ui/settings';
 import { ResolvedSettingRow } from './ResolvedSettingRow';
-import { Eye, EyeOff, Lock, Unlock } from 'lucide-react';
+import { Eye, EyeOff, Lock, Unlock } from '@/components/ui/icons';
 
 /** Mirrors `config.rs::DEFAULT_PARAKEET_MODEL`; the engine+model Nixon ships with. */
 const DEFAULT_PARAKEET_MODEL = 'parakeet-tdt-0.6b-v3-int8';
