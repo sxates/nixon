@@ -8,7 +8,8 @@ import { ModelConfig } from '@/components/ModelSettingsModal';
 import { SummaryToolbar } from './SummaryToolbar';
 import { useEffect, useRef, useState, RefObject } from 'react';
 import { toast } from 'sonner';
-import { AlertTriangle, Loader2 } from 'lucide-react';
+import { Callout } from '@/components/ui/callout';
+import { Spinner } from '@/components/ui/spinner';
 import { useDiarizationActive } from '@/hooks/useDiarizationActive';
 import { Button } from '@/components/ui/button';
 import {
@@ -274,43 +275,34 @@ export function SummaryPanel({
             {/* Partial-summary warning (specs/0028): some transcript chunks failed
                 after retries, so sections of this summary may be missing. */}
             {/* Status sits above the summary, not under pages of it. */}
+            {/* Status is the Callout's tone, not a warning glyph (docs/design-system.md
+                §Icons); the preliminary note keeps its spinner — it IS in progress. */}
             {summaryStatus === 'error' && (
-              <div
-                role="alert"
-                className="mb-4 flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2"
-              >
-                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" aria-hidden="true" />
+              <Callout tone="error" className="mb-4 px-3 py-2">
                 <p className="text-sm text-foreground">
                   <span className="font-semibold">Could not generate the summary</span>
                   {summaryError ? <> — {summaryError}</> : null}
                 </p>
-              </div>
+              </Callout>
             )}
             {preliminary && summaryStatus !== 'error' && (
-              <div
-                role="status"
-                className="mb-4 flex items-center gap-2 rounded-md border border-border bg-muted/50 px-3 py-2"
-              >
-                <Loader2 className="h-4 w-4 shrink-0 animate-spin text-muted-foreground" aria-hidden="true" />
+              <Callout tone="muted" role="status" className="mb-4 flex items-center gap-2 px-3 py-2">
+                <Spinner className="text-muted-foreground" />
                 <p className="text-sm text-muted-foreground">
                   <span className="font-semibold text-foreground">Preliminary summary</span> — speakers
                   will be added when available.
                 </p>
-              </div>
+              </Callout>
             )}
             {partialSummary && (
-              <div
-                role="status"
-                className="mb-4 flex items-start gap-2 rounded-md border border-brand/30 bg-brand/10 px-3 py-2"
-              >
-                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-brand" aria-hidden="true" />
+              <Callout tone="warn" role="status" className="mb-4 px-3 py-2">
                 <p className="text-sm text-foreground">
                   <span className="font-semibold">Partial summary</span> — some sections may be
                   missing: {partialSummary.failed_chunks} of {partialSummary.total_chunks} transcript
                   section{partialSummary.total_chunks === 1 ? '' : 's'} could not be processed.
                   Regenerating the summary may recover them.
                 </p>
-              </div>
+              </Callout>
             )}
             <BlockNoteSummaryView
               ref={summaryRef}

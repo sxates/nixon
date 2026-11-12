@@ -5,7 +5,8 @@ import { Transcript, Summary } from "@/types";
 import PageContent from "./page-content";
 import { useRouter, useSearchParams } from "next/navigation";
 import { invoke } from "@tauri-apps/api/core";
-import { LoaderIcon } from "lucide-react";
+import { PageLoading } from "@/components/ui/empty-state";
+import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { useConfig } from "@/contexts/ConfigContext";
 import { useRecordingState } from "@/contexts/RecordingStateContext";
@@ -496,11 +497,7 @@ function MeetingDetailsContent() {
   // While redirecting an in-progress recording to /record, show a spinner instead of the
   // blank summary so the user never sees the empty pane flash.
   if (isLiveRecordingMeeting) {
-    return (
-      <div className="flex items-center justify-center h-page">
-        <LoaderIcon className="animate-spin size-6" />
-      </div>
-    );
+    return <PageLoading />;
   }
 
   if (error) {
@@ -508,12 +505,9 @@ function MeetingDetailsContent() {
       <div className="flex items-center justify-center h-page">
         <div className="text-center">
           <p className="text-destructive mb-4">{error}</p>
-          <button
-            onClick={() => router.push('/')}
-            className="px-4 py-2 bg-brand text-brand-foreground rounded hover:bg-brand/90"
-          >
+          <Button variant="brand" onClick={() => router.push('/')}>
             Go Back
-          </button>
+          </Button>
         </div>
       </div>
     );
@@ -523,9 +517,7 @@ function MeetingDetailsContent() {
   // refetch (e.g. after renaming a speaker) keeps the populated meetingDetails, so
   // PageContent stays mounted and the active tab / speaker legend aren't reset.
   if (isLoading || !meetingDetails) {
-    return <div className="flex items-center justify-center h-page">
-      <LoaderIcon className="animate-spin size-6 " />
-    </div>;
+    return <PageLoading />;
   }
 
   return <PageContent
@@ -559,11 +551,7 @@ function MeetingDetailsContent() {
 
 export default function MeetingDetails() {
   return (
-    <Suspense fallback={
-      <div className="flex items-center justify-center h-page">
-        <LoaderIcon className="animate-spin size-6" />
-      </div>
-    }>
+    <Suspense fallback={<PageLoading />}>
       <MeetingDetailsContent />
     </Suspense>
   );

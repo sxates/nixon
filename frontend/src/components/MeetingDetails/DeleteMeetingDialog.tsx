@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { toast } from 'sonner';
-import { Loader2 } from 'lucide-react';
+import { Spinner } from '@/components/ui/spinner';
 import {
   Dialog,
   DialogContent,
@@ -76,7 +76,7 @@ export function DeleteMeetingDialog({
             Cancel
           </Button>
           <Button variant="destructive" onClick={handleConfirm} disabled={isDeleting}>
-            {isDeleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {isDeleting && <Spinner />}
             Delete
           </Button>
         </DialogFooter>

@@ -2,9 +2,15 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { BatteryLow, ChevronLeft, Pencil } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import { toast } from 'sonner';
+import { Button } from '@/components/ui/button';
+import { DeckIcon } from '@/components/ui/deck-icon';
+import { BatteryLow } from '@/components/ui/icons';
+import { PageHeader } from '@/components/ui/page-header';
+import { MeetingTitleField } from '@/components/MeetingDetails/MeetingTitleField';
+import { TITLE_PLACEHOLDER } from '@/hooks/useRecordingTitleEdit';
+import { cn } from '@/lib/utils';
 import {
   Tooltip,
   TooltipContent,
@@ -57,22 +63,26 @@ function ModeChip({ meetingId }: { meetingId: string }) {
   };
 
   const chip = (
-    <button
+    <Button
       type="button"
+      variant="outline"
+      // sm = h-8: matches the prompt picker and the participants trigger beside it — the
+      // three per-meeting controls used to be h-7 / h-9 / h-9 and visibly failed to line up
+      // (owner feedback 2026-09-21).
+      size="sm"
       onClick={handleClick}
       disabled={enabling}
       // The action, matching the visible label — a screen reader must hear the same thing an
       // eye reads (specs/0071 W1). It used to announce the mode and then the switch, which is
       // the same trap in longer form.
       aria-label={label}
-      // h-8 matches the prompt picker and the participants trigger beside it — the three
-      // per-meeting controls used to be h-7 / h-9 / h-9 and visibly failed to line up
-      // (owner feedback 2026-09-21).
-      className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border bg-card px-3 text-xs font-semibold text-foreground transition-colors hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+      className="bg-card"
     >
-      {showBatteryGlyph && <BatteryLow size={14} />}
+      {/* The only carrier of WHY the transcript is paused (on battery): functional, not
+          decorative, so it stays. */}
+      {showBatteryGlyph && <DeckIcon icon={BatteryLow} size={14} />}
       {enabling ? 'Switching…' : label}
-    </button>
+    </Button>
   );
 
   if (!enabling) return chip;
@@ -86,6 +96,9 @@ function ModeChip({ meetingId }: { meetingId: string }) {
     </TooltipProvider>
   );
 }
+
+/** The faceplate band's bevel: a highlight above, a shade below, from the bevel tokens. */
+const FACEPLATE_BEVEL = 'shadow-[inset_0_1px_0_hsl(var(--bevel-hi)),inset_0_-1px_0_hsl(var(--bevel-lo))]'; // ui-gate: allow hardware faceplate bevel built from the --bevel-hi/--bevel-lo tokens; no card shadow fits a full-bleed band
 
 interface RecordingHeaderProps {
   meetingTitle: string;
@@ -131,7 +144,9 @@ export function RecordingHeader({
   const titleColumnRef = useRef<HTMLDivElement>(null);
   const [meterHeight, setMeterHeight] = useState(VU_DEFAULT_HEIGHT);
   useEffect(() => {
-    const el = titleColumnRef.current;
+    // The ref sits on the subtitle node; PageHeader wraps it once (the `.u-meta` box), and
+    // that box's parent is the title column (the h1 plus the subtitle) the meters follow.
+    const el = titleColumnRef.current?.parentElement?.parentElement;
     if (!el || typeof ResizeObserver === 'undefined') return;
     const observer = new ResizeObserver(([entry]) => {
       setMeterHeight(Math.max(VU_DEFAULT_HEIGHT, Math.round(entry.contentRect.height)));
@@ -140,75 +155,28 @@ export function RecordingHeader({
     return () => observer.disconnect();
   }, []);
 
-  return (
-    <header className="record-header flex items-start gap-x-2 border-b border-border bg-panel py-4 pl-4 pr-4 min-[900px]:pl-6 shadow-[inset_0_1px_0_hsl(var(--bevel-hi)),inset_0_-1px_0_hsl(var(--bevel-lo))]">
-      {/* 0.1.0 canvas feedback: the back control is the same unboxed chevron as on meeting
-          details, sitting on the title line (the header top-aligns for that; the meter
-          bridge re-centres itself on the right). */}
-      <button
-        onClick={() => router.push('/')}
-        aria-label="Back to home"
-        title="Back to home"
-        className="-ml-1 mt-0.5 inline-flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      >
-        <ChevronLeft size={18} />
-      </button>
+  // The context's unnamed-session placeholder ('+ New Call') is not a title: an idle
+  // recorder reads "New meeting", an unnamed live one "Untitled meeting", both muted.
+  const realTitle = meetingTitle === TITLE_PLACEHOLDER ? '' : meetingTitle;
+  // Editable during a recording (specs/0029 WS4.3); static until the recording's SQLite
+  // row id exists — there is nothing to rename before that.
+  const canRename = isRecordingActive && !!activeRecordingMeetingId;
 
-      <div ref={titleColumnRef} className="min-w-0 flex-1 basis-60">
-        {/* Editable during a recording (specs/0029 WS4.3); static until the recording's
-            SQLite row id exists — there is nothing to rename before that. */}
-        {!isRecordingActive || !activeRecordingMeetingId ? (
-          <h1 className="font-display truncate text-lg font-semibold">
-            {meetingTitle}
-          </h1>
-        ) : isEditingTitle ? (
-          <input
-            ref={titleInputRef}
-            type="text"
-            value={titleDraft}
-            placeholder="Untitled meeting"
-            onChange={(e) => setTitleDraft(e.target.value)}
-            onBlur={commitTitleEdit}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault();
-                commitTitleEdit();
-              } else if (e.key === 'Escape') {
-                e.preventDefault();
-                cancelTitleEdit();
-              }
-            }}
-            className="w-full max-w-md rounded-md border border-input bg-muted px-2 py-0.5 font-display text-lg font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-          />
-        ) : (
-          <button
-            type="button"
-            onClick={startEditingTitle}
-            title="Click to rename"
-            className="group -ml-2 flex w-fit max-w-full items-center gap-2 rounded-md px-2 py-0.5 text-left transition-colors hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <h1 className="font-display truncate text-lg font-semibold">
-              {meetingTitle}
-            </h1>
-            <Pencil className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
-          </button>
-        )}
-        {/* No "On the reel" subhead while recording (owner feedback 2026-09-21): the
-            transport rail says exactly that, in the same words, a few inches below — and
-            the only way to be looking at this header at all is with a recording in
-            progress, so the line carried no information for the height it took. The idle
-            line stays: an idle header DOES need to say what pressing REC will do. */}
-        {!isRecordingActive && !transition && (
-          <p className="mt-0.5 text-xs text-muted-foreground">Recording locally on your Mac</p>
-        )}
+  const subtitle = (
+    // Measured: the meters take the title column's height (see above).
+    <div ref={titleColumnRef}>
+      {/* No "On the reel" subhead while recording (owner feedback 2026-09-21): the
+          transport rail says exactly that, in the same words, a few inches below — and
+          the only way to be looking at this header at all is with a recording in
+          progress, so the line carried no information for the height it took. The idle
+          line stays: an idle header DOES need to say what pressing REC will do. */}
+      {!isRecordingActive && !transition && <p>Recording locally on your Mac</p>}
         {/* 0.1.0 canvas feedback: the per-meeting controls sit under the title, not in the
-            meter bridge. Rendered only when at least one is live so an idle header carries
-            no empty row. */}
-        {/* Per-meeting controls, ordered Participants → Live → Prompt (owner feedback
-            2026-09-21): who is here, then how it is being processed, then what the summary
-            will look like — decreasing immediacy, left to right. All three are h-8; they
-            used to be h-9 / h-9 / h-7 and the row visibly stepped. Rendered only when at
-            least one is live, so an idle header carries no empty row. */}
+            meter bridge. Ordered Participants → Live → Prompt (owner feedback 2026-09-21):
+            who is here, then how it is being processed, then what the summary will look
+            like — decreasing immediacy, left to right. All three are h-8; they used to be
+            h-9 / h-9 / h-7 and the row visibly stepped. Rendered only when at least one is
+            live, so an idle header carries no empty row. */}
         {isRecordingActive || activeRecordingMeetingId ? (
           <div className="mt-2.5 flex flex-wrap items-center gap-2">
             {/* Participants for the in-progress meeting (specs/0017). Use the authoritative
@@ -251,35 +219,51 @@ export function RecordingHeader({
             )}
           </div>
         ) : null}
-      </div>
+    </div>
+  );
 
-      {/* The control panel's meter bridge (specs/0057 §3.2): one needle per channel — CH1
-          is the owner's mic, CH2 is system audio (the other side of the call) — read from
-          the clean pre-mix windows. The PEAK / MIC GATE lamps were dropped on 0.1.0 canvas
-          feedback: the rail's ladder and the transport status line carry both states. The
-          meters carry their own channel label inside the well since 2026-09-21 — see
-          VuMeter. Since 2026-09-23 they are as tall as the title column (57px minimum)
-          rather than floating centred beside it, and the header's right padding is 16px to
-          match the 16px above and below them (owner feedback).
-          Hidden when the header's content is under 804px wide (owner feedback 2026-09-23) — a
-          container query on the header, not the window, so an open or closed sidebar is
-          accounted for (globals.css `.record-meters`). The header no longer wraps: wrapped
-          under the controls, the meters' size fed back into the title column's height they
-          are sized from, and they flickered between the two positions. */}
-      <div className="record-meters flex-shrink-0 items-start gap-2.5">
-        <VuMeter
-          db={rmsToVu(level.mic.rms)}
-          active={isRecordingActive}
-          label="CH1 Mic"
-          height={meterHeight}
+  // The control panel's meter bridge (specs/0057 §3.2): one needle per channel — CH1 is the
+  // owner's mic, CH2 is system audio (the other side of the call) — read from the clean
+  // pre-mix windows. The PEAK / MIC GATE lamps were dropped on 0.1.0 canvas feedback: the
+  // rail's ladder and the transport status line carry both states. The meters carry their
+  // own channel label inside the well since 2026-09-21 — see VuMeter. Since 2026-09-23 they
+  // are as tall as the title column (57px minimum) rather than floating centred beside it
+  // (owner feedback). Hidden when the header's content is under 804px wide (owner feedback
+  // 2026-09-23) — a container query on the header, not the window, so an open or closed
+  // sidebar is accounted for (globals.css `.record-header` / `.record-meters`). The header
+  // never wraps: wrapped under the controls, the meters' size fed back into the title
+  // column's height they are sized from, and they flickered between the two positions.
+  const meters = (
+    <div className="record-meters flex-shrink-0 items-start gap-2.5">
+      <VuMeter db={rmsToVu(level.mic.rms)} active={isRecordingActive} label="CH1 Mic" height={meterHeight} />
+      <VuMeter db={rmsToVu(level.sys.rms)} active={isRecordingActive} label="CH2 Sys" height={meterHeight} />
+    </div>
+  );
+
+  // The same PageHeader + MeetingTitleField as the meeting page (one back/title header),
+  // on the recorder's faceplate band: bg-panel, a hairline below, the panel bevel.
+  return (
+    <PageHeader
+      // pr-4: the meters sit 16px from the right edge, matching the 16px above and below
+      // them (owner feedback 2026-09-23).
+      className={cn('record-header border-b border-border bg-panel pb-4 pr-4 pt-4 min-[900px]:pr-4', FACEPLATE_BEVEL)}
+      back={{ label: 'Back to home', onClick: () => router.push('/') }}
+      title={
+        <MeetingTitleField
+          title={realTitle}
+          placeholder={isRecordingActive ? 'Untitled meeting' : 'New meeting'}
+          editable={canRename}
+          isEditing={isEditingTitle}
+          draft={titleDraft}
+          onDraftChange={setTitleDraft}
+          onStartEditing={startEditingTitle}
+          onCommit={commitTitleEdit}
+          onCancel={cancelTitleEdit}
+          inputRef={titleInputRef}
         />
-        <VuMeter
-          db={rmsToVu(level.sys.rms)}
-          active={isRecordingActive}
-          label="CH2 Sys"
-          height={meterHeight}
-        />
-      </div>
-    </header>
+      }
+      subtitle={subtitle}
+      actions={meters}
+    />
   );
 }

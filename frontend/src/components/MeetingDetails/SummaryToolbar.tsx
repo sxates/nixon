@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Loader2, MoreHorizontal } from 'lucide-react';
+import { MenuButton } from '@/components/ui/menu-button';
+import { Spinner } from '@/components/ui/spinner';
 
 import { ModelConfig, ModelSettingsModal } from '@/components/ModelSettingsModal';
 import { Button } from '@/components/ui/button';
@@ -159,7 +160,7 @@ export function SummaryToolbar({
           >
             {isCheckingModels || isModelConfigLoading ? (
               <>
-                <Loader2 className="mr-2 animate-spin" size={16} />
+                <Spinner />
                 <span>Processing…</span>
               </>
             ) : (
@@ -173,7 +174,7 @@ export function SummaryToolbar({
           <Button
             variant="outline"
             size="xs"
-            className="bg-brand/20"
+            className="bg-brand-wash"
             title={isSaving ? 'Saving' : 'Save changes'}
             onClick={() => {
               void onSave();
@@ -182,7 +183,7 @@ export function SummaryToolbar({
           >
             {isSaving ? (
               <>
-                <Loader2 className="mr-2 animate-spin" size={16} />
+                <Spinner />
                 <span>Saving…</span>
               </>
             ) : (
@@ -202,14 +203,9 @@ export function SummaryToolbar({
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button
-              variant="outline"
-              size="xs"
-              aria-label="More summary actions"
-              title="More summary actions"
-            >
-              <MoreHorizontal size={14} />
-            </Button>
+            {/* Bordered, to sit with the outline buttons beside it (same trigger as the
+                Transcript tab's toolbar `…`). */}
+            <MenuButton label="More summary actions" variant="bordered" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuItem
