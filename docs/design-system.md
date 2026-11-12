@@ -25,7 +25,7 @@ don't flip with `.dark`.
 | Dialog overlay | `bg-scrim` (its own alpha per theme) |
 | Transcript paper | `bg-paper`, `text-paper-ink` |
 | **Amber lamp**: armed, active, selected, queue, today, primary CTA | `brand` |
-| **REC red**: recording state *only* | `record`, `text-record-ink` |
+| **REC red**: recording state, and the control that starts one (`Button variant="record"`) | `record`, `text-record-ink` |
 | **Ready green**: granted, done | `success` |
 | Error, destructive confirm | `destructive` |
 
@@ -104,8 +104,9 @@ primitive's shadow. No arbitrary `shadow-[…]`.
 ### Spacing and layout
 
 - Page column: `PAGE_CONTENT_WIDTH` (1080px) and `PAGE_GUTTER` (`px-4 min-[900px]:px-7`)
-  from `lib/page-width.ts`. The `PageHeader` sits inside the same column as the content, so
-  the title, tabs and first card share one left edge.
+  from `lib/page-width.ts`. A centred page passes `PageHeader width="page"` (or `"doc"`) so
+  the title, tabs and first card share one left edge when the rail is collapsed. Never wrap
+  `PageHeader` in your own width container.
 - Document column: `DOC_CONTENT_WIDTH`. Never a bare `max-w-[Npx]` on a page column.
 - Rhythm: section gap `mt-8`; panel padding `px-4 py-3` (`p-6` for documents); row padding
   `px-3 py-2`; list stack `gap-0.5`; card stack `gap-3`.
@@ -117,12 +118,23 @@ Sparse, mechanical. Icons are imported from `@/components/ui/icons` (never strai
 `lucide-react`) and rendered through `DeckIcon` at 12, 14 (default) or 16px. The barrel *is*
 the allowlist: adding a glyph to it is a reviewed design decision.
 
-- **Functional glyphs only:** back, chevrons, close, check, overflow `…` (horizontal), play,
-  pause, spinner, star toggle, refresh, and icon-only trash.
-- **Allowed:** leading icons on dropdown menu items (`DropdownMenuItem icon={…}`), and the
-  `Sparkles` glyph on AI actions (Ask, Summarize, Generate). It marks "this uses the model".
-- **Not allowed:** decorative icons on card headers, tabs, text buttons, onboarding steps,
-  list rows, or empty states (no icon discs). Status is a `StatusDot`, not a glyph.
+What is in the barrel, by reason:
+
+- **Functional:** back, chevrons, close, check, overflow `…` (horizontal), play, pause,
+  spinner, star toggle, refresh, add, edit, icon-only trash.
+- **Functional on icon-only controls**, where the glyph is the control's only face (the
+  tooltip carries the words): `Search`, `Eye`/`EyeOff`, `Lock`/`Unlock`, `ChevronsUpDown`,
+  `CalendarDays`, `Download`, `RotateCw`, `FileAudio`, `GripVertical`, `BatteryLow`,
+  `Link2` (pending owner sign-off).
+- **Menu items:** leading icons on `DropdownMenuItem icon={…}`. Command-palette (⌘K) rows
+  count as menu items.
+- **Sidebar navigation:** the collapsed rail is icon-only, so each destination's glyph is
+  its only wayfinding.
+- **AI actions:** `Sparkles` on Ask, Summarize, Generate. It marks "this uses the model".
+
+**Not allowed:** decorative icons on card headers, tabs, text buttons, onboarding steps,
+list rows, or empty states (no icon discs). Status is a `StatusDot`, not a glyph. Primitives
+in `components/ui/` import from the barrel too.
 
 ### Motion
 
@@ -138,14 +150,14 @@ without a visible ring.
 
 | Need | Use | Notes |
 |---|---|---|
-| Any button with text | `Button` | variants `brand` (primary CTA), `outline` (row action), `ghost`, `link`, `dashed` ("+ Add …"), `destructive` (**confirm inside a dialog only**); sizes `xs`/`sm`/`default`/`lg`, plus `icon-sm` (28px square) |
+| Any button with text | `Button` | variants `brand` (primary CTA), `outline` (row action), `ghost`, `link`, `dashed` ("+ Add …"), `destructive` (**confirm inside a dialog only**), `record` (**starts a recording; nothing else**); sizes `xs`/`sm`/`default`/`lg`, plus `icon-sm` (28px square) |
 | Icon-only button | `IconButton` | `size` `sm` (28) / `md` (32), `variant` `ghost` / `bordered`, tooltip from `label` |
 | Overflow `…` | `MenuButton` | an `IconButton` preset: 14px horizontal glyph, opens a `DropdownMenu` |
 | Menu items | `DropdownMenuItem` | `icon` prop; `destructive` variant |
-| Page title row | `PageHeader` | `back`, editable `title`, `subtitle` node (not inside the h1), `actions` |
+| Page title row | `PageHeader` | `back`, editable `title`, `subtitle` node (not inside the h1), `actions`, `width` `page` / `doc` / `none` (default; aligns the row to the content column) |
 | Inline editable text | `EditableText` | the click-to-edit title or field, with the hover pencil |
 | Underline tabs | `Tabs` / `TabStrip` | underline is the default; optional `badge` slot; roving focus built in |
-| View switch | `SegmentedControl` | `size` default / `compact`; the only segmented style |
+| View switch | `SegmentedControl` | `size` default / `compact`; the only segmented style; one Tab stop (with no active option, the first holds it) |
 | Card | `Panel` | `title` (makes it a `<section>` named by the heading), `count` chip, `action` slot, `variant` `solid` / `dashed`, `size` `default` (`px-4 py-3`) / `document` (`p-6`), `titleAs`; header is a `.u-section-label`, no icons |
 | Inline notice | `Callout` | `tone` `info` (brand wash + edge) / `warn` (brand wash, full brand edge; never red) / `error` (destructive wash + edge, `role="alert"`) / `muted`; `title`, `action` (primary first). Without `title`/`action` children render straight into the box. `Alert` and `SettingsNote` are thin aliases |
 | Empty / loading / error | `EmptyState`, `PageLoading`, `Callout tone="error"` | `EmptyState` `title`, `body`, `action`, `variant` `plain` / `panel` (dashed), `titleAs`; `PageLoading` `label`, `hideLabel`, `fill` `page` (`h-page`) / `pane` (`h-64`). No icon discs |
@@ -156,23 +168,42 @@ without a visible ring.
 | Lamp / status / speaker dot | `StatusDot` | `size` 6 / 8 (default) / 10; `tone` `brand` / `record` / `success` / `destructive` / `muted`, or a speaker colour `className`; `label` makes it `role="img"` |
 | Person | `Avatar`, `AvatarStack` | `Avatar` `name`, `photo`, `size` 16 / 22 / 24 / 28 / 32 (default) / 56, `colorClass` or `colorKey`, `fallback`, `title`; `AvatarStack` `people`, `size` 22 / 24, `max` (4px overlap, never clips initials). `initials()` is exported from here (implementation in `lib/initials.ts`) |
 | Person picker | `PersonPicker` / `PersonOption` | `PersonPicker` `query`, `onQueryChange`, `onSubmit` (Enter), `inputAction`, `before`, `groups` (`label`, `options`, `emptyMessage`); filtering is the caller's (`matchesPersonQuery`). `PersonOption` `name`, `email`, `suffix`, `lead`, `onSelect`, `selected` |
-| List row | `ListRow` | slots `lead`, `title`, `meta`, `trailing`, `menu`; `onClick` makes the main area a button (trailing and menu stay outside it); `selected`, `menuReveal` `always` / `hover`, `ruled`. `LinkRow` `title`, `meta`, `onClick`, `muted`, `hint`: one baseline + chevron, brand on hover |
+| List row | `ListRow` | slots `lead`, `title`, `meta`, `trailing`, `menu`; `onClick` makes the main area a button (trailing and menu stay outside it); `selected`, `menuReveal` `always` / `hover`, `ruled`, `hint` (native tooltip on the main area). `LinkRow` `title`, `meta`, `onClick`, `muted`, `hint`: one baseline + chevron, brand on hover |
 | Settings | `SettingsSection` (`action` slot on the title line) / `SettingsGroup` / `SettingsRow` | rows put `Button variant="outline" size="sm"` on the right |
 | Permission | `PermissionRow` + `PermissionStatus` | `state` `granted` / `denied` / `silent` / `checking` (a `StatusDot` and a word, or a spinner); `PermissionRow` `title`, `description`, `statusLabel`, `action`, `variant` `row` / `card`. One shape for settings, onboarding and the modal |
 | Selectable card | `OptionCard` / `OptionCardGroup` | `OptionCard` `title`, `description`, `trailing`, `value` (in a group) or `selected` + `onSelect`; radio semantics. `OptionCardGroup` `value`, `onValueChange`, one Tab stop with arrow keys. Model pickers, theme choice |
 | Confirm | `ConfirmDialog` | `open`, `onOpenChange`, `title`, `body`, `confirmLabel`, `cancelLabel`, `tone` `destructive` / `brand`, `busy` (spinner, can't be dismissed), `confirmDisabled`, `onConfirm`, `children` for details |
 | Date navigation | `DateNavigator` | `label`, `onPrev`, `onNext`, `prevLabel`, `nextLabel`, `onToday`, `showToday`, `leading`, `trailing`, `labelClassName`; Today sits left of the arrows |
-| Form field | `Input`, `Textarea`, `Select`, `Switch`, `Label` (`optional` prop) | no native `<input>`/`<select>` in screens |
+| Form field | `Input`, `Textarea`, `Select`, `Switch`, `Checkbox`, `Label` (`optional` prop) | no native `<input>`/`<select>` in screens |
+| Checkbox | `Checkbox` | `checked` / `defaultChecked`, `onCheckedChange`, `label` (names it), `size` `sm` (16) / `default` (18); `onClick` fires first (shift-click ranges). **Checkbox vs Switch:** pick from a list, or an option a dialog's button submits, is a `Checkbox`. A single setting that applies at once is a `Switch` |
 
-Domain components (`ProcessingBadge`, `RecordingBadge`, `StateChip`, `LampDot`, `TapeCounter`,
-`VuMeter`, `TransportKey`) are composed from these and stay where they are.
+Domain components are composed from these and stay where they are. Reuse them before
+building another:
+
+- Deck: `ProcessingBadge`, `RecordingBadge`, `StateChip`, `LampDot`, `TapeCounter`,
+  `VuMeter`, `TransportKey`.
+- `Meetings/DayGroupCard`: one day's card (`Panel` + `ListRow` header), List and Week views.
+- `shared/ModelOptionCard`: a model in a picker, an `OptionCard` with its actions beside it.
+- `MeetingDetails/MeetingTitleField`: the editable-title pattern for `PageHeader` (renders
+  inside its h1, so no heading of its own).
+- `People/PersonActionsMenu`: the one overflow menu for a person.
+- `People/InlineEditable`: click-to-edit fields with Escape-revert and placeholders.
 
 ## 3. Exceptions
 
 Hardware-faithful parts of the deck (`Transport/` tape counter, VU meter, transport keys,
 `ChannelStrip` scale) may use raw sizes and elements. Each exception sits on an allowlist in
 `scripts/ui-consistency-allow.txt` with a reason. A one-off exception on a single line uses
-`// ui-gate: allow <reason>`.
+`// ui-gate: allow <reason>`. The sanctioned cases:
+
+- Inline text that is itself the trigger (a speaker name, a roster name, a click-to-edit
+  description): Button chrome would box it.
+- Citation chips and links that flow inside prose.
+- Disclosure rows (`aria-expanded`) and other rows with a geometry no primitive has (the
+  sidebar's 64px icon column, a month-grid `gridcell`).
+- Deck hardware: bevels, lamp glows, the odometer figures.
+
+Anything else is a missing variant: extend the primitive.
 
 ## 4. Changing the system
 
