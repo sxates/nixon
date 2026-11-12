@@ -33,6 +33,14 @@ describe('Button', () => {
     expect(cls).toContain('hover:text-brand');
   });
 
+  it('has a REC-red record variant whose hover comes from the variant', () => {
+    render(<Button variant="record">Start recording</Button>);
+    const cls = screen.getByRole('button').className;
+    expect(cls).toContain('bg-record');
+    expect(cls).toContain('text-record-foreground');
+    expect(cls).toContain('hover:bg-record/90');
+  });
+
   it('has a 28px icon-sm size', () => {
     render(<Button size="icon-sm" aria-label="Close" />);
     const cls = screen.getByRole('button', { name: 'Close' }).className;

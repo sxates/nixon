@@ -231,12 +231,8 @@ export default function PermissionsModal() {
             <Button variant="outline">Not now</Button>
           </DialogClose>
           {recordReady ? (
-            // REC red is right here: this button starts a recording. `Button` has no
-            // `record` variant yet, so the fill is spelled out (flagged for the primitive).
-            <Button
-              className="bg-record text-record-foreground hover:bg-record/90 sm:flex-1"
-              onClick={handleStartRecording}
-            >
+            // REC red is right here: this button starts a recording.
+            <Button variant="record" className="sm:flex-1" onClick={handleStartRecording}>
               <StatusDot className="bg-current" />
               Start recording
             </Button>

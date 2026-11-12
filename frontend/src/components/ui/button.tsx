@@ -24,6 +24,9 @@ const buttonVariants = cva(
         // the brand edge on hover. Was hand-rolled in ParticipantsPanel.
         dashed:
           "border border-dashed border-border bg-transparent text-muted-foreground hover:border-brand-edge hover:text-brand",
+        // REC red (docs/design-system.md): starts a recording; nothing else. Errors and
+        // destructive confirms are `destructive`, primary CTAs `brand`.
+        record: "bg-record text-record-foreground shadow-sm hover:bg-record/90",
       },
       size: {
         default: "h-9 px-4 py-2",
