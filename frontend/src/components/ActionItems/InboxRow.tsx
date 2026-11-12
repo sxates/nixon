@@ -57,7 +57,7 @@ export function InboxRow({
         variant="ghost"
         onClick={() => onOpen(item)}
         title="Open this item"
-        className="h-auto min-w-0 justify-start whitespace-normal rounded-md px-0.5 py-0 text-left text-sm font-normal leading-snug text-foreground hover:bg-transparent hover:text-brand"
+        className="h-auto min-w-0 justify-start whitespace-normal rounded-md px-0.5 py-0 text-left text-sm font-normal leading-snug text-foreground hover:bg-transparent hover:underline"
       >
         {segments.map((seg, i) =>
           seg.kind === 'person' ? (
@@ -80,7 +80,7 @@ export function InboxRow({
           </Button>
         ) : (
           <>
-            <Button variant="brand" size="xs" onClick={() => void onAdd(item)}>
+            <Button variant="outline" size="xs" onClick={() => void onAdd(item)}>
               Add to my list
             </Button>
             <Button variant="outline" size="xs" onClick={() => void onDismiss(item)}>
@@ -89,6 +89,7 @@ export function InboxRow({
             <AssigneePicker
               label={null}
               emptyLabel="Assign…"
+              emptyVariant="ghost"
               candidates={candidates}
               onSelect={(selection) => void onAssign(item, selection)}
             />

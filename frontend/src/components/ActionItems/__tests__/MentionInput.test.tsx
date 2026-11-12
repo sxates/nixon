@@ -156,3 +156,19 @@ describe('MentionInput', () => {
     await waitFor(() => expect(input.value).toBe('Ask @Sam Rivera'));
   });
 });
+
+describe('MentionInput multiline', () => {
+  it('sets the textarea height from scrollHeight so a long title wraps instead of clipping', async () => {
+    const spy = vi.spyOn(HTMLTextAreaElement.prototype, 'scrollHeight', 'get').mockReturnValue(96);
+    try {
+      const { input } = await setup({ multiline: true, value: 'A long title that wraps' });
+      expect(input.getAttribute('rows')).toBe('1');
+      expect(input.style.height).toBe('96px');
+      spy.mockReturnValue(140);
+      type(input, 'A long title that wraps over a good many more words than it did');
+      expect(input.style.height).toBe('140px');
+    } finally {
+      spy.mockRestore();
+    }
+  });
+});

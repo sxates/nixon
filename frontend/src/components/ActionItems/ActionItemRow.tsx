@@ -127,7 +127,7 @@ export function ActionItemRow({
 
   return (
     <div className="group flex items-start gap-2 rounded-lg px-2 py-1.5 transition-colors hover:bg-accent/60">
-      {dragHandle}
+      {dragHandle && <span className="-ml-6 shrink-0">{dragHandle}</span>}
       {showCheckbox ? (
         <Checkbox
           checked={completed}
@@ -151,7 +151,7 @@ export function ActionItemRow({
             onCancel={() => setIsEditing(false)}
             submitOnBlur
             ariaLabel="Edit action item description"
-            className="h-auto border-border bg-background px-1.5 py-0.5 text-sm text-foreground shadow-none md:text-sm"
+            variant="bare"
             autoFocus
           />
         ) : (
@@ -161,7 +161,7 @@ export function ActionItemRow({
               onClick={() => (onOpen ? onOpen(item) : startEdit())}
               title={onOpen ? 'Open this item' : 'Edit description'}
               className={cn(
-                'min-w-0 flex-1 rounded-md px-0.5 text-left text-sm leading-snug text-foreground hover:text-brand focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                'min-w-0 flex-1 rounded-md px-0.5 text-left text-sm leading-snug text-foreground hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                 completed && 'text-muted-foreground line-through',
                 dismissed && 'text-muted-foreground',
               )}

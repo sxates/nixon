@@ -166,6 +166,7 @@
           row.triage = 'listed';
           row.adoptedAt = iso(created);
           if (slot === 0 && n === 0) row.dueDate = localDay(0);
+          if (slot === 0 && n === 6) row.dueDate = localDay(-2); // overdue: amber like today
           if (slot === 4) {
             row.status = 'completed';
             row.completedAt = iso(new Date(Date.now() - (1 + (n % 20)) * 86400000));

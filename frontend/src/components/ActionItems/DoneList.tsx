@@ -77,7 +77,7 @@ export function DoneList({
 }: DoneListProps) {
   const groups = useMemo(() => groupDoneByWeek(rows, new Date()), [rows]);
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-5 px-1">
       {groups.map((group) => (
         <section key={group.key} aria-label={group.title}>
           <h3 className="u-section-label px-2 py-1.5">{group.title}</h3>

@@ -16,16 +16,22 @@ export type InputSize = keyof typeof INPUT_SIZES
 
 export interface InputProps extends Omit<React.ComponentProps<"input">, "size"> {
   size?: InputSize
+  /** `bare`: inline-edit surface, no border or shadow, transparent, `bg-muted` on hover. */
+  variant?: "default" | "bare"
 }
 
 const Input = React.forwardRef<HTMLInputElement, InputProps>(
-  ({ className, type, size = "default", ...props }, ref) => {
+  ({ className, type, size = "default", variant = "default", ...props }, ref) => {
     return (
       <input
         type={type}
         data-size={size}
+        data-variant={variant}
         className={cn(
-          "flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50",
+          "flex w-full rounded-md bg-transparent text-base transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50",
+          variant === "bare"
+            ? "h-auto border-0 text-sm px-1 py-0.5 shadow-none hover:bg-muted focus-visible:bg-muted"
+            : "h-9 border border-input px-3 py-1 shadow-sm",
           INPUT_SIZES[size],
           className
         )}

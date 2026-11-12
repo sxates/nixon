@@ -301,10 +301,9 @@ export function ItemDetail({ id }: { id: string }) {
               multiline
               ariaLabel="To-do title"
               placeholder="Title"
-              className={cn(
-                'min-h-0 resize-none overflow-hidden border-transparent bg-transparent px-1 py-1 text-xl font-semibold leading-snug shadow-none hover:bg-muted md:text-xl',
-                completed && 'text-muted-foreground line-through',
-              )}
+              variant="bare"
+              size="title"
+              className={cn('-mx-1', completed && 'text-muted-foreground line-through')}
             />
             <div className="flex flex-wrap items-center gap-3">
               <DueDateControl item={item} onSetDueDate={setDueDate} />
@@ -317,7 +316,7 @@ export function ItemDetail({ id }: { id: string }) {
               <h2 className="u-section-label">
                 Notes
               </h2>
-              <span className="text-caption text-muted-foreground" aria-live="polite">
+              <span className="min-w-16 text-right text-caption text-muted-foreground" aria-live="polite">
                 {saveState === 'saving' ? 'Saving…' : saveState === 'saved' ? 'Saved' : ''}
               </span>
             </div>
@@ -327,7 +326,7 @@ export function ItemDetail({ id }: { id: string }) {
               onChange={(e) => onNotesChange(e.target.value)}
               onBlur={() => void flushNotes()}
               placeholder="Add notes"
-              className="min-h-[140px]"
+              rows={6}
             />
           </section>
 

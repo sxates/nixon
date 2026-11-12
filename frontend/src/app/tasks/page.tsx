@@ -111,6 +111,7 @@ function TasksPageContent() {
     bulkSetStatus,
     triage,
     dismissOlderThan,
+    setDueDate,
   } = useActionItemMutations<TodoRow>({
     setItems,
     meetingId: null, // quick-add creates standalone to-dos
@@ -228,19 +229,33 @@ function TasksPageContent() {
   const inboxRows = showDismissed ? views.dismissed : views.inbox;
   const doneRows = useMemo(() => views.done.filter((r) => r.status === 'completed'), [views.done]);
 
+  const noun = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+  const subtitle =
+    tab === 'inbox'
+      ? inboxRows.length > 0
+        ? showDismissed
+          ? `${noun(inboxRows.length, 'dismissed suggestion', 'dismissed suggestions')}`
+          : `${noun(inboxRows.length, 'suggestion', 'suggestions')} to review`
+        : 'Suggestions from your meetings'
+      : tab === 'done'
+        ? doneRows.length > 0
+          ? `${doneRows.length} completed`
+          : 'What you finish lands here'
+        : openItems.length > 0
+          ? `${noun(openItems.length, 'item', 'items')} on your list`
+          : 'Your commitments, in the order you choose';
+
   return (
     // A short opacity fade, no travel (docs/design-system.md §Motion).
     <div className="flex h-page animate-fade-in flex-col bg-background">
       <PageHeader
         width="page"
         title="To-do"
-        subtitle={
-          openItems.length > 0
-            ? `${openItems.length} ${openItems.length === 1 ? 'item' : 'items'} on your list`
-            : 'Your commitments, in the order you choose'
-        }
+        subtitle={subtitle}
         actions={
-          tab === 'inbox' ? (
+          // The slot exists on every tab so the header doesn't jump when the menu appears.
+          <div className="size-7">
+          {tab === 'inbox' && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <MenuButton label="Inbox options" />
@@ -257,7 +272,8 @@ function TasksPageContent() {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-          ) : undefined
+          )}
+          </div>
         }
       />
 
@@ -292,7 +308,7 @@ function TasksPageContent() {
                       body="Add a to-do above, or move suggestions over from your Inbox."
                     />
                   ) : (
-                    <div className="mt-4 flex flex-col gap-0.5">
+                    <div className="mt-4 flex flex-col gap-0.5 px-1">
                       {openItems.map((item) => (
                         <div
                           key={item.id}
@@ -332,6 +348,8 @@ function TasksPageContent() {
                             onAssign={assign}
                             onDelete={handleDelete}
                             onOpen={openItem}
+                            hideAssignee={item.assigneeIsSelf}
+                            onSetDueDate={setDueDate}
                             dragHandle={
                               <IconButton
                                 variant="ghost"
@@ -363,7 +381,7 @@ function TasksPageContent() {
                       }
                     />
                   ) : (
-                    <div className="flex flex-col gap-0.5">
+                    <div className="flex flex-col gap-0.5 px-0.5">
                       {inboxRows.map((item) => (
                         <InboxRow
                           key={item.id}

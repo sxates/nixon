@@ -13,7 +13,7 @@
  * (`{ heading, items }[]`) so a Topics group can sit above People without a rewrite.
  */
 
-import { useEffect, useMemo, useRef, useState, type ChangeEvent, type ComponentProps, forwardRef, type KeyboardEvent, type SyntheticEvent } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent, type ComponentProps, forwardRef, type KeyboardEvent, type SyntheticEvent } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { Command, CommandGroup, CommandItem, CommandList } from '@/components/ui/command';
 import { Input } from '@/components/ui/input';
@@ -53,6 +53,9 @@ interface MentionInputProps {
   ariaLabel?: string;
   className?: string;
   autoFocus?: boolean;
+  /** Primitive variant/size passed through: `bare` is the inline-edit surface. */
+  variant?: 'default' | 'bare';
+  size?: 'title';
   /** Auto-growing textarea (the detail-page title). Enter still submits; Shift+Enter is
    *  ignored — titles never hold newlines. */
   multiline?: boolean;
@@ -73,6 +76,8 @@ export function MentionInput({
   autoFocus,
   multiline = false,
   resetKey = 0,
+  variant = 'default',
+  size,
 }: MentionInputProps) {
   // cmdk owns the listbox's id, so read it back from the DOM once the list mounts.
   const [listId, setListId] = useState<string | undefined>(undefined);
@@ -278,6 +283,8 @@ export function MentionInput({
             }
           }}
           rows={1}
+          variant={variant}
+          size={size}
         />
         ) : (
         <Input
@@ -293,6 +300,7 @@ export function MentionInput({
           aria-expanded={open}
           aria-activedescendant={open ? activeOptionId : undefined}
           className={className}
+          variant={variant}
           onChange={(e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
             settled.current = false;
             const v = multiline ? e.target.value.replace(/\n/g, ' ') : e.target.value;
@@ -359,12 +367,27 @@ export function MentionInput({
 const AutoGrowTextarea = forwardRef<HTMLTextAreaElement, ComponentProps<typeof Textarea>>(
   function AutoGrowTextarea(props, ref) {
     const local = useRef<HTMLTextAreaElement | null>(null);
-    useEffect(() => {
+    const grow = () => {
       const el = local.current;
       if (!el) return;
       el.style.height = 'auto';
       el.style.height = `${el.scrollHeight}px`;
-    }, [props.value]);
+    };
+    // Re-measure on every text change and whenever the column width changes (a wrap point
+    // moves with the width, not with the value).
+    useLayoutEffect(grow, [props.value]);
+    useLayoutEffect(() => {
+      const el = local.current;
+      if (!el || typeof ResizeObserver === 'undefined') return;
+      let width = el.clientWidth;
+      const ro = new ResizeObserver(() => {
+        if (el.clientWidth === width) return;
+        width = el.clientWidth;
+        grow();
+      });
+      ro.observe(el);
+      return () => ro.disconnect();
+    }, []);
     return (
       <Textarea
         {...props}
