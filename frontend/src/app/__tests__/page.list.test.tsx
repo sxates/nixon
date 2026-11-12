@@ -195,11 +195,11 @@ describe('All Meetings tape log (specs/0057 Task 6)', () => {
 });
 
 describe('All Meetings row grid tracks (fix round 1, Important 1)', () => {
-  it('keeps 5 direct grid children whether or not the row has attendees', async () => {
-    // display:none on the attendee cell (the old `hidden … sm:flex`) removes a grid
-    // ITEM below `sm`, so a row WITH attendees auto-placed into 4 tracks while a
-    // row without kept 5 — the tape log misaligned. The wrapper must always be a
-    // grid item; only its contents may collapse.
+  it('keeps the same fixed-width columns whether or not the row has attendees', async () => {
+    // A row WITH attendees once auto-placed into 4 grid tracks while a row without kept
+    // 5 — the tape log misaligned. The row is a ListRow now (design-system wave B): the
+    // attendee, duration and time columns are fixed-width cells every row renders, even
+    // when the attendee cell is empty, so the columns line up row to row.
     invokeMock.mockResolvedValue([
       {
         id: 'm-attendees',
@@ -217,8 +217,10 @@ describe('All Meetings row grid tracks (fix round 1, Important 1)', () => {
     const withAttendees = (await screen.findByText('Standup')).closest('button')!;
     const withoutAttendees = (await screen.findByText('Ad hoc')).closest('button')!;
 
-    expect(withAttendees.children).toHaveLength(5);
-    expect(withoutAttendees.children).toHaveLength(5);
+    const columns = (row: HTMLElement) =>
+      Array.from(row.querySelectorAll('[data-col]')).map((el) => el.getAttribute('data-col'));
+    expect(columns(withAttendees)).toEqual(['attendees', 'duration', 'time']);
+    expect(columns(withoutAttendees)).toEqual(['attendees', 'duration', 'time']);
   });
 });
 

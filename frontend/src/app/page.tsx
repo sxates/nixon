@@ -15,9 +15,8 @@
  */
 
 import { Suspense, useCallback, useMemo, useState } from 'react';
-import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
-import { Loader2 } from 'lucide-react';
+import { PageLoading } from '@/components/ui/empty-state';
 import { useRecordingState } from '@/contexts/RecordingStateContext';
 import { useSidebar } from '@/components/Sidebar/SidebarProvider';
 import { useDayAgenda } from '@/hooks/useDayAgenda';
@@ -27,6 +26,8 @@ import { useMeetingsUrlSync, useMeetingsView } from '@/hooks/useMeetingsView';
 import { useRecordedMeetings } from '@/hooks/useRecordedMeetings';
 import { agendaNavLabel, agendaSummary } from '@/lib/agenda-labels';
 import { MEETINGS_CONTENT_WIDTH, needsCalendar } from '@/lib/meetings-view';
+import { PAGE_GUTTER } from '@/lib/page-width';
+import { cn } from '@/lib/utils';
 import { ConnectCalendarNudge } from '@/components/Today/ConnectCalendarNudge';
 import { AgendaPane } from '@/components/Meetings/AgendaPane';
 import { AgendaDialogs } from '@/components/Meetings/AgendaDialogs';
@@ -81,12 +82,8 @@ function MeetingsView() {
       : 'Every recording you make shows up here';
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.25, ease: 'easeOut' }}
-      className="flex h-page flex-col bg-background"
-    >
+    // A short opacity fade, no travel (docs/design-system.md §Motion).
+    <div className="flex h-page animate-fade-in flex-col bg-background">
       <MeetingsHeader
         subtitle={subtitle}
         calendarConnected={calendarConnected !== false}
@@ -102,7 +99,7 @@ function MeetingsView() {
       {/* specs/0069 W4 — gated on `calendarConnected` (EventKit OR Google), never the
           EventKit-only status; `null` (not yet resolved) hides it. */}
       {calendarConnected === false && (
-        <div className="flex-shrink-0 px-4 min-[900px]:px-7">
+        <div className={cn('flex-shrink-0', PAGE_GUTTER)}>
           <div className={`mx-auto mb-4 w-full ${MEETINGS_CONTENT_WIDTH}`}>
             <ConnectCalendarNudge />
           </div>
@@ -121,9 +118,7 @@ function MeetingsView() {
       <NavSlotProvider value={navSlot}>
 
       {pendingCalendar ? (
-        <div className="flex h-64 items-center justify-center text-muted-foreground">
-          <Loader2 className="h-5 w-5 animate-spin" aria-label="Loading" />
-        </div>
+        <PageLoading fill="pane" />
       ) : agendaMode ? (
         <AgendaPane
           mode={agendaMode}
@@ -135,7 +130,7 @@ function MeetingsView() {
       ) : shown === 'month' ? (
         // Month owns the remaining height (the grid divides it); the list scrolls. The month
         // grid is seven columns and needs the width, or every title truncates.
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-4 min-[900px]:px-7 pb-6">
+        <div className={cn('flex min-h-0 flex-1 flex-col overflow-hidden pb-6', PAGE_GUTTER)}>
           <div className={`mx-auto flex min-h-0 w-full flex-1 flex-col ${MEETINGS_CONTENT_WIDTH}`}>
             <MonthCalendar
               onOpenMeeting={(id) => router.push(`/meeting-details?id=${id}`)}
@@ -147,7 +142,7 @@ function MeetingsView() {
           </div>
         </div>
       ) : (
-        <div className="flex-1 overflow-y-auto px-4 min-[900px]:px-7 pb-12">
+        <div className={cn('flex-1 overflow-y-auto pb-12', PAGE_GUTTER)}>
           <div className={`mx-auto w-full ${MEETINGS_CONTENT_WIDTH}`}>
             <MeetingsList
               meetings={recorded.meetings}
@@ -159,7 +154,7 @@ function MeetingsView() {
         </div>
       )}
       </NavSlotProvider>
-    </motion.div>
+    </div>
   );
 }
 

@@ -18,8 +18,8 @@
  */
 
 import { useRouter } from 'next/navigation';
-import { Calendar } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Callout } from '@/components/ui/callout';
 
 /** Settings → General, scrolled to the Calendar section (`CALENDAR_SECTION_ID`). */
 export const CALENDAR_SETTINGS_ROUTE = '/settings?tab=general#calendar';
@@ -35,35 +35,26 @@ export function ConnectCalendarCard({
   onDismiss?: () => void;
 }) {
   const router = useRouter();
+  // The same Callout as Google's reconnect row: primary action first, then the quiet one.
   return (
-    <div className="flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-3">
-      <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-muted">
-        <Calendar className="h-4 w-4 text-muted-foreground" />
-      </div>
-      <div className="min-w-0 flex-1">
-        <div className="text-sm font-medium text-foreground">{title}</div>
-        <div className="text-xs text-muted-foreground">
-          Connect your Mac&apos;s calendar or Google Calendar in Settings — either is read
-          on-device, and nothing leaves your machine.
-        </div>
-      </div>
-      <Button
-        variant="brand"
-        size="sm"
-        className="flex-shrink-0"
-        onClick={() => router.push(CALENDAR_SETTINGS_ROUTE)}
-      >
-        Connect
-      </Button>
-      {onDismiss && (
-        <button
-          type="button"
-          onClick={onDismiss}
-          className="flex-shrink-0 text-xs text-muted-foreground hover:text-foreground"
-        >
-          Dismiss
-        </button>
-      )}
-    </div>
+    <Callout
+      tone="info"
+      title={title}
+      action={
+        <>
+          <Button variant="brand" size="sm" onClick={() => router.push(CALENDAR_SETTINGS_ROUTE)}>
+            Connect
+          </Button>
+          {onDismiss && (
+            <Button variant="ghost" size="sm" onClick={onDismiss}>
+              Dismiss
+            </Button>
+          )}
+        </>
+      }
+    >
+      Connect your Mac&apos;s calendar or Google Calendar in Settings — either is read
+      on-device, and nothing leaves your machine.
+    </Callout>
   );
 }

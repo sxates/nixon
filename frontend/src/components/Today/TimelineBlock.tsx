@@ -25,12 +25,12 @@ export const LANE_GAP_PX = 6; // horizontal gap between side-by-side (overlappin
 export function blockClasses(state: TimelineVisualState): string {
   switch (state) {
     case 'past-unrecorded':
-      return 'border-dashed border-border/70 bg-transparent text-muted-foreground';
+      return 'border-dashed border-rule bg-transparent text-muted-foreground';
     case 'upcoming':
-      return 'border-border bg-card hover:border-brand/40';
+      return 'border-border bg-card hover:border-brand-edge';
     case 'past-recorded':
     case 'processing':
-      return 'border-border bg-card hover:border-brand/40';
+      return 'border-border bg-card hover:border-brand-edge';
     case 'recording':
     case 'now-joinable':
     case 'now':
@@ -166,7 +166,7 @@ export function TimelineBlock({
         left: `${lane * widthPct}%`,
         width: `calc(${widthPct}% - ${LANE_GAP_PX}px)`,
       }}
-      className={`group absolute cursor-pointer overflow-hidden rounded-[3px] border px-3 py-1.5 text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+      className={`group absolute cursor-pointer overflow-hidden rounded-md border px-3 py-1.5 text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
         // A compact block has one line (no meta row); centre it, or a block a few px
         // taller than another shows its title riding high (owner feedback 2026-09-24).
         compact ? 'flex flex-col justify-center' : ''
@@ -177,7 +177,7 @@ export function TimelineBlock({
       {bar && <i aria-hidden="true" data-state-bar className={`absolute inset-y-0 left-0 w-[3px] ${bar}`} />}
       <div className="flex items-center gap-2">
         <span
-          className={`min-w-0 flex-1 truncate font-semibold ${compact ? 'text-[12.5px]' : 'text-[13.5px]'} ${
+          className={`min-w-0 flex-1 truncate font-semibold ${compact ? 'text-meta' : 'text-body'} ${
             state === 'past-unrecorded' ? 'text-muted-foreground' : 'text-foreground'
           }`}
         >
@@ -191,7 +191,7 @@ export function TimelineBlock({
               e.stopPropagation();
               onJoin(item);
             }}
-            className={`flex-shrink-0 ${compact ? 'h-5 px-2 text-[10.5px]' : ''}`}
+            className={`flex-shrink-0 ${compact ? 'h-5 px-2 text-label' : ''}`}
           >
             Join &amp; record
           </Button>
@@ -203,14 +203,21 @@ export function TimelineBlock({
               e.stopPropagation();
               onRecord(item);
             }}
-            className={`flex-shrink-0 ${compact ? 'h-5 px-2 text-[10.5px]' : ''}`}
+            className={`flex-shrink-0 ${compact ? 'h-5 px-2 text-label' : ''}`}
           >
             Record
           </Button>
         ) : (
           <StateChip state={state} />
         )}
-        <AgendaRowMenu item={item} ctx={ctx} actions={{ onHide, onEdit, onDelete, onRecord }} />
+        <AgendaRowMenu
+          item={item}
+          ctx={ctx}
+          actions={{ onHide, onEdit, onDelete, onRecord }}
+          // The 28px key would grow the 20px title line and clip a short block's meta row;
+          // the negative margin keeps its hit area without taking the height.
+          triggerClassName="-my-1 opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100"
+        />
       </div>
       {!compact && (
         <div className="mt-0.5 flex min-w-0 items-center gap-2">

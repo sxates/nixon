@@ -1,6 +1,8 @@
 'use client';
 
-import { MoreHorizontal, Trash2 } from 'lucide-react';
+import { Trash2 } from '@/components/ui/icons';
+import { ListRow } from '@/components/ui/list-row';
+import { MenuButton } from '@/components/ui/menu-button';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -13,6 +15,7 @@ import type { AgendaAttendee } from '@/lib/day-agenda';
 import { RecordingBadge } from '@/components/RecordingBadge';
 import { ProcessingBadge } from '@/components/ProcessingBadge';
 import { formatReelTag } from '@/lib/reel-number';
+import { cn } from '@/lib/utils';
 
 /**
  * One row of the Meetings List view (the former All meetings page, specs/0057 Task 6),
@@ -99,11 +102,15 @@ function formatDuration(seconds?: number | null): string | null {
 }
 
 /**
- * One line of the tape log (specs/0057 Task 6): a hairline-ruled grid — reel tag, a 3px
- * colour spine + title, the bounded attendee preview (specs/0038 WS8.a — avatars +
- * "Sarah, +2", owner excluded), the duration on a counter, and the start time. The
- * attendee cluster is omitted when the meeting has no roster (never fabricated); the
- * reel cell is blank for a meeting the backend has not numbered.
+ * One line of the tape log (specs/0057 Task 6), on `ListRow`: reel tag and a 3px colour
+ * spine in the lead, then the title, the bounded attendee preview (specs/0038 WS8.a —
+ * avatars + "Sarah, +2", owner excluded), the duration and the start time as fixed-width
+ * columns. The attendee cluster is omitted when the meeting has no roster (never
+ * fabricated); the reel cell is blank for a meeting the backend has not numbered.
+ *
+ * The columns ride inside the row's button (the title slot), so the whole line opens the
+ * meeting as it always did; only the `…` menu sits outside it. The attendee column has a
+ * real width (audit 2026-11-11: an auto track capped at 38% clipped "Tomas, +1" to "T..").
  */
 export function MeetingRow({
   meeting,
@@ -124,73 +131,62 @@ export function MeetingRow({
 }) {
   const created = new Date(meeting.createdAt);
   const validTime = !Number.isNaN(created.getTime());
-  const seconds = meeting.durationSeconds;
-  const hasDuration = seconds != null && Number.isFinite(seconds) && seconds > 0;
-  const duration = formatDuration(seconds);
+  // 0.1.0 owner feedback: plain text, not the rail's counter — easier to read in a list,
+  // and the counter is the live recording's instrument, not a duration.
+  const duration = formatDuration(meeting.durationSeconds);
   const title = meeting.title?.trim() || 'Untitled meeting';
   const reelTag = formatReelTag(meeting.reelNumber);
   // Bounded attendee preview (WS8.a) with owner excluded display-only (WS8.b).
   const attendees = meeting.attendees ?? [];
   const attendeePreview = attendeeSummaryLabel(attendees, meeting.attendeeCount ?? 0, 1);
+  const column = 'u-row-meta flex-none font-normal tabular-nums';
 
   return (
-    <div className="group flex w-full items-center border-b border-border/60 transition-colors hover:bg-accent">
-      <button
-        type="button"
-        onClick={() => onOpen(meeting.id)}
-        className="grid min-w-0 flex-1 grid-cols-[64px_1fr_auto_64px_64px] items-center gap-3 px-4 py-2 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      >
-        <span className="truncate font-mono text-[11px] text-engrave">{reelTag}</span>
-        <span className="flex min-w-0 items-center gap-2.5">
-          <span className={`h-4 w-[3px] flex-shrink-0 ${spineClass}`} aria-hidden="true" />
-          <span className="min-w-0 flex-1 truncate text-[13.5px] font-semibold text-foreground">
-            {title}
-          </span>
+    <ListRow
+      ruled
+      menuReveal="hover"
+      onClick={() => onOpen(meeting.id)}
+      lead={
+        <span className="flex items-center gap-3">
+          <span className="w-12 truncate font-mono text-caption text-engrave">{reelTag}</span>
+          <span className={cn('h-4 w-[3px] flex-none', spineClass)} aria-hidden="true" />
+        </span>
+      }
+      title={
+        <span className="flex items-center gap-3">
+          <span className="min-w-0 flex-1 truncate">{title}</span>
           {isRecordingThis ? <RecordingBadge /> : isProcessing && <ProcessingBadge />}
+          {/* Hidden below `sm`, where the title needs the width. */}
+          <span data-col="attendees" className="hidden w-[200px] flex-none items-center gap-1.5 font-normal sm:flex">
+            {attendeePreview && (
+              <>
+                <AvatarStack attendees={attendees} size="sm" max={3} />
+                <span className="u-row-meta min-w-0 truncate">{attendeePreview}</span>
+              </>
+            )}
+          </span>
+          <span data-col="duration" className={cn(column, 'w-14 text-right')}>{duration ?? ''}</span>
+          <span data-col="time" className={cn(column, 'w-16 text-right')}>
+            {validTime ? formatStartTime(created) : ''}
+          </span>
         </span>
-        {/* fix round 1: the wrapper stays a permanent grid item (5 tracks below `sm`
-            too) — only its CONTENTS collapse via `sm:contents`, so `display:none`
-            never removes a grid item and shifts the row's later tracks. */}
-        <span className="flex max-w-[38%] min-w-0 flex-shrink-0 items-center gap-1.5">
-          {attendeePreview && (
-            <span className="hidden min-w-0 items-center gap-1.5 sm:contents">
-              <AvatarStack attendees={attendees} size="sm" max={3} />
-              <span className="truncate text-xs text-muted-foreground">{attendeePreview}</span>
-            </span>
-          )}
-        </span>
-        <span className="flex justify-end">
-          {hasDuration && (
-            // 0.1.0 owner feedback: plain text, not the rail's counter — easier to read in
-            // a list, and the counter is the live recording's instrument, not a duration.
-            <span className="text-xs tabular-nums text-muted-foreground">{duration}</span>
-          )}
-        </span>
-        <span className="text-right text-xs text-muted-foreground">
-          {validTime ? formatStartTime(created) : ''}
-        </span>
-      </button>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <button
-            type="button"
-            aria-label="Meeting options"
-            title="Meeting options"
-            className="mr-2 inline-flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-background hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100"
-          >
-            <MoreHorizontal className="h-4 w-4" />
-          </button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuItem
-            onSelect={() => onRequestDelete(meeting)}
-            className="text-destructive focus:text-destructive"
-          >
-            <Trash2 className="mr-2 h-4 w-4" />
-            Delete meeting
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-    </div>
+      }
+      menu={
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <MenuButton label="Meeting options" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem
+              icon={Trash2}
+              variant="destructive"
+              onSelect={() => onRequestDelete(meeting)}
+            >
+              Delete meeting
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      }
+    />
   );
 }
