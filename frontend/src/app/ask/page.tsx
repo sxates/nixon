@@ -484,6 +484,7 @@ function AskPageContent() {
               {/* Scope: which meetings the question may draw from. */}
               <div className="flex flex-wrap items-center justify-end gap-2">
                 <SegmentedControl
+                  size="lg"
                   aria-label="Filter by date"
                   options={DATE_PRESETS}
                   value={preset}

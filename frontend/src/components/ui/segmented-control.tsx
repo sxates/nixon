@@ -15,8 +15,11 @@ export interface SegmentedControlProps {
   value: string;
   onChange: (value: string) => void;
   'aria-label': string;
-  /** `default` (28px) for a page-level filter; `compact` (24px) inside a panel or toolbar. */
-  size?: 'default' | 'compact';
+  /**
+   * `default` (28px) for a page-level filter; `compact` (24px) inside a panel or toolbar;
+   * `lg` (32px) when it sits in a row of default-height (32px) buttons, like Ask's scope bar.
+   */
+  size?: 'default' | 'compact' | 'lg';
   className?: string;
 }
 
@@ -29,7 +32,8 @@ export interface SegmentedControlProps {
  * underline strips side by side and Ask's 7d/30d scope read as navigation. A control that
  * changes WHICH view is on screen (Meetings Agenda/Week/Month/List) is `Tabs`.
  *
- * Sizes: `default` is 28px (the `xs` control height), `compact` 24px for a panel or toolbar.
+ * Sizes: `default` is 28px (the `xs` control height), `compact` 24px for a panel or toolbar,
+ * `lg` 32px to match default-height buttons beside it.
  * It stays a `role="group"` of `aria-pressed` buttons (not a tablist): these filter what a
  * view shows, they don't label panels.
  *
@@ -73,7 +77,7 @@ export function SegmentedControl({
       data-size={size}
       className={cn(
         'inline-flex flex-none items-stretch gap-0.5 rounded-md border border-border bg-muted p-0.5',
-        size === 'compact' ? 'h-6' : 'h-7',
+        size === 'compact' ? 'h-6' : size === 'lg' ? 'h-8' : 'h-7',
         className,
       )}
     >
