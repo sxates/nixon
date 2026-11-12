@@ -229,6 +229,11 @@ describe('PrepPanel (specs/0036)', () => {
 
     expect(await screen.findByText('Linked meetings')).toBeInTheDocument();
     expect(screen.getByText('Old design chat')).toBeInTheDocument();
+    // The row's open button keeps its "Open this meeting" tooltip (lost in wave A).
+    expect(screen.getByText('Old design chat').closest('button')).toHaveAttribute(
+      'title',
+      'Open this meeting',
+    );
 
     fireEvent.click(screen.getByRole('button', { name: /unlink old design chat/i }));
     await waitFor(() =>

@@ -392,6 +392,7 @@ export function PrepPanel({
                 <li key={m.id}>
                   <ListRow
                     onClick={() => openMeeting(m.id)}
+                    hint="Open this meeting"
                     title={m.title?.trim() || 'Untitled meeting'}
                     meta={formatMeetingDate(m.startedAt) || undefined}
                     trailing={

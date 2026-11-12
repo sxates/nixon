@@ -31,6 +31,19 @@ describe('ListRow', () => {
     expect(onClick).toHaveBeenCalledOnce();
   });
 
+  it('hint is the main area\'s native tooltip, not the trailing slot\'s', () => {
+    render(
+      <ListRow
+        title="Q3 planning"
+        hint="Open this meeting"
+        onClick={() => {}}
+        trailing={<button type="button">Unlink</button>}
+      />,
+    );
+    expect(screen.getByRole('button', { name: /Q3 planning/ }).getAttribute('title')).toBe('Open this meeting');
+    expect(screen.getByRole('button', { name: 'Unlink' }).getAttribute('title')).toBeNull();
+  });
+
   it('selected rows use the brand wash and mark the button current', () => {
     const { container } = render(<ListRow title="Row" selected onClick={() => {}} />);
     expect(container.firstElementChild).toHaveClass('bg-brand-wash');

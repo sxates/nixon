@@ -31,6 +31,8 @@ export interface ListRowProps {
   onClick?: () => void;
   /** Accessible name for the main button when the visible title isn't enough. */
   'aria-label'?: string;
+  /** Native tooltip on the main area ("Open this meeting"). */
+  hint?: string;
   /** Selected row: the brand wash. */
   selected?: boolean;
   /** `always` (default) or `hover`: the menu appears on hover / focus-within / open. */
@@ -48,6 +50,7 @@ export function ListRow({
   menu,
   onClick,
   'aria-label': ariaLabel,
+  hint,
   selected = false,
   menuReveal = 'always',
   ruled = false,
@@ -78,6 +81,7 @@ export function ListRow({
           type="button"
           onClick={onClick}
           aria-label={ariaLabel}
+          title={hint}
           aria-current={selected || undefined}
           className={cn(
             mainClass,
@@ -87,7 +91,9 @@ export function ListRow({
           {body}
         </button>
       ) : (
-        <div className={mainClass}>{body}</div>
+        <div className={mainClass} title={hint}>
+          {body}
+        </div>
       )}
       {trailing != null ? (
         <div className={cn('flex flex-none items-center gap-2', menu == null && 'pr-3')}>{trailing}</div>
