@@ -15,37 +15,30 @@
  *   1. Summary        — on-demand LLM roll-up (`api_person_rollup`), cached in page state
  *                       so switching tabs never re-runs the slow local model.
  *   2. Recent meetings — the fast, no-LLM `api_recent_meetings_with_person` list.
- *   3. Voice Samples  — the reusable `VoiceprintSamplesList`, or a friendly opt-out state.
+ *   3. Voice samples  — the reusable `VoiceprintSamplesList`, or a friendly opt-out state.
  */
 
-import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
-import { motion } from 'framer-motion';
+import { Suspense, useCallback, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { invoke } from '@tauri-apps/api/core';
 import { toast } from 'sonner';
-import {
-  ArrowLeft,
-  Check,
-  ChevronRight,
-  Loader2,
-  MicOff,
-  MoreHorizontal,
-  Pencil,
-  Sparkles,
-  Trash2,
-} from 'lucide-react';
 import { AnswerMarkdown } from '@/components/AskAI/AnswerMarkdown';
-import { PersonAvatar } from '@/components/People/PersonAvatar';
+import { InlineEditable } from '@/components/People/InlineEditable';
+import { PersonActionsMenu } from '@/components/People/PersonActionsMenu';
 import { VoiceprintSamplesList } from '@/components/People/VoiceprintSamplesList';
 import { ForgetPersonDialog } from '@/app/people/ForgetPersonDialog';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+import { Avatar } from '@/components/ui/avatar';
+import { Button } from '@/components/ui/button';
+import { Callout } from '@/components/ui/callout';
+import { DeckIcon } from '@/components/ui/deck-icon';
+import { EmptyState, PageLoading } from '@/components/ui/empty-state';
+import { ArrowLeft, Sparkles } from '@/components/ui/icons';
+import { LinkRow } from '@/components/ui/list-row';
+import { Panel } from '@/components/ui/panel';
+import { RunStatus } from '@/components/ui/run-status';
+import { Spinner } from '@/components/ui/spinner';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { PAGE_CONTENT_WIDTH, PAGE_GUTTER } from '@/lib/page-width';
 import { getPerson } from '@/lib/people';
 import {
   fetchPersonRollup,
@@ -58,146 +51,6 @@ import { cn } from '@/lib/utils';
 import { avatarColorClass } from '@/lib/avatar-colors';
 import type { Person } from '@/types';
 import { PageHeader } from '@/components/ui/page-header';
-
-/**
- * A click-to-edit text field. Renders as text with a hover pencil; clicking swaps to an
- * input that commits on Enter/blur and reverts on Escape. Empty commits are rejected unless
- * `allowEmpty` (name is required; role can be cleared).
- */
-function InlineEditable({
-  value,
-  placeholder,
-  ariaLabel,
-  allowEmpty,
-  textClassName,
-  inputClassName,
-  onCommit,
-  multiline = false,
-  truncate = true,
-}: {
-  value: string;
-  placeholder: string;
-  ariaLabel: string;
-  allowEmpty: boolean;
-  textClassName: string;
-  inputClassName: string;
-  onCommit: (next: string) => void;
-  /** Render a wrapping textarea (notes) instead of a single-line input. */
-  multiline?: boolean;
-  /** Clip the display text to one line with an ellipsis. Off for the name/notes. */
-  truncate?: boolean;
-}) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(value);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-
-  // Keep the draft synced with the source of truth while not actively editing.
-  useEffect(() => {
-    if (!editing) setDraft(value);
-  }, [value, editing]);
-
-  useEffect(() => {
-    if (editing) {
-      const id = window.setTimeout(() => {
-        const el = multiline ? textareaRef.current : inputRef.current;
-        el?.focus();
-        el?.select();
-      }, 0);
-      return () => window.clearTimeout(id);
-    }
-  }, [editing, multiline]);
-
-  const commit = useCallback(() => {
-    setEditing(false);
-    const trimmed = draft.trim();
-    if (!allowEmpty && !trimmed) {
-      setDraft(value); // reject empty — revert to current value
-      return;
-    }
-    if (trimmed !== value.trim()) onCommit(trimmed);
-  }, [draft, value, allowEmpty, onCommit]);
-
-  if (editing) {
-    // Escape reverts+closes for both; single-line commits on Enter, the textarea
-    // keeps Enter for newlines and commits with ⌘/Ctrl+Enter (or blur).
-    const onKeyDown = (e: React.KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        setDraft(value);
-        setEditing(false);
-      } else if (e.key === 'Enter' && (!multiline || e.metaKey || e.ctrlKey)) {
-        e.preventDefault();
-        commit();
-      }
-    };
-    if (multiline) {
-      return (
-        <textarea
-          ref={textareaRef}
-          value={draft}
-          placeholder={placeholder}
-          aria-label={ariaLabel}
-          rows={3}
-          onChange={(e) => setDraft(e.target.value)}
-          onBlur={commit}
-          onKeyDown={onKeyDown}
-          className={cn(
-            'w-full resize-y rounded-md border border-input bg-muted px-2 py-1.5 text-foreground focus:outline-none focus:ring-2 focus:ring-ring',
-            inputClassName,
-          )}
-        />
-      );
-    }
-    return (
-      <input
-        ref={inputRef}
-        type="text"
-        value={draft}
-        placeholder={placeholder}
-        aria-label={ariaLabel}
-        onChange={(e) => setDraft(e.target.value)}
-        onBlur={commit}
-        onKeyDown={onKeyDown}
-        className={cn(
-          'w-full rounded-md border border-input bg-muted px-2 py-1 text-foreground focus:outline-none focus:ring-2 focus:ring-ring',
-          inputClassName,
-        )}
-      />
-    );
-  }
-
-  const display = value.trim() || placeholder;
-  const isPlaceholder = !value.trim();
-  return (
-    <button
-      type="button"
-      onClick={() => setEditing(true)}
-      title="Click to edit"
-      aria-label={ariaLabel}
-      className={cn(
-        'group -ml-2 flex w-fit max-w-full gap-2 rounded-md px-2 py-1 text-left transition-colors hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-        multiline ? 'items-start' : 'items-center',
-      )}
-    >
-      <span
-        className={cn(
-          truncate ? 'truncate' : 'whitespace-pre-wrap break-words',
-          textClassName,
-          isPlaceholder && 'text-muted-foreground',
-        )}
-      >
-        {display}
-      </span>
-      <Pencil
-        className={cn(
-          'h-4 w-4 flex-shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100',
-          multiline && 'mt-1',
-        )}
-      />
-    </button>
-  );
-}
 
 type TabId = 'summary' | 'meetings' | 'voice';
 
@@ -340,26 +193,23 @@ function PersonDetailsContent() {
     }
   }, [person, optOutSaving]);
 
+
   if (loading) {
-    return (
-      <div className="flex h-page items-center justify-center bg-background text-muted-foreground">
-        <Loader2 className="h-5 w-5 animate-spin" />
-      </div>
-    );
+    return <PageLoading className="bg-background" />;
   }
 
   if (!person) {
     return (
-      <div className="flex h-page flex-col items-center justify-center gap-4 bg-background px-8 text-center">
-        <p className="text-sm text-muted-foreground">That person no longer exists.</p>
-        <button
-          type="button"
-          onClick={() => router.push('/people')}
-          className="inline-flex h-9 items-center gap-1.5 rounded-[3px] border border-border bg-card px-3 text-sm font-semibold text-foreground transition-colors hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <ArrowLeft size={14} aria-hidden="true" />
-          Back to People
-        </button>
+      <div className="flex h-page items-center justify-center bg-background px-8">
+        <EmptyState
+          title="That person no longer exists."
+          action={
+            <Button variant="outline" onClick={() => router.push('/people')}>
+              <DeckIcon icon={ArrowLeft} size={14} />
+              Back to People
+            </Button>
+          }
+        />
       </div>
     );
   }
@@ -368,102 +218,63 @@ function PersonDetailsContent() {
   const citedSources = rollup?.sources.filter((s) => s.cited) ?? [];
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.25, ease: 'easeOut' }}
-      className="flex h-page flex-col bg-background"
-    >
-      <div className="flex-shrink-0 px-4 min-[900px]:px-7 pt-7">
-        <button
-          type="button"
-          onClick={onBack}
-          className="u-meta inline-flex items-center gap-1.5 text-muted-foreground transition-colors hover:text-foreground focus:outline-none"
-        >
-          <ArrowLeft size={14} aria-hidden="true" />
-          People
-        </button>
-      </div>
-
-      {/* The shared page header (specs/0057 Task 2). The title slot carries the
-          avatar plus the inline name/role editors, so this page's identity block
-          sits on the same baseline and padding as every other screen. */}
+    <div className="flex h-page flex-col bg-background animate-fade-in">
+      {/* The shared page header (specs/0057 Task 2). The title carries the avatar and the
+          inline name editor; the role editor is the SUBTITLE, outside the h1, so it keeps
+          its own weight. The avatar's negative bottom margin lets it hang beside the
+          subtitle (which is indented past it) instead of pushing the subtitle below it. */}
       <PageHeader
-        className="pt-3"
+        back={{ label: 'People', onClick: onBack }}
         title={
-          <span className="flex min-w-0 items-center gap-4">
+          <span className="flex min-w-0 items-start gap-4">
             {/* Decorative inside the h1 — the avatar renders the person's initials,
                 which would otherwise stutter the heading's accessible name. */}
-            <span aria-hidden="true" className="flex-shrink-0">
-              <PersonAvatar
+            <span aria-hidden="true" className="-mb-7 flex-shrink-0">
+              <Avatar
                 name={name}
-                photoDataUri={person.photoDataUri}
-                size="lg"
+                photo={person.photoDataUri}
+                size={56}
                 colorClass={avatarColorClass(person.id)}
               />
             </span>
-            <span className="min-w-0 flex-1">
+            <span className="min-w-0 flex-1 pt-1">
               <InlineEditable
                 value={person.displayName}
                 placeholder="Unnamed person"
                 ariaLabel="Person name"
                 allowEmpty={false}
                 truncate={false}
-                textClassName="font-display text-[22px] font-semibold leading-[1.1] tracking-[-0.011em] text-foreground"
-                inputClassName="font-display text-[22px] font-semibold tracking-[-0.011em]"
+                inputClassName="u-page-title text-title md:text-title"
                 onCommit={(next) => void savePersonField({ displayName: next })}
-              />
-              <InlineEditable
-                value={person.role ?? ''}
-                placeholder="Add a title"
-                ariaLabel="Person title"
-                allowEmpty
-                textClassName="text-sm text-muted-foreground"
-                inputClassName="text-sm"
-                onCommit={(next) => void savePersonField({ role: next || null })}
               />
             </span>
           </span>
         }
+        subtitle={
+          <div className="pl-[4.5rem]">
+            <InlineEditable
+              value={person.role ?? ''}
+              placeholder="Add a title"
+              ariaLabel="Person title"
+              allowEmpty
+              inputClassName="text-meta md:text-meta"
+              onCommit={(next) => void savePersonField({ role: next || null })}
+            />
+          </div>
+        }
         actions={
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                type="button"
-                aria-label="Person options"
-                title="Person options"
-                className="inline-flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <MoreHorizontal className="h-5 w-5" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem
-                disabled={optOutSaving}
-                onSelect={(e) => {
-                  e.preventDefault();
-                  void toggleOptOut();
-                }}
-              >
-                <MicOff className="mr-2 h-4 w-4" />
-                Don&apos;t store this person&apos;s voice
-                {person.voiceprintOptOut && <Check className="ml-auto h-4 w-4" />}
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onSelect={() => setForgetOpen(true)}
-                className="text-destructive focus:text-destructive"
-              >
-                <Trash2 className="mr-2 h-4 w-4" />
-                Forget this person
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <PersonActionsMenu
+            size="md"
+            voiceprintOptOut={person.voiceprintOptOut}
+            onToggleVoiceOptOut={() => void toggleOptOut()}
+            optOutSaving={optOutSaving}
+            onForget={() => setForgetOpen(true)}
+          />
         }
       />
 
-      <div className="flex-1 overflow-y-auto px-4 min-[900px]:px-7 pb-12">
-        <div className="mx-auto max-w-[840px]">
+      <div className={cn('flex-1 overflow-y-auto pb-12', PAGE_GUTTER)}>
+        <div className={cn('mx-auto', PAGE_CONTENT_WIDTH)}>
           {/* Notes — the free-text description of this person (role, how you know
               them). Restored on the detail page (specs/0038 feedback): the field
               lives on `Person.notes` and was previously only editable in the dialog. */}
@@ -477,7 +288,7 @@ function PersonDetailsContent() {
               multiline
               truncate={false}
               textClassName="text-sm leading-relaxed text-foreground"
-              inputClassName="text-sm leading-relaxed"
+              inputClassName="text-sm md:text-sm leading-relaxed"
               onCommit={(next) => void savePersonField({ notes: next || null })}
             />
           </section>
@@ -486,33 +297,27 @@ function PersonDetailsContent() {
             <TabsList>
               <TabsTrigger value="summary">Summary</TabsTrigger>
               <TabsTrigger value="meetings">Recent meetings</TabsTrigger>
-              <TabsTrigger value="voice">Voice Samples</TabsTrigger>
+              <TabsTrigger value="voice">Voice samples</TabsTrigger>
             </TabsList>
 
             {/* ── Summary — on-demand roll-up, cached in page state. ──────────── */}
             <TabsContent value="summary" className="mt-5">
               {rollupRunning ? (
-                <div
-                  role="status"
-                  className="flex items-center gap-2 rounded-[3px] border border-border bg-card px-4 py-4 text-sm text-foreground shadow-sm"
-                >
-                  <Loader2 size={15} aria-hidden="true" className="animate-spin text-brand" />
-                  <span className="truncate">Summarizing recent activity…</span>
-                </div>
+                <RunStatus label="Summarizing recent activity…" />
               ) : rollupError ? (
-                <div className="rounded-[3px] border border-destructive/30 bg-destructive/5 px-4 py-4">
-                  <p className="text-sm text-foreground">{rollupError}</p>
-                  <p className="u-meta mt-1">Check your model settings, then try again.</p>
-                  <button
-                    type="button"
-                    onClick={() => void runRollup()}
-                    className="mt-3 rounded-[3px] border border-border bg-card px-3 py-1.5 text-xs font-semibold text-foreground transition-colors hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  >
-                    Try again
-                  </button>
-                </div>
+                <Callout
+                  tone="error"
+                  title={rollupError}
+                  action={
+                    <Button variant="outline" size="sm" onClick={() => void runRollup()}>
+                      Try again
+                    </Button>
+                  }
+                >
+                  Check your model settings, then try again.
+                </Callout>
               ) : rollup ? (
-                <div className="rounded-[3px] border border-border bg-card p-5 shadow-sm">
+                <Panel size="document">
                   {rollup.markdown.trim() ? (
                     <AnswerMarkdown markdown={rollup.markdown} sources={rollup.sources} />
                   ) : (
@@ -525,108 +330,69 @@ function PersonDetailsContent() {
                       <h4 className="u-section-label">From</h4>
                       <div className="mt-1 flex flex-col gap-0.5">
                         {citedSources.map((s) => (
-                          <button
+                          <LinkRow
                             key={s.meetingId}
-                            type="button"
+                            title={s.title?.trim() || 'Untitled meeting'}
+                            meta={formatMeetingDate(s.createdAt) || undefined}
                             onClick={() => openMeeting(s.meetingId)}
-                            title="Open this meeting"
-                            className="group/source flex items-baseline gap-2 rounded px-2 py-1 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                          >
-                            <span className="min-w-0 truncate text-[13.5px] font-semibold text-foreground group-hover/source:text-brand">
-                              {s.title?.trim() || 'Untitled meeting'}
-                            </span>
-                            {formatMeetingDate(s.createdAt) && (
-                              <span className="flex-shrink-0 text-xs text-muted-foreground">
-                                {formatMeetingDate(s.createdAt)}
-                              </span>
-                            )}
-                            <ChevronRight
-                              size={13}
-                              aria-hidden="true"
-                              className="self-center text-muted-foreground group-hover/source:text-brand"
-                            />
-                          </button>
+                            hint="Open this meeting"
+                          />
                         ))}
                       </div>
                     </div>
                   )}
-                </div>
+                </Panel>
               ) : (
-                <div className="rounded-[3px] border border-dashed border-border bg-card/50 px-6 py-10 text-center">
-                  <Sparkles
-                    size={20}
-                    aria-hidden="true"
-                    className="mx-auto mb-3 text-muted-foreground"
-                  />
-                  <p className="text-sm font-medium text-foreground">Summarize recent activity</p>
-                  <p className="u-meta mx-auto mt-1 max-w-sm">
-                    Reads your last few meetings with {name}. May take a moment on local models.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => void runRollup()}
-                    className="mt-4 inline-flex items-center gap-1.5 rounded-[3px] bg-brand px-4 py-2 text-sm font-semibold text-brand-foreground transition-colors hover:bg-brand/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  >
-                    <Sparkles size={14} aria-hidden="true" />
-                    Summarize
-                  </button>
-                </div>
+                <EmptyState
+                  variant="panel"
+                  titleAs="h3"
+                  title="Summarize recent activity"
+                  body={`Reads your last few meetings with ${name}. May take a moment on local models.`}
+                  action={
+                    <Button variant="brand" onClick={() => void runRollup()}>
+                      <DeckIcon icon={Sparkles} size={14} />
+                      Summarize
+                    </Button>
+                  }
+                />
               )}
             </TabsContent>
 
             {/* ── Recent meetings — fast, no-LLM list. ────────────────────────── */}
             <TabsContent value="meetings" className="mt-5">
               {meetingsError ? (
-                <p className="text-sm text-muted-foreground">{meetingsError}</p>
+                <Callout tone="error">{meetingsError}</Callout>
               ) : meetings === null ? (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                <p className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Spinner />
                   <span>Loading meetings…</span>
-                </div>
+                </p>
               ) : meetings.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No meetings with {name} yet.</p>
+                <EmptyState variant="panel" titleAs="h3" title={`No meetings with ${name} yet.`} />
               ) : (
                 <div className="flex flex-col gap-0.5">
                   {meetings.map((m) => (
-                    <button
+                    <LinkRow
                       key={m.id}
-                      type="button"
+                      title={m.title?.trim() || 'Untitled meeting'}
+                      meta={formatMeetingDate(m.startedAt) || undefined}
                       onClick={() => openMeeting(m.id)}
-                      title="Open this meeting"
-                      className="group/meeting flex items-baseline gap-2 rounded px-2 py-1.5 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    >
-                      <span className="min-w-0 truncate text-[13.5px] font-semibold text-foreground group-hover/meeting:text-brand">
-                        {m.title?.trim() || 'Untitled meeting'}
-                      </span>
-                      {formatMeetingDate(m.startedAt) && (
-                        <span className="flex-shrink-0 text-xs text-muted-foreground">
-                          {formatMeetingDate(m.startedAt)}
-                        </span>
-                      )}
-                      <ChevronRight
-                        size={13}
-                        aria-hidden="true"
-                        className="self-center text-muted-foreground group-hover/meeting:text-brand"
-                      />
-                    </button>
+                      hint="Open this meeting"
+                    />
                   ))}
                 </div>
               )}
             </TabsContent>
 
-            {/* ── Voice Samples — reusable list, or opt-out state. ─────────────── */}
+            {/* ── Voice samples — reusable list, or opt-out state. ─────────────── */}
             <TabsContent value="voice" className="mt-5">
               {person.voiceprintOptOut ? (
-                <div className="flex flex-col items-center justify-center rounded-[3px] border border-dashed border-border bg-card/50 px-6 py-10 text-center">
-                  <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-                    <MicOff className="h-5 w-5 text-muted-foreground" />
-                  </div>
-                  <p className="text-sm font-medium text-foreground">Voice isn&apos;t stored</p>
-                  <p className="u-meta mx-auto mt-1 max-w-xs">
-                    You&apos;ve asked Nixon not to store {name}&apos;s voice, so there are no
-                    samples here. You can change this from the menu above.
-                  </p>
-                </div>
+                <EmptyState
+                  variant="panel"
+                  titleAs="h3"
+                  title="Voice isn't stored"
+                  body={`You've asked Nixon not to store ${name}'s voice, so there are no samples here. You can change this from the menu above.`}
+                />
               ) : (
                 <VoiceprintSamplesList personId={person.id} personName={person.displayName} />
               )}
@@ -642,20 +408,14 @@ function PersonDetailsContent() {
         personName={person.displayName}
         onForgotten={() => router.push('/people')}
       />
-    </motion.div>
+    </div>
   );
 }
 
 export default function PersonDetailsPage() {
   // useSearchParams requires a Suspense boundary (same pattern as /meeting-details, /ask).
   return (
-    <Suspense
-      fallback={
-        <div className="flex h-page items-center justify-center bg-background text-muted-foreground">
-          <Loader2 className="h-5 w-5 animate-spin" />
-        </div>
-      }
-    >
+    <Suspense fallback={<PageLoading className="bg-background" />}>
       <PersonDetailsContent />
     </Suspense>
   );

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { toast } from 'sonner';
-import { Loader2 } from 'lucide-react';
+import { Spinner } from '@/components/ui/spinner';
 import {
   Dialog,
   DialogContent,
@@ -119,8 +119,8 @@ export function PersonFormDialog({ open, onOpenChange, person, onSaved }: Person
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="person-email">
-                Email <span className="font-normal text-muted-foreground">(optional)</span>
+              <Label htmlFor="person-email" optional>
+                Email
               </Label>
               <Input
                 id="person-email"
@@ -131,8 +131,8 @@ export function PersonFormDialog({ open, onOpenChange, person, onSaved }: Person
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="person-role">
-                Role <span className="font-normal text-muted-foreground">(optional)</span>
+              <Label htmlFor="person-role" optional>
+                Role
               </Label>
               <Input
                 id="person-role"
@@ -142,8 +142,8 @@ export function PersonFormDialog({ open, onOpenChange, person, onSaved }: Person
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="person-notes">
-                Notes <span className="font-normal text-muted-foreground">(optional)</span>
+              <Label htmlFor="person-notes" optional>
+                Notes
               </Label>
               <Textarea
                 id="person-notes"
@@ -165,7 +165,7 @@ export function PersonFormDialog({ open, onOpenChange, person, onSaved }: Person
               Cancel
             </Button>
             <Button type="submit" variant="brand" disabled={isSaving}>
-              {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {isSaving && <Spinner />}
               {isEdit ? 'Save' : 'Add person'}
             </Button>
           </DialogFooter>

@@ -3,8 +3,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { toast } from 'sonner';
-import { AlertTriangle, Loader2, RotateCcw, ShieldOff, Trash2, Waves } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Callout } from '@/components/ui/callout';
+import { DeckIcon } from '@/components/ui/deck-icon';
+import { EmptyState, PageLoading } from '@/components/ui/empty-state';
+import { IconButton } from '@/components/ui/icon-button';
+import { Trash2 } from '@/components/ui/icons';
+import { Spinner } from '@/components/ui/spinner';
 import { formatMeetingDate } from '@/lib/format-date';
 import { cn } from '@/lib/utils';
 import type { MeetingMetadata, VoiceprintSampleDto } from '@/types';
@@ -31,7 +37,7 @@ function formatQuality(q: number | null): string | null {
 /**
  * Per-sample voice gallery management for one person (specs/0039 WS3, task 9), extracted from
  * `VoiceprintSamplesDialog` (specs/0038 dogfood feedback #3) so it can be reused by BOTH the
- * dialog and the person-detail page's "Voice Samples" tab.
+ * dialog and the person-detail page's "Voice samples" tab.
  *
  * Lists a person's stored voice samples (`api_list_person_voiceprints` — metadata/ids only,
  * never embeddings) with their source meeting, capture date, quality, and a live/quarantined
@@ -193,36 +199,32 @@ export function VoiceprintSamplesList({
   }, [samples]);
 
   if (samples === null && !error) {
-    return (
-      <div className="flex h-40 items-center justify-center text-muted-foreground">
-        <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-        <span className="text-sm">Loading voice samples…</span>
-      </div>
-    );
+    return <PageLoading fill="pane" className="h-40" label="Loading voice samples…" />;
   }
 
   if (error) {
     return (
-      <div className="flex h-40 flex-col items-center justify-center text-center">
-        <p className="text-sm text-muted-foreground">{error}</p>
-        <Button variant="outline" size="sm" className="mt-3" onClick={() => void load()}>
-          Try again
-        </Button>
-      </div>
+      <Callout
+        tone="error"
+        action={
+          <Button variant="outline" size="sm" onClick={() => void load()}>
+            Try again
+          </Button>
+        }
+      >
+        {error}
+      </Callout>
     );
   }
 
   if (samples && samples.length === 0) {
     return (
-      <div className="flex h-40 flex-col items-center justify-center text-center">
-        <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-          <Waves className="h-5 w-5 text-muted-foreground" />
-        </div>
-        <p className="text-sm font-medium text-foreground">No voice samples yet</p>
-        <p className="mt-1 max-w-xs text-xs text-muted-foreground">
-          Nixon stores a sample when you confirm {label} on a speaker in a transcript.
-        </p>
-      </div>
+      <EmptyState
+        variant="panel"
+        titleAs="h3"
+        title="No voice samples yet"
+        body={`Nixon stores a sample when you confirm ${label} on a speaker in a transcript.`}
+      />
     );
   }
 
@@ -260,101 +262,66 @@ export function VoiceprintSamplesList({
                 <div className="flex items-start gap-3">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <span
-                        className={cn(
-                          'inline-flex items-center gap-1 rounded-[2px] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide',
-                          sample.quarantined
-                            ? 'bg-brand/15 text-brand'
-                            : 'bg-success/15 text-success',
-                        )}
-                      >
-                        {sample.quarantined ? (
-                          <>
-                            <ShieldOff className="h-3 w-3" />
-                            Quarantined
-                          </>
-                        ) : (
-                          'Active'
-                        )}
-                      </span>
+                      <Badge tone={sample.quarantined ? 'brand' : 'success'}>
+                        {sample.quarantined ? 'Quarantined' : 'Active'}
+                      </Badge>
                     </div>
-                    <p className="mt-1 truncate text-xs text-muted-foreground">{meta}</p>
+                    <p className="u-row-meta mt-1 truncate">{meta}</p>
                   </div>
 
                   {!isConfirming && (
                     <div className="flex flex-shrink-0 items-center gap-1">
-                      {sample.quarantined ? (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-7 gap-1 px-2 text-xs"
-                          disabled={isBusy}
-                          onClick={() => void toggleQuarantine(sample, false)}
-                        >
-                          {isBusy ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          ) : (
-                            <RotateCcw className="h-3.5 w-3.5" />
-                          )}
-                          Restore
-                        </Button>
-                      ) : (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-7 gap-1 px-2 text-xs"
-                          disabled={isBusy}
-                          onClick={() => void toggleQuarantine(sample, true)}
-                        >
-                          {isBusy ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          ) : (
-                            <ShieldOff className="h-3.5 w-3.5" />
-                          )}
-                          Quarantine
-                        </Button>
-                      )}
                       <Button
+                        variant="outline"
+                        size="xs"
+                        disabled={isBusy}
+                        onClick={() => void toggleQuarantine(sample, !sample.quarantined)}
+                      >
+                        {isBusy && <Spinner />}
+                        {sample.quarantined ? 'Restore' : 'Quarantine'}
+                      </Button>
+                      <IconButton
                         variant="ghost"
-                        size="sm"
-                        aria-label="Delete this voice sample permanently"
-                        title="Delete permanently"
-                        className="h-7 w-7 px-0 text-muted-foreground hover:text-destructive"
+                        label="Delete this voice sample permanently"
+                        className="hover:text-destructive"
                         disabled={isBusy}
                         onClick={() => setConfirmingDelete(sample.id)}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
+                        icon={<DeckIcon icon={Trash2} size={14} />}
+                      />
                     </div>
                   )}
                 </div>
 
                 {isConfirming && (
-                  <div className="mt-2.5 flex items-center gap-2 rounded-md bg-destructive/10 px-2.5 py-2">
-                    <AlertTriangle className="h-4 w-4 flex-shrink-0 text-destructive" />
-                    <p className="min-w-0 flex-1 text-xs text-foreground">
-                      Delete this sample forever? This can&apos;t be undone.
-                    </p>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 px-2 text-xs"
-                      disabled={isBusy}
-                      onClick={() => setConfirmingDelete(null)}
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      className="h-7 gap-1 px-2 text-xs"
-                      disabled={isBusy}
-                      onClick={() => void handleDelete(sample)}
-                    >
-                      {isBusy && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                      Delete
-                    </Button>
-                  </div>
+                  // Inline confirm, not an alert: it answers the user's own click.
+                  <Callout
+                    tone="error"
+                    role="group"
+                    className="mt-2.5 px-2.5 py-2 text-xs"
+                    action={
+                      <>
+                        <Button
+                          variant="ghost"
+                          size="xs"
+                          disabled={isBusy}
+                          onClick={() => setConfirmingDelete(null)}
+                        >
+                          Cancel
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          size="xs"
+                          disabled={isBusy}
+                          onClick={() => void handleDelete(sample)}
+                        >
+                          {isBusy && <Spinner />}
+                          Delete
+                        </Button>
+                      </>
+                    }
+                  >
+                    Delete this sample forever? This can&apos;t be undone.
+                  </Callout>
                 )}
               </li>
             );

@@ -1,21 +1,20 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import { invoke } from '@tauri-apps/api/core';
 import { toast } from 'sonner';
-import { Check, Loader2, MicOff, MoreHorizontal, Pencil, Search, Star, Trash2, UserPlus, Users, Waves } from 'lucide-react';
+import { Avatar } from '@/components/ui/avatar';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Callout } from '@/components/ui/callout';
+import { DeckIcon } from '@/components/ui/deck-icon';
+import { EmptyState, PageLoading } from '@/components/ui/empty-state';
+import { IconButton } from '@/components/ui/icon-button';
+import { Search, Star } from '@/components/ui/icons';
 import { Input } from '@/components/ui/input';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { PersonAvatar } from '@/components/People/PersonAvatar';
+import { ListRow } from '@/components/ui/list-row';
+import { PersonActionsMenu } from '@/components/People/PersonActionsMenu';
 import { PersonFormDialog } from '@/components/People/PersonFormDialog';
 import { VoiceprintSamplesDialog } from '@/components/People/VoiceprintSamplesDialog';
 import { ForgetPersonDialog } from './ForgetPersonDialog';
@@ -23,7 +22,8 @@ import type { Person } from '@/types';
 import { filterPeople } from '@/lib/people-filter';
 import { avatarColorClass } from '@/lib/avatar-colors';
 import { PageHeader } from '@/components/ui/page-header';
-import { PAGE_CONTENT_WIDTH } from '@/lib/page-width';
+import { PAGE_CONTENT_WIDTH, PAGE_GUTTER } from '@/lib/page-width';
+import { cn } from '@/lib/utils';
 
 /**
  * A single person row: avatar, name + role/email, the voiceprint opt-out switch,
@@ -102,117 +102,54 @@ function PersonRow({
   // stored" indicator) + subline. The verbose opt-out toggle + voice-samples copy moved
   // into the "…" menu, leaving only the indicator inline.
   // specs/0038 dogfood feedback #3 — clicking the row navigates to the dedicated
-  // person-detail page. Nested controls (star / overflow) stop propagation so they
-  // never trigger navigation.
+  // person-detail page. The star and the overflow menu sit OUTSIDE ListRow's main button,
+  // so they never trigger navigation.
   return (
-    <div
-      role="button"
-      tabIndex={0}
+    <ListRow
       onClick={() => onOpen(person.id)}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          onOpen(person.id);
-        }
-      }}
-      className="group flex w-full cursor-pointer items-center gap-3 rounded-[3px] px-3 py-2 text-left transition-colors hover:bg-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-    >
-      <PersonAvatar
-        name={name}
-        photoDataUri={person.photoDataUri}
-        size="sm"
-        colorClass={dotClass}
-      />
-
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-1.5">
-          <span className="truncate text-[13.5px] font-semibold text-foreground">{name}</span>
+      lead={<Avatar name={name} photo={person.photoDataUri} size={32} colorClass={dotClass} />}
+      title={
+        <span className="flex min-w-0 items-center gap-1.5">
+          <span className="truncate">{name}</span>
           {person.voiceprintOptOut && (
-            <span
-              title="Voice not stored"
-              aria-label="Voice not stored"
-              className="u-section-label flex-shrink-0 rounded-[2px] border border-border px-1 text-[9px] text-muted-foreground"
-            >
+            <Badge tone="outline" title="Voice not stored" aria-label="Voice not stored">
               NO VOICE
-            </span>
+            </Badge>
           )}
-        </div>
-        {subParts.length > 0 && (
-          <div className="truncate text-xs text-muted-foreground">{subParts.join(' · ')}</div>
-        )}
-      </div>
-
-      {/* specs/0038 WS5.a — star pins the person to the top of ranked pick-lists.
-          Starred rows keep the filled star visible; unstarred reveal it on hover. */}
-      <button
-        type="button"
-        onClick={(e) => {
-          e.stopPropagation();
-          void handleToggleStar();
-        }}
-        disabled={starSaving}
-        aria-label={person.starred ? 'Unstar person' : 'Star person'}
-        aria-pressed={person.starred}
-        title={person.starred ? 'Starred — pinned to the top' : 'Star to pin to the top'}
-        className={`inline-flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:opacity-100 disabled:opacity-50 ${
-          person.starred
-            ? 'text-brand hover:bg-background'
-            : 'text-muted-foreground opacity-0 hover:bg-background hover:text-foreground group-hover:opacity-100'
-        }`}
-      >
-        <Star className={`h-4 w-4 ${person.starred ? 'fill-current' : ''}`} />
-      </button>
-
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <button
-            type="button"
-            aria-label="Person options"
-            title="Person options"
-            onClick={(e) => e.stopPropagation()}
-            className="inline-flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-background hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100"
-          >
-            <MoreHorizontal className="h-4 w-4" />
-          </button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuItem onSelect={() => onEdit(person)}>
-            <Pencil className="mr-2 h-4 w-4" />
-            Edit
-          </DropdownMenuItem>
-          {/* specs/0039 WS3 — per-sample voice gallery management (quarantine/restore/delete).
-              Hidden when this person's voice isn't stored (opt-out ⇒ no samples). */}
-          {!person.voiceprintOptOut && (
-            <DropdownMenuItem onSelect={() => onManageVoice(person)}>
-              <Waves className="mr-2 h-4 w-4" />
-              Manage voice samples
-            </DropdownMenuItem>
-          )}
-          <DropdownMenuSeparator />
-          {/* Voiceprint opt-out — identity/naming still work; this only blocks voice
-              modeling. A check marks the active ("don't store") state. */}
-          <DropdownMenuItem
-            disabled={saving}
-            onSelect={(e) => {
-              e.preventDefault();
-              void handleToggle(!person.voiceprintOptOut);
-            }}
-          >
-            <MicOff className="mr-2 h-4 w-4" />
-            Don&apos;t store this person&apos;s voice
-            {person.voiceprintOptOut && <Check className="ml-auto h-4 w-4" />}
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem
-            onSelect={() => onRequestForget(person)}
-            className="text-destructive focus:text-destructive"
-          >
-            <Trash2 className="mr-2 h-4 w-4" />
-            Forget this person
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-    </div>
+        </span>
+      }
+      meta={subParts.length > 0 ? subParts.join(' · ') : undefined}
+      trailing={
+        // specs/0038 WS5.a — star pins the person to the top of ranked pick-lists.
+        // Starred rows keep the filled star visible; unstarred reveal it on hover.
+        <IconButton
+          variant="ghost"
+          label={person.starred ? 'Unstar person' : 'Star person'}
+          aria-pressed={person.starred}
+          onClick={() => void handleToggleStar()}
+          disabled={starSaving}
+          icon={
+            <DeckIcon icon={Star} size={14} className={person.starred ? 'fill-current' : undefined} />
+          }
+          className={
+            person.starred
+              ? 'text-brand hover:text-brand'
+              : 'opacity-0 focus-visible:opacity-100 group-hover/row:opacity-100'
+          }
+        />
+      }
+      menuReveal="hover"
+      menu={
+        <PersonActionsMenu
+          voiceprintOptOut={person.voiceprintOptOut}
+          onEdit={() => onEdit(person)}
+          onManageVoice={() => onManageVoice(person)}
+          onToggleVoiceOptOut={() => void handleToggle(!person.voiceprintOptOut)}
+          optOutSaving={saving}
+          onForget={() => onRequestForget(person)}
+        />
+      }
+    />
   );
 }
 
@@ -294,12 +231,7 @@ export default function PeoplePage() {
   const noMatches = hasPeople && filtered.length === 0;
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.25, ease: 'easeOut' }}
-      className="flex h-page flex-col bg-background"
-    >
+    <div className="flex h-page flex-col bg-background animate-fade-in">
       <PageHeader
         title="People"
         subtitle={
@@ -309,8 +241,7 @@ export default function PeoplePage() {
         }
         actions={
           hasPeople ? (
-            <Button variant="brand" onClick={handleAdd} className="flex-shrink-0 gap-2">
-              <UserPlus className="h-4 w-4" />
+            <Button variant="brand" onClick={handleAdd} className="flex-shrink-0">
               Add person
             </Button>
           ) : undefined
@@ -318,9 +249,13 @@ export default function PeoplePage() {
       />
 
       {hasPeople && (
-        <div className="flex-shrink-0 px-4 min-[900px]:px-7 pb-3">
-          <div className={`relative mx-auto ${PAGE_CONTENT_WIDTH}`}>
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <div className={cn('flex-shrink-0 pb-3', PAGE_GUTTER)}>
+          <div className={cn('relative mx-auto', PAGE_CONTENT_WIDTH)}>
+            <DeckIcon
+              icon={Search}
+              size={16}
+              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+            />
             <Input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
@@ -332,18 +267,15 @@ export default function PeoplePage() {
         </div>
       )}
 
-      <div className="flex-1 overflow-y-auto px-4 min-[900px]:px-7 pb-12">
+      <div className={cn('flex-1 overflow-y-auto pb-12', PAGE_GUTTER)}>
         {isLoading ? (
-          <div className="flex h-64 items-center justify-center text-muted-foreground">
-            <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-            <span className="text-sm">Loading people…</span>
-          </div>
+          <PageLoading fill="pane" label="Loading people…" />
         ) : error ? (
-          <div className="flex h-64 flex-col items-center justify-center text-center">
-            <p className="text-sm text-muted-foreground">{error}</p>
+          <div className={cn('mx-auto', PAGE_CONTENT_WIDTH)}>
+            <Callout tone="error">{error}</Callout>
           </div>
         ) : (
-          <div className={`mx-auto ${PAGE_CONTENT_WIDTH}`}>
+          <div className={cn('mx-auto', PAGE_CONTENT_WIDTH)}>
             {hasPeople ? (
               noMatches ? (
                 <div className="flex h-40 flex-col items-center justify-center text-center">
@@ -352,7 +284,7 @@ export default function PeoplePage() {
                   </p>
                 </div>
               ) : (
-                <div className="space-y-0.5">
+                <div className="flex flex-col gap-0.5">
                   {filtered.map((person) => (
                     <PersonRow
                       key={person.id}
@@ -369,19 +301,16 @@ export default function PeoplePage() {
                 </div>
               )
             ) : (
-              <div className="flex h-[40vh] flex-col items-center justify-center text-center">
-                <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-muted">
-                  <Users className="h-6 w-6 text-muted-foreground" />
-                </div>
-                <h2 className="text-base font-semibold text-foreground">No people yet</h2>
-                <p className="mt-1 max-w-xs text-sm text-muted-foreground">
-                  Add the people you meet with, then attach them to speakers in your transcripts.
-                </p>
-                <Button variant="brand" onClick={handleAdd} className="mt-5 gap-2">
-                  <UserPlus className="h-4 w-4" />
-                  Add a person
-                </Button>
-              </div>
+              <EmptyState
+                className="h-[40vh]"
+                title="No people yet"
+                body="Add the people you meet with, then attach them to speakers in your transcripts."
+                action={
+                  <Button variant="brand" onClick={handleAdd}>
+                    Add a person
+                  </Button>
+                }
+              />
             )}
           </div>
         )}
@@ -416,6 +345,6 @@ export default function PeoplePage() {
           onForgotten={handleForgotten}
         />
       )}
-    </motion.div>
+    </div>
   );
 }

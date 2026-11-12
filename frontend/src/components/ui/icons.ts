@@ -26,6 +26,9 @@ export {
   X,
 } from 'lucide-react';
 
+// Functional: the magnifier inside a search field (People directory).
+export { Search } from 'lucide-react';
+
 // Dropdown-menu leading icons (`DropdownMenuItem icon={…}`) in use today.
 export { Circle, EyeOff, MicOff, Radio, RotateCcw, UserCheck, UserPlus, Waves } from 'lucide-react';
 
