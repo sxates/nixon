@@ -1,6 +1,7 @@
 import { VirtualizedTranscriptView } from '@/components/VirtualizedTranscriptView';
 import { PermissionWarning } from '@/components/PermissionWarning';
-import { AlertTriangle, BatteryLow, MicOff } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Callout } from '@/components/ui/callout';
 import { invoke } from '@tauri-apps/api/core';
 import { toast } from 'sonner';
 import { expandTranscriptSegments } from '@/lib/live-channel-split';
@@ -155,13 +156,9 @@ export function TranscriptPanel({
             {/* Persistent backpressure hint (specs/0028 → 0030 WS4): the transcript has
                 gaps — one banner with a running count instead of a toast per event. */}
             {gapMessage && (
-              <div
-                role="status"
-                className="flex items-start gap-2 rounded-md border border-brand/30 bg-brand/10 px-3 py-2"
-              >
-                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-brand" aria-hidden="true" />
-                <p className="text-xs text-foreground">{gapMessage}</p>
-              </div>
+              <Callout tone="warn" role="status" className="rounded-md px-3 py-2 text-xs">
+                {gapMessage}
+              </Callout>
             )}
           </div>
         </div>
@@ -187,7 +184,6 @@ export function TranscriptPanel({
            offer a one-click per-meeting override instead of just explaining. */
         <div className="flex-1 min-h-0 px-5 pb-4 flex items-center justify-center">
           <div className="text-center max-w-xs space-y-3">
-            <BatteryLow className="mx-auto h-5 w-5 text-muted-foreground" aria-hidden="true" />
             <p className="text-sm font-medium text-muted-foreground">
               Low Power Mode — recording only
             </p>
@@ -196,14 +192,9 @@ export function TranscriptPanel({
               meeting.
             </p>
             {activeRecordingMeetingId && (
-              <button
-                type="button"
-                onClick={handleTranscribeLiveNow}
-                disabled={enablingLive}
-                className="inline-flex items-center gap-1.5 rounded-md border border-input bg-card px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
-              >
+              <Button variant="outline" size="sm" onClick={handleTranscribeLiveNow} disabled={enablingLive}>
                 {enablingLive ? 'Starting…' : 'Transcribe this meeting live'}
-              </button>
+              </Button>
             )}
           </div>
         </div>
@@ -216,7 +207,6 @@ export function TranscriptPanel({
            neutral deferred copy AND still offer the per-meeting go-live button. */
         <div className="flex-1 min-h-0 px-5 pb-4 flex items-center justify-center">
           <div className="text-center max-w-xs space-y-3">
-            <MicOff className="mx-auto h-5 w-5 text-muted-foreground" aria-hidden="true" />
             <p className="text-sm font-medium text-muted-foreground">
               Live transcription is off
             </p>
@@ -226,14 +216,9 @@ export function TranscriptPanel({
                 : 'Recordings are saved without a live transcript and transcribed later. You can turn live transcription back on in Settings → Recording.'}
             </p>
             {isRecording && activeRecordingMeetingId && (
-              <button
-                type="button"
-                onClick={handleTranscribeLiveNow}
-                disabled={enablingLive}
-                className="inline-flex items-center gap-1.5 rounded-md border border-input bg-card px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
-              >
+              <Button variant="outline" size="sm" onClick={handleTranscribeLiveNow} disabled={enablingLive}>
                 {enablingLive ? 'Starting…' : 'Transcribe this meeting live'}
-              </button>
+              </Button>
             )}
           </div>
         </div>
