@@ -25,7 +25,7 @@
 
 use serde::Deserialize;
 use sqlx::SqlitePool;
-use tauri::{AppHandle, Manager, Runtime};
+use tauri::{AppHandle, Emitter, Manager, Runtime};
 
 use crate::action_items::diff::{self, ResolvedCandidate};
 use crate::database::repositories::action_item::{
@@ -298,10 +298,16 @@ pub async fn api_update_action_item<R: Runtime>(
     ActionItemTodoRepository::reconcile_triage_after_assignee_change(pool, &id)
         .await
         .map_err(|e| format!("Failed to update action item: {e}"))?;
-    ActionItemsRepository::get(pool, &id)
+    let item = ActionItemsRepository::get(pool, &id)
         .await
         .map_err(|e| format!("Failed to update action item: {e}"))?
-        .ok_or_else(|| "That action item no longer exists".to_string())
+        .ok_or_else(|| "That action item no longer exists".to_string())?;
+    // The inbox badge listens for this (reassigning can move a suggestion to the record).
+    let _ = app.emit(
+        super::ACTION_ITEMS_UPDATED_EVENT,
+        serde_json::json!({ "meeting_id": item.meeting_id.clone().unwrap_or_default() }),
+    );
+    Ok(item)
 }
 
 /// Flip an item's status: `'open' | 'completed' | 'dismissed'`. Completing stamps

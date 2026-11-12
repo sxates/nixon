@@ -104,7 +104,9 @@ async fn add_to_list_appends_and_keeps_assignee() {
     let pool = db.pool();
     meeting(pool, "m1", 1).await;
     sqlx::query("INSERT INTO people (id, display_name, created_at, updated_at) VALUES ('p-1','Pat','2026-01-01','2026-01-01')")
-        .execute(pool).await.ok();
+        .execute(pool)
+        .await
+        .unwrap();
     for d in ["a", "b"] {
         ActionItemsRepository::create(pool, None, &cand(d), "manual", d)
             .await
@@ -112,7 +114,7 @@ async fn add_to_list_appends_and_keeps_assignee() {
     }
     let rec = extracted(pool, "m1", "rec", "record", "open").await;
     sqlx::query(
-        "UPDATE action_items SET assignee_person_id = NULL, assignee_raw = 'Pat' WHERE id = ?",
+        "UPDATE action_items SET assignee_person_id = 'p-1', assignee_raw = NULL WHERE id = ?",
     )
     .bind(&rec)
     .execute(pool)
@@ -121,7 +123,7 @@ async fn add_to_list_appends_and_keeps_assignee() {
     let item = Todo::add_to_list(pool, &rec).await.unwrap().unwrap();
     assert_eq!(item.sort_order, Some(2));
     assert_eq!(item.triage, "listed");
-    assert_eq!(item.assignee_raw.as_deref(), Some("Pat"));
+    assert_eq!(item.assignee_person_id.as_deref(), Some("p-1"));
     assert!(item.user_edited && item.adopted_at.is_some());
 }
 
@@ -272,4 +274,52 @@ async fn detail_lists_sources_oldest_first() {
     assert_eq!(rows[0].latest_context.as_deref(), Some("ctx"));
     assert!(Todo::set_notes(pool, &x, Some("hi")).await.unwrap());
     assert!(!Todo::set_notes(pool, "nope", Some("hi")).await.unwrap());
+}
+
+#[tokio::test]
+async fn restore_reopens_dismissed_item() {
+    let (_d, db) = fresh_db().await;
+    let pool = db.pool();
+    meeting(pool, "m1", 1).await;
+    let id = extracted(pool, "m1", "x", "suggested", "dismissed").await;
+    assert_eq!(ids(pool, TodoView::Dismissed).await, vec![id.clone()]);
+    let item = Todo::restore(pool, &id).await.unwrap().unwrap();
+    assert!(item.status == "open" && item.user_edited);
+    assert_eq!(ids(pool, TodoView::Inbox).await, vec![id]);
+    assert!(ids(pool, TodoView::Dismissed).await.is_empty());
+}
+
+#[tokio::test]
+async fn dismissed_view_excludes_record_rows() {
+    let (_d, db) = fresh_db().await;
+    let pool = db.pool();
+    meeting(pool, "m1", 1).await;
+    extracted(pool, "m1", "rec", "record", "dismissed").await;
+    assert!(ids(pool, TodoView::Dismissed).await.is_empty());
+}
+
+#[tokio::test]
+async fn standalone_listed_row_appears_in_list() {
+    let (_d, db) = fresh_db().await;
+    let pool = db.pool();
+    let id = ActionItemsRepository::create(pool, None, &cand("solo"), "manual", "solo")
+        .await
+        .unwrap()
+        .id;
+    let rows = Todo::list_view(pool, TodoView::List).await.unwrap();
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].item.id, id);
+    assert_eq!(rows[0].source_count, 0);
+    assert!(rows[0].latest_source_at.is_none());
+}
+
+#[tokio::test]
+async fn inbox_orders_by_latest_source_newest_first() {
+    let (_d, db) = fresh_db().await;
+    let pool = db.pool();
+    meeting(pool, "older", 20).await;
+    meeting(pool, "newer", 2).await;
+    let a = extracted(pool, "older", "a", "suggested", "open").await;
+    let b = extracted(pool, "newer", "b", "suggested", "open").await;
+    assert_eq!(ids(pool, TodoView::Inbox).await, vec![b, a]);
 }
