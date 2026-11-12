@@ -1,5 +1,7 @@
 import React from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight } from '@/components/ui/icons';
+import { DeckIcon } from '@/components/ui/deck-icon';
+import { IconButton } from '@/components/ui/icon-button';
 import { cn } from '@/lib/utils';
 import { ProgressIndicator } from './shared/ProgressIndicator';
 import { useOnboarding } from '@/contexts/OnboardingContext';
@@ -51,31 +53,23 @@ export function OnboardingContainer({
             {/* Navigation Buttons */}
             {showNavigation && (
               <div className="absolute top-1/2 -translate-y-1/2 left-0 right-0 flex justify-between pointer-events-none">
-                <button
+                <IconButton
+                  label="Previous step"
+                  size="md"
+                  icon={<DeckIcon icon={ChevronLeft} size={16} />}
                   onClick={handlePrevious}
                   disabled={!canGoPrevious || step === 1}
-                  className={cn(
-                    'pointer-events-auto w-8 h-8 rounded-[3px] bg-card border border-border shadow-sm flex items-center justify-center transition-all duration-200',
-                    canGoPrevious && step !== 1
-                      ? 'hover:bg-muted hover:shadow-md hover:scale-110 text-foreground'
-                      : 'opacity-0 cursor-not-allowed'
-                  )}
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                </button>
+                  className={cn('pointer-events-auto text-foreground', (!canGoPrevious || step === 1) && 'invisible')}
+                />
 
-                <button
+                <IconButton
+                  label="Next step"
+                  size="md"
+                  icon={<DeckIcon icon={ChevronRight} size={16} />}
                   onClick={handleNext}
                   disabled={!canGoNext || step === totalSteps}
-                  className={cn(
-                    'pointer-events-auto w-8 h-8 rounded-[3px] bg-card border border-border shadow-sm flex items-center justify-center transition-all duration-200',
-                    canGoNext && step !== totalSteps
-                      ? 'hover:bg-muted hover:shadow-md hover:scale-110 text-foreground'
-                      : 'opacity-0 cursor-not-allowed'
-                  )}
-                >
-                  <ChevronRight className="w-4 h-4" />
-                </button>
+                  className={cn('pointer-events-auto text-foreground', (!canGoNext || step === totalSteps) && 'invisible')}
+                />
               </div>
             )}
 
@@ -86,7 +80,7 @@ export function OnboardingContainer({
 
         {/* Header - Fixed */}
         <div className="mb-4 text-center space-y-3 flex-shrink-0">
-          <h1 className="font-display text-[30px] font-semibold text-foreground animate-fade-in">{title}</h1>
+          <h1 className="font-display text-display font-semibold text-foreground animate-fade-in">{title}</h1>
           {description && (
             <p className="text-base text-muted-foreground max-w-md mx-auto animate-fade-in">
               {description}

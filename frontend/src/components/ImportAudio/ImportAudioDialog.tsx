@@ -1,18 +1,10 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import {
-  Upload,
-  Globe,
-  Loader2,
-  AlertCircle,
-  CheckCircle2,
-  X,
-  Cpu,
-  FileAudio,
-  Clock,
-  HardDrive,
-  ChevronDown,
-  ChevronUp,
-} from 'lucide-react';
+import { ChevronDown, ChevronUp } from '@/components/ui/icons';
+import { Callout } from '@/components/ui/callout';
+import { DeckIcon } from '@/components/ui/deck-icon';
+import { Label } from '@/components/ui/label';
+import { Progress } from '@/components/ui/progress';
+import { Spinner } from '@/components/ui/spinner';
 import {
   Dialog,
   DialogContent,
@@ -237,24 +229,15 @@ export function ImportAudioDialog({
           <DialogTitle className="flex items-center gap-2">
             {isProcessing ? (
               <>
-                <Loader2 className="h-5 w-5 animate-spin text-brand" />
+                <Spinner className="text-brand" />
                 Importing Audio...
               </>
             ) : error ? (
-              <>
-                <AlertCircle className="h-5 w-5 text-destructive" />
-                Import Failed
-              </>
+              'Import Failed'
             ) : status === 'complete' ? (
-              <>
-                <CheckCircle2 className="h-5 w-5 text-success" />
-                Import Complete
-              </>
+              'Import Complete'
             ) : (
-              <>
-                <Upload className="h-5 w-5 text-brand" />
-                Import Audio File
-              </>
+              'Import Audio File'
             )}
           </DialogTitle>
           <DialogDescription>
@@ -273,18 +256,11 @@ export function ImportAudioDialog({
               {fileInfo ? (
                 <div className="bg-muted rounded-lg p-4 space-y-3">
                   <div className="flex items-start gap-3">
-                    <FileAudio className="h-8 w-8 text-brand flex-shrink-0" />
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-foreground truncate">{fileInfo.filename}</p>
                       <div className="flex items-center gap-4 text-sm text-muted-foreground mt-1">
-                        <span className="flex items-center gap-1">
-                          <Clock className="h-3.5 w-3.5" />
-                          {formatDuration(fileInfo.duration_seconds)}
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <HardDrive className="h-3.5 w-3.5" />
-                          {formatFileSize(fileInfo.size_bytes)}
-                        </span>
+                        <span>{formatDuration(fileInfo.duration_seconds)}</span>
+                        <span>{formatFileSize(fileInfo.size_bytes)}</span>
                         <span className="text-brand font-medium">{fileInfo.format}</span>
                       </div>
                     </div>
@@ -292,8 +268,9 @@ export function ImportAudioDialog({
 
                   {/* Editable title */}
                   <div className="space-y-1">
-                    <label className="text-sm font-medium text-foreground">Meeting Title</label>
+                    <Label htmlFor="import-meeting-title">Meeting Title</Label>
                     <Input
+                      id="import-meeting-title"
                       value={title}
                       onChange={(e) => {
                         setTitle(e.target.value);
@@ -309,18 +286,14 @@ export function ImportAudioDialog({
                 </div>
               ) : (
                 <div className="border-2 border-dashed border-input rounded-lg p-8 text-center">
-                  <FileAudio className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                  <Button onClick={handleSelectFile} disabled={status === 'validating'}>
+                  <Button variant="brand" onClick={handleSelectFile} disabled={status === 'validating'}>
                     {status === 'validating' ? (
                       <>
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        <Spinner />
                         Validating...
                       </>
                     ) : (
-                      <>
-                        <Upload className="h-4 w-4 mr-2" />
-                        Select Audio File
-                      </>
+                      'Select Audio File'
                     )}
                   </Button>
                   <p className="text-sm text-muted-foreground mt-2">MP4, WAV, MP3, FLAC, OGG, MKV, WebM, WMA</p>
@@ -330,27 +303,22 @@ export function ImportAudioDialog({
               {/* Advanced options (collapsible) */}
               {fileInfo && (
                 <div className="border rounded-lg">
-                  <button
+                  <Button
+                    variant="ghost"
                     onClick={() => setShowAdvanced(!showAdvanced)}
-                    className="w-full flex items-center justify-between p-3 text-sm font-medium text-foreground hover:bg-muted"
+                    aria-expanded={showAdvanced}
+                    className="h-auto w-full justify-between p-3 font-medium text-foreground"
                   >
                     <span>Advanced Options</span>
-                    {showAdvanced ? (
-                      <ChevronUp className="h-4 w-4" />
-                    ) : (
-                      <ChevronDown className="h-4 w-4" />
-                    )}
-                  </button>
+                    <DeckIcon icon={showAdvanced ? ChevronUp : ChevronDown} />
+                  </Button>
 
                   {showAdvanced && (
                     <div className="p-3 pt-0 space-y-4 border-t">
                       {/* Language selector */}
                       {!isParakeetModel ? (
                         <div className="space-y-2">
-                          <div className="flex items-center gap-2">
-                            <Globe className="h-4 w-4 text-muted-foreground" />
-                            <span className="text-sm font-medium">Language</span>
-                          </div>
+                          <span className="text-sm font-medium">Language</span>
                           <Select value={selectedLang} onValueChange={setSelectedLang}>
                             <SelectTrigger className="w-full">
                               <SelectValue placeholder="Select language" />
@@ -366,10 +334,7 @@ export function ImportAudioDialog({
                         </div>
                       ) : (
                         <div className="space-y-2">
-                          <div className="flex items-center gap-2">
-                            <Globe className="h-4 w-4 text-muted-foreground" />
-                            <span className="text-sm font-medium">Language</span>
-                          </div>
+                          <span className="text-sm font-medium">Language</span>
                           <p className="text-xs text-muted-foreground">
                             Language selection isn&apos;t supported for Parakeet. It always uses automatic detection.
                           </p>
@@ -379,10 +344,7 @@ export function ImportAudioDialog({
                       {/* Model selector */}
                       {availableModels.length > 0 && (
                         <div className="space-y-2">
-                          <div className="flex items-center gap-2">
-                            <Cpu className="h-4 w-4 text-muted-foreground" />
-                            <span className="text-sm font-medium">Model</span>
-                          </div>
+                          <span className="text-sm font-medium">Model</span>
                           <Select
                             value={selectedModelKey}
                             onValueChange={setSelectedModelKey}
@@ -415,12 +377,10 @@ export function ImportAudioDialog({
           {isProcessing && progress && (
             <div className="space-y-2">
               <div className="relative">
-                <div className="w-full bg-muted rounded-full h-3">
-                  <div
-                    className="bg-brand h-3 rounded-full transition-all duration-300 ease-out"
-                    style={{ width: `${Math.min(progress.progress_percentage, 100)}%` }}
-                  />
-                </div>
+                <Progress
+                  value={Math.min(progress.progress_percentage, 100)}
+                  aria-label="Import progress"
+                />
                 <div className="flex justify-between text-xs text-muted-foreground mt-1">
                   <span>{progress.stage}</span>
                   <span>{Math.round(progress.progress_percentage)}%</span>
@@ -432,9 +392,7 @@ export function ImportAudioDialog({
 
           {/* Error display */}
           {error && (
-            <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-3">
-              <p className="text-sm text-foreground">{error}</p>
-            </div>
+            <Callout tone="error">{error}</Callout>
           )}
         </div>
 
@@ -444,19 +402,13 @@ export function ImportAudioDialog({
               <Button variant="outline" onClick={() => onOpenChange(false)}>
                 Cancel
               </Button>
-              <Button
-                onClick={handleStartImport}
-                className="bg-brand text-brand-foreground hover:bg-brand/90"
-                disabled={!fileInfo}
-              >
-                <Upload className="h-4 w-4 mr-2" />
+              <Button variant="brand" onClick={handleStartImport} disabled={!fileInfo}>
                 Import
               </Button>
             </>
           )}
           {isProcessing && (
             <Button variant="outline" onClick={handleCancel}>
-              <X className="h-4 w-4 mr-2" />
               Cancel
             </Button>
           )}

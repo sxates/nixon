@@ -26,6 +26,13 @@ vi.mock('sonner', () => ({ toast: toastMock }));
 
 import { LanguageSelection } from '../LanguageSelection';
 
+/** Opens the Radix Select listbox (it renders its options only while open). */
+function openSelect() {
+  const trigger = screen.getByRole('combobox', { name: 'Transcription language' });
+  fireEvent.keyDown(trigger, { key: 'Enter' });
+  return trigger;
+}
+
 describe('LanguageSelection (single global control)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -35,12 +42,13 @@ describe('LanguageSelection (single global control)', () => {
   it('writes the global language preference when the user picks a language', () => {
     render(<LanguageSelection />);
 
-    const select = screen.getByRole('combobox');
+    const select = screen.getByRole('combobox', { name: 'Transcription language' });
     // The control is NOT disabled — the old modal disabled it while recording,
     // which is the "can't leave Auto-detect" bug this consolidation fixes.
     expect(select).not.toBeDisabled();
 
-    fireEvent.change(select, { target: { value: 'es' } });
+    openSelect();
+    fireEvent.click(screen.getByRole('option', { name: 'Spanish (es)' }));
 
     expect(setSelectedLanguage).toHaveBeenCalledWith('es');
     expect(toastMock.success).toHaveBeenCalled();
@@ -48,6 +56,7 @@ describe('LanguageSelection (single global control)', () => {
 
   it('limits Whisper to the full language list', () => {
     render(<LanguageSelection />);
+    openSelect();
     const options = screen.getAllByRole('option');
     // Far more than the two auto options — the full Whisper list is available.
     expect(options.length).toBeGreaterThan(50);
@@ -57,6 +66,7 @@ describe('LanguageSelection (single global control)', () => {
   it('restricts Parakeet to auto-detect only', () => {
     transcriptModelConfig.provider = 'parakeet';
     render(<LanguageSelection />);
+    openSelect();
     const options = screen.getAllByRole('option');
     // Parakeet supports only auto / auto-translate.
     expect(options).toHaveLength(2);

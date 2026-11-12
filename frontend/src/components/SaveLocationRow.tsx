@@ -11,7 +11,6 @@
  */
 
 import { useState, type Dispatch, type SetStateAction } from 'react';
-import { FolderOpen } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -137,7 +136,6 @@ export function SaveLocationRow({
         control={
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" onClick={handleOpenFolder}>
-              <FolderOpen className="h-4 w-4" />
               Open folder
             </Button>
             {disabled ? (
@@ -176,14 +174,14 @@ export function SaveLocationRow({
               {move.leftBehind === 1
                 ? '1 recording is still in another folder — '
                 : `${move.leftBehind} recordings are still in another folder — `}
-              <button
-                type="button"
+              <Button
+                variant="link"
                 onClick={move.gatherHere}
                 disabled={disabled}
-                className="font-semibold text-brand underline-offset-2 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+                className="h-auto p-0 align-baseline text-xs text-brand underline-offset-2"
               >
                 Move them here
-              </button>
+              </Button>
             </p>
             {move.leftBehindReason && <p className="mt-1">{move.leftBehindReason}</p>}
           </div>

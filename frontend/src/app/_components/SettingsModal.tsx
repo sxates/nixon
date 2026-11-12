@@ -3,6 +3,14 @@ import { PreferenceSettings } from "@/components/PreferenceSettings";
 import { DeviceSelection } from "@/components/DeviceSelection";
 import { TranscriptSettings } from "@/components/TranscriptSettings";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Callout } from "@/components/ui/callout";
+import { DeckIcon } from "@/components/ui/deck-icon";
+import { IconButton } from "@/components/ui/icon-button";
+import { X } from "@/components/ui/icons";
+import { Label } from "@/components/ui/label";
+import { OptionCard, OptionCardGroup } from "@/components/ui/option-card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { useConfig } from "@/contexts/ConfigContext";
@@ -60,20 +68,12 @@ export function SettingsModals({
   return <>
     {/* Legacy Settings Modal */}
     {modals.modelSettings && (
-      <div className={/* token-gate: allow: dimming overlay */ "fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"}>
+      <div className={"fixed inset-0 bg-scrim flex items-center justify-center z-50 p-4"}>
         <div className="bg-card rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
           {/* Header */}
           <div className="flex justify-between items-center p-6 border-b border-border">
-            <h3 className="text-xl font-semibold text-foreground">Preferences</h3>
-            <button
-              onClick={() => onClose("modelSettings")
-              }
-              className="text-muted-foreground hover:text-foreground"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
+            <h3 className="text-title font-semibold text-foreground">Preferences</h3>
+            <IconButton variant="ghost" label="Close" icon={<DeckIcon icon={X} size={16} />} onClick={() => onClose("modelSettings")} />
           </div>
 
           {/* Content - Scrollable */}
@@ -83,18 +83,17 @@ export function SettingsModals({
 
             {/* Divider */}
             <div className="border-t border-border pt-8">
-              <h4 className="text-lg font-semibold text-foreground mb-4">AI Model Configuration</h4>
+              <h4 className="text-heading font-semibold text-foreground mb-4">AI Model Configuration</h4>
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-foreground mb-1">
+                  <Label htmlFor="legacy-summary-provider" className="mb-1 block">
                     Summarization Model
-                  </label>
+                  </Label>
                   <div className="flex space-x-2">
-                    <select
-                      className="px-3 py-2 text-sm bg-card border border-input rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-ring focus:border-brand"
+                    <Select
                       value={modelConfig.provider}
-                      onChange={(e) => {
-                        const provider = e.target.value as ModelConfig['provider'];
+                      onValueChange={(value) => {
+                        const provider = value as ModelConfig['provider'];
                         setModelConfig({
                           ...modelConfig,
                           provider,
@@ -102,49 +101,59 @@ export function SettingsModals({
                         });
                       }}
                     >
-                      <option value="builtin-ai">Built-in AI</option>
-                      <option value="claude">Claude</option>
-                      <option value="groq">Groq</option>
-                      <option value="ollama">Ollama</option>
-                      <option value="openrouter">OpenRouter</option>
-                      <option value="openai">OpenAI</option>
-                    </select>
+                      <SelectTrigger id="legacy-summary-provider" className="w-40 bg-card">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="builtin-ai">Built-in AI</SelectItem>
+                        <SelectItem value="claude">Claude</SelectItem>
+                        <SelectItem value="groq">Groq</SelectItem>
+                        <SelectItem value="ollama">Ollama</SelectItem>
+                        <SelectItem value="openrouter">OpenRouter</SelectItem>
+                        <SelectItem value="openai">OpenAI</SelectItem>
+                      </SelectContent>
+                    </Select>
 
-                    <select
-                      className="flex-1 px-3 py-2 text-sm bg-card border border-input rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-ring focus:border-brand"
+                    <Select
                       value={modelConfig.model}
-                      onChange={(e) => setModelConfig((prev: ModelConfig) => ({ ...prev, model: e.target.value }))}
+                      onValueChange={(value) => setModelConfig((prev: ModelConfig) => ({ ...prev, model: value }))}
                     >
-                      {modelOptions[modelConfig.provider].map((model: string) => (
-                        <option key={model} value={model}>
-                          {model}
-                        </option>
-                      ))}
-                    </select>
+                      <SelectTrigger aria-label="Model" className="flex-1 bg-card">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {modelOptions[modelConfig.provider].map((model: string) => (
+                          <SelectItem key={model} value={model}>
+                            {model}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
                 {modelConfig.provider === 'ollama' && (
                   <div>
-                    <h4 className="text-lg font-bold mb-4">Available Ollama Models</h4>
+                    <h4 className="text-heading font-semibold mb-4">Available Ollama Models</h4>
                     {error && (
-                      <div className="bg-destructive/10 border border-destructive/40 text-destructive px-4 py-3 rounded mb-4">
+                      <Callout tone="error" className="mb-4">
                         {error}
-                      </div>
+                      </Callout>
                     )}
-                    <div className="grid gap-4 max-h-[400px] overflow-y-auto pr-2">
+                    <OptionCardGroup
+                      aria-label="Available Ollama models"
+                      value={modelConfig.model}
+                      onValueChange={(name) => setModelConfig((prev: ModelConfig) => ({ ...prev, model: name }))}
+                      className="grid gap-2 max-h-[400px] overflow-y-auto pr-2"
+                    >
                       {models.map((model) => (
-                        <div
+                        <OptionCard
                           key={model.id}
-                          className={`bg-card p-4 rounded-lg shadow cursor-pointer transition-colors ${modelConfig.model === model.name ? 'ring-2 ring-brand bg-brand/10' : 'hover:bg-muted'
-                            }`}
-                          onClick={() => setModelConfig((prev: ModelConfig) => ({ ...prev, model: model.name }))}
-                        >
-                          <h3 className="font-bold">{model.name}</h3>
-                          <p className="text-muted-foreground">Size: {model.size}</p>
-                          <p className="text-muted-foreground">Modified: {model.modified}</p>
-                        </div>
+                          value={model.name}
+                          title={model.name}
+                          description={<>Size: {model.size} · Modified: {model.modified}</>}
+                        />
                       ))}
-                    </div>
+                    </OptionCardGroup>
                   </div>
                 )}
               </div>
@@ -153,12 +162,9 @@ export function SettingsModals({
 
           {/* Footer */}
           <div className="border-t border-border p-6 flex justify-end">
-            <button
-              onClick={() => onClose('modelSettings')}
-              className="px-4 py-2 text-sm font-medium text-brand-foreground bg-brand rounded-md hover:bg-brand/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-ring"
-            >
+            <Button variant="brand" onClick={() => onClose('modelSettings')}>
               Done
-            </button>
+            </Button>
           </div>
         </div>
       </div>
@@ -166,18 +172,11 @@ export function SettingsModals({
 
     {/* Device Settings Modal */}
     {modals.deviceSettings && (
-      <div className={/* token-gate: allow: dimming overlay */ "fixed inset-0 bg-black/50 flex items-center justify-center z-50"}>
+      <div className={"fixed inset-0 bg-scrim flex items-center justify-center z-50"}>
         <div className="bg-card rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
           <div className="flex justify-between items-center mb-4">
             <h3 className="text-lg font-semibold text-foreground">Audio Device Settings</h3>
-            <button
-              onClick={() => onClose('deviceSettings')}
-              className="text-muted-foreground hover:text-foreground"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
+            <IconButton variant="ghost" label="Close" icon={<DeckIcon icon={X} size={16} />} onClick={() => onClose('deviceSettings')} />
           </div>
 
           <DeviceSelection
@@ -187,7 +186,8 @@ export function SettingsModals({
           />
 
           <div className="mt-6 flex justify-end">
-            <button
+            <Button
+              variant="brand"
               onClick={() => {
                 const micDevice = selectedDevices.micDevice || 'Default';
                 const systemDevice = selectedDevices.systemDevice || 'Default';
@@ -196,10 +196,9 @@ export function SettingsModals({
                 });
                 onClose('deviceSettings');
               }}
-              className="px-4 py-2 text-sm font-medium text-brand-foreground bg-brand rounded-md hover:bg-brand/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-ring"
             >
               Done
-            </button>
+            </Button>
           </div>
         </div>
       </div>
@@ -207,21 +206,14 @@ export function SettingsModals({
 
     {/* Model Selection Modal */}
     {modals.modelSelector && (
-      <div className={/* token-gate: allow: dimming overlay */ "fixed inset-0 bg-black/50 flex items-center justify-center z-50"}>
+      <div className={"fixed inset-0 bg-scrim flex items-center justify-center z-50"}>
         <div className="bg-card rounded-lg max-w-4xl w-full mx-4 shadow-xl max-h-[90vh] flex flex-col">
           {/* Fixed Header */}
           <div className="flex justify-between items-center p-6 pb-4 border-b border-border">
             <h3 className="text-lg font-semibold text-foreground">
               {messages.modelSelector ? 'Speech Recognition Setup Required' : 'Transcription Model Settings'}
             </h3>
-            <button
-              onClick={() => onClose('modelSelector')}
-              className="text-muted-foreground hover:text-foreground"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
+            <IconButton variant="ghost" label="Close" icon={<DeckIcon icon={X} size={16} />} onClick={() => onClose('modelSelector')} />
           </div>
 
           {/* Scrollable Content */}
@@ -248,12 +240,9 @@ export function SettingsModals({
               </div>
             </div>
 
-            <button
-              onClick={() => onClose('modelSelector')}
-              className="px-4 py-2 text-sm font-medium text-secondary-foreground bg-secondary rounded-md hover:bg-secondary/80 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-ring"
-            >
+            <Button variant="outline" onClick={() => onClose('modelSelector')}>
               {messages.modelSelector ? 'Cancel' : 'Done'}
-            </button>
+            </Button>
           </div>
         </div>
       </div>
@@ -261,20 +250,21 @@ export function SettingsModals({
 
     {/* Error Alert Modal */}
     {modals.errorAlert && (
-      <div className={/* token-gate: allow: dimming overlay */ "fixed inset-0 bg-black/50 flex items-center justify-center z-50"}>
+      <div className={"fixed inset-0 bg-scrim flex items-center justify-center z-50"}>
         {/* An optional first line is the heading (a failed START names the device problem);
             the rest keeps its newlines, so the bullet lists render as bullets. Messages with
             no newline keep the historical heading. See lib/error-alert.ts. */}
-        <Alert className="max-w-md mx-4 border-destructive/30 bg-card shadow-xl">
+        <Alert className="max-w-md mx-4 border-destructive-edge bg-card shadow-xl">
           <AlertTitle className="text-destructive">{errorAlert.title}</AlertTitle>
-          <AlertDescription className="whitespace-pre-line text-destructive/90">
+          <AlertDescription className="whitespace-pre-line text-destructive">
             {errorAlert.body}
-            <button
+            <Button
+              variant="link"
               onClick={() => onClose('errorAlert')}
-              className="ml-2 whitespace-normal text-destructive underline hover:text-destructive/80"
+              className="ml-2 h-auto whitespace-normal p-0 text-destructive underline"
             >
               Dismiss
-            </button>
+            </Button>
           </AlertDescription>
         </Alert>
       </div>
@@ -282,17 +272,18 @@ export function SettingsModals({
 
     {/* Chunk Drop Warning Modal */}
     {modals.chunkDropWarning && (
-      <div className={/* token-gate: allow: dimming overlay */ "fixed inset-0 bg-black/50 flex items-center justify-center z-50"}>
-        <Alert className="max-w-lg mx-4 border-brand/30 bg-card shadow-xl">
+      <div className={"fixed inset-0 bg-scrim flex items-center justify-center z-50"}>
+        <Alert className="max-w-lg mx-4 border-brand-edge bg-card shadow-xl">
           <AlertTitle className="text-brand">Transcription Performance Warning</AlertTitle>
-          <AlertDescription className="text-brand/90">
+          <AlertDescription className="text-brand">
             {messages.chunkDropWarning}
-            <button
+            <Button
+              variant="link"
               onClick={() => onClose('chunkDropWarning')}
-              className="ml-2 text-brand hover:text-brand/80 underline"
+              className="ml-2 h-auto p-0 text-brand underline"
             >
               Dismiss
-            </button>
+            </Button>
           </AlertDescription>
         </Alert>
       </div>

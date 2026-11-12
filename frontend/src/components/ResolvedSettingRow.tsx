@@ -14,8 +14,8 @@
  */
 
 import { useState, type ReactNode } from 'react';
-import { ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
 import { SettingsGroup, SettingsRow } from '@/components/ui/settings';
 
 export function ResolvedSettingRow({
@@ -43,17 +43,12 @@ export function ResolvedSettingRow({
           description={description}
           control={
             <div className="flex items-center gap-3">
-              <span className="u-section-label text-[11px] text-engrave" data-testid="resolved-value">
+              <span className="u-section-label" data-testid="resolved-value">
                 {value}
               </span>
-              <button
-                type="button"
-                onClick={() => setExpanded(true)}
-                className="u-section-label flex items-center gap-1 rounded-[3px] border border-border px-2 py-0.5 text-[9px] text-muted-foreground transition-colors hover:bg-key hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
+              <Button variant="outline" size="sm" aria-expanded={false} onClick={() => setExpanded(true)}>
                 Change
-                <ChevronDown className="h-3 w-3" aria-hidden />
-              </button>
+              </Button>
             </div>
           }
         />

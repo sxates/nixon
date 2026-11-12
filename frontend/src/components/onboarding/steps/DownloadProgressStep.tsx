@@ -1,8 +1,11 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { safeListen } from '@/lib/safe-listen';
-import { Mic, Sparkles, Check, Loader2, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Callout } from '@/components/ui/callout';
+import { Progress } from '@/components/ui/progress';
+import { Spinner } from '@/components/ui/spinner';
+import { StatusDot } from '@/components/ui/status-dot';
 import { OnboardingContainer } from '../OnboardingContainer';
 import { useOnboarding } from '@/contexts/OnboardingContext';
 import { toast } from 'sonner';
@@ -358,34 +361,22 @@ export function DownloadProgressStep() {
 
   const renderDownloadCard = (
     title: string,
-    icon: React.ReactNode,
     state: DownloadState,
     modelSize: string,
     sizeUnit = 'MB'
   ) => (
-    <div className="bg-card rounded-[3px] border border-border p-5">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center">
-            {icon}
-          </div>
-          <div>
-            <h3 className="font-medium text-foreground">{title}</h3>
-            <p className="text-sm text-muted-foreground">{modelSize}</p>
-          </div>
-        </div>
+    <div className="rounded-lg border border-border bg-card p-5">
+      <div className="mb-4 flex items-center justify-between">
         <div>
+          <h3 className="font-medium text-foreground">{title}</h3>
+          <p className="text-sm text-muted-foreground">{modelSize}</p>
+        </div>
+        <div className="flex items-center text-muted-foreground">
           {state.status === 'waiting' && (
             <span className="text-sm text-muted-foreground">Waiting...</span>
           )}
-          {state.status === 'downloading' && (
-            <Loader2 className="w-5 h-5 text-muted-foreground animate-spin" />
-          )}
-          {state.status === 'completed' && (
-            <div className="w-6 h-6 rounded-full bg-success/20 flex items-center justify-center">
-              <Check className="w-4 h-4 text-success" />
-            </div>
-          )}
+          {state.status === 'downloading' && <Spinner size="md" />}
+          {state.status === 'completed' && <StatusDot tone="success" label="Downloaded" />}
           {state.status === 'error' && (
             <span className="text-sm text-destructive">Failed</span>
           )}
@@ -395,12 +386,7 @@ export function DownloadProgressStep() {
       {/* Progress Bar */}
       {(state.status === 'downloading' || state.status === 'completed') && (
         <div className="space-y-2">
-          <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
-            <div
-              className="h-full bg-brand rounded-full transition-all duration-300"
-              style={{ width: `${state.progress}%` }}
-            />
-          </div>
+          <Progress value={state.progress} aria-label={`${title} download progress`} />
           <div className="flex items-center justify-between text-sm">
             <span className="text-muted-foreground">
               {state.downloadedMb.toFixed(1)} {sizeUnit} / {state.totalMb.toFixed(1)} {sizeUnit}
@@ -420,22 +406,19 @@ export function DownloadProgressStep() {
       )}
 
       {state.status === 'error' && state.error && (
-        <div className="mt-2 p-3 bg-destructive/10 border border-destructive/30 rounded-md">
-          <p className="text-sm text-destructive font-medium">Download Error</p>
-          <p className="text-xs text-foreground mt-1">{state.error}</p>
+        <Callout tone="error" className="mt-2">
+          <p className="font-medium text-destructive">Download Error</p>
+          <p className="mt-1 text-xs text-foreground">{state.error}</p>
           {(title === 'Transcription Engine' || title === 'Summary Engine') && (
-            <button
+            <Button
+              variant="brand"
+              className="mt-3 w-full"
               onClick={title === 'Transcription Engine' ? handleRetryDownload : handleRetrySummaryDownload}
-              className="mt-3 w-full h-9 px-4 bg-brand hover:bg-brand/90 text-brand-foreground text-sm font-medium rounded-md transition-colors flex items-center justify-center gap-2"
             >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
               Try Again
-            </button>
+            </Button>
           )}
-        </div>
+        </Callout>
       )}
     </div>
   );
@@ -452,14 +435,12 @@ export function DownloadProgressStep() {
         <div className="w-full max-w-lg space-y-4">
           {renderDownloadCard(
             'Transcription Engine',
-            <Mic className="w-5 h-5 text-muted-foreground" />,
             parakeetState,
             getParakeetSizeLabel()
           )}
 
           {renderDownloadCard(
             'Summary Engine',
-            <Sparkles className="w-5 h-5 text-muted-foreground" />,
             summaryState,
             getSummaryModelSizeLabel(selectedSummaryModel || recommendedSummaryModel),
             'MiB'
@@ -470,21 +451,15 @@ export function DownloadProgressStep() {
         <AnimatePresence>
           {parakeetDownloaded && !summaryModelDownloaded && (
             <motion.div
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.3, ease: 'easeOut' }}
-              className="w-full max-w-lg bg-muted rounded-[3px] p-4 text-sm text-foreground"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.14, ease: 'easeOut' }}
+              className="w-full max-w-lg"
             >
-              <div className="flex items-start gap-3">
-                <Download className="w-5 h-5 text-muted-foreground flex-shrink-0 mt-0.5" />
-                <div>
-                  <p className="font-medium">You can continue while this finishes</p>
-                  <p className="text-muted-foreground mt-1">
-                    Download will continue in the background.
-                  </p>
-                </div>
-              </div>
+              <Callout tone="muted" title="You can continue while this finishes">
+                Download will continue in the background.
+              </Callout>
             </motion.div>
           )}
         </AnimatePresence>
@@ -492,15 +467,14 @@ export function DownloadProgressStep() {
         {/* Continue Button */}
         <div className="w-full max-w-xs">
           <Button
+            variant="brand"
+            size="lg"
+            className="w-full"
             onClick={handleContinue}
             disabled={!parakeetDownloaded}
-            className="w-full h-11 bg-brand hover:bg-brand/90 text-brand-foreground disabled:opacity-50 disabled:cursor-not-allowed"
+            aria-busy={!parakeetDownloaded || undefined}
           >
-            {!parakeetDownloaded ? (
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-            ) : (
-              'Continue'
-            )}
+            {!parakeetDownloaded ? <Spinner /> : 'Continue'}
           </Button>
         </div>
       </div>

@@ -1,18 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Loader2 } from 'lucide-react';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { MAX_PROMPT_NAME_CHARS } from '@/lib/summary-prompts';
 
 interface SaveOneOffDialogProps {
@@ -72,67 +64,44 @@ export function SaveOneOffDialog({
   };
 
   return (
-    <Dialog
+    <ConfirmDialog
       open={open}
       onOpenChange={(next) => {
         if (next) onOpenChange(true);
-        else if (!isSaving) onSkip();
+        else onSkip();
       }}
+      title="Keep this prompt?"
+      body="It is set for this meeting. You can also keep it for later."
+      tone="brand"
+      confirmLabel="Save"
+      cancelLabel="Not now"
+      busy={isSaving}
+      confirmDisabled={!canSave}
+      onConfirm={handleSave}
     >
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>Keep this prompt?</DialogTitle>
-          <DialogDescription>
-            It is set for this meeting. You can also keep it for later.
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="space-y-3">
-          {hasSeries && (
-            <div className="flex items-center gap-2">
-              <input
-                id="save-one-off-series"
-                type="checkbox"
-                checked={toSeries}
-                onChange={(e) => setToSeries(e.target.checked)}
-                className="h-4 w-4 rounded border-input accent-brand"
-              />
-              <Label htmlFor="save-one-off-series">Use for future meetings in this series</Label>
-            </div>
-          )}
-          <div className="flex items-center gap-2">
-            <input
-              id="save-one-off-library"
-              type="checkbox"
-              checked={toLibrary}
-              onChange={(e) => setToLibrary(e.target.checked)}
-              className="h-4 w-4 rounded border-input accent-brand"
-            />
-            <Label htmlFor="save-one-off-library">Save to my prompt library</Label>
+      <div className="space-y-3">
+        {hasSeries && (
+          <div className="flex items-center gap-3">
+            <Switch id="save-one-off-series" checked={toSeries} onCheckedChange={setToSeries} />
+            <Label htmlFor="save-one-off-series">Use for future meetings in this series</Label>
           </div>
-          {toLibrary && (
-            <div className="space-y-1.5 pl-6">
-              <Label htmlFor="save-one-off-name">Prompt name</Label>
-              <Input
-                id="save-one-off-name"
-                value={name}
-                maxLength={MAX_PROMPT_NAME_CHARS}
-                onChange={(e) => setName(e.target.value)}
-              />
-            </div>
-          )}
+        )}
+        <div className="flex items-center gap-3">
+          <Switch id="save-one-off-library" checked={toLibrary} onCheckedChange={setToLibrary} />
+          <Label htmlFor="save-one-off-library">Save to my prompt library</Label>
         </div>
-
-        <DialogFooter>
-          <Button variant="outline" onClick={onSkip} disabled={isSaving}>
-            Not now
-          </Button>
-          <Button variant="brand" onClick={handleSave} disabled={!canSave}>
-            {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Save
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        {toLibrary && (
+          <div className="space-y-1.5 pl-12">
+            <Label htmlFor="save-one-off-name">Prompt name</Label>
+            <Input
+              id="save-one-off-name"
+              value={name}
+              maxLength={MAX_PROMPT_NAME_CHARS}
+              onChange={(e) => setName(e.target.value)}
+            />
+          </div>
+        )}
+      </div>
+    </ConfirmDialog>
   );
 }

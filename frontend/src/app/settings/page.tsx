@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { LoaderIcon } from 'lucide-react';
+import { PageLoading } from '@/components/ui/empty-state';
 import { invoke } from '@tauri-apps/api/core';
 import { TranscriptSettings } from '@/components/TranscriptSettings';
 import { SpeakerSettings } from '@/components/SpeakerSettings';
@@ -207,11 +207,7 @@ function SettingsPageContent() {
 
 export default function SettingsPage() {
   return (
-    <Suspense fallback={
-      <div className="flex items-center justify-center h-page">
-        <LoaderIcon className="animate-spin size-6" />
-      </div>
-    }>
+    <Suspense fallback={<PageLoading hideLabel />}>
       <SettingsPageContent />
     </Suspense>
   );

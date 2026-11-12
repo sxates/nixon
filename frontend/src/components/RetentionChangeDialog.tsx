@@ -1,16 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Loader2 } from 'lucide-react';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { formatBytes, plural } from '@/lib/recordings-move';
 import {
   keptForNowSentence,
@@ -47,35 +38,28 @@ export function RetentionChangeDialog({ pending, onConfirm, onCancel }: Retentio
   };
 
   return (
-    <Dialog
+    <ConfirmDialog
       open={pending !== null}
       onOpenChange={(open) => {
         if (!open && !submitting) onCancel();
       }}
+      title={
+        pending
+          ? `Delete audio from ${plural(pending.preview.meetings, 'meeting')} (${formatBytes(pending.preview.bytes)}) now?`
+          : 'Delete audio now?'
+      }
+      body={
+        <>
+          {pending && retentionDeletesNowSentence(pending.choice)} Transcripts, notes, summaries
+          and speaker names are kept. This can&apos;t be undone.
+        </>
+      }
+      confirmLabel="Delete audio"
+      tone="destructive"
+      busy={submitting}
+      onConfirm={handleConfirm}
     >
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>
-            {pending
-              ? `Delete audio from ${plural(pending.preview.meetings, 'meeting')} (${formatBytes(pending.preview.bytes)}) now?`
-              : 'Delete audio now?'}
-          </DialogTitle>
-          <DialogDescription>
-            {pending && retentionDeletesNowSentence(pending.choice)} Transcripts, notes, summaries
-            and speaker names are kept. This can&apos;t be undone.
-          </DialogDescription>
-        </DialogHeader>
-        {kept && <p className="text-xs text-muted-foreground">{kept}</p>}
-        <DialogFooter>
-          <Button variant="outline" onClick={onCancel} disabled={submitting}>
-            Cancel
-          </Button>
-          <Button variant="destructive" onClick={() => void handleConfirm()} disabled={submitting}>
-            {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Delete audio
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      {kept && <p className="text-xs text-muted-foreground">{kept}</p>}
+    </ConfirmDialog>
   );
 }

@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Loader2 } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -13,6 +12,8 @@ import {
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
+import { Spinner } from '@/components/ui/spinner';
+import { Switch } from '@/components/ui/switch';
 import { MAX_PROMPT_CHARS } from '@/lib/summary-prompts';
 import { PromptNotesHint } from './PromptNotesHint';
 
@@ -96,14 +97,8 @@ export function OneOffPromptDialog({
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <input
-              id="one-off-prompt-extract"
-              type="checkbox"
-              checked={extract}
-              onChange={(e) => setExtract(e.target.checked)}
-              className="h-4 w-4 rounded border-input accent-brand"
-            />
+          <div className="flex items-center gap-3">
+            <Switch id="one-off-prompt-extract" checked={extract} onCheckedChange={setExtract} />
             <Label htmlFor="one-off-prompt-extract">Extract action items</Label>
           </div>
         </div>
@@ -113,7 +108,7 @@ export function OneOffPromptDialog({
             Cancel
           </Button>
           <Button variant="brand" onClick={handleSubmit} disabled={!canSubmit}>
-            {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {isSubmitting && <Spinner />}
             Use for this meeting
           </Button>
         </DialogFooter>

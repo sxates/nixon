@@ -226,8 +226,8 @@ describe('CalendarSettings — Google row render states', () => {
     ).toBeInTheDocument();
     expect(screen.getByText(/Last synced 5m ago/)).toBeInTheDocument();
 
-    expect(screen.getByRole('checkbox', { name: 'Work' })).toBeChecked();
-    expect(screen.getByRole('checkbox', { name: 'Family' })).not.toBeChecked();
+    expect(screen.getByRole('switch', { name: 'Work' })).toBeChecked();
+    expect(screen.getByRole('switch', { name: 'Family' })).not.toBeChecked();
 
     expect(screen.getByRole('button', { name: /sync now/i })).toBeEnabled();
     expect(screen.getByRole('button', { name: /^disconnect$/i })).toBeEnabled();
@@ -257,7 +257,7 @@ describe('CalendarSettings — connected-state actions', () => {
     mockBackend(CONNECTED_STATUS);
     render(<CalendarSettings />);
 
-    fireEvent.click(await screen.findByRole('checkbox', { name: 'Work' }));
+    fireEvent.click(await screen.findByRole('switch', { name: 'Work' }));
 
     await waitFor(() =>
       expect(invoke).toHaveBeenCalledWith('api_google_calendar_set_calendar_selected', {
@@ -273,7 +273,7 @@ describe('CalendarSettings — connected-state actions', () => {
       'selected',
     ]);
     // Optimistic UI: the checkbox flipped immediately.
-    expect(screen.getByRole('checkbox', { name: 'Work' })).not.toBeChecked();
+    expect(screen.getByRole('switch', { name: 'Work' })).not.toBeChecked();
   });
 
   it('reverts the optimistic toggle and toasts when the command fails', async () => {
@@ -282,10 +282,10 @@ describe('CalendarSettings — connected-state actions', () => {
     });
     render(<CalendarSettings />);
 
-    fireEvent.click(await screen.findByRole('checkbox', { name: 'Work' }));
+    fireEvent.click(await screen.findByRole('switch', { name: 'Work' }));
 
     await waitFor(() =>
-      expect(screen.getByRole('checkbox', { name: 'Work' })).toBeChecked(),
+      expect(screen.getByRole('switch', { name: 'Work' })).toBeChecked(),
     );
     expect(toastMock.error).toHaveBeenCalledWith('Could not update calendar selection');
   });
@@ -304,8 +304,8 @@ describe('CalendarSettings — connected-state actions', () => {
         selected: true,
       }),
     );
-    expect(screen.getByRole('checkbox', { name: 'Work' })).toBeChecked();
-    expect(screen.getByRole('checkbox', { name: 'Family' })).toBeChecked();
+    expect(screen.getByRole('switch', { name: 'Work' })).toBeChecked();
+    expect(screen.getByRole('switch', { name: 'Family' })).toBeChecked();
   });
 
   it('"Select none" unchecks every calendar through the bulk command', async () => {
@@ -320,8 +320,8 @@ describe('CalendarSettings — connected-state actions', () => {
         selected: false,
       }),
     );
-    expect(screen.getByRole('checkbox', { name: 'Work' })).not.toBeChecked();
-    expect(screen.getByRole('checkbox', { name: 'Family' })).not.toBeChecked();
+    expect(screen.getByRole('switch', { name: 'Work' })).not.toBeChecked();
+    expect(screen.getByRole('switch', { name: 'Family' })).not.toBeChecked();
   });
 
   it('reverts the optimistic bulk toggle and toasts when the command fails', async () => {
@@ -333,9 +333,9 @@ describe('CalendarSettings — connected-state actions', () => {
     fireEvent.click(await screen.findByRole('button', { name: /select none/i }));
 
     await waitFor(() =>
-      expect(screen.getByRole('checkbox', { name: 'Work' })).toBeChecked(),
+      expect(screen.getByRole('switch', { name: 'Work' })).toBeChecked(),
     );
-    expect(screen.getByRole('checkbox', { name: 'Family' })).not.toBeChecked();
+    expect(screen.getByRole('switch', { name: 'Family' })).not.toBeChecked();
     expect(toastMock.error).toHaveBeenCalledWith('Could not update calendar selection');
   });
 
@@ -661,7 +661,7 @@ describe('CalendarSettings — latched auth + per-calendar status', () => {
       }),
     });
     render(<CalendarSettings />);
-    fireEvent.click(await screen.findByRole('checkbox', { name: 'Family' }));
+    fireEvent.click(await screen.findByRole('switch', { name: 'Family' }));
     await waitFor(() =>
       expect(toastMock.warning).toHaveBeenCalledWith(
         'Synced, but Family failed',

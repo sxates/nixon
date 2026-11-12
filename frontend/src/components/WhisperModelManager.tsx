@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import { makeSafeUnlisten } from '@/lib/safe-listen';
 import { invoke } from '@tauri-apps/api/core';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 import {
   ModelInfo,
@@ -14,6 +14,10 @@ import {
   getModelTagline,
   WhisperAPI
 } from '../lib/whisper';
+import { Badge, type BadgeTone } from '@/components/ui/badge';
+import { Callout } from '@/components/ui/callout';
+import { OptionCardGroup } from '@/components/ui/option-card';
+import { ModelOptionCard } from '@/components/shared/ModelOptionCard';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 
 interface ModelManagerProps {
@@ -409,10 +413,9 @@ export function ModelManager({
 
   if (error) {
     return (
-      <div className={`bg-destructive/10 border border-destructive/30 rounded-lg p-4 ${className}`}>
-        <p className="text-sm font-semibold text-destructive">Failed to load models</p>
-        <p className="text-xs text-muted-foreground mt-1">{error}</p>
-      </div>
+      <Callout tone="error" title="Failed to load models" className={className}>
+        {error}
+      </Callout>
     );
   }
 
@@ -421,61 +424,61 @@ export function ModelManager({
     .sort((a, b) => basicModelNames.indexOf(a.name) - basicModelNames.indexOf(b.name));
   const advancedModels = models.filter(m => !basicModelNames.includes(m.name));
 
+  // Only an on-disk model shows as chosen (the old card lit on isSelected && isAvailable).
+  const chosen = models.some(m => m.name === selectedModel && m.status === 'Available') ? selectedModel! : null;
+  const choose = (name: string) => {
+    const model = models.find(m => m.name === name);
+    if (model?.status === 'Available') selectModel(name);
+  };
+
+  const card = (model: ModelInfo, isRecommended: boolean) => {
+    const perf = isQuantizedModel(model.name) ? getModelPerformanceBadge(model.name) : null;
+    return (
+      <ModelOptionCard
+        key={model.name}
+        value={model.name}
+        title={getDisplayName(model.name)}
+        description={
+          <>
+            {getModelTagline(model.name, model.speed, model.accuracy)}
+            <span className="mt-0.5 block">
+              {formatFileSize(model.size_mb)} · {model.accuracy} accuracy · {model.speed} processing
+            </span>
+          </>
+        }
+        badges={perf ? <Badge tone={PERF_BADGE_TONE[perf.color] ?? 'muted'}>{perf.label}</Badge> : null}
+        isRecommended={isRecommended}
+        status={model.status}
+        sizeMb={model.size_mb}
+        formatSize={formatFileSize}
+        onDownload={() => downloadModel(model.name)}
+        onCancel={() => cancelDownload(model.name)}
+        onDelete={() => deleteModel(model.name)}
+      />
+    );
+  };
+
   return (
     <div className={`space-y-3 ${className}`}>
       {/* Basic Models */}
-      <div className="space-y-3">
-        {basicModels.map((model) => {
-          const isRecommended = model.name === 'base';
-          return (
-            <ModelCard
-              key={model.name}
-              model={model}
-              isSelected={selectedModel === model.name}
-              isRecommended={isRecommended}
-              onSelect={() => {
-                if (model.status === 'Available') {
-                  selectModel(model.name);
-                }
-              }}
-              onDownload={() => downloadModel(model.name)}
-              onCancel={() => cancelDownload(model.name)}
-              onDelete={() => deleteModel(model.name)}
-              isDownloading={downloadingModels.has(model.name)}
-              displayName={getDisplayName(model.name)}
-            />
-          );
-        })}
-      </div>
+      <OptionCardGroup aria-label="Whisper models" value={chosen} onValueChange={choose} className="space-y-3">
+        {basicModels.map((model) => card(model, model.name === 'base'))}
+      </OptionCardGroup>
 
       {/* Advanced Models */}
       {advancedModels.length > 0 && (
         <Accordion type="single" collapsible className="w-full">
           <AccordionItem value="advanced-models">
-            <AccordionTrigger>
-              <span className='text-lg'>Advanced Models</span>
-            </AccordionTrigger>
+            <AccordionTrigger>Advanced Models</AccordionTrigger>
             <AccordionContent>
-              <div className="space-y-3 pt-4">
-                {advancedModels.map((model) => (
-                  <ModelCard
-                    key={model.name}
-                    model={model}
-                    isSelected={selectedModel === model.name}
-                    isRecommended={false}
-                    onSelect={() => {
-                      if (model.status === 'Available') {
-                        selectModel(model.name);
-                      }
-                    }}
-                    onDownload={() => downloadModel(model.name)}
-                    onCancel={() => cancelDownload(model.name)}
-                    onDelete={() => deleteModel(model.name)}
-                    isDownloading={downloadingModels.has(model.name)}
-                    displayName={getDisplayName(model.name)}
-                  />
-                ))}
-              </div>
+              <OptionCardGroup
+                aria-label="Advanced Whisper models"
+                value={chosen}
+                onValueChange={choose}
+                className="space-y-3 pt-4"
+              >
+                {advancedModels.map((model) => card(model, false))}
+              </OptionCardGroup>
             </AccordionContent>
           </AccordionItem>
         </Accordion>
@@ -484,8 +487,8 @@ export function ModelManager({
       {/* Helper text */}
       {selectedModel && (
         <motion.div
-          initial={{ opacity: 0, y: -5 }}
-          animate={{ opacity: 1, y: 0 }}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
           className="text-xs text-muted-foreground text-center pt-2"
         >
           Using {getDisplayName(selectedModel)} for transcription
@@ -495,233 +498,8 @@ export function ModelManager({
   );
 }
 
-// Model Card Component
-interface ModelCardProps {
-  model: ModelInfo;
-  isSelected: boolean;
-  isRecommended: boolean;
-  onSelect: () => void;
-  onDownload: () => void;
-  onCancel: () => void;
-  onDelete: () => void;
-  isDownloading: boolean;
-  displayName: string;
-}
-
-function ModelCard({
-  model,
-  isSelected,
-  isRecommended,
-  onSelect,
-  onDownload,
-  onCancel,
-  onDelete,
-  isDownloading: _isDownloading,
-  displayName
-}: ModelCardProps) {
-  const [isHovered, setIsHovered] = useState(false);
-
-  const isAvailable = model.status === 'Available';
-  const isMissing = model.status === 'Missing';
-  const isError = typeof model.status === 'object' && 'Error' in model.status;
-  const isCorrupted = typeof model.status === 'object' && 'Corrupted' in model.status;
-  const downloadProgress =
-    typeof model.status === 'object' && 'Downloading' in model.status
-      ? model.status.Downloading
-      : null;
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 5 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.2 }}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-      className={`
-        relative rounded-lg border-2 transition-all cursor-pointer
-        ${isSelected && isAvailable
-          ? 'border-brand bg-brand/10'
-          : isAvailable
-            ? 'border-border hover:border-input bg-card'
-            : 'border-border bg-muted'
-        }
-        ${isAvailable ? '' : 'cursor-default'}
-      `}
-      onClick={() => {
-        if (isAvailable) onSelect();
-      }}
-    >
-      {/* Recommended Badge */}
-      {isRecommended && (
-        <div className="absolute -top-2 -right-2 bg-brand text-brand-foreground text-xs px-2 py-0.5 rounded-[3px] font-medium">
-          Recommended
-        </div>
-      )}
-
-      <div className="p-3">
-        <div className="flex items-start justify-between mb-2">
-          <div className="flex-1">
-            {/* Model Name and Tagline */}
-            <div className="flex items-center gap-2 flex-wrap mb-2">
-              <span className="text-2xl">{getModelIcon(model.accuracy)}</span>
-              <h3 className="font-semibold text-foreground">{displayName}</h3>
-              <span className="text-sm text-muted-foreground">•</span>
-              <span className="text-sm text-muted-foreground">{getModelTagline(model.name, model.speed, model.accuracy)}</span>
-              {isSelected && isAvailable && (
-                <motion.span
-                  initial={{ scale: 0 }}
-                  animate={{ scale: 1 }}
-                  className="bg-brand text-brand-foreground px-2 py-0.5 rounded-[3px] text-xs font-medium flex items-center gap-1"
-                >
-                  ✓
-                </motion.span>
-              )}
-              {isQuantizedModel(model.name) && (
-                <span className={`px-2 py-0.5 rounded-[3px] text-xs ${getModelPerformanceBadge(model.name).color === 'green'
-                  ? 'bg-success/10 text-success'
-                  : getModelPerformanceBadge(model.name).color === 'orange'
-                    ? 'bg-brand/10 text-brand'
-                    : 'bg-muted text-foreground'
-                  }`}>
-                  {getModelPerformanceBadge(model.name).label}
-                </span>
-              )}
-            </div>
-
-            {/* Model Specs */}
-            <div className="flex items-center space-x-4 text-sm text-muted-foreground ml-9 mt-1.5">
-              <span>{formatFileSize(model.size_mb)}</span>
-              <span aria-hidden>·</span>
-              <span>{model.accuracy} accuracy</span>
-              <span aria-hidden>·</span>
-              <span>{model.speed} processing</span>
-            </div>
-          </div>
-
-          {/* Status/Action */}
-          <div className="ml-4 flex items-center gap-2">
-            {isAvailable && (
-              <>
-                <div className="flex items-center gap-1.5 text-success">
-                  <div className="w-2 h-2 bg-success rounded-full"></div>
-                  <span className="text-xs font-medium">Ready</span>
-                </div>
-                <AnimatePresence>
-                  {isHovered && (
-                    <motion.button
-                      initial={{ opacity: 0, scale: 0.8 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      exit={{ opacity: 0, scale: 0.8 }}
-                      transition={{ duration: 0.15 }}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onDelete();
-                      }}
-                      className="text-muted-foreground hover:text-destructive transition-colors p-1"
-                      title="Delete model to free up space"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                      </svg>
-                    </motion.button>
-                  )}
-                </AnimatePresence>
-              </>
-            )}
-
-            {isMissing && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDownload();
-                }}
-                className="bg-brand text-brand-foreground px-3 py-1.5 rounded-md text-sm font-medium hover:bg-brand/90 transition-colors"
-              >
-                Download
-              </button>
-            )}
-
-            {downloadProgress === null && isError && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDownload();
-                }}
-                className="bg-destructive text-destructive-foreground px-3 py-1.5 rounded-md text-sm font-medium hover:bg-destructive/90 transition-colors"
-              >
-                Retry
-              </button>
-            )}
-
-            {isCorrupted && (
-              <div className="flex gap-2">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onDelete();
-                  }}
-                  className="bg-destructive text-destructive-foreground px-3 py-1.5 rounded-md text-sm font-medium hover:bg-destructive/90 transition-colors"
-                >
-                  Delete
-                </button>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onDownload();
-                  }}
-                  className="bg-brand text-brand-foreground px-3 py-1.5 rounded-md text-sm font-medium hover:bg-brand/90 transition-colors"
-                >
-                  Re-download
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Full-width Download Progress Bar - PROMINENT */}
-        {downloadProgress !== null && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            className="mt-3 pt-3 border-t border-border"
-          >
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-medium text-brand">Downloading...</span>
-                <span className="text-sm font-semibold text-brand">{Math.round(downloadProgress)}%</span>
-              </div>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onCancel();
-                }}
-                className="text-xs text-muted-foreground hover:text-destructive font-medium transition-colors px-2 py-1 rounded hover:bg-destructive/10"
-                title="Cancel download"
-              >
-                Cancel
-              </button>
-            </div>
-            <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
-              <motion.div
-                className="h-full bg-brand rounded-full"
-                initial={{ width: 0 }}
-                animate={{ width: `${downloadProgress}%` }}
-                transition={{ duration: 0.3, ease: 'easeOut' }}
-              />
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              {model.size_mb ? (
-                <>
-                  {formatFileSize(model.size_mb * downloadProgress / 100)} / {formatFileSize(model.size_mb)}
-                </>
-              ) : (
-                'Downloading...'
-              )}
-            </p>
-          </motion.div>
-        )}
-      </div>
-    </motion.div>
-  );
-}
+/** `getModelPerformanceBadge`'s colour names -> Badge tones. */
+const PERF_BADGE_TONE: Record<string, BadgeTone> = {
+  green: 'success',
+  orange: 'brand',
+};

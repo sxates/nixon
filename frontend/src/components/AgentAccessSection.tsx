@@ -255,13 +255,9 @@ export function AgentAccessSection() {
             </ul>
           )}
           {log.length > 0 ? (
-            <button
-              type="button"
-              onClick={onOpenFullLog}
-              className="mt-2 text-sm text-primary hover:underline"
-            >
+            <Button variant="link" size="xs" onClick={onOpenFullLog} className="mt-2 h-auto px-0 text-sm">
               Open full log
-            </button>
+            </Button>
           ) : null}
         </div>
       </SettingsGroup>
