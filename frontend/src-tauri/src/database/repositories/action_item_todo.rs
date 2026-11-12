@@ -155,20 +155,35 @@ impl ActionItemTodoRepository {
         .await
     }
 
-    /// "Add to my list" / "Adopt": the assignee is left alone.
+    /// "Adopt": take someone else's item onto the list, assignee left alone.
+    pub async fn adopt(pool: &SqlitePool, id: &str) -> Result<Option<ActionItem>, SqlxError> {
+        Self::list_item(pool, id, false).await
+    }
+
+    /// "Add to my list": the item becomes mine (a suggestion is mine or unassigned).
     pub async fn add_to_list(pool: &SqlitePool, id: &str) -> Result<Option<ActionItem>, SqlxError> {
+        Self::list_item(pool, id, true).await
+    }
+
+    async fn list_item(
+        pool: &SqlitePool,
+        id: &str,
+        make_mine: bool,
+    ) -> Result<Option<ActionItem>, SqlxError> {
         let now = Utc::now().to_rfc3339();
         let res = sqlx::query(
-            "UPDATE action_items SET triage = 'listed', adopted_at = ?, user_edited = 1, \
-             status = 'open', completed_at = NULL, updated_at = ?, \
+            "UPDATE action_items SET triage = 'listed', adopted_at = ?2, user_edited = 1, \
+             status = 'open', completed_at = NULL, updated_at = ?2, \
+             assignee_is_self = CASE WHEN ?3 THEN 1 ELSE assignee_is_self END, \
+             assignee_person_id = CASE WHEN ?3 THEN NULL ELSE assignee_person_id END, \
+             assignee_raw = CASE WHEN ?3 THEN NULL ELSE assignee_raw END, \
              sort_order = (SELECT COALESCE(MAX(sort_order), -1) + 1 FROM action_items \
-                           WHERE triage = 'listed' AND id != ?) \
-             WHERE id = ?",
+                           WHERE triage = 'listed' AND id != ?1) \
+             WHERE id = ?1",
         )
-        .bind(&now)
-        .bind(&now)
         .bind(id)
-        .bind(id)
+        .bind(&now)
+        .bind(make_mine)
         .execute(pool)
         .await?;
         if res.rows_affected() == 0 {
@@ -192,15 +207,21 @@ impl ActionItemTodoRepository {
         ActionItemsRepository::get(pool, id).await
     }
 
-    /// A suggestion that now belongs to someone else is part of the record, not the inbox.
+    /// Keeps triage in step with the assignee: a suggestion that now belongs to someone else is
+    /// part of the record; an open record item that is mine or nobody's is a suggestion again.
     pub async fn reconcile_triage_after_assignee_change(
         pool: &SqlitePool,
         id: &str,
     ) -> Result<(), SqlxError> {
         sqlx::query(
-            "UPDATE action_items SET triage = 'record' WHERE id = ? AND triage = 'suggested' \
-             AND assignee_is_self = 0 \
-             AND (assignee_person_id IS NOT NULL OR assignee_raw IS NOT NULL)",
+            "UPDATE action_items SET triage = CASE \
+               WHEN assignee_is_self = 0 AND (assignee_person_id IS NOT NULL \
+                    OR assignee_raw IS NOT NULL) THEN 'record' ELSE 'suggested' END \
+             WHERE id = ?1 AND ( \
+               (triage = 'suggested' AND assignee_is_self = 0 \
+                AND (assignee_person_id IS NOT NULL OR assignee_raw IS NOT NULL)) \
+               OR (triage = 'record' AND status = 'open' AND (assignee_is_self = 1 \
+                OR (assignee_person_id IS NULL AND assignee_raw IS NULL))))",
         )
         .bind(id)
         .execute(pool)

@@ -100,7 +100,7 @@ async fn list_view_partitions_rows() {
 }
 
 #[tokio::test]
-async fn add_to_list_appends_and_keeps_assignee() {
+async fn adopt_appends_and_keeps_assignee() {
     let (_d, db) = fresh_db().await;
     let pool = db.pool();
     meeting(pool, "m1", 1).await;
@@ -121,11 +121,70 @@ async fn add_to_list_appends_and_keeps_assignee() {
     .execute(pool)
     .await
     .unwrap();
-    let item = Todo::add_to_list(pool, &rec).await.unwrap().unwrap();
+    let item = Todo::adopt(pool, &rec).await.unwrap().unwrap();
     assert_eq!(item.sort_order, Some(2));
     assert_eq!(item.triage, "listed");
     assert_eq!(item.assignee_person_id.as_deref(), Some("p-1"));
     assert!(item.user_edited && item.adopted_at.is_some());
+}
+
+#[tokio::test]
+async fn add_to_list_makes_the_item_mine() {
+    let (_d, db) = fresh_db().await;
+    let pool = db.pool();
+    meeting(pool, "m1", 1).await;
+    let unassigned = extracted(pool, "m1", "nobody", "suggested", "open").await;
+    let raw = extracted(pool, "m1", "raw", "suggested", "open").await;
+    sqlx::query("UPDATE action_items SET assignee_raw = 'Someone' WHERE id = ?")
+        .bind(&raw)
+        .execute(pool)
+        .await
+        .unwrap();
+    for id in [&unassigned, &raw] {
+        let item = Todo::add_to_list(pool, id).await.unwrap().unwrap();
+        assert_eq!(item.triage, "listed");
+        assert!(item.assignee_is_self);
+        assert!(item.assignee_person_id.is_none() && item.assignee_raw.is_none());
+    }
+}
+
+#[tokio::test]
+async fn manual_create_is_mine() {
+    let (_d, db) = fresh_db().await;
+    let item = ActionItemsRepository::create(db.pool(), None, &cand("typed"), "manual", "typed")
+        .await
+        .unwrap();
+    assert!(item.assignee_is_self);
+}
+
+#[tokio::test]
+async fn reconcile_moves_record_back_to_suggested_when_mine_or_nobody() {
+    let (_d, db) = fresh_db().await;
+    let pool = db.pool();
+    meeting(pool, "m1", 1).await;
+    let mine = extracted(pool, "m1", "a", "record", "open").await;
+    let nobody = extracted(pool, "m1", "b", "record", "open").await;
+    let done = extracted(pool, "m1", "c", "record", "completed").await;
+    sqlx::query("UPDATE action_items SET assignee_is_self = 1 WHERE id = ?")
+        .bind(&mine)
+        .execute(pool)
+        .await
+        .unwrap();
+    for id in [&mine, &nobody, &done] {
+        Todo::reconcile_triage_after_assignee_change(pool, id)
+            .await
+            .unwrap();
+    }
+    let triage = |id: String| async move {
+        ActionItemsRepository::get(pool, &id)
+            .await
+            .unwrap()
+            .unwrap()
+            .triage
+    };
+    assert_eq!(triage(mine).await, "suggested");
+    assert_eq!(triage(nobody).await, "suggested");
+    assert_eq!(triage(done).await, "record");
 }
 
 #[tokio::test]

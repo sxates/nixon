@@ -48,7 +48,8 @@ pub async fn api_triage_action_item<R: Runtime>(
     let state = app.state::<AppState>();
     let pool = state.db_manager.pool();
     let res = match action.trim() {
-        "add_to_list" | "adopt" => Todo::add_to_list(pool, &id).await,
+        "add_to_list" => Todo::add_to_list(pool, &id).await,
+        "adopt" => Todo::adopt(pool, &id).await,
         "restore" => Todo::restore(pool, &id).await,
         "dismiss" => ActionItemsRepository::set_status(pool, &id, "dismissed").await,
         other => {

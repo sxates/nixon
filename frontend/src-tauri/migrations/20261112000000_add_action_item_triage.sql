@@ -33,3 +33,11 @@ UPDATE action_items SET triage = CASE
   WHEN assignee_is_self = 1 OR (assignee_person_id IS NULL AND assignee_raw IS NULL) THEN 'suggested'
   ELSE 'record' END;
 UPDATE action_items SET adopted_at = updated_at WHERE triage = 'listed';
+-- Number the list densely (0..n) so the first item added afterwards (MAX + 1) lands last:
+-- rows that already had an order keep it, the rest follow by age.
+UPDATE action_items SET sort_order = (
+  SELECT rn FROM (
+    SELECT id, ROW_NUMBER() OVER (ORDER BY sort_order IS NULL, sort_order, created_at, id) - 1 AS rn
+    FROM action_items WHERE triage = 'listed') n
+  WHERE n.id = action_items.id)
+WHERE triage = 'listed';

@@ -234,6 +234,11 @@ impl ActionItemsRepository {
         // specs/0088: a hand-typed item is a to-do (end of the list); an extracted one is
         // triaged like any extraction candidate and is not yet adopted.
         let manual = source == "manual";
+        // ...and it is mine unless it names someone else.
+        let assignee_is_self = candidate.assignee_is_self
+            || (manual
+                && candidate.assignee_person_id.is_none()
+                && candidate.assignee_raw.is_none());
         let triage = if manual {
             "listed"
         } else {
@@ -253,7 +258,7 @@ impl ActionItemsRepository {
         .bind(meeting_id)
         .bind(&candidate.description)
         .bind(candidate.assignee_person_id.as_deref())
-        .bind(candidate.assignee_is_self)
+        .bind(assignee_is_self)
         .bind(candidate.assignee_raw.as_deref())
         .bind(candidate.due_hint.as_deref())
         .bind(candidate.due_date.as_deref())

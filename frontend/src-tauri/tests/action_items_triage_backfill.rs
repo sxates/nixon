@@ -62,6 +62,15 @@ async fn migration_backfills_triage_and_sources() {
     before.run(&pool).await.expect("pre-migrations");
 
     insert(&pool, "manual", None, "manual", 1, None, None, "open", None).await;
+    // Legacy listed rows: one with an explicit order, one without (NULL sorts last).
+    insert(
+        &pool, "ordered", None, "manual", 1, None, None, "open", None,
+    )
+    .await;
+    sqlx::query("UPDATE action_items SET sort_order = 5 WHERE id = 'ordered'")
+        .execute(&pool)
+        .await
+        .unwrap();
     insert(
         &pool,
         "done",
@@ -159,6 +168,25 @@ async fn migration_backfills_triage_and_sources() {
     assert_eq!(triage("raw").await, "record");
     assert_eq!(triage("person").await, "record");
 
+    // Listed rows are numbered densely 0..n: explicit order first, then NULL by created_at.
+    let order: Vec<(String, Option<i64>)> = sqlx::query_as(
+        "SELECT id, sort_order FROM action_items WHERE triage = 'listed' ORDER BY sort_order",
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    let sorted: Vec<i64> = order.iter().filter_map(|(_, s)| *s).collect();
+    assert_eq!(sorted, (0..order.len() as i64).collect::<Vec<_>>());
+    assert_eq!(order[0].0, "ordered");
+    let item =
+        app_lib::database::repositories::action_item_todo::ActionItemTodoRepository::add_to_list(
+            &pool, "pristine",
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(item.sort_order, Some(order.len() as i64));
+
     // Listed rows carry adopted_at; others do not.
     let adopted: Option<String> =
         sqlx::query_scalar("SELECT adopted_at FROM action_items WHERE id = 'done'")
@@ -182,11 +210,11 @@ async fn migration_backfills_triage_and_sources() {
     .fetch_all(&pool)
     .await
     .unwrap();
-    assert_eq!(rows.len(), 7);
+    assert_eq!(rows.len(), 8);
     for r in rows {
         let id: String = r.get("id");
         let n: i64 = r.get("n");
-        if id == "manual" {
+        if id == "manual" || id == "ordered" {
             assert_eq!(n, 0);
         } else {
             assert_eq!(n, 1, "{id}");
