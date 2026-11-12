@@ -144,4 +144,24 @@ describe('SegmentedControl', () => {
     );
     expect(screen.getByTestId('list-icon')).toBeTruthy();
   });
+
+  it('defaults to the page-level size', () => {
+    renderControl();
+    const btn = screen.getByRole('button', { name: 'Day' });
+    expect(btn.className).toContain('text-sm');
+    expect(btn.className).toContain('px-3');
+    expect(screen.getByRole('group').getAttribute('data-size')).toBe('default');
+  });
+
+  it('has a compact size for panels and toolbars', () => {
+    render(
+      <SegmentedControl options={OPTIONS} value="day" onChange={vi.fn()} aria-label="Agenda view" size="compact" />
+    );
+    const btn = screen.getByRole('button', { name: 'Day' });
+    expect(btn.className).toContain('text-xs');
+    expect(btn.className).toContain('px-2');
+    expect(btn.className).not.toContain('text-sm');
+    // Still the one underline style.
+    expect(btn.className).toContain('border-b-2');
+  });
 });

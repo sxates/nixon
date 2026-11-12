@@ -492,7 +492,7 @@ export function ParticipantsPanel({
       className={cn(
         isCompact
           ? 'flex flex-col gap-2'
-          : 'flex flex-col gap-2 rounded-[3px] border border-border bg-card px-4 py-3 shadow-[0_1px_2px_hsl(34_12%_12%/0.03)]',
+          : 'flex flex-col gap-2 rounded-[3px] border border-border bg-card px-4 py-3 shadow-card',
         className,
       )}
     >

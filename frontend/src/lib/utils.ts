@@ -1,5 +1,32 @@
 import { clsx, type ClassValue } from "clsx"
-import { twMerge } from "tailwind-merge"
+import { extendTailwindMerge } from "tailwind-merge"
+
+/**
+ * The named type scale and `shadow-card` from tailwind.config.js (docs/design-system.md).
+ * tailwind-merge only knows Tailwind's built-in names, so without this it reads
+ * `text-caption` as a text COLOUR and `cn('text-caption', 'text-muted-foreground')` drops
+ * the size. Keep this list in step with `theme.extend.fontSize`.
+ */
+export const FONT_SIZE_TOKENS = [
+  "micro",
+  "label",
+  "caption",
+  "meta",
+  "body",
+  "lead",
+  "heading",
+  "title",
+  "display",
+] as const
+
+const twMerge = extendTailwindMerge({
+  extend: {
+    classGroups: {
+      "font-size": [{ text: [...FONT_SIZE_TOKENS] }],
+      shadow: [{ shadow: ["card"] }],
+    },
+  },
+})
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))

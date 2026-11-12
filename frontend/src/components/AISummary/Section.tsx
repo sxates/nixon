@@ -2,7 +2,7 @@
 
 import { Section as SectionType, Block } from '@/types';
 import { BlockComponent } from './Block';
-import { EditableTitle } from '../EditableTitle';
+import { EditableText } from '@/components/ui/editable-text';
 import { useState, useRef } from 'react';
 import { motion } from 'framer-motion';
 
@@ -58,7 +58,7 @@ export const Section: React.FC<SectionProps> = ({
       className="mb-8"
     >
       <div className="flex items-center justify-between mb-4">
-        <EditableTitle
+        <EditableText
           title={section.title}
           isEditing={isEditingTitle}
           onStartEditing={() => setIsEditingTitle(true)}

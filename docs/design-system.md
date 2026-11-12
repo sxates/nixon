@@ -137,7 +137,7 @@ without a visible ring.
 
 | Need | Use | Notes |
 |---|---|---|
-| Any button with text | `Button` | variants `brand` (primary CTA), `outline` (row action), `ghost`, `link`, `dashed` ("+ Add …"), `destructive` (**confirm inside a dialog only**); sizes `xs`/`sm`/`default`/`lg` |
+| Any button with text | `Button` | variants `brand` (primary CTA), `outline` (row action), `ghost`, `link`, `dashed` ("+ Add …"), `destructive` (**confirm inside a dialog only**); sizes `xs`/`sm`/`default`/`lg`, plus `icon-sm` (28px square) |
 | Icon-only button | `IconButton` | `size` `sm` (28) / `md` (32), `variant` `ghost` / `bordered`, tooltip from `label` |
 | Overflow `…` | `MenuButton` | an `IconButton` preset: 14px horizontal glyph, opens a `DropdownMenu` |
 | Menu items | `DropdownMenuItem` | `icon` prop; `destructive` variant |
@@ -149,8 +149,8 @@ without a visible ring.
 | Inline notice | `Callout` | `tone` `info` / `warn` / `error` / `muted`, `title`, `action`; replaces `Alert` and the ad-hoc error boxes (`SettingsNote` is a thin alias) |
 | Empty / loading / error | `EmptyState`, `PageLoading`, `Callout tone="error"` | no icon discs |
 | Run in progress | `RunStatus` | spinner, label and an optional Cancel, inside a `Panel` |
-| Spinner | `Spinner` | `sm` (14) / `md` (20); never a raw `Loader2` or a CSS spinner |
-| Progress bar | `Progress` | `h-1.5 rounded-full bg-muted` with a `bg-brand` fill; every download and move bar |
+| Spinner | `Spinner` | `sm` (14) / `md` (20), inherits colour; `label` makes it a `role="status"`; never a raw `Loader2` or a CSS spinner |
+| Progress bar | `Progress` | `h-1.5 rounded-full bg-muted` with a `bg-brand` fill; every download and move bar; `tone` `brand` / `success` / `destructive` |
 | Status pill | `Badge` | `tone` `brand` / `success` / `muted` / `destructive`; 11px, `rounded-sm` |
 | Lamp / status / speaker dot | `StatusDot` | `size` 6/8/10; `tone` or a speaker colour class |
 | Person | `Avatar`, `AvatarStack` | photo or initials; the only `initials()` |

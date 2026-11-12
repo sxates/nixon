@@ -127,10 +127,8 @@ function SettingsPageContent() {
       <PageHeader title="Settings" className="pb-0" />
 
       <div className="flex-shrink-0 px-4 min-[900px]:px-7">
-        {/* Pure-CSS underline (specs/0057 Task 2): the active tab owns a 2px brand
-            border-bottom, the same formula as the meeting-details tab bar. The old
-            measured framer-motion bar could land in the wrong place on first paint. */}
-        <TabsList className="mt-3 h-auto rounded-none border-b border-border bg-transparent p-0">
+        {/* Underline tabs are the Tabs primitive's default style (docs/design-system.md). */}
+        <TabsList className="mt-3">
           {[...TABS, ...(devToolsAvailable ? [DEV_TAB] : [])].map((tab) => (
             <TabsTrigger
               key={tab.value}
@@ -138,7 +136,6 @@ function SettingsPageContent() {
               // Hidden while a screenshot driver is attached (`data-shot="1"`, globals.css):
               // this tab exists only in debug builds, so a README capture must not show it.
               {...(tab.value === DEV_TAB.value ? { 'data-dev-only': '' } : {})}
-              className="-mb-px rounded-none border-0 border-b-2 border-transparent bg-transparent px-3 py-1.5 text-sm font-semibold text-muted-foreground transition-colors [transition-duration:140ms] hover:text-foreground data-[state=active]:border-brand data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
             >
               {tab.label}
             </TabsTrigger>

@@ -183,7 +183,7 @@ export function SpeakerLegend({
   return (
     <div
       className={cn(
-        'flex flex-col gap-1.5 rounded-[3px] border border-border bg-card px-4 py-3 shadow-[0_1px_2px_hsl(34_12%_12%/0.03)]',
+        'flex flex-col gap-1.5 rounded-[3px] border border-border bg-card px-4 py-3 shadow-card',
         className,
       )}
     >

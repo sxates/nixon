@@ -15,6 +15,8 @@ export interface SegmentedControlProps {
   value: string;
   onChange: (value: string) => void;
   'aria-label': string;
+  /** `default` for a page-level view switch; `compact` for one inside a panel or toolbar. */
+  size?: 'default' | 'compact';
   className?: string;
 }
 
@@ -35,6 +37,7 @@ export function SegmentedControl({
   value,
   onChange,
   'aria-label': ariaLabel,
+  size = 'default',
   className,
 }: SegmentedControlProps) {
   const buttonRefs = React.useRef<Array<HTMLButtonElement | null>>([]);
@@ -54,7 +57,12 @@ export function SegmentedControl({
   };
 
   return (
-    <div role="group" aria-label={ariaLabel} className={cn('flex items-center gap-1', className)}>
+    <div
+      role="group"
+      aria-label={ariaLabel}
+      data-size={size}
+      className={cn('flex items-center', size === 'compact' ? 'gap-0.5' : 'gap-1', className)}
+    >
       {options.map((option, index) => {
         const active = option.value === value;
         return (
@@ -86,7 +94,8 @@ export function SegmentedControl({
               }
             }}
             className={cn(
-              'inline-flex items-center gap-1.5 border-b-2 px-3 py-1.5 text-sm font-semibold transition-colors [transition-duration:140ms] focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+              'inline-flex items-center gap-1.5 border-b-2 font-semibold transition-colors [transition-duration:140ms] focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+              size === 'compact' ? 'px-2 py-1 text-xs' : 'px-3 py-1.5 text-sm',
               active
                 ? 'border-brand text-foreground'
                 : 'border-transparent text-muted-foreground hover:text-foreground'

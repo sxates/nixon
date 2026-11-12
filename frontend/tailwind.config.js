@@ -18,6 +18,27 @@ module.exports = {
   			mono: ['var(--font-plex-mono)', 'Menlo', 'monospace'],
   			type: ['var(--font-courier-prime)', '"Courier New"', 'Courier', 'monospace'],
   		},
+  		// docs/design-system.md §Type scale. Named sizes so screens never reach for
+  		// `text-[Npx]`. Plain strings set font-size only (the same as the arbitrary values
+  		// they replace); body and title carry their line-height. Tailwind's own xs/sm/base
+  		// stay. Registered with tailwind-merge in lib/utils.ts so `cn()` doesn't read
+  		// `text-caption` as a colour and drop it.
+  		fontSize: {
+  			micro: '9px',
+  			label: '10px',
+  			caption: '11px',
+  			meta: '13px',
+  			body: ['13.5px', { lineHeight: '1.5' }],
+  			lead: '15px',
+  			heading: '18px',
+  			title: ['22px', { lineHeight: '1.1', letterSpacing: '-0.011em' }],
+  			display: '30px',
+  		},
+  		// Cards use `shadow-card` (docs/design-system.md §Elevation); the value is a CSS var
+  		// so Deck gets a shadow that is actually visible on charcoal.
+  		boxShadow: {
+  			card: 'var(--shadow-card)',
+  		},
   		colors: {
   			background: 'hsl(var(--background))',
   			foreground: 'hsl(var(--foreground))',
@@ -75,6 +96,13 @@ module.exports = {
   				DEFAULT: 'hsl(var(--success))',
   				foreground: 'hsl(var(--success-foreground))'
   			},
+  			// Named tints (docs/design-system.md §Tints) — use these, not ad-hoc opacities.
+  			'brand-wash': 'hsl(var(--brand) / 0.1)',
+  			'brand-edge': 'hsl(var(--brand) / 0.3)',
+  			'destructive-wash': 'hsl(var(--destructive) / 0.05)',
+  			'destructive-edge': 'hsl(var(--destructive) / 0.3)',
+  			'success-wash': 'hsl(var(--success) / 0.1)',
+  			rule: 'hsl(var(--rule))',
   			panel: 'hsl(var(--panel))',
   			engrave: 'hsl(var(--engrave))',
   			'lamp-amber': 'hsl(var(--lamp-amber))',
