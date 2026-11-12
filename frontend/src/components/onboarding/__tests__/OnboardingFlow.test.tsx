@@ -7,7 +7,7 @@ import { render, screen } from '@testing-library/react';
 // platform-detection window a real Mac user just saw a blank step 4.
 // Adding the Calendar step's `isMac === false` branch made that same window
 // reachable for a REAL Mac user to see (and act on) the WRONG step: both
-// "Finish Setup" and "Skip for now" on the Calendar step complete onboarding
+// "Finish setup" and "Skip for now" on the Calendar step complete onboarding
 // outright, skipping Permissions (mic/system-audio) entirely. `isMac` is now
 // `boolean | null`, and every platform-gated branch requires a resolved
 // (non-null) value, restoring the original "render nothing while detecting"

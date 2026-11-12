@@ -86,7 +86,7 @@ export function SetupOverviewStep() {
     >
       <div className="flex flex-col items-center space-y-10">
         {/* Steps Card */}
-        <div className="w-full max-w-md rounded-lg border border-border bg-card p-4">
+        <div className="w-full max-w-lg rounded-lg border border-border bg-card p-4">
           <div className="space-y-4" data-testid="setup-overview-steps">
             {steps.map((step) => (
               <div key={step.number} className="flex items-start gap-4 p-1">
@@ -111,7 +111,7 @@ export function SetupOverviewStep() {
             </Callout>
           )}
           <Button variant="brand" size="lg" className="w-full" onClick={handleContinue}>
-            {needsMoreSpace ? 'Download anyway' : "Let's Go"}
+            {needsMoreSpace ? 'Download anyway' : "Let's go"}
           </Button>
         </div>
       </div>

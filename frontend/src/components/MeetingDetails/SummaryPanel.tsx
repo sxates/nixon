@@ -254,6 +254,8 @@ export function SummaryPanel({
               {...toolbarPromptProps}
               hasTranscripts={transcripts.length > 0}
               hasSummary={false}
+              // The empty state's own CTA below is the Generate key here.
+              hideGenerate
               isModelConfigLoading={isModelConfigLoading}
               onOpenModelSettings={onOpenModelSettings}
               isSaving={isSaving}

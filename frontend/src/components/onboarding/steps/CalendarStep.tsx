@@ -25,7 +25,7 @@ function mapEventKitStatus(status: CalendarAccessStatus | null): PermissionStatu
  * Final, skippable onboarding step (specs/0061 W1): offers both Google
  * Calendar and macOS Calendar so a first-run user is offered a calendar
  * connection before they ever see the Today view / prep briefs that depend
- * on one. Neither row is required — both "Finish Setup" and "Skip for now"
+ * on one. Neither row is required — both "Finish setup" and "Skip for now"
  * complete onboarding the same way.
  */
 export function CalendarStep() {
@@ -140,7 +140,7 @@ export function CalendarStep() {
 
         <div className="flex flex-col gap-3 pt-4">
           <Button variant="brand" size="lg" className="w-full" onClick={() => void handleFinish()}>
-            Finish Setup
+            Finish setup
           </Button>
 
           <Button variant="ghost" onClick={() => void handleSkip()} className="text-muted-foreground">

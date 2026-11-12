@@ -5,7 +5,7 @@ import { render, screen, fireEvent, waitFor, within } from '@testing-library/rea
 // Google Calendar and macOS Calendar. Renders whichever Google connect state
 // `useGoogleCalendarConnect` reports (mocked here — its own behavior is
 // covered by useGoogleCalendarConnect.test.ts) and the EventKit row via
-// `@/lib/calendar`. "Finish Setup" and "Skip for now" both complete
+// `@/lib/calendar`. "Finish setup" and "Skip for now" both complete
 // onboarding then reload the app.
 
 const invokeMock = vi.fn().mockResolvedValue(undefined);
@@ -81,9 +81,9 @@ describe('CalendarStep', () => {
     expect(connectMock).toHaveBeenCalledTimes(1);
   });
 
-  it('"Finish Setup" completes onboarding then reloads', async () => {
+  it('"Finish setup" completes onboarding then reloads', async () => {
     render(<CalendarStep />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Finish Setup' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Finish setup' }));
 
     await waitFor(() => expect(completeOnboardingMock).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(reloadMock).toHaveBeenCalledTimes(1));

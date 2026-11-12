@@ -40,6 +40,11 @@ export interface SummaryToolbarProps {
   isModelConfigLoading: boolean;
   onGenerateSummary: () => Promise<void>;
   onStopGeneration: () => void;
+  /**
+   * Leave Generate out (Stop still shows while a run is live): the empty Summary tab has
+   * its own Generate summary CTA right below, and two of the same key read as two actions.
+   */
+  hideGenerate?: boolean;
 
   /* Prompt */
   prompts: SummaryPrompt[];
@@ -86,6 +91,7 @@ export function SummaryToolbar({
   isModelConfigLoading,
   onGenerateSummary,
   onStopGeneration,
+  hideGenerate = false,
   prompts,
   promptState,
   onPromptSelect,
@@ -139,7 +145,7 @@ export function SummaryToolbar({
           >
             <span>Stop</span>
           </Button>
-        ) : (
+        ) : hideGenerate ? null : (
           <Button
             variant="outline"
             size="xs"
@@ -164,7 +170,7 @@ export function SummaryToolbar({
                 <span>Processing…</span>
               </>
             ) : (
-              <span>{hasSummary ? 'Regenerate Summary' : 'Generate Summary'}</span>
+              <span>{hasSummary ? 'Regenerate summary' : 'Generate summary'}</span>
             )}
           </Button>
         )}

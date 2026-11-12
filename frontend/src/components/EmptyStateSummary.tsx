@@ -27,7 +27,7 @@ export function EmptyStateSummary({ onGenerate, hasModel, isGenerating = false }
     <EmptyState
       titleAs="h3"
       className="h-full animate-fade-in p-8"
-      title="No Summary Generated Yet"
+      title="No summary generated yet"
       body="Generate an AI-powered summary of your meeting transcript to get key points, action items, and decisions."
       action={
         <div className="flex flex-col items-center gap-3">
@@ -37,7 +37,7 @@ export function EmptyStateSummary({ onGenerate, hasModel, isGenerating = false }
                 <div>
                   <Button variant="brand" onClick={onGenerate} disabled={!hasModel || isGenerating}>
                     <DeckIcon icon={Sparkles} size={16} />
-                    {isGenerating ? 'Generating...' : 'Generate Summary'}
+                    {isGenerating ? 'Generating…' : 'Generate summary'}
                   </Button>
                 </div>
               </TooltipTrigger>

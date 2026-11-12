@@ -37,7 +37,7 @@ export function WelcomeStep() {
         {/* CTA Section */}
         <div className="w-full max-w-xs space-y-3">
           <Button variant="brand" size="lg" className="w-full" onClick={goNext}>
-            Get Started
+            Get started
           </Button>
           <p className="text-xs text-center text-muted-foreground">Takes less than 3 minutes</p>
         </div>
