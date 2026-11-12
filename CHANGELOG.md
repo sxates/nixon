@@ -19,7 +19,21 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 ## [Unreleased]
 
-_(nothing yet)_
+### Added
+
+- **To-do** is now a list you work from: one list you order yourself by dragging, with quick-add at the top. Type a due date in the title, like "(Nov 20)" or "(Tuesday)", and it becomes the due date. Type @ to mention a person.
+- **Inbox** collects the action items Nixon finds in your meetings as suggestions. Choose **Add to my list**, **Dismiss**, or **Assign...** for each one, right from the Inbox or from the meeting page.
+- When the same item comes up in several meetings, it appears once, with every meeting it came up in listed on its page.
+- Each to-do has its own page with notes you can write and the meetings it came from.
+- **Done** keeps a history of what you finished, grouped by week.
+- Clear out old suggestions in one step: dismiss everything in the Inbox older than 14, 30, or 60 days.
+- Items assigned to other people stay on the meeting as a record, and you can adopt one onto your list if it becomes yours.
+
+### Internal
+
+- Action items gain `triage` (suggested / listed / record) beside `status`, plus `action_item_sources` and `action_item_people`; existing items are backfilled on migration.
+- Cross-meeting merge uses `same_as` from extraction with a Jaccard backstop and an absorb rule for dismissed and recently completed items; the merge eval lives in `tests/action_items_merge_eval.rs` (ignored by default, results in spec 0088).
+- Shots: `tasks-inbox`, `tasks-done` and `tasks-item` routes added to `scripts/shots/routes.json`.
 
 ## [0.16.2] - 2026-11-12
 
