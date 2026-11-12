@@ -17,12 +17,14 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { Check, Loader2, Mic, RefreshCw, Volume2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { patchRecordingPreferences } from '@/lib/recording-preferences';
 import { usePermissionsModal } from '@/contexts/PermissionsModalContext';
 import { usePermissionCheck } from '@/hooks/usePermissionCheck';
 import { Button } from '@/components/ui/button';
+import { DeckIcon } from '@/components/ui/deck-icon';
+import { RefreshCw } from '@/components/ui/icons';
+import { PermissionStatus } from '@/components/ui/permission-row';
 import {
   Select,
   SelectContent,
@@ -116,7 +118,6 @@ export function AudioSettings() {
   const rows = [
     {
       key: 'mic' as const,
-      icon: <Mic className="h-4 w-4 text-muted-foreground" aria-hidden />,
       label: 'Microphone',
       sub: 'Your voice in the room',
       granted: hasMicrophone,
@@ -128,7 +129,6 @@ export function AudioSettings() {
     },
     {
       key: 'system' as const,
-      icon: <Volume2 className="h-4 w-4 text-muted-foreground" aria-hidden />,
       label: 'System audio',
       sub: 'Everyone else on the call',
       granted: audioCapture,
@@ -150,37 +150,27 @@ export function AudioSettings() {
           {/* Column headers, so the two columns read as one table rather than a pile of
               controls. Hidden from screen readers: each row already names itself. */}
           <div className="flex items-center gap-4 px-4 py-2" aria-hidden>
-            <span className="u-section-label flex-1 text-[9px]">Input</span>
-            <span className="u-section-label w-28 text-[9px]">Permission</span>
-            <span className="u-section-label w-64 text-[9px]">Device</span>
+            <span className="u-section-label-sm flex-1">Input</span>
+            <span className="u-section-label-sm w-28">Permission</span>
+            <span className="u-section-label-sm w-64">Device</span>
           </div>
 
           {rows.map((row) => (
             <div key={row.key} className="flex items-center gap-4 px-4 py-3" data-testid={`audio-row-${row.key}`}>
-              <div className="flex min-w-0 flex-1 items-center gap-2.5">
-                {row.icon}
-                <span className="min-w-0">
-                  <span className="block text-sm text-foreground">{row.label}</span>
-                  <span className="block text-xs text-muted-foreground">{row.sub}</span>
-                </span>
+              <div className="min-w-0 flex-1">
+                <span className="block text-sm font-medium text-foreground">{row.label}</span>
+                <span className="block text-xs text-muted-foreground">{row.sub}</span>
               </div>
 
               <div className="w-28">
                 {isChecking && row.key === 'mic' ? (
-                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" aria-label="Checking" />
+                  <PermissionStatus state="checking" />
                 ) : row.granted ? (
-                  <span className="inline-flex items-center gap-1.5 text-sm text-success">
-                    <Check className="h-3.5 w-3.5" aria-hidden />
-                    Allowed
-                  </span>
+                  <PermissionStatus state="granted" />
                 ) : (
-                  <button
-                    type="button"
-                    onClick={openPermissionsModal}
-                    className="u-section-label rounded-[3px] border border-border px-2 py-0.5 text-[9px] text-muted-foreground transition-colors hover:bg-key hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  >
+                  <Button variant="outline" size="sm" onClick={openPermissionsModal}>
                     Allow…
-                  </button>
+                  </Button>
                 )}
               </div>
 
@@ -208,7 +198,7 @@ export function AudioSettings() {
             Devices and permissions are read when this page opens.
           </span>
           <Button variant="outline" size="sm" onClick={handleRefresh} disabled={refreshing}>
-            <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} aria-hidden />
+            <DeckIcon icon={RefreshCw} size={12} className={refreshing ? 'animate-spin' : undefined} />
             Refresh
           </Button>
         </div>

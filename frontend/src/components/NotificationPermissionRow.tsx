@@ -17,7 +17,6 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
-import { Bell, Check, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   type AuthorizationStatus,
@@ -30,6 +29,7 @@ import {
   requestNotificationPermission,
 } from '@/lib/osNotification';
 import { Button } from '@/components/ui/button';
+import { PermissionStatus } from '@/components/ui/permission-row';
 import { SettingsNote, SettingsRow } from '@/components/ui/settings';
 
 export function NotificationPermissionRow() {
@@ -104,25 +104,21 @@ export function NotificationPermissionRow() {
       control={
         <div className="flex w-64 items-center justify-end gap-2" data-testid="notification-permission">
           {status === null ? (
-            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" aria-label="Checking" />
+            <PermissionStatus state="checking" />
           ) : !capability?.supported ? (
             <span className="text-right text-xs text-muted-foreground">
               {capability?.reason ?? 'Not available in this build.'}
             </span>
           ) : allowed ? (
             <>
-              <span className="inline-flex items-center gap-1.5 text-sm text-success">
-                <Check className="h-3.5 w-3.5" aria-hidden />
-                Allowed
-              </span>
+              <PermissionStatus state="granted" />
               <Button variant="outline" size="sm" onClick={handleTest} disabled={busy}>
-                <Bell className="mr-1.5 h-3.5 w-3.5" aria-hidden />
                 Send a test
               </Button>
             </>
           ) : status === 'denied' ? (
             <>
-              <span className="text-sm text-muted-foreground">Turned off</span>
+              <PermissionStatus state="denied" label="Turned off" />
               <Button variant="outline" size="sm" onClick={() => void openNotificationSettings()}>
                 Open System Settings
               </Button>
@@ -147,13 +143,13 @@ export function NotificationPermissionRow() {
         For the &quot;meeting is starting&quot; alert to wait for you, set Nixon to{' '}
         <strong className="font-semibold">Alerts</strong> in System Settings → Notifications.
         Nixon clears the rest by itself after a few seconds.{' '}
-        <button
-          type="button"
+        <Button
+          variant="link"
           onClick={() => void openNotificationSettings()}
-          className="font-semibold text-brand underline-offset-2 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="h-auto p-0 align-baseline text-brand underline-offset-2"
         >
           Open Notifications
-        </button>
+        </Button>
       </SettingsNote>
     )}
     </>

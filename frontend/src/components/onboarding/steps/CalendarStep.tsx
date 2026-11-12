@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { toast } from 'sonner';
-import { Calendar } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { OnboardingContainer } from '../OnboardingContainer';
 import { PermissionRow } from '../shared';
@@ -113,7 +112,6 @@ export function CalendarStep() {
           {showGoogleRow && (
             <div role="group" aria-label="Google Calendar">
               <PermissionRow
-                icon={<Calendar className="w-5 h-5" />}
                 title="Google Calendar"
                 description="Read-only access to your Google account's events."
                 status={
@@ -129,7 +127,6 @@ export function CalendarStep() {
 
           <div role="group" aria-label="macOS Calendar">
             <PermissionRow
-              icon={<Calendar className="w-5 h-5" />}
               title="macOS Calendar"
               description="Read your Mac's calendar to show today's meetings on-device."
               status={mapEventKitStatus(eventKitStatus)}
@@ -142,16 +139,13 @@ export function CalendarStep() {
         </div>
 
         <div className="flex flex-col gap-3 pt-4">
-          <Button onClick={() => void handleFinish()} className="w-full h-11">
+          <Button variant="brand" size="lg" className="w-full" onClick={() => void handleFinish()}>
             Finish Setup
           </Button>
 
-          <button
-            onClick={() => void handleSkip()}
-            className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-          >
+          <Button variant="ghost" onClick={() => void handleSkip()} className="text-muted-foreground">
             Skip for now
-          </button>
+          </Button>
         </div>
       </div>
     </OnboardingContainer>

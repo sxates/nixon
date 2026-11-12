@@ -1,5 +1,6 @@
 import React from 'react';
-import { Check, Lock, Download, CheckCircle2, BrainCircuit } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 
 interface ProgressIndicatorProps {
   current: number;
@@ -7,13 +8,11 @@ interface ProgressIndicatorProps {
   onStepClick?: (step: number) => void;
 }
 
-const stepIcons = [
-  Lock,         // 1. Welcome
-  BrainCircuit, // 2. Setup Overview
-  Download,     // 3. Download Progress
-  // Step 4 (Permissions) doesn't need icon - auto-skipped on non-macOS
-];
-
+/**
+ * Onboarding position markers: one engraved bar per step — done (`bg-success`), current
+ * (`bg-brand`), pending (`bg-border`). No per-step icons (docs/design-system.md §Icons:
+ * onboarding steps carry no decorative glyphs); a completed bar is clickable to go back.
+ */
 export function ProgressIndicator({ current, total, onStepClick }: ProgressIndicatorProps) {
   const visibleSteps = Array.from({ length: total }, (_, i) => i + 1);
 
@@ -24,46 +23,31 @@ export function ProgressIndicator({ current, total, onStepClick }: ProgressIndic
           const isActive = step === current;
           const isCompleted = step < current;
           const isClickable = isCompleted && onStepClick;
-          const StepIcon = stepIcons[step - 1] || CheckCircle2;
 
           return (
             <React.Fragment key={step}>
-              {/* Position marker — engraved bar with its step icon above it. */}
-              <button
+              <Button
+                variant="ghost"
+                size="xs"
                 onClick={() => isClickable && onStepClick(step)}
                 disabled={!isClickable}
                 aria-label={`Step ${step} of ${total}${isCompleted ? ' — completed' : isActive ? ' — current' : ''}`}
                 aria-current={isActive ? 'step' : undefined}
-                className={`flex flex-col items-center gap-1.5 ${
-                  isClickable ? 'cursor-pointer hover:opacity-80' : 'cursor-default'
-                }`}
+                // The bar is the control; drop the button's own padding and keep a
+                // non-clickable marker at full strength (not the disabled 50%).
+                className={cn('h-auto px-1 py-1.5 disabled:opacity-100', isClickable ? 'cursor-pointer' : 'cursor-default')}
               >
-                {isCompleted ? (
-                  <Check className="h-3.5 w-3.5 text-success transition-colors duration-300" />
-                ) : (
-                  <StepIcon
-                    className={`h-3.5 w-3.5 transition-colors duration-300 ${
-                      isActive ? 'text-brand' : 'text-muted-foreground'
-                    }`}
-                  />
-                )}
                 <span
-                  className={`h-2 w-6 rounded-[1px] transition-all duration-300 ${
-                    isCompleted
-                      ? 'bg-success'
-                      : isActive
-                        ? 'bg-brand shadow-[0_0_0_1px_hsl(var(--brand)/0.25),0_0_8px_-1px_hsl(var(--brand)/0.55)]'
-                        : 'bg-border'
-                  }`}
+                  className={cn(
+                    'h-2 w-6 rounded-sm transition-colors duration-300',
+                    isCompleted ? 'bg-success' : isActive ? 'bg-brand' : 'bg-border',
+                  )}
                 />
-              </button>
+              </Button>
 
-              {/* Connector Line */}
               {index < visibleSteps.length - 1 && (
                 <div
-                  className={`h-0.5 w-6 transition-all duration-300 ${
-                    isCompleted ? 'bg-success' : 'bg-border'
-                  }`}
+                  className={cn('h-0.5 w-6 transition-colors duration-300', isCompleted ? 'bg-success' : 'bg-border')}
                 />
               )}
             </React.Fragment>
