@@ -60,14 +60,15 @@ export function PageHeader({ title, subtitle, back, actions, width = 'none', cla
           the title claims the free space and wraps only when there genuinely is none. */}
       <div className="flex min-w-0 flex-1 items-start gap-2">
         {back ? (
-          // -mt-0.5 centres the 28px key on the title's 24px first line.
+          // -mt-0.5 centres the 28px key on the title's 24px first line. Foreground at
+          // reduced emphasis: the muted ghost ink read as a disabled key beside the title.
           <IconButton
             variant="ghost"
             size="sm"
             label={back.label}
             onClick={back.onClick}
             icon={<DeckIcon icon={ArrowLeft} size={16} />}
-            className="-ml-1.5 -mt-0.5"
+            className="-ml-1.5 -mt-0.5 text-foreground/80"
           />
         ) : null}
         <div className="min-w-0 flex-1">
@@ -81,7 +82,13 @@ export function PageHeader({ title, subtitle, back, actions, width = 'none', cla
           ) : null}
         </div>
       </div>
-      {actions ? <div className="flex flex-shrink-0 items-center gap-2.5">{actions}</div> : null}
+      {/* A ghost icon key here (the page's overflow `…`) takes the back key's ink, not the
+          muted toolbar ink, so the header's keys don't read as disabled. */}
+      {actions ? (
+        <div className="flex flex-shrink-0 items-center gap-2.5 [&_[data-variant=ghost]]:text-foreground/80 [&_[data-variant=ghost]:hover]:text-foreground">
+          {actions}
+        </div>
+      ) : null}
     </>
   );
   if (width === 'none') {

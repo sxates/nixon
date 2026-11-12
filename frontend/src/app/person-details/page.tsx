@@ -224,6 +224,7 @@ function PersonDetailsContent() {
           its own weight. The avatar's negative bottom margin lets it hang beside the
           subtitle (which is indented past it) instead of pushing the subtitle below it. */}
       <PageHeader
+        width="page"
         back={{ label: 'People', onClick: onBack }}
         title={
           <span className="flex min-w-0 items-start gap-4">

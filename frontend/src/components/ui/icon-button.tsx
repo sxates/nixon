@@ -76,6 +76,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(functio
             type={type}
             // No `title`: it would duplicate the tooltip as a second, slower native one.
             aria-label={label}
+            data-variant={variant ?? 'bordered'}
             className={cn(iconButtonVariants({ size, variant }), className)}
             {...rest}
           >
