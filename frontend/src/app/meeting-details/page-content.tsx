@@ -433,7 +433,9 @@ export default function PageContent({
             isRecording={isRecording}
             selectedSpeakerKey={speakerFilter}
             onSelectSpeaker={onSelectSpeaker}
-            className="mt-4 mb-4"
+            // A card stack (gap-3, docs/design-system.md §Spacing) under Participants; the
+            // tabs below bring their own top margin.
+            className="mt-3"
           />
 
           {/* Tabs — underlined active tab in brand, sticky to the top of the scroll

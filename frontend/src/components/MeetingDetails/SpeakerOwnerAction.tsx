@@ -16,6 +16,7 @@
  *    Only when the meeting actually has a "You" speaker row.
  */
 
+import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { isRoomSetup, type AudioSetupResolved } from '@/hooks/useAudioSetup';
 
@@ -108,10 +109,10 @@ export function SpeakerOwnerAction({
 }
 
 /** One line under the legend for a room meeting with no "You" yet. */
-export function RoomOwnerHint({ owner }: { owner: OwnerActionContext }) {
+export function RoomOwnerHint({ owner, className }: { owner: OwnerActionContext; className?: string }) {
   if (!isRoomSetup(owner.resolved) || owner.hasLocalSpeaker) return null;
   return (
-    <p className="text-xs text-muted-foreground">
+    <p className={cn('text-xs text-muted-foreground', className)}>
       Recorded in a room. Mark which speaker is you: click the name, then &ldquo;This is
       me&rdquo;.
     </p>

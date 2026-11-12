@@ -217,7 +217,9 @@ export function SpeakerLegend({
           </Button>
         ) : null
       }
-      className={cn('flex flex-col gap-1.5', className)}
+      // No extra flex gap under the header: the Panel header's own mb-2 is the title→body
+      // spacing, as in Participants (the gap-1.5 on top of it set the strip 6px lower).
+      className={className}
     >
 
       {/* Channel strip (specs/0057 §3.5). Height-capped + scrollable so a long
@@ -245,7 +247,7 @@ export function SpeakerLegend({
           />
         </div>
       )}
-      <RoomOwnerHint owner={ownerActionContext(controller)} />
+      <RoomOwnerHint owner={ownerActionContext(controller)} className="mt-1.5" />
     </Panel>
   );
 }
