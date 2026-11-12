@@ -92,7 +92,7 @@ export function DeveloperSettings() {
               <label className="flex items-center gap-2 text-xs text-muted-foreground">
                 <Switch checked={skipAudio} onCheckedChange={setSkipAudio} aria-label="Skip audio synthesis" /> skip audio
               </label>
-              <Button size="sm" variant="secondary" disabled={busy} onClick={load}>{busy ? "Loading…" : "Load demo data"}</Button>
+              <Button size="sm" variant="outline" disabled={busy} onClick={load}>{busy ? "Loading…" : "Load demo data"}</Button>
             </div>
           }
         />
@@ -101,10 +101,10 @@ export function DeveloperSettings() {
           description="Fires the real banners. Put another window in front first. Prep and the body tap toast here; Starting now runs the REAL Join & Record path (no Zoom link, so only the recording half) — it will start an actual recording in this debug profile."
           control={
             <div className="flex items-center gap-2">
-              <Button size="sm" variant="secondary" onClick={() => testAlert(false)}>
+              <Button size="sm" variant="outline" onClick={() => testAlert(false)}>
                 T-5 (Prep)
               </Button>
-              <Button size="sm" variant="secondary" onClick={() => testAlert(true)}>
+              <Button size="sm" variant="outline" onClick={() => testAlert(true)}>
                 Starting now
               </Button>
             </div>
@@ -113,7 +113,7 @@ export function DeveloperSettings() {
         <SettingsRow
           label="Reset onboarding and restart"
           description="Clears the onboarding status. The app reloads on the Welcome step."
-          control={<Button size="sm" variant="secondary" onClick={reset}>Reset onboarding</Button>}
+          control={<Button size="sm" variant="outline" onClick={reset}>Reset onboarding</Button>}
         />
       </SettingsGroup>
       <SettingsNote tone="muted">Launch flags: ./dev-nixon.sh --demo, --no-audio, --onboarding, --real-downloads, --control</SettingsNote>

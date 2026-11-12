@@ -3,9 +3,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { toast } from 'sonner';
-import { Pencil, Plus, Star, Trash2 } from 'lucide-react';
+import { Trash2 } from '@/components/ui/icons';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { SettingsGroup, SettingsNote, SettingsSection } from '@/components/ui/settings';
+import { Callout } from '@/components/ui/callout';
+import { DeckIcon } from '@/components/ui/deck-icon';
+import { IconButton } from '@/components/ui/icon-button';
+import { SettingsGroup, SettingsSection } from '@/components/ui/settings';
 import type { SummaryPrompt } from '@/lib/summary-prompts';
 import { PromptEditorDialog } from './PromptEditorDialog';
 import { DeletePromptDialog } from './DeletePromptDialog';
@@ -62,19 +66,13 @@ export function SummaryPromptSettings() {
       <SettingsSection
         title="Summary prompts"
         description="A prompt tells the model how you want your meeting notes shaped. The default is used for new meetings; you can pick a different one per meeting."
-      >
-        <div className="flex justify-end">
-          <Button variant="brand" size="sm" onClick={() => setEditorTarget(null)}>
-            <Plus className="h-4 w-4" />
+        action={
+          <Button variant="outline" size="sm" onClick={() => setEditorTarget(null)}>
             New prompt
           </Button>
-        </div>
-
-        {loadError && (
-          <SettingsNote tone="warn" className="text-destructive">
-            {loadError}
-          </SettingsNote>
-        )}
+        }
+      >
+        {loadError && <Callout tone="error">{loadError}</Callout>}
 
         <SettingsGroup>
           {loading && <div className="py-3 u-meta">Loading prompts…</div>}
@@ -87,14 +85,10 @@ export function SummaryPromptSettings() {
                 <div className="flex items-center gap-2">
                   <span className="truncate font-medium">{prompt.name}</span>
                   {prompt.is_default && (
-                    <span className="flex-shrink-0 rounded-[3px] bg-brand/10 px-2 py-0.5 text-[11px] font-semibold text-brand">
-                      Default
-                    </span>
+                    <Badge tone="brand">Default</Badge>
                   )}
                   {prompt.extract_action_items && (
-                    <span className="flex-shrink-0 rounded-[3px] bg-muted px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">
-                      Action items
-                    </span>
+                    <Badge>Action items</Badge>
                   )}
                 </div>
                 <div className="mt-0.5 line-clamp-2 whitespace-pre-line text-sm text-muted-foreground">
@@ -108,7 +102,6 @@ export function SummaryPromptSettings() {
                   onClick={() => setEditorTarget(prompt)}
                   aria-label={`Edit ${prompt.name}`}
                 >
-                  <Pencil className="h-4 w-4" />
                   Edit
                 </Button>
                 {!prompt.is_default && (
@@ -119,19 +112,15 @@ export function SummaryPromptSettings() {
                       onClick={() => void setDefault(prompt)}
                       aria-label={`Set ${prompt.name} as default`}
                     >
-                      <Star className="h-4 w-4" />
                       Set as default
                     </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
+                    <IconButton
+                      size="md"
+                      label={`Delete ${prompt.name}`}
+                      icon={<DeckIcon icon={Trash2} />}
                       className="text-destructive hover:text-destructive"
                       onClick={() => setDeleteTarget(prompt)}
-                      aria-label={`Delete ${prompt.name}`}
-                      title="Delete"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    />
                   </>
                 )}
               </div>

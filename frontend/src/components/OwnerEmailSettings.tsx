@@ -2,9 +2,12 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { X } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import { DeckIcon } from '@/components/ui/deck-icon';
+import { IconButton } from '@/components/ui/icon-button';
+import { X } from '@/components/ui/icons';
+import { Input } from '@/components/ui/input';
 import { SettingsGroup, SettingsRow, SettingsSection } from '@/components/ui/settings';
 
 /**
@@ -110,17 +113,15 @@ export function OwnerEmailSettings() {
               {ownerEmails.map((email) => (
                 <li
                   key={email}
-                  className="flex items-center justify-between gap-2 rounded-[3px] bg-muted px-3 py-1.5"
+                  className="flex items-center justify-between gap-2 rounded-md bg-muted py-1 pl-3 pr-1"
                 >
                   <span className="truncate text-sm text-foreground">{email}</span>
-                  <button
-                    type="button"
+                  <IconButton
+                    variant="ghost"
+                    label={`Remove ${email}`}
+                    icon={<DeckIcon icon={X} />}
                     onClick={() => void handleRemoveOwnerEmail(email)}
-                    aria-label={`Remove ${email}`}
-                    className="flex-shrink-0 rounded-[3px] p-1 text-muted-foreground hover:bg-background hover:text-foreground"
-                  >
-                    <X size={14} />
-                  </button>
+                  />
                 </li>
               ))}
             </ul>
@@ -135,16 +136,17 @@ export function OwnerEmailSettings() {
             }}
             className="flex items-center gap-2"
           >
-            <input
+            <Input
               type="email"
               value={ownerEmailInput}
               onChange={(e) => setOwnerEmailInput(e.target.value)}
               placeholder="you@example.com"
               aria-label="Add your email address"
-              className="flex-1 rounded-md border border-input bg-background px-2 py-1 text-sm"
+              className="h-8 flex-1 bg-background"
             />
             <Button
               type="submit"
+              variant="outline"
               size="sm"
               disabled={addingOwnerEmail || !ownerEmailInput.trim()}
             >

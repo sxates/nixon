@@ -240,8 +240,9 @@ export function SpeakerSettings() {
               description="Delete every stored voice sample. People and their names are kept; Nixon just re-learns voices from scratch."
               control={
                 <Button
-                  variant="destructive"
+                  variant="outline"
                   size="sm"
+                  className="text-destructive hover:text-destructive"
                   onClick={() => setClearVoiceprintsOpen(true)}
                 >
                   Clear all
