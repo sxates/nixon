@@ -22,7 +22,7 @@
 #   lucide-import        `from 'lucide-react'` — import glyphs from @/components/ui/icons
 #   motion-travel        framer-motion `initial={{ … y: … }}` / `x:` entrance offsets
 #                        (same-line approximation: a multi-line initial object is not seen)
-#   handrolled-hover     `hover:bg-brand/90`-style hover tints — use the primitive's variant
+#   handrolled-hover     `hover:bg-brand/90`-style hover tints (brand, destructive, primary, record, success) — use the primitive's variant
 #
 # Scope: git-tracked `.ts` / `.tsx` / `.css` under frontend/src, EXCLUDING
 # components/ui/ (the primitives themselves), __tests__/, fixtures/, *.test.* / *.spec.*,
@@ -82,7 +82,7 @@ label-override	u-section-label
 arbitrary-shadow	shadow-\[
 lucide-import	from[[:space:]]*['"]lucide-react(/[^'"]*)?['"]
 motion-travel	initial=\{\{([^}]*[[:space:],])?[xy][[:space:]]*:
-handrolled-hover	hover:bg-(brand|destructive|primary)/[0-9]+
+handrolled-hover	hover:bg-(brand|destructive|primary|record|success)/[0-9]+
 EOF
 )
 RULE_NAMES=$(printf '%s\n' "$RULES" | cut -f1)

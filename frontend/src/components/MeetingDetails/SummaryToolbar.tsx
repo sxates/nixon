@@ -133,7 +133,7 @@ export function SummaryToolbar({
           <Button
             variant="outline"
             size="xs"
-            className="border-record/30 bg-record/10 text-record-ink hover:bg-record/20 xl:px-4"
+            className="text-destructive xl:px-4"
             onClick={onStopGeneration}
             title="Stop summary generation"
           >
