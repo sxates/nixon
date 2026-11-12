@@ -23,6 +23,7 @@ use sqlx::{Error as SqlxError, FromRow, SqlitePool};
 use uuid::Uuid;
 
 use crate::action_items::diff::{ExtractionDiff, ResolvedCandidate};
+use crate::action_items::triage::triage_for;
 
 /// One action item, serialized camelCase for the frontend.
 #[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
@@ -61,6 +62,12 @@ pub struct ActionItem {
     /// [`ActionItemsRepository::reorder`] writes dense 0,1,2,… values. The default `list`
     /// order (meeting recency) ignores this — the hub's Manual sort reads it client-side.
     pub sort_order: Option<i64>,
+    /// `'suggested' | 'listed' | 'record'` (specs/0088).
+    pub triage: String,
+    /// When the item entered the owner's to-do list.
+    pub adopted_at: Option<String>,
+    /// Owner's notes (detail page), markdown.
+    pub notes_markdown: Option<String>,
 }
 
 /// Hub row: an action item joined to its source meeting's title/date (both `None` for a
@@ -115,7 +122,8 @@ pub enum BulkStatusFilter<'a> {
 
 const SELECT_ITEM: &str = "SELECT id, meeting_id, description, assignee_person_id, \
      assignee_is_self, assignee_raw, due_hint, due_date, status, source, user_edited, \
-     content_key, created_at, updated_at, completed_at, sort_order FROM action_items";
+     content_key, created_at, updated_at, completed_at, sort_order, triage, adopted_at, \
+     notes_markdown FROM action_items";
 
 pub struct ActionItemsRepository;
 
@@ -178,7 +186,7 @@ impl ActionItemsRepository {
             "SELECT ai.id, ai.meeting_id, ai.description, ai.assignee_person_id, \
              ai.assignee_is_self, ai.assignee_raw, ai.due_hint, ai.due_date, ai.status, \
              ai.source, ai.user_edited, ai.content_key, ai.created_at, ai.updated_at, \
-             ai.completed_at, ai.sort_order, \
+             ai.completed_at, ai.sort_order, ai.triage, ai.adopted_at, ai.notes_markdown, \
              m.title AS meeting_title, m.created_at AS meeting_created_at \
              FROM action_items ai \
              LEFT JOIN meetings m ON m.id = ai.meeting_id \
@@ -222,8 +230,10 @@ impl ActionItemsRepository {
             "INSERT INTO action_items
                 (id, meeting_id, description, assignee_person_id, assignee_is_self,
                  assignee_raw, due_hint, due_date, status, source, user_edited, content_key,
-                 created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'open', ?, 0, ?, ?, ?)",
+                 created_at, updated_at, triage, adopted_at, sort_order)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'open', ?, 0, ?, ?, ?, 'listed', ?,
+                 (SELECT COALESCE(MAX(sort_order), -1) + 1 FROM action_items
+                  WHERE triage = 'listed'))",
         )
         .bind(&id)
         .bind(meeting_id)
@@ -235,6 +245,7 @@ impl ActionItemsRepository {
         .bind(candidate.due_date.as_deref())
         .bind(source)
         .bind(content_key)
+        .bind(&now)
         .bind(&now)
         .bind(&now)
         .execute(pool)
@@ -499,7 +510,7 @@ impl ActionItemsRepository {
                 "UPDATE action_items
                  SET description = ?, assignee_person_id = ?, assignee_is_self = ?,
                      assignee_raw = ?, due_hint = ?, due_date = ?, content_key = ?,
-                     updated_at = ?
+                     updated_at = ?, triage = ?
                  WHERE id = ? AND meeting_id = ?
                    AND source = 'extracted' AND status = 'open' AND user_edited = 0",
             )
@@ -511,6 +522,7 @@ impl ActionItemsRepository {
             .bind(update.candidate.due_date.as_deref())
             .bind(&update.content_key)
             .bind(&now)
+            .bind(triage_for(&update.candidate).as_str())
             .bind(&update.id)
             .bind(meeting_id)
             .execute(&mut *tx)
@@ -524,8 +536,8 @@ impl ActionItemsRepository {
                 "INSERT INTO action_items
                     (id, meeting_id, description, assignee_person_id, assignee_is_self,
                      assignee_raw, due_hint, due_date, status, source, user_edited,
-                     content_key, created_at, updated_at)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'open', 'extracted', 0, ?, ?, ?)",
+                     content_key, created_at, updated_at, triage)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'open', 'extracted', 0, ?, ?, ?, ?)",
             )
             .bind(&id)
             .bind(meeting_id)
@@ -538,6 +550,7 @@ impl ActionItemsRepository {
             .bind(&insert.content_key)
             .bind(&now)
             .bind(&now)
+            .bind(triage_for(&insert.candidate).as_str())
             .execute(&mut *tx)
             .await?;
             rows_written += 1;
@@ -1468,8 +1481,9 @@ mod action_items_tests {
         .await
         .unwrap();
 
-        // Fresh rows have no order.
-        assert!(a.sort_order.is_none());
+        // `create` adds a to-do (specs/0088), so fresh rows go to the end of the list.
+        assert_eq!(a.sort_order, Some(0));
+        assert_eq!(c.sort_order, Some(2));
 
         // Reorder c, a, b — plus a ghost id that no longer exists (skipped).
         let written = ActionItemsRepository::reorder(

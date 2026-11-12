@@ -1,0 +1,196 @@
+//! specs/0088 W1: the triage migration backfills existing action items correctly.
+//! Brings a database up to just before the migration, inserts one row per case, then runs
+//! the full migrator.
+
+use std::borrow::Cow;
+
+use sqlx::sqlite::SqlitePoolOptions;
+use sqlx::Row;
+
+const V: i64 = 20261112000000;
+
+#[allow(clippy::too_many_arguments)]
+async fn insert(
+    pool: &sqlx::SqlitePool,
+    id: &str,
+    meeting: Option<&str>,
+    source: &str,
+    is_self: i64,
+    person: Option<&str>,
+    raw: Option<&str>,
+    status: &str,
+    due_date: Option<&str>,
+) {
+    sqlx::query(
+        "INSERT INTO action_items
+            (id, meeting_id, description, assignee_person_id, assignee_is_self, assignee_raw,
+             due_date, status, source, user_edited, content_key, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, '2026-01-01T00:00:00Z', '2026-01-02T00:00:00Z')",
+    )
+    .bind(id)
+    .bind(meeting)
+    .bind(format!("desc {id}"))
+    .bind(person)
+    .bind(is_self)
+    .bind(raw)
+    .bind(due_date)
+    .bind(status)
+    .bind(source)
+    .bind(format!("key-{id}"))
+    .execute(pool)
+    .await
+    .expect("insert row");
+}
+
+#[tokio::test]
+async fn migration_backfills_triage_and_sources() {
+    let pool = SqlitePoolOptions::new()
+        .max_connections(1)
+        .connect("sqlite::memory:")
+        .await
+        .unwrap();
+
+    let mut before = sqlx::migrate!("./migrations");
+    before.migrations = Cow::Owned(
+        before
+            .migrations
+            .iter()
+            .filter(|m| m.version < V)
+            .cloned()
+            .collect(),
+    );
+    before.run(&pool).await.expect("pre-migrations");
+
+    insert(&pool, "manual", None, "manual", 1, None, None, "open", None).await;
+    insert(
+        &pool,
+        "done",
+        Some("m1"),
+        "extracted",
+        1,
+        None,
+        None,
+        "completed",
+        None,
+    )
+    .await;
+    insert(
+        &pool,
+        "dated",
+        Some("m1"),
+        "extracted",
+        1,
+        None,
+        None,
+        "open",
+        Some("2026-02-01"),
+    )
+    .await;
+    insert(
+        &pool,
+        "pristine",
+        Some("m1"),
+        "extracted",
+        1,
+        None,
+        None,
+        "open",
+        None,
+    )
+    .await;
+    insert(
+        &pool,
+        "nobody",
+        Some("m2"),
+        "extracted",
+        0,
+        None,
+        None,
+        "open",
+        None,
+    )
+    .await;
+    insert(
+        &pool,
+        "raw",
+        Some("m2"),
+        "extracted",
+        0,
+        None,
+        Some("Sam"),
+        "open",
+        None,
+    )
+    .await;
+    insert(
+        &pool,
+        "person",
+        Some("m2"),
+        "extracted",
+        0,
+        Some("p-1"),
+        None,
+        "open",
+        None,
+    )
+    .await;
+
+    sqlx::migrate!("./migrations")
+        .run(&pool)
+        .await
+        .expect("full migrations");
+
+    let triage = |id: &'static str| {
+        let pool = pool.clone();
+        async move {
+            sqlx::query("SELECT triage FROM action_items WHERE id = ?")
+                .bind(id)
+                .fetch_one(&pool)
+                .await
+                .unwrap()
+                .get::<String, _>(0)
+        }
+    };
+    assert_eq!(triage("manual").await, "listed");
+    assert_eq!(triage("done").await, "listed");
+    assert_eq!(triage("dated").await, "listed");
+    assert_eq!(triage("pristine").await, "suggested");
+    assert_eq!(triage("nobody").await, "suggested");
+    assert_eq!(triage("raw").await, "record");
+    assert_eq!(triage("person").await, "record");
+
+    // Listed rows carry adopted_at; others do not.
+    let adopted: Option<String> =
+        sqlx::query_scalar("SELECT adopted_at FROM action_items WHERE id = 'done'")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(adopted.as_deref(), Some("2026-01-02T00:00:00Z"));
+    let adopted: Option<String> =
+        sqlx::query_scalar("SELECT adopted_at FROM action_items WHERE id = 'raw'")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert!(adopted.is_none());
+
+    // Exactly one source row per item with a meeting, phrasing == description; none otherwise.
+    let rows = sqlx::query(
+        "SELECT ai.id, ai.description, COUNT(s.meeting_id) AS n, MIN(s.phrasing) AS p
+         FROM action_items ai LEFT JOIN action_item_sources s ON s.action_item_id = ai.id
+         GROUP BY ai.id",
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(rows.len(), 7);
+    for r in rows {
+        let id: String = r.get("id");
+        let n: i64 = r.get("n");
+        if id == "manual" {
+            assert_eq!(n, 0);
+        } else {
+            assert_eq!(n, 1, "{id}");
+            assert_eq!(r.get::<String, _>("p"), r.get::<String, _>("description"));
+        }
+    }
+}

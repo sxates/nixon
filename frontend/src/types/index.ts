@@ -318,6 +318,10 @@ export interface ActionItem {
   /** Manual drag-order key (specs/0038 WS1.b); null = unordered. Only the hub's Manual
    *  sort reads it — the default list order (meeting recency) ignores it. */
   sortOrder: number | null;
+  /** specs/0088: inbox / to-do list / someone else's (meeting record only). */
+  triage: 'suggested' | 'listed' | 'record';
+  adoptedAt: string | null;
+  notesMarkdown: string | null;
 }
 
 /** Hub-query row (specs/0034): an action item joined to its source meeting

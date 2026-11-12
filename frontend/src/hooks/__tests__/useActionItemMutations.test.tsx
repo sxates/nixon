@@ -39,6 +39,9 @@ function makeItem(overrides: Partial<ActionItem> = {}): ActionItem {
     updatedAt: '2026-07-01T10:00:00Z',
     completedAt: null,
     sortOrder: null,
+    triage: 'suggested',
+    adoptedAt: null,
+    notesMarkdown: null,
     ...overrides,
   };
 }

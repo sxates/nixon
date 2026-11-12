@@ -347,6 +347,9 @@ mod tests {
             updated_at: "2026-07-01T00:00:00Z".to_string(),
             completed_at: None,
             sort_order: None,
+            triage: "suggested".to_string(),
+            adopted_at: None,
+            notes_markdown: None,
         }
     }
 

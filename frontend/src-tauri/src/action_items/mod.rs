@@ -18,6 +18,7 @@ pub mod extractor;
 pub mod grammar;
 mod reply_parse;
 pub mod schema;
+pub mod triage;
 
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex, OnceLock};
@@ -404,6 +405,9 @@ mod tests {
             updated_at: "2026-07-01T00:00:00Z".to_string(),
             completed_at: None,
             sort_order: None,
+            triage: "suggested".to_string(),
+            adopted_at: None,
+            notes_markdown: None,
         }
     }
 
