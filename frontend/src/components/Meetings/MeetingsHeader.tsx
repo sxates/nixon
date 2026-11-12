@@ -45,39 +45,34 @@ export function MeetingsHeader({
 }) {
   const { openImportDialog } = useImportDialog();
   return (
-    // The header sits in the same centred column as the content, so with the rail
-    // collapsed (a wider page) the title keeps the content's left edge (audit 2026-11-11:
-    // "Meetings" at x=92, the cards at x=132). The gutter moves out to the wrapper.
-    <div className={cn('flex-shrink-0', PAGE_GUTTER)}>
-      <div className={cn('mx-auto w-full', MEETINGS_CONTENT_WIDTH)}>
-        <PageHeader
-          className="px-0 min-[900px]:px-0"
-          title="Meetings"
-          subtitle={subtitle}
-          actions={
-            <>
-              <SearchMeetingsButton />
-              {/* Import audio: an icon button beside Search, on every view (owner, 2026-11-05). */}
-              <IconButton
-                size="md"
-                label="Import audio"
-                onClick={() => openImportDialog()}
-                icon={<DeckIcon icon={FileAudio} size={14} />}
-              />
-              <ProcessMeetingsButton />
-              {/* A meeting added here lives on the calendar views; without a calendar there is
-                  no view that would show it until it is recorded. */}
-              {calendarConnected && (
-                <Button variant="brand" onClick={onAddMeeting}>
-                  <Plus aria-hidden="true" />
-                  Add meeting
-                </Button>
-              )}
-            </>
-          }
-        />
-      </div>
-    </div>
+    // `width="page"`: the title keeps the content's left edge when the rail is collapsed
+    // (audit 2026-11-11: "Meetings" at x=92, the cards at x=132).
+    <PageHeader
+      width="page"
+      title="Meetings"
+      subtitle={subtitle}
+      actions={
+        <>
+          <SearchMeetingsButton />
+          {/* Import audio: an icon button beside Search, on every view (owner, 2026-11-05). */}
+          <IconButton
+            size="md"
+            label="Import audio"
+            onClick={() => openImportDialog()}
+            icon={<DeckIcon icon={FileAudio} size={14} />}
+          />
+          <ProcessMeetingsButton />
+          {/* A meeting added here lives on the calendar views; without a calendar there is
+              no view that would show it until it is recorded. */}
+          {calendarConnected && (
+            <Button variant="brand" onClick={onAddMeeting}>
+              <Plus aria-hidden="true" />
+              Add meeting
+            </Button>
+          )}
+        </>
+      }
+    />
   );
 }
 

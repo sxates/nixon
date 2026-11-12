@@ -5,7 +5,7 @@ import * as React from 'react';
 import { DeckIcon } from '@/components/ui/deck-icon';
 import { IconButton } from '@/components/ui/icon-button';
 import { ArrowLeft } from '@/components/ui/icons';
-import { PAGE_GUTTER } from '@/lib/page-width';
+import { DOC_CONTENT_WIDTH, PAGE_CONTENT_WIDTH, PAGE_GUTTER } from '@/lib/page-width';
 import { cn } from '@/lib/utils';
 
 export interface PageHeaderBack {
@@ -28,6 +28,13 @@ export interface PageHeaderProps {
   back?: PageHeaderBack;
   /** Right-hand cluster (search, primary action, overflow menu). */
   actions?: React.ReactNode;
+  /**
+   * Which content column the title row aligns to. `page` (`PAGE_CONTENT_WIDTH`) and `doc`
+   * (`DOC_CONTENT_WIDTH`) centre the row in that column inside the gutter, so the title
+   * keeps the content's left edge when the page is wider than the column (the rail
+   * collapsed). `none` (default) is the full-width row inside the gutter.
+   */
+  width?: 'page' | 'doc' | 'none';
   /** Never children — the header owns its own layout. */
   children?: never;
   className?: string;
@@ -39,13 +46,14 @@ export interface PageHeaderProps {
  * renders its title block through this so the type scale, the padding and the
  * actions cluster are identical everywhere instead of eight near-copies.
  */
-export function PageHeader({ title, subtitle, back, actions, className }: PageHeaderProps) {
+const COLUMN = { page: PAGE_CONTENT_WIDTH, doc: DOC_CONTENT_WIDTH } as const;
+
+export function PageHeader({ title, subtitle, back, actions, width = 'none', className }: PageHeaderProps) {
   const hasSubtitle = subtitle !== undefined && subtitle !== null && subtitle !== false && subtitle !== '';
   const subtitleIsText = typeof subtitle === 'string' || typeof subtitle === 'number';
-  return (
-    <header
-      className={cn('flex flex-shrink-0 items-start justify-between gap-4 pb-4 pt-7', PAGE_GUTTER, className)}
-    >
+  const row = 'flex items-start justify-between gap-4';
+  const content = (
+    <>
       {/* `flex-1`, not just `min-w-0`: without it this box takes its content width and
           then shrinks, so a two-word name wraps while the rest of the row sits empty
           (owner report on the person page, specs/0067). Actions stay `flex-shrink-0`, so
@@ -74,6 +82,16 @@ export function PageHeader({ title, subtitle, back, actions, className }: PageHe
         </div>
       </div>
       {actions ? <div className="flex flex-shrink-0 items-center gap-2.5">{actions}</div> : null}
+    </>
+  );
+  if (width === 'none') {
+    return (
+      <header className={cn('flex-shrink-0 pb-4 pt-7', row, PAGE_GUTTER, className)}>{content}</header>
+    );
+  }
+  return (
+    <header className={cn('flex-shrink-0 pb-4 pt-7', PAGE_GUTTER, className)}>
+      <div className={cn('mx-auto w-full', row, COLUMN[width])}>{content}</div>
     </header>
   );
 }

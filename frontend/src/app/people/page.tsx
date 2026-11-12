@@ -233,6 +233,7 @@ export default function PeoplePage() {
   return (
     <div className="flex h-page flex-col bg-background animate-fade-in">
       <PageHeader
+        width="page"
         title="People"
         subtitle={
           hasPeople

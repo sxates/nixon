@@ -266,6 +266,7 @@ function SavedQuestionContent() {
   return (
     <div className="flex h-page flex-col bg-background animate-fade-in">
       <PageHeader
+        width="page"
         back={{ label: 'Ask AI', onClick: onBack }}
         title={<span className="block min-w-0 truncate">{saved.label?.trim() || saved.question}</span>}
         subtitle="Saved question — shows the last answer; Rerun to refresh it."

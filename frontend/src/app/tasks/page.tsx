@@ -304,21 +304,15 @@ export default function TasksPage() {
   return (
     // A short opacity fade, no travel (docs/design-system.md §Motion).
     <div className="flex h-page animate-fade-in flex-col bg-background">
-      {/* The header sits in the content's centred column, so the title keeps the content's
-          left edge when the page is wider than the column (the rail collapsed). */}
-      <div className={cn('flex-shrink-0', PAGE_GUTTER)}>
-        <div className={cn('mx-auto w-full', PAGE_CONTENT_WIDTH)}>
-          <PageHeader
-            className="px-0 min-[900px]:px-0"
-            title="Action items"
-            subtitle={
-              items.length > 0
-                ? `${items.length} ${items.length === 1 ? 'item' : 'items'}`
-                : 'Commitments from your meetings, in one place'
-            }
-          />
-        </div>
-      </div>
+      <PageHeader
+        width="page"
+        title="Action items"
+        subtitle={
+          items.length > 0
+            ? `${items.length} ${items.length === 1 ? 'item' : 'items'}`
+            : 'Commitments from your meetings, in one place'
+        }
+      />
 
       {/* Filter bar: status · view (Mine/Everyone/By person) · sort · bulk. */}
       <div className={cn('flex-shrink-0 pb-3', PAGE_GUTTER)}>

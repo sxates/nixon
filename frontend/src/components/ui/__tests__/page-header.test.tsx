@@ -75,4 +75,26 @@ describe('PageHeader', () => {
     expect(editor.closest('div.u-meta')).toBeTruthy();
     expect(container.querySelector('p.u-meta')).toBeNull();
   });
+
+  it("width='page' centres the row in the page column inside the gutter", () => {
+    const { container } = render(<PageHeader title="Meetings" width="page" actions={<span>a</span>} />);
+    const header = container.querySelector('header')!;
+    expect(header.className).toContain('px-7');
+    const column = header.firstElementChild as HTMLElement;
+    expect(column.className).toContain('mx-auto');
+    expect(column.className).toContain('max-w-[1080px]');
+    expect(column.className).toContain('justify-between');
+    expect(column.querySelector('h1')!.textContent).toBe('Meetings');
+  });
+
+  it("width='doc' uses the document column; the default keeps the row on the header", () => {
+    const { container, rerender } = render(<PageHeader title="Notes" width="doc" />);
+    expect((container.querySelector('header')!.firstElementChild as HTMLElement).className).toContain(
+      'max-w-[840px]',
+    );
+    rerender(<PageHeader title="Notes" />);
+    const header = container.querySelector('header')!;
+    expect(header.className).toContain('justify-between');
+    expect(header.className).not.toContain('max-w-');
+  });
 });

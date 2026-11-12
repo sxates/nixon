@@ -425,6 +425,7 @@ function AskPageContent() {
   return (
     <div className="flex h-page flex-col bg-background animate-fade-in">
       <PageHeader
+        width="page"
         title="Ask AI"
         subtitle="Ask a question across your meetings — answers cite their sources"
       />
