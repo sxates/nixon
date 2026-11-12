@@ -16,7 +16,7 @@ import { ModelConfig, ModelSettingsModal } from '@/components/ModelSettingsModal
 import { SummaryModelName } from '@/components/SummaryModelRow';
 import { ResolvedSettingRow } from '@/components/ResolvedSettingRow';
 import { SettingsSection } from '@/components/ui/settings';
-import { cliModelLabel, isCliProvider, isKeylessProvider, providerLabel } from '@/lib/llm-providers';
+import { isCliProvider, isKeylessProvider } from '@/lib/llm-providers';
 
 interface SummaryModelSectionProps {
   refetchTrigger?: number; // Change this to trigger refetch
@@ -145,14 +145,10 @@ export function SummaryModelSection({ refetchTrigger }: SummaryModelSectionProps
             : 'The AI model that writes your meeting summaries. A local model keeps everything on this Mac.'
         }
       >
-        {isCliProvider(modelConfig.provider) && (
-          // specs/0085: a subscription CLI is a choice the user made, never Nixon's pick, so
-          // this states what is in use instead of the "chosen for this Mac" resolved row.
-          <p className="text-sm" data-testid="cli-resolved">
-            {providerLabel(modelConfig.provider)} · {cliModelLabel(modelConfig.model)} · your{' '}
-            {modelConfig.provider === 'claude-code' ? 'Claude' : 'ChatGPT'} subscription
-          </p>
-        )}
+        {/* specs/0085: a subscription CLI is a choice the user made, never Nixon's pick, so
+            the row is locked open (below) and the picker names the provider, its model and
+            the plan. The one-line restatement that sat here repeated the picker word for
+            word and was dropped (design-system wave C). */}
         <ResolvedSettingRow
           label="Summary model"
           description="Chosen to suit this Mac's memory. Summaries are written here, on your machine — nothing is sent anywhere."

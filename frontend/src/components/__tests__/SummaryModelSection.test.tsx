@@ -109,16 +109,17 @@ describe('Summary model — resolved, and last on the tab (specs/0067)', () => {
     await waitFor(() => expect(screen.getByTestId('model-picker')).toBeInTheDocument());
   });
 
-  // specs/0085 — a subscription CLI provider is a deliberate choice: the controls stay open,
-  // the row names the provider, model and plan, and "Recommended" is never claimed.
-  it('names Claude Code, its model and the plan, and never says Recommended', async () => {
+  // specs/0085 — a subscription CLI provider is a deliberate choice: the controls stay open
+  // (the picker names the provider, model and plan) and "Recommended" is never claimed.
+  // Design-system wave C dropped the one-line restatement above the picker; it repeated it.
+  it('keeps the picker open for Claude Code, with no restated line and no Recommended', async () => {
     arrange({ provider: 'claude-code', model: 'sonnet' });
     const { container } = render(<SummaryModelSection />);
 
-    expect(await screen.findByTestId('cli-resolved')).toHaveTextContent(
-      'Claude Code · Sonnet · your Claude subscription',
-    );
+    await waitFor(() => expect(container.textContent).toMatch(/Claude Code sends meeting text/));
     expect(screen.getByTestId('model-picker')).toBeInTheDocument();
+    expect(screen.queryByTestId('resolved-value')).toBeNull();
+    expect(container.textContent).not.toMatch(/your Claude subscription/);
     expect(container.textContent).not.toMatch(/recommended/i);
   });
 
@@ -126,7 +127,7 @@ describe('Summary model — resolved, and last on the tab (specs/0067)', () => {
     arrange({ provider: 'claude-code', model: 'sonnet' });
     const { container } = render(<SummaryModelSection />);
 
-    await screen.findByTestId('cli-resolved');
+    await waitFor(() => expect(container.textContent).toMatch(/Claude Code sends meeting text/));
     expect(container.textContent).toContain(
       'The AI model that writes your meeting summaries. Claude Code sends meeting text to Anthropic under your Claude plan.',
     );

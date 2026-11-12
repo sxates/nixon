@@ -26,6 +26,10 @@ export {
   X,
 } from 'lucide-react';
 
+// Functional, Settings (design-system wave C): the API-key field's icon-only lock and
+// show/hide toggles, and the model combobox trigger's up/down chevron.
+export { ChevronsUpDown, Eye, Lock, Unlock } from 'lucide-react';
+
 // Dropdown-menu leading icons (`DropdownMenuItem icon={…}`) in use today.
 export { Circle, EyeOff, MicOff, Radio, RotateCcw, UserCheck, UserPlus, Waves } from 'lucide-react';
 
