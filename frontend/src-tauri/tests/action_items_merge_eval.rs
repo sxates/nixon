@@ -64,9 +64,9 @@ impl Score {
 
 /// The expectation a candidate is judged against: the first whose hint it contains;
 /// none means an extra candidate, which is expected not to merge.
-fn expectation_for<'a>(case: &'a Case, description: &str) -> Option<&'a Expect> {
+fn expect_index(case: &Case, description: &str) -> Option<usize> {
     let d = description.to_lowercase();
-    case.expect.iter().find(|e| d.contains(&e.hint))
+    case.expect.iter().position(|e| d.contains(&e.hint))
 }
 
 #[tokio::test]
@@ -141,9 +141,16 @@ async fn merge_precision_recall() {
         let targets: HashSet<u32> = case.expect.iter().filter_map(|e| e.same_as).collect();
         routed_score.expected += targets.len() as u32;
 
+        // Raw and routed are scored per prediction. A prediction is correct only if it
+        // fills a not-yet-filled expected slot; repeats and unmatched phrasings are false
+        // positives.
+        let mut raw_filled: HashSet<usize> = HashSet::new();
         for cand in &resolved {
-            let want = expectation_for(case, &cand.description).and_then(|e| e.same_as);
-            // Raw: a valid in-range number pointing at another meeting's item.
+            let slot = expect_index(case, &cand.description);
+            let want = slot.and_then(|i| case.expect[i].same_as);
+            // Raw: a valid in-range number pointing at another meeting's item. A `same_as`
+            // at the current meeting's own row is a legitimate forced own-row match (spec
+            // ruling R10), not a cross-meeting merge, so it is not scored here.
             let raw_pred = cand.same_as.filter(|n| {
                 tracked
                     .get((*n as usize).wrapping_sub(1))
@@ -151,30 +158,53 @@ async fn merge_precision_recall() {
             });
             if let Some(n) = raw_pred {
                 raw.predicted += 1;
-                raw.correct += (Some(n) == want) as u32;
-            }
-            // Routed: the tracked index that received an attach for this phrasing.
-            let routed_pred = routed
-                .attaches
-                .iter()
-                .find(|a| a.phrasing == cand.description)
-                .and_then(|a| tracked.iter().position(|t| t.id == a.item_id))
-                .map(|p| p as u32 + 1);
-            if let Some(n) = routed_pred {
-                routed_score.predicted += 1;
-                routed_score.correct += (Some(n) == want) as u32;
+                if want == Some(n) && raw_filled.insert(slot.unwrap()) {
+                    raw.correct += 1;
+                }
             }
             println!(
-                "{:<40} want={:?} raw={:?} routed={:?} cand={:?}",
-                case.name, want, raw_pred, routed_pred, cand.description
+                "{:<40} want={:?} raw={:?} cand={:?}",
+                case.name, want, raw_pred, cand.description
+            );
+        }
+        // Routed: every attach is one prediction.
+        let mut filled: HashSet<u32> = HashSet::new();
+        for a in &routed.attaches {
+            routed_score.predicted += 1;
+            let target = tracked
+                .iter()
+                .position(|t| t.id == a.item_id)
+                .map(|p| p as u32 + 1);
+            let want = expect_index(case, &a.phrasing).and_then(|i| case.expect[i].same_as);
+            let ok = target.is_some() && target == want && filled.insert(target.unwrap());
+            routed_score.correct += ok as u32;
+            println!(
+                "{:<40} attach -> {:?} want={:?} ok={}",
+                case.name, target, want, ok
             );
         }
         println!(
-            "{:<40} for_diff={} kept={}",
+            "{:<40} attaches={} for_diff={} kept={}",
             case.name,
+            routed.attaches.len(),
             routed.for_diff.len(),
             routed.kept.len()
         );
+        match case.name.as_str() {
+            "hard-many-to-one" => {
+                assert_eq!(routed.attaches.len(), 1, "many-to-one: exactly one attach");
+                assert_eq!(routed.attaches[0].item_id, "t1");
+                assert_eq!(routed.for_diff.len() + routed.kept.len(), 1);
+            }
+            "hard-current-meeting-row" => {
+                assert!(
+                    routed.attaches.is_empty(),
+                    "own-meeting row must not attach"
+                );
+                assert_eq!(routed.kept.len(), 1, "own-meeting row is a forced match");
+            }
+            _ => {}
+        }
     }
     println!("model={provider}/{model} cases={}", cases.len());
     println!(
@@ -192,6 +222,11 @@ async fn merge_precision_recall() {
         routed_score.correct,
         routed_score.predicted,
         routed_score.expected
+    );
+    assert!(raw.correct <= raw.expected, "raw correct exceeds expected");
+    assert!(
+        routed_score.correct <= routed_score.expected,
+        "routed correct exceeds expected"
     );
     assert!(
         routed_score.expected == 0 || routed_score.correct > 0,
