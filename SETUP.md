@@ -177,11 +177,17 @@ pre-flight if missing, unless `--no-release`):
     CLOUDFLARE_API_TOKEN="…"      # R2 Object Read & Write on the nixon-releases bucket
     CLOUDFLARE_ACCOUNT_ID="…"
     NIXON_SITE_DIR="/path/to/nixonapp"   # site repo checkout; wrangler is run from its pinned install
+    NIXON_SITE_BRANCH="main"             # optional; the site branch that is deployed (default main)
 
 Upload order is artifacts, then `updates/current.json`, then `updates/early.json` (only if it
 moves forward), then `updates/latest.json` last, so an interrupted release never advertises a
-version whose files are missing. It then verifies the live feed, and commits + pushes
-`public/release.json` to the site repo. `gh` must be authenticated on the build machine unless
+version whose files are missing. It then verifies the live feed and runs
+`scripts/publish-site.sh`, which writes `public/release.json` (the download page's version),
+copies the three site screenshots from `docs/screenshots/real` (run `pnpm shots:real` first
+when the app's look changed), commits and pushes on `NIXON_SITE_BRANCH`, and deploys
+production and staging — pushing alone deploys nothing. Normal releases and promotes do this;
+`--early` does not. The site repo must be on that branch with a clean tree (checked before the
+build). If the step fails, fix it and run `scripts/publish-site.sh X.Y.Z` by hand. `gh` must be authenticated on the build machine unless
 you pass `--no-github` or `--no-release`.
 
 #### Early access, then promote (specs/0086)

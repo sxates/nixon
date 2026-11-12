@@ -244,7 +244,7 @@ if [ "$ALSO_GITHUB" -eq 1 ]; then GH_STEPS="     ${GH_UPLOAD}
 R2_FAIL_STATE="nothing was rebuilt or committed; the uploads listed before this one succeeded; everyone's feed is unchanged unless updates/latest.json was already uploaded. Until it is, re-running ./release.sh promote ${P} is safe and finishes the job."
 R2_FAIL_LAST="latest.json"
 R2_FAIL_NEXT="the site release.json and the GitHub steps"
-R2_FAIL_TAIL="     update ${NIXON_SITE_DIR}/public/release.json (version ${P}, size ${DMG_BYTES:-<dmg bytes>})
+R2_FAIL_TAIL="     scripts/publish-site.sh ${P}
 ${GH_STEPS}"
 
 # README images track the everyone track (specs/0060): nudge against the version everyone
@@ -265,7 +265,7 @@ if [ "$DRY_RUN" -eq 0 ]; then
     die "$1
    updates/latest.json was already uploaded, so a re-run of promote will refuse (${P} is no longer newer).
    Skipped because of this: the site release.json push and the GitHub steps.
-   To finish: re-check ${SITE_BASE}/updates/latest.json, then update ${NIXON_SITE_DIR}/public/release.json (version ${P}, size ${DMG_BYTES}) and run:
+   To finish: re-check ${SITE_BASE}/updates/latest.json, then run scripts/publish-site.sh ${P} and:
 ${GH_STEPS}"
   }
   verify_live "updates/latest.json" "$P" "$PDMG" "$DMG_BYTES" "$TGZ_BYTES"
@@ -273,7 +273,7 @@ fi
 
 # ---- publish 4: site release.json (warn, never fail) ---------------------------
 if [ "$DRY_RUN" -eq 1 ]; then
-  echo "  [dry-run] write ${NIXON_SITE_DIR}/public/release.json (version ${P}, size ${DMG_BYTES:-<unknown>}) and push"
+  "$REPO_ROOT/scripts/publish-site.sh" "$P" --size "${DMG_BYTES:-1}" --dry-run || c_yellow "$RELEASE_JSON_WARN"
 else
   publish_release_json "$P" "$DMG_BYTES" || c_yellow "$RELEASE_JSON_WARN"
 fi
