@@ -1,47 +1,339 @@
 [
-  {"name": "para-roadmap-deck", "tracked": ["Order new badges for the visiting auditors", "Share the roadmap deck with the team"],
-   "summary": "## Weekly Sync\n\n### Follow-ups\n- Maya will send the slides out to everyone on the team by tomorrow so they can review the roadmap.",
-   "expect_same_as": [2]},
-  {"name": "para-vendor-contract", "tracked": ["Review the Halvorsen vendor contract", "Book a venue for the offsite"],
-   "summary": "## Procurement check-in\n\n### Next steps\n- Priya agreed to go through the Halvorsen vendor agreement and flag any odd clauses.",
-   "expect_same_as": [1]},
-  {"name": "para-staging-env", "tracked": ["Fix the flaky login test"], 
-   "summary": "## Engineering standup\n\n### Action items\n- Tomas to stabilise the intermittent login test failures in CI.",
-   "expect_same_as": [1]},
-  {"name": "para-onboarding-doc", "tracked": ["Update the onboarding checklist for new hires", "Renew the office plant subscription", "Draft Q4 budget"],
-   "summary": "## People ops\n\n### Next steps\n- Lena will refresh the new-hire onboarding checklist with the latest laptop setup steps.",
-   "expect_same_as": [1]},
-  {"name": "para-customer-call", "tracked": ["Schedule a follow-up call with Brightwater", "Prepare invoice for Corvid Labs"],
-   "summary": "## Account review\n\n### Follow-ups\n- Omar should set up another call with the Brightwater team next week.",
-   "expect_same_as": [1]},
-  {"name": "para-press-release", "tracked": ["Write the press release for the product launch"],
-   "summary": "## Launch planning\n\n### Action items\n- Nadia is drafting the announcement copy for the launch press release.",
-   "expect_same_as": [1]},
-  {"name": "para-security-patch", "tracked": ["Rotate the shared API credentials", "Patch the file server to the latest version"],
-   "summary": "## Ops review\n\n### Action items\n- Gabe will apply the newest update to the file server this weekend.",
-   "expect_same_as": [2]},
-  {"name": "near-deck-finance-vs-client", "tracked": ["Send the deck to finance"],
-   "summary": "## Sales sync\n\n### Next steps\n- Ravi will send the deck to the client before Friday.",
-   "expect_same_as": [null]},
-  {"name": "near-review-vs-write", "tracked": ["Write the migration guide"],
-   "summary": "## Docs sync\n\n### Action items\n- Elena will review the migration guide once it is drafted.",
-   "expect_same_as": [null]},
-  {"name": "near-different-customer", "tracked": ["Schedule a follow-up call with Brightwater"],
-   "summary": "## Account review\n\n### Follow-ups\n- Sam should schedule a follow-up call with Corvid Labs.",
-   "expect_same_as": [null]},
-  {"name": "near-same-verb-other-object", "tracked": ["Update the pricing page copy"],
-   "summary": "## Marketing sync\n\n### Action items\n- Joanna will update the careers page copy.",
-   "expect_same_as": [null]},
-  {"name": "near-test-vs-fix", "tracked": ["Fix the flaky login test"],
-   "summary": "## Engineering standup\n\n### Action items\n- Tomas to write new tests for the password reset flow.",
-   "expect_same_as": [null]},
-  {"name": "near-budget-year", "tracked": ["Draft the Q3 budget proposal"],
-   "summary": "## Finance sync\n\n### Next steps\n- Hiro will draft the Q4 budget proposal.",
-   "expect_same_as": [null]},
-  {"name": "near-book-vs-cancel", "tracked": ["Book a venue for the offsite"],
-   "summary": "## Team planning\n\n### Action items\n- Dana will cancel the venue reservation for the offsite.",
-   "expect_same_as": [null]},
-  {"name": "near-unrelated", "tracked": ["Order new badges for the visiting auditors", "Review the Halvorsen vendor contract"],
-   "summary": "## Hiring sync\n\n### Action items\n- Wen will schedule interviews for the two backend candidates.",
-   "expect_same_as": [null]}
+ {
+  "name": "para-roadmap-deck",
+  "tracked": [
+   "Order new badges for the visiting auditors",
+   "Share the roadmap deck with the team"
+  ],
+  "summary": "## Weekly Sync\n\n### Follow-ups\n- Maya will send the slides out to everyone on the team by tomorrow so they can review the roadmap.",
+  "expect": [
+   {
+    "hint": "",
+    "same_as": 2
+   }
+  ]
+ },
+ {
+  "name": "para-vendor-contract",
+  "tracked": [
+   "Review the Halvorsen vendor contract",
+   "Book a venue for the offsite"
+  ],
+  "summary": "## Procurement check-in\n\n### Next steps\n- Priya agreed to go through the Halvorsen vendor agreement and flag any odd clauses.",
+  "expect": [
+   {
+    "hint": "",
+    "same_as": 1
+   }
+  ]
+ },
+ {
+  "name": "para-login-test",
+  "tracked": [
+   "Fix the flaky login test"
+  ],
+  "summary": "## Engineering standup\n\n### Action items\n- Tomas to stabilise the intermittent login test failures in CI.",
+  "expect": [
+   {
+    "hint": "",
+    "same_as": 1
+   }
+  ]
+ },
+ {
+  "name": "para-onboarding-doc",
+  "tracked": [
+   "Update the onboarding checklist for new hires",
+   "Renew the office plant subscription",
+   "Draft Q4 budget"
+  ],
+  "summary": "## People ops\n\n### Next steps\n- Lena will refresh the new-hire onboarding checklist with the latest laptop setup steps.",
+  "expect": [
+   {
+    "hint": "",
+    "same_as": 1
+   }
+  ]
+ },
+ {
+  "name": "para-customer-call",
+  "tracked": [
+   "Schedule a follow-up call with Brightwater",
+   "Prepare invoice for Corvid Labs"
+  ],
+  "summary": "## Account review\n\n### Follow-ups\n- Omar should set up another call with the Brightwater team next week.",
+  "expect": [
+   {
+    "hint": "",
+    "same_as": 1
+   }
+  ]
+ },
+ {
+  "name": "para-press-release",
+  "tracked": [
+   "Write the press release for the product launch"
+  ],
+  "summary": "## Launch planning\n\n### Action items\n- Nadia is drafting the announcement copy for the launch press release.",
+  "expect": [
+   {
+    "hint": "",
+    "same_as": 1
+   }
+  ]
+ },
+ {
+  "name": "para-security-patch",
+  "tracked": [
+   "Rotate the shared API credentials",
+   "Patch the file server to the latest version"
+  ],
+  "summary": "## Ops review\n\n### Action items\n- Gabe will apply the newest update to the file server this weekend.",
+  "expect": [
+   {
+    "hint": "",
+    "same_as": 2
+   }
+  ]
+ },
+ {
+  "name": "near-deck-finance-vs-client",
+  "tracked": [
+   "Send the deck to finance"
+  ],
+  "summary": "## Sales sync\n\n### Next steps\n- Ravi will send the deck to the client before Friday.",
+  "expect": [
+   {
+    "hint": "",
+    "same_as": null
+   }
+  ]
+ },
+ {
+  "name": "near-review-vs-write",
+  "tracked": [
+   "Write the migration guide"
+  ],
+  "summary": "## Docs sync\n\n### Action items\n- Elena will review the migration guide once it is drafted.",
+  "expect": [
+   {
+    "hint": "",
+    "same_as": null
+   }
+  ]
+ },
+ {
+  "name": "near-different-customer",
+  "tracked": [
+   "Schedule a follow-up call with Brightwater"
+  ],
+  "summary": "## Account review\n\n### Follow-ups\n- Sam should schedule a follow-up call with Corvid Labs.",
+  "expect": [
+   {
+    "hint": "",
+    "same_as": null
+   }
+  ]
+ },
+ {
+  "name": "near-same-verb-other-object",
+  "tracked": [
+   "Update the pricing page copy"
+  ],
+  "summary": "## Marketing sync\n\n### Action items\n- Joanna will update the careers page copy.",
+  "expect": [
+   {
+    "hint": "",
+    "same_as": null
+   }
+  ]
+ },
+ {
+  "name": "near-test-vs-fix",
+  "tracked": [
+   "Fix the flaky login test"
+  ],
+  "summary": "## Engineering standup\n\n### Action items\n- Tomas to write new tests for the password reset flow.",
+  "expect": [
+   {
+    "hint": "",
+    "same_as": null
+   }
+  ]
+ },
+ {
+  "name": "near-budget-year",
+  "tracked": [
+   "Draft the Q3 budget proposal"
+  ],
+  "summary": "## Finance sync\n\n### Next steps\n- Hiro will draft the Q4 budget proposal.",
+  "expect": [
+   {
+    "hint": "",
+    "same_as": null
+   }
+  ]
+ },
+ {
+  "name": "near-book-vs-cancel",
+  "tracked": [
+   "Book a venue for the offsite"
+  ],
+  "summary": "## Team planning\n\n### Action items\n- Dana will cancel the venue reservation for the offsite.",
+  "expect": [
+   {
+    "hint": "",
+    "same_as": null
+   }
+  ]
+ },
+ {
+  "name": "near-unrelated",
+  "tracked": [
+   "Order new badges for the visiting auditors",
+   "Review the Halvorsen vendor contract"
+  ],
+  "summary": "## Hiring sync\n\n### Action items\n- Wen will schedule interviews for the two backend candidates.",
+  "expect": [
+   {
+    "hint": "",
+    "same_as": null
+   }
+  ]
+ },
+ {
+  "name": "hard-long-list-similar-pair",
+  "tracked": [
+   "Renew the office plant subscription",
+   "Order new badges for the visiting auditors",
+   "Review the Halvorsen vendor contract",
+   "Book a venue for the offsite",
+   "Draft the Q3 budget proposal",
+   "Update the onboarding checklist for new hires",
+   "Send the deck to finance",
+   "Fix the flaky login test",
+   "Schedule interviews for the backend candidates",
+   "Send the deck to the client",
+   "Archive the old design mockups",
+   "Write the migration guide",
+   "Prepare invoice for Corvid Labs",
+   "Rotate the shared API credentials",
+   "Patch the file server to the latest version",
+   "Set up the shared calendar for the support rota",
+   "Collect feedback on the new dashboard",
+   "Order lunch for the training day",
+   "Update the pricing page copy",
+   "Confirm the translator for the trade show"
+  ],
+  "summary": "## Sales sync\n\n### Next steps\n- Ravi will send the deck over to the client before Friday.",
+  "expect": [
+   {
+    "hint": "",
+    "same_as": 10
+   }
+  ]
+ },
+ {
+  "name": "hard-multi-task",
+  "tracked": [
+   "Collect feedback on the new dashboard",
+   "Rotate the shared API credentials",
+   "Draft the Q3 budget proposal",
+   "Archive the old design mockups"
+  ],
+  "summary": "## Product review\n\n### Action items\n- Imani will gather feedback from customers on the new dashboard.\n- Kofi will change the shared API credentials this week.\n- Lucia will draft the Q4 budget proposal.\n- Pavel will book a caterer for the launch party.",
+  "expect": [
+   {
+    "hint": "feedback",
+    "same_as": 1
+   },
+   {
+    "hint": "credentials",
+    "same_as": 2
+   },
+   {
+    "hint": "q4 budget",
+    "same_as": null
+   },
+   {
+    "hint": "caterer",
+    "same_as": null
+   }
+  ]
+ },
+ {
+  "name": "hard-related-topic-no-overlap",
+  "tracked": [
+   "Renew the office plant subscription",
+   "Fix the flaky login test"
+  ],
+  "summary": "## Facilities\n\n### Action items\n- Greta will arrange a watering schedule for the lobby ferns.",
+  "expect": [
+   {
+    "hint": "",
+    "same_as": null
+   }
+  ]
+ },
+ {
+  "name": "hard-recipient-variants-both-tracked",
+  "tracked": [
+   "Send the quarterly report to the board",
+   "Send the quarterly report to the auditors",
+   "Send the quarterly report to the regional leads"
+  ],
+  "summary": "## Finance close\n\n### Action items\n- Hiro will email the quarterly report to the auditors.",
+  "expect": [
+   {
+    "hint": "",
+    "same_as": 2
+   }
+  ]
+ },
+ {
+  "name": "hard-recipient-variants-novel-recipient",
+  "tracked": [
+   "Send the quarterly report to the board",
+   "Send the quarterly report to the auditors"
+  ],
+  "summary": "## Finance close\n\n### Action items\n- Hiro will email the quarterly report to the investors.",
+  "expect": [
+   {
+    "hint": "",
+    "same_as": null
+   }
+  ]
+ },
+ {
+  "name": "hard-current-meeting-row",
+  "tracked": [
+   "@current:Draft the launch announcement",
+   "Renew the office plant subscription"
+  ],
+  "summary": "## Launch planning\n\n### Action items\n- Nadia will write the launch announcement.",
+  "expect": [
+   {
+    "hint": "",
+    "same_as": null
+   }
+  ]
+ },
+ {
+  "name": "hard-many-to-one",
+  "tracked": [
+   "Send the roadmap deck to the team",
+   "Order new badges for the visiting auditors"
+  ],
+  "summary": "## Weekly sync\n\n### Action items\n- Maya will share the roadmap deck with the whole team.\n- Maya will also email the team the roadmap slides.",
+  "expect": [
+   {
+    "hint": "deck",
+    "same_as": 1
+   },
+   {
+    "hint": "slides",
+    "same_as": 1
+   }
+  ]
+ }
 ]
