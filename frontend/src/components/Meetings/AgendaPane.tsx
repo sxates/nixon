@@ -79,7 +79,8 @@ export function AgendaPane({
             <DayTimeline
               visibleItems={agenda.visibleItems}
               now={agenda.now}
-                    viewDate={agenda.viewDate}
+              viewIsToday={agenda.viewIsToday}
+              viewDate={agenda.viewDate}
               ctx={ctx}
               onSelect={handleSelect}
               onJoin={handleJoin}
