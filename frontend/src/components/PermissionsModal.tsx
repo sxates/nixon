@@ -20,6 +20,7 @@ import {
   getCalendarAccessStatus,
   requestCalendarAccess,
 } from '@/lib/calendar';
+import { openPrivacySettings } from '@/lib/system-settings';
 import { usePermissionsModal } from '@/contexts/PermissionsModalContext';
 import { useSidebar } from '@/components/Sidebar/SidebarProvider';
 import { SILENT_AUDIO_CAPTURE_COPY } from '@/components/onboarding/shared/PermissionRow';
@@ -92,7 +93,7 @@ export default function PermissionsModal() {
     if (microphone === 'denied') {
       // Already denied → the OS won't re-prompt; deep-link to System Settings.
       try {
-        await invoke('open_system_settings');
+        await openPrivacySettings('microphone');
       } catch (err) {
         console.warn('[PermissionsModal] open_system_settings failed:', err);
       }
@@ -114,7 +115,7 @@ export default function PermissionsModal() {
   const handleSystemAudio = async () => {
     if (systemAudio === 'denied') {
       try {
-        await invoke('open_system_settings');
+        await openPrivacySettings('systemAudio');
       } catch (err) {
         console.warn('[PermissionsModal] open_system_settings failed:', err);
       }

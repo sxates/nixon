@@ -1,5 +1,5 @@
 import React from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import { openPrivacySettings } from '@/lib/system-settings';
 import { Button } from '@/components/ui/button';
 import { Callout } from '@/components/ui/callout';
 import { Spinner } from '@/components/ui/spinner';
@@ -35,7 +35,7 @@ export function PermissionWarning({
   const openMicrophoneSettings = async () => {
     if (isMacOS) {
       try {
-        await invoke('open_system_settings', { preferencePane: 'Privacy_Microphone' });
+        await openPrivacySettings('microphone');
       } catch (error) {
         console.error('Failed to open microphone settings:', error);
       }
@@ -45,7 +45,7 @@ export function PermissionWarning({
   const openAudioCaptureSettings = async () => {
     if (isMacOS) {
       try {
-        await invoke('open_system_settings', { preferencePane: 'Privacy_ScreenCapture' });
+        await openPrivacySettings('systemAudio');
       } catch (error) {
         console.error('Failed to open audio capture settings:', error);
       }

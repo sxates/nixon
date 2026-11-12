@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { invoke } from '@tauri-apps/api/core';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { OnboardingContainer } from '../OnboardingContainer';
 import { PermissionRow } from '../shared';
+import { openPrivacySettings } from '@/lib/system-settings';
 import { useOnboarding } from '@/contexts/OnboardingContext';
 import { useGoogleCalendarConnect } from '@/hooks/useGoogleCalendarConnect';
 import {
@@ -60,7 +60,7 @@ export function CalendarStep() {
   const handleMacCalendarAction = async () => {
     if (eventKitStatus === 'denied' || eventKitStatus === 'restricted') {
       try {
-        await invoke('open_system_settings');
+        await openPrivacySettings('calendar');
       } catch {
         toast.error('Could not open System Settings', {
           description:

@@ -8,7 +8,8 @@ import { render, screen, fireEvent, waitFor, within } from '@testing-library/rea
 // `@/lib/calendar`. "Finish Setup" and "Skip for now" both complete
 // onboarding then reload the app.
 
-vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn() }));
+const invokeMock = vi.fn().mockResolvedValue(undefined);
+vi.mock('@tauri-apps/api/core', () => ({ invoke: (...args: unknown[]) => invokeMock(...args) }));
 vi.mock('@tauri-apps/plugin-os', () => ({ platform: () => 'macos' }));
 
 const connectMock = vi.fn().mockResolvedValue({ ok: true, email: 'user@halden.example' });
@@ -94,6 +95,21 @@ describe('CalendarStep', () => {
 
     await waitFor(() => expect(completeOnboardingMock).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(reloadMock).toHaveBeenCalledTimes(1));
+  });
+
+  // The denied macOS row's "Open Settings" used to call `open_system_settings`
+  // without the required `preferencePane`, so System Settings never opened.
+  it('denied macOS Calendar → Open Settings deep-links Privacy_Calendars', async () => {
+    getCalendarAccessStatusMock.mockResolvedValue('denied');
+    render(<CalendarStep />);
+    const macRow = await screen.findByRole('group', { name: 'macOS Calendar' });
+    fireEvent.click(await within(macRow).findByRole('button', { name: 'Open Settings' }));
+    await waitFor(() =>
+      expect(invokeMock).toHaveBeenCalledWith('open_system_settings', {
+        preferencePane: 'Privacy_Calendars',
+      }),
+    );
+    expect(requestCalendarAccessMock).not.toHaveBeenCalled();
   });
 
   it('uses the exact step copy', async () => {

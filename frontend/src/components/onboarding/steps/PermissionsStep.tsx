@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { OnboardingContainer } from '../OnboardingContainer';
 import { PermissionRow } from '../shared';
+import { openPrivacySettings } from '@/lib/system-settings';
 import { useOnboarding } from '@/contexts/OnboardingContext';
 import type { ProbeResult } from '@/types/onboarding';
 
@@ -31,7 +32,7 @@ export function PermissionsStep() {
     if (permissions.microphone === 'denied') {
       // Try to open system settings
       try {
-        await invoke('open_system_settings');
+        await openPrivacySettings('microphone');
       } catch {
         toast.error('Could not open System Settings', {
           description: 'Please enable microphone access in System Settings → Privacy & Security → Microphone.',
@@ -65,7 +66,7 @@ export function PermissionsStep() {
     if (permissions.systemAudio === 'denied') {
       // Try to open system settings
       try {
-        await invoke('open_system_settings');
+        await openPrivacySettings('systemAudio');
       } catch {
         toast.error('Could not open System Settings', {
           description: 'Please enable Audio Capture in System Settings → Privacy & Security → Audio Capture.',
