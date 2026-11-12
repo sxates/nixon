@@ -1,10 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { Checkbox } from '@/components/ui/checkbox';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
 import { MAX_PROMPT_NAME_CHARS } from '@/lib/summary-prompts';
 
 interface SaveOneOffDialogProps {
@@ -80,18 +80,23 @@ export function SaveOneOffDialog({
       onConfirm={handleSave}
     >
       <div className="space-y-3">
+        {/* Two independent destinations (at least one to save), so checkboxes, not switches. */}
         {hasSeries && (
-          <div className="flex items-center gap-3">
-            <Switch id="save-one-off-series" checked={toSeries} onCheckedChange={setToSeries} />
-            <Label htmlFor="save-one-off-series">Use for future meetings in this series</Label>
-          </div>
+          <Checkbox
+            id="save-one-off-series"
+            label="Use for future meetings in this series"
+            checked={toSeries}
+            onCheckedChange={setToSeries}
+          />
         )}
-        <div className="flex items-center gap-3">
-          <Switch id="save-one-off-library" checked={toLibrary} onCheckedChange={setToLibrary} />
-          <Label htmlFor="save-one-off-library">Save to my prompt library</Label>
-        </div>
+        <Checkbox
+          id="save-one-off-library"
+          label="Save to my prompt library"
+          checked={toLibrary}
+          onCheckedChange={setToLibrary}
+        />
         {toLibrary && (
-          <div className="space-y-1.5 pl-12">
+          <div className="space-y-1.5 pl-[26px]">
             <Label htmlFor="save-one-off-name">Prompt name</Label>
             <Input
               id="save-one-off-name"

@@ -1,7 +1,8 @@
 'use client';
 
 import { memo, useState } from "react";
-import { Check, Pencil } from "@/components/ui/icons";
+import { Pencil } from "@/components/ui/icons";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { DeckIcon } from "@/components/ui/deck-icon";
 import { IconButton } from "@/components/ui/icon-button";
@@ -135,28 +136,21 @@ const SelectionCheckbox = memo(function SelectionCheckbox({
 }) {
     return (
         <div className="flex w-4 flex-shrink-0 items-center pt-1.5">
-            <button // ui-gate: allow the line's role="checkbox" box; there is no Checkbox primitive and Button chrome is not a check box
-                type="button"
-                role="checkbox"
-                aria-checked={selected}
+            <Checkbox
+                size="sm"
+                checked={selected}
                 aria-label={selected ? 'Deselect this line' : 'Select this line'}
                 onClick={(e) => {
                     // Prevent the click from starting a text selection on shift-click.
                     e.preventDefault();
                     onToggle(id, index, e.shiftKey);
                 }}
-                className={cn(
-                    'flex h-4 w-4 items-center justify-center rounded-sm border transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                    selected
-                        ? 'border-brand bg-brand text-brand-foreground'
-                        : 'border-muted-foreground/40 bg-transparent hover:border-brand',
+                className={
                     selected || active
                         ? 'opacity-100'
-                        : 'opacity-0 focus-visible:opacity-100 group-hover/segment:opacity-100',
-                )}
-            >
-                {selected && <Check size={11} strokeWidth={3} />}
-            </button>
+                        : 'opacity-0 focus-visible:opacity-100 group-hover/segment:opacity-100'
+                }
+            />
         </div>
     );
 });

@@ -17,8 +17,8 @@
  */
 
 import { useState, type ReactNode } from 'react';
-import { Check, EyeOff, RotateCcw, Trash2 } from '@/components/ui/icons';
-import { DeckIcon } from '@/components/ui/deck-icon';
+import { EyeOff, RotateCcw, Trash2 } from '@/components/ui/icons';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { MenuButton } from '@/components/ui/menu-button';
 import {
@@ -142,25 +142,16 @@ export function ActionItemRow({
   return (
     <div className="group flex items-start gap-2 rounded-lg px-2 py-1.5 transition-colors hover:bg-accent/60">
       {dragHandle}
-      <button // ui-gate: allow the item's role="checkbox" box; there is no Checkbox primitive and Button chrome is not a check box
-        type="button"
-        role="checkbox"
-        aria-checked={completed}
+      <Checkbox
+        checked={completed}
         aria-label={
           completed
             ? `Mark "${item.description}" as open`
             : `Mark "${item.description}" as completed`
         }
-        onClick={() => void onSetStatus(item, completed ? 'open' : 'completed')}
-        className={cn(
-          'mt-0.5 flex h-[18px] w-[18px] flex-shrink-0 items-center justify-center rounded-sm border transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-          completed
-            ? 'border-brand bg-brand text-brand-foreground'
-            : 'border-border bg-card hover:border-brand-edge',
-        )}
-      >
-        {completed && <DeckIcon icon={Check} size={12} />}
-      </button>
+        onCheckedChange={(next) => void onSetStatus(item, next ? 'completed' : 'open')}
+        className="mt-0.5"
+      />
 
       <div className="min-w-0 flex-1">
         {isEditing ? (

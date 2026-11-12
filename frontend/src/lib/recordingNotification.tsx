@@ -1,4 +1,6 @@
 import { toast } from 'sonner';
+import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 
 /**
  * Shows the recording notification toast with compliance message.
@@ -24,17 +26,17 @@ export async function showRecordingNotification(): Promise<void> {
             <p className="text-sm font-medium text-foreground">
               Inform all participants this meeting is being recorded.
             </p>
-            <label className="flex items-center gap-2 text-xs cursor-pointer hover:bg-accent p-2 rounded transition-colors">
-              <input
-                type="checkbox"
-                onChange={(e) => {
-                  dontShowAgain = e.target.checked;
-                }}
-                className="rounded border-input text-brand focus:ring-ring focus:ring-2"
-              />
-              <span className="select-none text-foreground">Don&apos;t show this again</span>
-            </label>
-            <button
+            <Checkbox
+              size="sm"
+              label="Don't show this again"
+              labelClassName="text-xs"
+              onCheckedChange={(checked) => {
+                dontShowAgain = checked;
+              }}
+            />
+            <Button
+              size="xs"
+              className="w-full"
               onClick={async () => {
                 if (dontShowAgain) {
                   const { Store } = await import('@tauri-apps/plugin-store');
@@ -44,10 +46,9 @@ export async function showRecordingNotification(): Promise<void> {
                 }
                 toast.dismiss(toastId);
               }}
-              className="w-full px-3 py-1.5 bg-primary text-primary-foreground text-xs rounded hover:bg-primary/90 transition-colors font-medium"
             >
               I&apos;ve Notified Participants
-            </button>
+            </Button>
           </div>
         ),
         duration: 10000,

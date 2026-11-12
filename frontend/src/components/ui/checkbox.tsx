@@ -99,7 +99,7 @@ export const Checkbox = React.forwardRef<HTMLButtonElement, CheckboxProps>(funct
   return (
     <label
       className={cn(
-        'inline-flex min-w-0 cursor-pointer items-center gap-2 text-sm text-foreground has-[:disabled]:cursor-not-allowed',
+        'flex w-fit min-w-0 max-w-full cursor-pointer items-center gap-2 text-sm text-foreground has-[:disabled]:cursor-not-allowed',
         labelClassName,
       )}
     >

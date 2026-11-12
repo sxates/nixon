@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Spinner } from '@/components/ui/spinner';
-import { Switch } from '@/components/ui/switch';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   type CalendarAccessStatus,
   getCalendarAccessStatus,
@@ -592,16 +592,14 @@ export function CalendarSettings() {
                     const line = calendarSyncLine(calendar);
                     return (
                       <li key={calendar.id} className="flex items-center gap-3">
-                        <label className="flex min-w-0 cursor-pointer items-center gap-2 text-sm text-foreground">
-                          <Switch
-                            aria-label={calendar.summary}
-                            checked={calendar.selected}
-                            onCheckedChange={(checked) =>
-                              void handleCalendarToggle(calendar.id, checked)
-                            }
-                          />
-                          <span className="truncate">{calendar.summary}</span>
-                        </label>
+                        <Checkbox
+                          size="sm"
+                          label={<span className="block truncate">{calendar.summary}</span>}
+                          checked={calendar.selected}
+                          onCheckedChange={(checked) =>
+                            void handleCalendarToggle(calendar.id, checked)
+                          }
+                        />
                         {/* specs/0074 W2: per-calendar freshness, so one stale or failing
                             calendar can't hide behind the account's newest sync time. */}
                         {line && (
