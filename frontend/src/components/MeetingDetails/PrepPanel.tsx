@@ -29,7 +29,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { invoke } from '@tauri-apps/api/core';
-import { ChevronRight, Link2, Loader2, RefreshCw, Sparkles, Unlink } from 'lucide-react';
+import { ChevronRight, Link2, RefreshCw } from '@/components/ui/icons';
 import { toast } from 'sonner';
 import { AnswerMarkdown } from '@/components/AskAI/AnswerMarkdown';
 import { formatMeetingDate } from '@/lib/format-date';
@@ -48,8 +48,13 @@ import {
   type SourceMeeting,
 } from '@/lib/prep';
 import type { ActionItem, Person } from '@/types';
-import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
+import { Callout } from '@/components/ui/callout';
+import { DeckIcon } from '@/components/ui/deck-icon';
 import { IconButton } from '@/components/ui/icon-button';
+import { ListRow } from '@/components/ui/list-row';
+import { Panel } from '@/components/ui/panel';
+import { Spinner } from '@/components/ui/spinner';
 import { ActionItemRow } from '@/components/ActionItems/ActionItemRow';
 import type { AssigneeCandidate } from '@/components/ActionItems/AssigneePicker';
 import { useActionItemMutations } from '@/hooks/useActionItemMutations';
@@ -257,23 +262,19 @@ export function PrepPanel({
 
   if (loadError) {
     return (
-      <div className="rounded-[3px] border border-destructive/30 bg-destructive/5 px-4 py-6 text-center">
+      <Callout tone="error" className="py-6 text-center">
         <p className="text-sm text-foreground">{loadError}</p>
-        <button
-          type="button"
-          onClick={() => void loadPrep()}
-          className="mt-3 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-semibold text-foreground transition-colors hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
+        <Button type="button" variant="outline" size="sm" onClick={() => void loadPrep()} className="mt-3">
           Try again
-        </button>
-      </div>
+        </Button>
+      </Callout>
     );
   }
 
   if (!view) {
     return (
       <div className="flex h-40 items-center justify-center text-muted-foreground">
-        <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+        <Spinner size="md" className="mr-2" />
         <span className="text-sm">Loading agenda…</span>
       </div>
     );
@@ -293,24 +294,21 @@ export function PrepPanel({
       {/* ── Brief ─────────────────────────────────────────────────────────── */}
       <section aria-label="Pre-call brief">
         <div className="mb-2 flex items-center justify-between gap-2">
-          <h2 className="u-section-label flex items-center gap-1.5">
-            <Sparkles size={13} aria-hidden="true" />
-            Before this meeting
-          </h2>
+          <h2 className="u-section-label">Before this meeting</h2>
           {/* specs/0063 W4 — icon-only; the full text lives in the tooltip and the
               accessible name, so the header stops competing with the brief itself. */}
           <div className="flex items-center gap-1.5">
             {briefStatus !== 'none' && (
               <IconButton
                 label="Link previous meeting…"
-                icon={<Link2 size={13} aria-hidden="true" />}
+                icon={<DeckIcon icon={Link2} />}
                 onClick={() => setLinkPickerOpen(true)}
               />
             )}
             {(briefStatus === 'ready' || briefStatus === 'failed') && (
               <IconButton
                 label="Regenerate the brief"
-                icon={<RefreshCw size={13} aria-hidden="true" />}
+                icon={<DeckIcon icon={RefreshCw} />}
                 onClick={() => void regenerate()}
               />
             )}
@@ -319,31 +317,32 @@ export function PrepPanel({
 
         {isBriefLoading(briefStatus) ? (
           <div role="status" className="flex items-center gap-2 py-1 text-sm text-foreground">
-            <Loader2 size={15} aria-hidden="true" className="animate-spin text-brand" />
+            <Spinner className="text-brand" />
             <span className="truncate">
               {stage ? prepStageLabel(stage) : 'Preparing your brief…'}
             </span>
           </div>
         ) : briefStatus === 'none' ? (
-          <div className="rounded-[3px] border border-dashed border-border bg-card/50 px-4 py-6 text-center">
+          <Panel variant="dashed" className="py-6 text-center">
             <p className="text-sm text-muted-foreground">
               No previous meetings found for this series. If an earlier meeting belongs
               here — recorded ad-hoc or under a different name — link it and a brief will
               be generated from it.
             </p>
-            <button
+            <Button
               type="button"
+              variant="outline"
+              size="sm"
               onClick={() => setLinkPickerOpen(true)}
-              className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-semibold text-foreground transition-colors hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="mt-3"
             >
-              <Link2 size={12} aria-hidden="true" />
               Link previous meeting…
-            </button>
-          </div>
+            </Button>
+          </Panel>
         ) : briefStatus === 'failed' ? (
           /* Flat, but the destructive tint stays — it is the only signal that this is an
              error rather than an unusually terse brief. */
-          <div className="rounded-[3px] bg-destructive/5 px-3 py-2">
+          <div className="rounded-lg bg-destructive-wash px-3 py-2">
             <p className="text-sm text-foreground">
               {briefError ?? 'The brief could not be generated.'}
             </p>
@@ -361,17 +360,17 @@ export function PrepPanel({
                 {citedSources.map((s, i) => (
                   <span key={s.meetingId} className="inline-flex items-baseline gap-1.5">
                     {i > 0 && <span aria-hidden="true">·</span>}
-                    <button
+                    <button // ui-gate: allow inline citation link inside the "From …" sentence; Button's fixed-height box would break the baseline
                       type="button"
                       onClick={() => openMeeting(s.meetingId)}
                       title="Open this meeting"
-                      className="inline-flex items-baseline gap-1 rounded font-semibold text-muted-foreground transition-colors hover:text-brand focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      className="inline-flex items-baseline gap-1 rounded-md font-semibold text-muted-foreground transition-colors hover:text-brand focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
                       {s.title?.trim() || 'Untitled meeting'}
                       {formatMeetingDate(s.createdAt) && (
                         <span className="font-normal">{formatMeetingDate(s.createdAt)}</span>
                       )}
-                      <ChevronRight size={11} aria-hidden="true" className="self-center" />
+                      <DeckIcon icon={ChevronRight} size={12} className="self-center" />
                     </button>
                   </span>
                 ))}
@@ -379,9 +378,9 @@ export function PrepPanel({
             )}
           </div>
         ) : (
-          <div className="rounded-[3px] border border-dashed border-border bg-card/50 px-4 py-6 text-center">
+          <Panel variant="dashed" className="py-6 text-center">
             <p className="text-sm text-muted-foreground">No brief available.</p>
-          </div>
+          </Panel>
         )}
 
         {/* Manually linked meetings (specs/0041 WS4), with an unlink affordance. */}
@@ -390,37 +389,27 @@ export function PrepPanel({
             <h3 className="u-section-label">Linked meetings</h3>
             <ul className="mt-1 flex flex-col gap-0.5">
               {(view.linkedMeetings ?? []).map((m) => (
-                <li key={m.id} className="group/linked flex items-center gap-2 rounded px-2 py-1">
-                  <button
-                    type="button"
+                <li key={m.id}>
+                  <ListRow
                     onClick={() => openMeeting(m.id)}
-                    title="Open this meeting"
-                    className="flex min-w-0 flex-1 items-baseline gap-2 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  >
-                    <span className="min-w-0 truncate text-[13.5px] font-semibold text-foreground hover:text-brand">
-                      {m.title?.trim() || 'Untitled meeting'}
-                    </span>
-                    {formatMeetingDate(m.startedAt) && (
-                      <span className="flex-shrink-0 text-xs text-muted-foreground">
-                        {formatMeetingDate(m.startedAt)}
-                      </span>
-                    )}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void unlinkMeeting(m.id)}
-                    disabled={unlinkingId !== null}
-                    title="Unlink this meeting from the series"
-                    aria-label={`Unlink ${m.title?.trim() || 'Untitled meeting'}`}
-                    className="inline-flex flex-shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-xs font-semibold text-muted-foreground transition-colors hover:text-destructive focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
-                  >
-                    {unlinkingId === m.id ? (
-                      <Loader2 size={12} aria-hidden="true" className="animate-spin" />
-                    ) : (
-                      <Unlink size={12} aria-hidden="true" />
-                    )}
-                    Unlink
-                  </button>
+                    title={m.title?.trim() || 'Untitled meeting'}
+                    meta={formatMeetingDate(m.startedAt) || undefined}
+                    trailing={
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="xs"
+                        onClick={() => void unlinkMeeting(m.id)}
+                        disabled={unlinkingId !== null}
+                        title="Unlink this meeting from the series"
+                        aria-label={`Unlink ${m.title?.trim() || 'Untitled meeting'}`}
+                        className="gap-1 text-muted-foreground hover:text-destructive"
+                      >
+                        {unlinkingId === m.id && <Spinner />}
+                        Unlink
+                      </Button>
+                    }
+                  />
                 </li>
               ))}
             </ul>
@@ -469,7 +458,7 @@ export function PrepPanel({
               <div className="mt-2 flex flex-col gap-3">
                 {otherGroups.map((group) => (
                   <div key={group.label}>
-                    <p className="px-1 text-[12.5px] font-semibold text-foreground">
+                    <p className="px-1 text-xs font-semibold text-foreground">
                       {group.label}
                     </p>
                     <div className="-mx-2 mt-1 flex flex-col gap-0.5">
@@ -515,18 +504,17 @@ function SourceMeetingChip({
 }) {
   if (!item.meetingId) return null;
   return (
-    <button
+    <Button
       type="button"
+      variant="ghost"
+      size="xs"
       onClick={() => onOpenMeeting(item.meetingId!)}
       title="Open the meeting this came from"
-      className={cn(
-        'inline-flex items-center gap-0.5 rounded text-[11px] font-semibold text-muted-foreground',
-        'transition-colors hover:text-brand focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-      )}
+      className="gap-0.5 px-1.5 text-muted-foreground hover:text-brand"
     >
       From this meeting
-      <ChevronRight size={11} aria-hidden="true" />
-    </button>
+      <DeckIcon icon={ChevronRight} size={12} />
+    </Button>
   );
 }
 

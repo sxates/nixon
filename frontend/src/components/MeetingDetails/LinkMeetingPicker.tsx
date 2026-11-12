@@ -12,7 +12,10 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { Link2, Loader2 } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { ListRow } from '@/components/ui/list-row';
+import { Spinner } from '@/components/ui/spinner';
+import { cn } from '@/lib/utils';
 import {
   Dialog,
   DialogContent,
@@ -109,14 +112,13 @@ export function LinkMeetingPicker({
           </DialogDescription>
         </DialogHeader>
 
-        <input
+        <Input
           type="text"
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
           placeholder="Filter by title…"
           aria-label="Filter meetings by title"
           autoFocus
-          className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         />
 
         {linkError && <p className="text-sm text-destructive">{linkError}</p>}
@@ -126,7 +128,7 @@ export function LinkMeetingPicker({
             <p className="px-1 py-4 text-sm text-muted-foreground">{loadError}</p>
           ) : meetings === null ? (
             <div className="flex items-center gap-2 px-1 py-4 text-sm text-muted-foreground">
-              <Loader2 size={14} aria-hidden="true" className="animate-spin" />
+              <Spinner />
               Loading meetings…
             </div>
           ) : listed.length === 0 ? (
@@ -134,37 +136,24 @@ export function LinkMeetingPicker({
               {filter.trim() ? 'No meetings match that title.' : 'No past meetings to link yet.'}
             </p>
           ) : (
-            <ul className="flex flex-col gap-1">
+            <ul className="flex flex-col gap-0.5">
               {listed.map((m) => (
                 <li key={m.id}>
-                  <button
-                    type="button"
-                    disabled={linkingId !== null}
-                    onClick={() => void link(m.id)}
-                    className="flex w-full items-baseline gap-2 rounded-lg px-2 py-2 text-left transition-colors hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
-                  >
-                    {linkingId === m.id ? (
-                      <Loader2
-                        size={13}
-                        aria-hidden="true"
-                        className="flex-shrink-0 animate-spin self-center text-brand"
-                      />
-                    ) : (
-                      <Link2
-                        size={13}
-                        aria-hidden="true"
-                        className="flex-shrink-0 self-center text-muted-foreground"
-                      />
-                    )}
-                    <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
-                      {m.title?.trim() || 'Untitled meeting'}
-                    </span>
-                    {formatMeetingDate(m.createdAt) && (
-                      <span className="flex-shrink-0 text-xs text-muted-foreground">
-                        {formatMeetingDate(m.createdAt)}
-                      </span>
-                    )}
-                  </button>
+                  {/* While one link is in flight every row is inert (the row primitive has
+                      no `disabled`, so the click is ignored instead). */}
+                  <ListRow
+                    onClick={() => {
+                      if (linkingId === null) void link(m.id);
+                    }}
+                    lead={linkingId === m.id ? <Spinner className="text-brand" /> : undefined}
+                    title={m.title?.trim() || 'Untitled meeting'}
+                    trailing={
+                      formatMeetingDate(m.createdAt) ? (
+                        <span className="u-row-meta">{formatMeetingDate(m.createdAt)}</span>
+                      ) : undefined
+                    }
+                    className={cn(linkingId !== null && 'opacity-60')}
+                  />
                 </li>
               ))}
             </ul>

@@ -10,13 +10,12 @@
  * both themes — no per-placement `tone` variant.
  */
 
-import { Users } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
-import { cn } from '@/lib/utils';
 import { ParticipantsPanel } from './ParticipantsPanel';
 
 interface ParticipantsPopoverProps {
@@ -31,21 +30,18 @@ export function ParticipantsPopover({
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <button
+        {/* h-8 (`sm`) to match the mode chip and template picker beside it on the record
+            header (owner feedback 2026-09-21). */}
+        <Button
           type="button"
+          variant="outline"
+          size="sm"
           aria-label="Participants"
           title="Participants"
-          className={cn(
-            // h-8 to match the mode chip and template picker beside it on the record
-            // header (owner feedback 2026-09-21).
-            'inline-flex h-8 items-center gap-1.5 rounded-lg px-3 text-xs font-semibold transition-colors focus:outline-none focus-visible:ring-2',
-            'border border-border bg-card text-foreground hover:bg-muted focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card',
-            className,
-          )}
+          className={className}
         >
-          <Users size={14} />
           Participants
-        </button>
+        </Button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-80 p-3">
         <ParticipantsPanel meetingId={meetingId} variant="compact" />

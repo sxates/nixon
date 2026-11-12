@@ -89,7 +89,7 @@ export function PrepNotesEditor({ meetingId, initialMarkdown, initialJson }: Pre
       onChange={handleChange}
       label="Agenda — what I plan to cover"
       placeholder="What do you want to cover? Jot your agenda — it stays in view during the call and shapes the summary."
-      className="rounded-lg border border-border bg-card px-4 pb-3 pt-3"
+      className="rounded-lg border border-border bg-card px-4 py-3 shadow-card"
       bodyClassName="min-h-[180px] pb-4"
     />
   );

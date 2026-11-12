@@ -23,8 +23,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { toast } from 'sonner';
-import { ListTodo, Loader2, ScanSearch } from 'lucide-react';
+import { Sparkles } from '@/components/ui/icons';
 import { Button } from '@/components/ui/button';
+import { DeckIcon } from '@/components/ui/deck-icon';
+import { Panel } from '@/components/ui/panel';
+import { Spinner } from '@/components/ui/spinner';
 import { ActionItemRow } from '@/components/ActionItems/ActionItemRow';
 import { AddActionItemRow } from '@/components/ActionItems/AddActionItemRow';
 import type { AssigneeCandidate } from '@/components/ActionItems/AssigneePicker';
@@ -164,31 +167,16 @@ export function ActionItemsSection({ meetingId, hasSummary }: ActionItemsSection
       variant="outline"
       onClick={() => void handleScan()}
       disabled={isScanning}
-      className="h-8 gap-1.5"
+      className="gap-1.5"
     >
-      {isScanning ? (
-        <Loader2 size={13} className="animate-spin" />
-      ) : (
-        <ScanSearch size={13} />
-      )}
+      {/* Scanning re-runs the model's extraction, so it carries the AI-action glyph. */}
+      {isScanning ? <Spinner /> : <DeckIcon icon={Sparkles} />}
       {isScanning ? 'Scanning…' : 'Scan again'}
     </Button>
   );
 
   return (
-    <section
-      aria-label="Action items"
-      className="flex flex-col gap-2 rounded-[3px] border border-border bg-card px-4 py-3"
-    >
-      <div className="flex items-center gap-2">
-        <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-          <ListTodo size={13} />
-          Action items
-          {visible.length > 0 && (
-            <span className="text-muted-foreground">({visible.length})</span>
-          )}
-        </span>
-      </div>
+    <Panel title="Action items" count={visible.length > 0 ? visible.length : null}>
 
       {isLoading ? (
         <p className="text-xs text-muted-foreground">Loading…</p>
@@ -227,6 +215,6 @@ export function ActionItemsSection({ meetingId, hasSummary }: ActionItemsSection
           <AddActionItemRow onAdd={add} className="mt-1" />
         </div>
       )}
-    </section>
+    </Panel>
   );
 }

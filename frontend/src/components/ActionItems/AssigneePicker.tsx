@@ -9,9 +9,11 @@
  */
 
 import { useEffect, useMemo, useState } from 'react';
-import { UserCheck, UserPlus, UserRound, X } from 'lucide-react';
+import { UserPlus } from '@/components/ui/icons';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { DeckIcon } from '@/components/ui/deck-icon';
+import { IconButton } from '@/components/ui/icon-button';
+import { PersonOption, PersonPicker } from '@/components/ui/person-picker';
 import {
   Popover,
   PopoverContent,
@@ -74,102 +76,67 @@ export function AssigneePicker({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <button
+        <Button
           type="button"
+          variant={label ? 'outline' : 'dashed'}
+          size="xs"
           title={label ? `Assigned to ${label} — change` : 'Assign to someone'}
-          className={cn(
-            'inline-flex max-w-[180px] items-center gap-1 rounded-[3px] border px-2 py-0.5 text-[11px] font-medium transition-colors',
-            label
-              ? 'border-border bg-card text-foreground hover:border-brand/50 hover:text-brand'
-              : 'border-dashed border-border text-muted-foreground hover:border-brand/50 hover:text-brand',
-            className,
-          )}
+          className={cn('max-w-[180px]', className)}
         >
-          <UserRound size={11} className="flex-shrink-0" />
           <span className="truncate">{label ?? 'Assign'}</span>
-        </button>
+        </Button>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-64 p-2">
-        <div className="space-y-2">
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              submitFreeText();
-            }}
-            className="flex items-center gap-1.5"
-          >
-            <Input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search or type a name…"
-              className="h-8 text-sm"
-              autoFocus
-            />
-            <Button
+        <PersonPicker
+          query={query}
+          onQueryChange={setQuery}
+          placeholder="Search or type a name…"
+          onSubmit={submitFreeText}
+          inputAction={
+            <IconButton
               type="submit"
-              size="sm"
-              variant="outline"
-              className="h-8 gap-1 px-2"
+              size="md"
+              label="Assign the typed name"
               disabled={!query.trim()}
-              title="Assign the typed name"
-            >
-              <UserPlus size={13} />
-            </Button>
-          </form>
-
-          <div className="space-y-0.5">
-            <button
-              type="button"
-              onClick={() => pick({ kind: 'me' })}
-              className="flex w-full items-center gap-2 rounded px-2 py-1 text-left text-xs font-medium text-foreground hover:bg-muted"
-            >
-              <UserCheck size={13} className="text-muted-foreground" />
-              Me
-            </button>
-            {label && (
-              <button
-                type="button"
-                onClick={() => pick({ kind: 'clear' })}
-                className="flex w-full items-center gap-2 rounded px-2 py-1 text-left text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
-              >
-                <X size={13} />
-                No assignee
-              </button>
-            )}
-          </div>
-
-          {candidates.length > 0 && (
-            <div className="space-y-1 border-t border-border pt-2">
-              <div className="u-section-label px-1">People</div>
-              {filtered.length === 0 ? (
-                <div className="px-2 py-1 text-[11px] text-muted-foreground">
-                  No people match “{query.trim()}”. Press enter to assign the name as
-                  typed.
-                </div>
-              ) : (
-                <div className="max-h-48 space-y-0.5 overflow-y-auto">
-                  {filtered.map((candidate) => (
-                    <button
-                      key={candidate.personId}
-                      type="button"
-                      onClick={() => pick({ kind: 'person', personId: candidate.personId })}
-                      className="flex w-full flex-col items-start rounded px-2 py-1 text-left text-xs hover:bg-muted"
-                    >
-                      <span className="font-medium text-foreground">
-                        {candidate.displayName}
-                      </span>
-                      {candidate.email && (
-                        <span className="truncate text-[11px] text-muted-foreground">
-                          {candidate.email}
-                        </span>
-                      )}
-                    </button>
-                  ))}
-                </div>
+              icon={<DeckIcon icon={UserPlus} />}
+            />
+          }
+          before={
+            <>
+              <PersonOption name="Me" onSelect={() => pick({ kind: 'me' })} />
+              {label && (
+                <PersonOption
+                  name={<span className="font-normal text-muted-foreground">No assignee</span>}
+                  onSelect={() => pick({ kind: 'clear' })}
+                />
               )}
-            </div>
-          )}
-        </div>
+            </>
+          }
+          listClassName="max-h-48"
+          groups={
+            candidates.length > 0
+              ? [
+                  {
+                    label: 'People',
+                    options: filtered.map((candidate) => (
+                      <PersonOption
+                        key={candidate.personId}
+                        name={candidate.displayName}
+                        email={candidate.email}
+                        onSelect={() => pick({ kind: 'person', personId: candidate.personId })}
+                      />
+                    )),
+                    emptyMessage: (
+                      <>
+                        No people match “{query.trim()}”. Press enter to assign the name as
+                        typed.
+                      </>
+                    ),
+                  },
+                ]
+              : []
+          }
+        />
       </PopoverContent>
     </Popover>
   );
