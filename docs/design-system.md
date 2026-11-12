@@ -180,7 +180,7 @@ without a visible ring.
 | Selectable card | `OptionCard` / `OptionCardGroup` | `OptionCard` `title`, `description`, `trailing`, `value` (in a group) or `selected` + `onSelect`; radio semantics. `OptionCardGroup` `value`, `onValueChange`, one Tab stop with arrow keys. Model pickers, theme choice |
 | Confirm | `ConfirmDialog` | `open`, `onOpenChange`, `title`, `body`, `confirmLabel`, `cancelLabel`, `tone` `destructive` / `brand`, `busy` (spinner, can't be dismissed), `confirmDisabled`, `onConfirm`, `children` for details |
 | Date navigation | `DateNavigator` | `label`, `onPrev`, `onNext`, `prevLabel`, `nextLabel`, `onToday`, `showToday`, `leading`, `trailing`, `labelClassName`; Today sits left of the arrows |
-| Form field | `Input`, `Textarea`, `Select`, `Switch`, `Checkbox`, `Label` (`optional` prop) | no native `<input>`/`<select>` in screens |
+| Form field | `Input`, `Textarea`, `Select`, `Switch`, `Checkbox`, `Label` (`optional` prop) | no native `<input>`/`<select>` in screens. `Input` `size` `default` (36px, 14px) / `lg` (36px, `text-lead`: the Ask question). The buttons in the row under a `lg` input are `size="sm"` |
 | Checkbox | `Checkbox` | `checked` / `defaultChecked`, `onCheckedChange`, `label` (names it), `size` `sm` (16) / `default` (18); `onClick` fires first (shift-click ranges). **Checkbox vs Switch:** pick from a list, or an option a dialog's button submits, is a `Checkbox`. A single setting that applies at once is a `Switch` |
 
 **Tabs switch the view; a boxed SegmentedControl filters it; never two underline strips in a

@@ -33,3 +33,21 @@ describe('Input / Textarea focus', () => {
     }
   });
 });
+
+describe('Input size', () => {
+  it('is 36px at 14px by default and 36px at text-lead when lg', () => {
+    render(
+      <>
+        <Input aria-label="Plain" />
+        <Input aria-label="Question" size="lg" />
+      </>,
+    );
+    const plain = screen.getByRole('textbox', { name: 'Plain' }).className;
+    const lg = screen.getByRole('textbox', { name: 'Question' }).className;
+    expect(plain).toContain('h-9');
+    expect(plain).toContain('md:text-sm');
+    expect(lg).toContain('h-9');
+    expect(lg).toContain('md:text-lead');
+    expect(lg).not.toContain('md:text-sm');
+  });
+});

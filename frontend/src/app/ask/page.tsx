@@ -455,7 +455,7 @@ function AskPageContent() {
               placeholder="What did we decide about…"
               aria-label="Question"
               autoFocus
-              className="h-10 text-lead md:text-lead"
+              size="lg"
             />
 
             {/* Owner feedback 2026-09-21: "Input at the very top, full width, but then
@@ -464,12 +464,15 @@ function AskPageContent() {
                 rule between them, which put Ask a long way from the thing it acts on. */}
             <div className="mt-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
               <div className="flex flex-shrink-0 items-center gap-2">
-                <Button variant="brand" onClick={() => void startRun()} disabled={!canAsk}>
+                {/* 32px keys (`sm`) like the scope controls on the right; the question
+                    field above is the one 36px control (28/32/36, docs/design-system.md). */}
+                <Button variant="brand" size="sm" onClick={() => void startRun()} disabled={!canAsk}>
                   <DeckIcon icon={Sparkles} size={14} />
                   Ask
                 </Button>
                 <Button
                   variant="outline"
+                  size="sm"
                   onClick={() => void saveCurrentQuestion()}
                   disabled={!trimmedQuestion || saving}
                   title="Save this question to re-run later against fresh data"
@@ -481,7 +484,6 @@ function AskPageContent() {
               {/* Scope: which meetings the question may draw from. */}
               <div className="flex flex-wrap items-center justify-end gap-2">
                 <SegmentedControl
-                  size="compact"
                   aria-label="Filter by date"
                   options={DATE_PRESETS}
                   value={preset}
