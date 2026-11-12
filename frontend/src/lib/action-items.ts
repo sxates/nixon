@@ -95,3 +95,16 @@ export function assigneeLabel(
   const raw = item.assigneeRaw?.trim();
   return raw ? raw : null;
 }
+
+/**
+ * Who an adopted item came from (specs/0088), or null. Adopting keeps the original
+ * assignee, so a listed item that is assigned to someone else is one the user took on.
+ */
+export function adoptedFromName(
+  item: ActionItem,
+  nameById: ReadonlyMap<string, string>,
+): string | null {
+  if (item.triage !== 'listed' || item.assigneeIsSelf) return null;
+  if (!item.assigneePersonId && !item.assigneeRaw?.trim()) return null;
+  return assigneeLabel(item, nameById);
+}

@@ -41,7 +41,7 @@ function makeItem(overrides: Partial<ActionItem> = {}): ActionItem {
     updatedAt: '2026-07-01T10:00:00Z',
     completedAt: null,
     sortOrder: null,
-    triage: 'suggested',
+    triage: 'listed',
     adoptedAt: null,
     notesMarkdown: null,
     ...overrides,
@@ -313,5 +313,99 @@ describe('ActionItemsSection (specs/0034)', () => {
     await waitFor(() =>
       expect(callsFor('api_get_action_items').length).toBe(initialLoads + 1),
     );
+  });
+});
+
+describe('ActionItemsSection triage (specs/0088)', () => {
+  it('suggested rows offer add and dismiss', async () => {
+    const item = makeItem({ id: 's1', triage: 'suggested', description: 'Suggested thing' });
+    let loads = 0;
+    stubInvoke({
+      api_get_action_items: () => (++loads === 1 ? [item] : [{ ...item, triage: 'listed' }]),
+      api_triage_action_item: () => ({ ...item, triage: 'listed' }),
+    });
+    render(<ActionItemsSection meetingId="m1" hasSummary />);
+
+    await screen.findByText('Suggested thing');
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Dismiss' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Add to my list' }));
+
+    await waitFor(() =>
+      expect(callsFor('api_triage_action_item')[0]![1]).toEqual({
+        id: 's1',
+        action: 'add_to_list',
+      }),
+    );
+    // Now listed: the checkbox appears.
+    expect(await screen.findByRole('checkbox')).toBeInTheDocument();
+  });
+
+  it('dismissing a suggestion triages it and hides the row', async () => {
+    const item = makeItem({ id: 's2', triage: 'suggested', description: 'Nope' });
+    let dismissed = false;
+    stubInvoke({
+      api_get_action_items: () => [dismissed ? { ...item, status: 'dismissed' } : item],
+      api_triage_action_item: () => {
+        dismissed = true;
+        return { ...item, status: 'dismissed' };
+      },
+    });
+    render(<ActionItemsSection meetingId="m1" hasSummary />);
+    await screen.findByText('Nope');
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+    await waitFor(() =>
+      expect(callsFor('api_triage_action_item')[0]![1]).toEqual({ id: 's2', action: 'dismiss' }),
+    );
+    await waitFor(() => expect(screen.queryByText('Nope')).not.toBeInTheDocument());
+  });
+
+  it('record rows have no checkbox and offer adopt', async () => {
+    const item = makeItem({
+      id: 'r1',
+      triage: 'record',
+      description: 'Send the budget',
+      assigneePersonId: 'p1',
+    });
+    stubInvoke({
+      api_get_action_items: () => [item],
+      api_list_people: () => [{ id: 'p1', displayName: 'Alice' }],
+      api_triage_action_item: () => ({ ...item, triage: 'listed' }),
+    });
+    render(<ActionItemsSection meetingId="m1" hasSummary />);
+
+    await screen.findByText('Send the budget');
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+    expect(await screen.findByText('Alice')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Add to my list' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Adopt' }));
+    await waitFor(() =>
+      expect(callsFor('api_triage_action_item')[0]![1]).toEqual({ id: 'r1', action: 'adopt' }),
+    );
+  });
+
+  it('shows "adopted from {name}" on an adopted item', async () => {
+    stubInvoke({
+      api_get_action_items: () => [
+        makeItem({
+          triage: 'listed',
+          assigneePersonId: 'p1',
+          adoptedAt: '2026-07-02T10:00:00Z',
+          description: 'Adopted thing',
+        }),
+      ],
+      api_list_people: () => [{ id: 'p1', displayName: 'Alice' }],
+    });
+    render(<ActionItemsSection meetingId="m1" hasSummary />);
+    expect(await screen.findByText('adopted from Alice')).toBeInTheDocument();
+  });
+
+  it('does not say adopted for a plain listed item of mine', async () => {
+    stubInvoke({
+      api_get_action_items: () => [makeItem({ assigneeIsSelf: true })],
+    });
+    render(<ActionItemsSection meetingId="m1" hasSummary />);
+    await screen.findByText('Send the deck to Alice');
+    expect(screen.queryByText(/adopted from/)).not.toBeInTheDocument();
   });
 });

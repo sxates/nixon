@@ -31,7 +31,9 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import { titleSegments } from '@/lib/todo-parse';
+import { Button } from '@/components/ui/button';
 import type { ActionItem, ActionItemStatus } from '@/types';
+import type { TriageAction } from '@/hooks/useActionItemMutations';
 import { DueDateControl } from './DueDateControl';
 import { MentionInput } from './MentionInput';
 import { AssigneePicker, type AssigneeCandidate, type AssigneeSelection } from './AssigneePicker';
@@ -69,6 +71,14 @@ interface ActionItemRowProps {
    * Reassignment there belongs on the meeting that owns the item, not in a prep view.
    */
   hideAssignee?: boolean;
+  /**
+   * Inline triage (specs/0088), used by the meeting page: a suggested row shows
+   * Add to my list / Dismiss, a record row shows Adopt. Surfaces that omit it keep their
+   * own triage controls.
+   */
+  onTriage?: (item: ActionItem, action: TriageAction) => void | Promise<void>;
+  /** Name the item was adopted from; shown in the meta row as "adopted from {name}". */
+  adoptedFrom?: string | null;
 }
 
 const EMPTY_NAMES = new Map<string, string>();
@@ -88,11 +98,18 @@ export function ActionItemRow({
   sourceCount,
   nameById = EMPTY_NAMES,
   hideAssignee = false,
+  onTriage,
+  adoptedFrom = null,
 }: ActionItemRowProps) {
   const [isEditing, setIsEditing] = useState(false);
 
   const completed = item.status === 'completed';
   const dismissed = item.status === 'dismissed';
+  // Others' items are on the record only: nothing to tick off. With inline triage, a
+  // suggestion isn't on the list yet either.
+  const showCheckbox = item.triage !== 'record' && !(onTriage && item.triage === 'suggested');
+  const suggestedInline = !!onTriage && item.triage === 'suggested' && !dismissed;
+  const adoptInline = !!onTriage && item.triage === 'record' && !dismissed;
 
   const startEdit = () => setIsEditing(true);
 
@@ -107,6 +124,7 @@ export function ActionItemRow({
   return (
     <div className="group flex items-start gap-2 rounded-lg px-2 py-1.5 transition-colors hover:bg-accent/60">
       {dragHandle}
+      {showCheckbox ? (
       <Checkbox
         checked={completed}
         aria-label={
@@ -117,6 +135,9 @@ export function ActionItemRow({
         onCheckedChange={(next) => void onSetStatus(item, next ? 'completed' : 'open')}
         className="mt-0.5"
       />
+      ) : (
+        <span aria-hidden className="size-4 shrink-0" />
+      )}
 
       <div className="min-w-0 flex-1">
         {isEditing ? (
@@ -174,7 +195,25 @@ export function ActionItemRow({
           {sourceCount !== undefined && sourceCount > 1 && (
             <span className="text-caption text-muted-foreground">from {sourceCount} meetings</span>
           )}
+          {adoptedFrom && (
+            <span className="text-caption text-muted-foreground">adopted from {adoptedFrom}</span>
+          )}
           {meetingChip}
+          {suggestedInline && (
+            <>
+              <Button type="button" size="sm" variant="outline" onClick={() => void onTriage!(item, 'add_to_list')}>
+                Add to my list
+              </Button>
+              <Button type="button" size="sm" variant="ghost" onClick={() => void onTriage!(item, 'dismiss')}>
+                Dismiss
+              </Button>
+            </>
+          )}
+          {adoptInline && (
+            <Button type="button" size="sm" variant="outline" onClick={() => void onTriage!(item, 'adopt')}>
+              Adopt
+            </Button>
+          )}
           {dismissed && (
             <span className="u-section-label-sm rounded-sm bg-muted px-1.5 py-px">dismissed</span>
           )}
@@ -197,7 +236,7 @@ export function ActionItemRow({
             <DropdownMenuItem icon={Trash2} variant="destructive" onSelect={() => void onDelete(item)}>
               Delete
             </DropdownMenuItem>
-          ) : (
+          ) : suggestedInline ? null : (
             <DropdownMenuItem icon={EyeOff} onSelect={() => void onSetStatus(item, 'dismissed')}>
               Dismiss
             </DropdownMenuItem>

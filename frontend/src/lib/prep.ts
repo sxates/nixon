@@ -84,12 +84,16 @@ export function prepStageLabel(stage: PrepStage): string {
   }
 }
 
-/** Split carried-over open items into mine vs. owed-by-others (for the two Prep sub-lists). */
+/**
+ * Split carried-over open items into the user's list vs. the record of others' items (for
+ * the two Prep sub-lists). The split is on triage, not assignee: an adopted item keeps its
+ * original assignee but lives on the user's list (specs/0088).
+ */
 export function splitOpenItems(items: ActionItem[]): { mine: ActionItem[]; others: ActionItem[] } {
   const mine: ActionItem[] = [];
   const others: ActionItem[] = [];
   for (const it of items) {
-    (it.assigneeIsSelf ? mine : others).push(it);
+    (it.triage === 'listed' ? mine : others).push(it);
   }
   return { mine, others };
 }
