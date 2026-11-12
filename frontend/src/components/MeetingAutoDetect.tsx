@@ -28,6 +28,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
+import { Button } from '@/components/ui/button';
 import { safeListen } from '@/lib/safe-listen';
 import {
   notify,
@@ -115,13 +116,13 @@ export default function MeetingAutoDetect() {
         description: notificationsOff ? (
           <span>
             {DETECTED_BODY} {NOTIFICATIONS_OFF_COPY}{' '}
-            <button
-              type="button"
-              className="font-medium underline underline-offset-2"
+            <Button
+              variant="link"
+              className="h-auto p-0 align-baseline text-current underline underline-offset-2"
               onClick={() => routerRef.current.push(NOTIFICATION_SETTINGS_ROUTE)}
             >
               Enable
-            </button>
+            </Button>
           </span>
         ) : (
           DETECTED_BODY
