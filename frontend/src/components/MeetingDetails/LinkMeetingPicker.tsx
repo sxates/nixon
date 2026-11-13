@@ -8,6 +8,9 @@
  * already excluded server-side), filterable by title client-side. Picking one calls
  * `api_link_meeting_to_series`, pinning it into the CURRENT meeting's series so prep briefs
  * and carryover can draw from it.
+ *
+ * Topics (specs/0089) reuse the same search with their own `onPick` (link a series to a
+ * topic), `title`, `description`, and extra controls as `children` under the filter.
  */
 
 import { useEffect, useMemo, useState } from 'react';
@@ -40,15 +43,25 @@ export function LinkMeetingPicker({
   targetMeetingId,
   excludeIds,
   onLink,
+  onPick,
+  title = 'Link previous meeting',
+  description,
+  children,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** The meeting whose series the picked meeting is linked into. */
-  targetMeetingId: string;
+  /** The meeting whose series the picked meeting is linked into (unused with `onPick`). */
+  targetMeetingId?: string;
   /** Meetings to hide from the list (the target itself + already-linked meetings). */
   excludeIds: string[];
   /** Called after a successful link so the parent can reload its prep view. */
   onLink: () => void;
+  /** Replaces the series link: what to do with the picked meeting. Rejects to show an error. */
+  onPick?: (meetingId: string) => Promise<void>;
+  title?: string;
+  description?: React.ReactNode;
+  /** Extra controls under the filter (a topic's backfill checkbox). */
+  children?: React.ReactNode;
 }) {
   const [meetings, setMeetings] = useState<PickerMeeting[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -87,10 +100,14 @@ export function LinkMeetingPicker({
     setLinkingId(id);
     setLinkError(null);
     try {
-      await invoke('api_link_meeting_to_series', {
-        meetingId: id,
-        targetMeetingId,
-      });
+      if (onPick) {
+        await onPick(id);
+      } else {
+        await invoke('api_link_meeting_to_series', {
+          meetingId: id,
+          targetMeetingId,
+        });
+      }
       onOpenChange(false);
       onLink();
     } catch (err) {
@@ -105,10 +122,14 @@ export function LinkMeetingPicker({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Link previous meeting</DialogTitle>
+          <DialogTitle>{title}</DialogTitle>
           <DialogDescription>
-            Pick a past meeting to treat as a previous occurrence of this one. Its summary
-            feeds this meeting&apos;s prep brief.
+            {description ?? (
+              <>
+                Pick a past meeting to treat as a previous occurrence of this one. Its summary
+                feeds this meeting&apos;s prep brief.
+              </>
+            )}
           </DialogDescription>
         </DialogHeader>
 
@@ -120,6 +141,8 @@ export function LinkMeetingPicker({
           aria-label="Filter meetings by title"
           autoFocus
         />
+
+        {children}
 
         {linkError && <p className="text-sm text-destructive">{linkError}</p>}
 

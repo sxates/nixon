@@ -36,6 +36,8 @@ export interface MeetingTitleFieldProps {
   onCommit: () => void;
   onCancel: () => void;
   inputRef?: RefObject<HTMLInputElement>;
+  /** Accessible name of the input (a topic page passes "Topic name"). */
+  ariaLabel?: string;
 }
 
 export function MeetingTitleField({
@@ -49,6 +51,7 @@ export function MeetingTitleField({
   onCommit,
   onCancel,
   inputRef,
+  ariaLabel = 'Meeting title',
 }: MeetingTitleFieldProps) {
   const text = title.trim();
   const shown = text || placeholder;
@@ -61,7 +64,7 @@ export function MeetingTitleField({
         type="text"
         value={draft}
         placeholder={placeholder}
-        aria-label="Meeting title"
+        aria-label={ariaLabel}
         onChange={(e) => onDraftChange(e.target.value)}
         onBlur={onCommit}
         onKeyDown={(e) => {
