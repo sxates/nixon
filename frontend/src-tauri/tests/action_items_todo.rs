@@ -585,17 +585,203 @@ async fn highlight_round_trips_on_the_list_view_and_rejects_unknown_colours() {
         .await
         .unwrap();
     let highlight = |rows: Vec<app_lib::database::repositories::action_item_todo::TodoRow>| {
-        rows.into_iter().find(|r| r.item.id == item.id).unwrap().highlight
+        rows.into_iter()
+            .find(|r| r.item.id == item.id)
+            .unwrap()
+            .highlight
     };
 
-    assert!(Todo::set_highlight(pool, &item.id, Some("yellow")).await.unwrap());
-    assert_eq!(highlight(Todo::list_view(pool, TodoView::List).await.unwrap()), Some("yellow".into()));
+    assert!(Todo::set_highlight(pool, &item.id, Some("yellow"))
+        .await
+        .unwrap());
+    assert_eq!(
+        highlight(Todo::list_view(pool, TodoView::List).await.unwrap()),
+        Some("yellow".into())
+    );
     // A highlight is not a content edit: re-extraction protection stays as it was.
-    let after = ActionItemsRepository::get(pool, &item.id).await.unwrap().unwrap();
+    let after = ActionItemsRepository::get(pool, &item.id)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(after.updated_at, item.updated_at);
 
-    assert!(Todo::set_highlight(pool, &item.id, Some("purple")).await.is_err());
+    assert!(Todo::set_highlight(pool, &item.id, Some("purple"))
+        .await
+        .is_err());
     assert!(Todo::set_highlight(pool, &item.id, None).await.unwrap());
-    assert_eq!(highlight(Todo::list_view(pool, TodoView::List).await.unwrap()), None);
+    assert_eq!(
+        highlight(Todo::list_view(pool, TodoView::List).await.unwrap()),
+        None
+    );
     assert!(!Todo::set_highlight(pool, "ai-missing", None).await.unwrap());
+}
+
+// ---- specs/0089: topic tagging ------------------------------------------------------------
+
+async fn topic(pool: &SqlitePool, name: &str) -> String {
+    app_lib::topics::repo::TopicsRepository::create(pool, name, "")
+        .await
+        .unwrap()
+        .id
+}
+
+async fn tag(pool: &SqlitePool, item: &str, topic_id: &str) {
+    sqlx::query("UPDATE action_items SET topic_id = ? WHERE id = ?")
+        .bind(topic_id)
+        .bind(item)
+        .execute(pool)
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+async fn list_for_topic_returns_listed_open_in_order() {
+    let (_d, db) = fresh_db().await;
+    let pool = db.pool();
+    meeting(pool, "m1", 1).await;
+    let t = topic(pool, "Atlas").await;
+    let other = topic(pool, "Other").await;
+    let a = extracted(pool, "m1", "a", "listed", "open").await;
+    let b = extracted(pool, "m1", "b", "listed", "open").await;
+    let done = extracted(pool, "m1", "c", "listed", "completed").await;
+    let sugg = extracted(pool, "m1", "d", "suggested", "open").await;
+    let elsewhere = extracted(pool, "m1", "e", "listed", "open").await;
+    for id in [&a, &b, &done, &sugg] {
+        tag(pool, id, &t).await;
+    }
+    tag(pool, &elsewhere, &other).await;
+    sqlx::query("UPDATE action_items SET sort_order = 2 WHERE id = ?")
+        .bind(&a)
+        .execute(pool)
+        .await
+        .unwrap();
+    sqlx::query("UPDATE action_items SET sort_order = 1 WHERE id = ?")
+        .bind(&b)
+        .execute(pool)
+        .await
+        .unwrap();
+    let rows = Todo::list_for_topic(pool, &t).await.unwrap();
+    let got: Vec<&str> = rows.iter().map(|r| r.item.id.as_str()).collect();
+    // A completed item stays on the topic (ticked off) until it is dismissed there.
+    assert_eq!(got, [b.as_str(), a.as_str(), done.as_str()]);
+}
+
+#[tokio::test]
+async fn topic_keeps_done_items_until_cleared_and_shows_them_again_when_redone() {
+    let (_d, db) = fresh_db().await;
+    let pool = db.pool();
+    meeting(pool, "m1", 1).await;
+    let t = topic(pool, "Atlas").await;
+    let item = extracted(pool, "m1", "a", "listed", "open").await;
+    let open = extracted(pool, "m1", "b", "listed", "open").await;
+    tag(pool, &item, &t).await;
+    tag(pool, &open, &t).await;
+    let listed = |pool: &SqlitePool, t: String| {
+        let pool = pool.clone();
+        async move {
+            Todo::list_for_topic(&pool, &t)
+                .await
+                .unwrap()
+                .into_iter()
+                .map(|r| (r.item.id, r.item.status))
+                .collect::<Vec<_>>()
+        }
+    };
+
+    ActionItemsRepository::set_status(pool, &item, "completed")
+        .await
+        .unwrap();
+    let rows = listed(pool, t.clone()).await;
+    assert!(rows.contains(&(item.clone(), "completed".to_string())));
+
+    // Only completed items clear; an open one is left alone.
+    let cleared = Todo::clear_done_for_topic(pool, &t, &[item.clone(), open.clone()])
+        .await
+        .unwrap();
+    assert_eq!(cleared, 1);
+    let rows = listed(pool, t.clone()).await;
+    assert_eq!(rows, vec![(open.clone(), "open".to_string())]);
+
+    // Reopened, it is back; completed again, it stays (ticked off) until the next clear.
+    ActionItemsRepository::set_status(pool, &item, "open")
+        .await
+        .unwrap();
+    assert_eq!(listed(pool, t.clone()).await.len(), 2);
+    ActionItemsRepository::set_status(pool, &item, "completed")
+        .await
+        .unwrap();
+    assert!(listed(pool, t.clone())
+        .await
+        .contains(&(item.clone(), "completed".to_string())));
+
+    // Clearing is per topic: another topic's id does nothing.
+    let other = topic(pool, "Other").await;
+    assert_eq!(
+        Todo::clear_done_for_topic(pool, &other, &[item.clone()])
+            .await
+            .unwrap(),
+        0
+    );
+}
+
+#[tokio::test]
+async fn set_action_item_topic_refuses_closed() {
+    let (_d, db) = fresh_db().await;
+    let pool = db.pool();
+    meeting(pool, "m1", 1).await;
+    let item = extracted(pool, "m1", "a", "listed", "open").await;
+    let t = topic(pool, "Atlas").await;
+    assert!(Todo::set_topic(pool, &item, Some(&t)).await.unwrap());
+    app_lib::topics::repo::TopicsRepository::update(pool, &t, None, None, Some("closed"))
+        .await
+        .unwrap();
+    let err = Todo::set_topic(pool, &item, Some(&t)).await.unwrap_err();
+    assert_eq!(err.to_string(), "That topic is closed.");
+    let err = Todo::set_topic(pool, &item, Some("topic-nope"))
+        .await
+        .unwrap_err();
+    assert_eq!(err.to_string(), "Topic not found.");
+    // Untagging is always allowed, even from a closed topic.
+    assert!(Todo::set_topic(pool, &item, None).await.unwrap());
+    assert!(!Todo::set_topic(pool, "ai-missing", None).await.unwrap());
+}
+
+#[tokio::test]
+async fn todo_rows_carry_topic_name() {
+    let (_d, db) = fresh_db().await;
+    let pool = db.pool();
+    meeting(pool, "m1", 1).await;
+    let item = extracted(pool, "m1", "a", "listed", "open").await;
+    let plain = extracted(pool, "m1", "b", "listed", "open").await;
+    let t = topic(pool, "Atlas CRM rebuild").await;
+    tag(pool, &item, &t).await;
+    let rows = Todo::list_view(pool, TodoView::List).await.unwrap();
+    let r = rows.iter().find(|r| r.item.id == item).unwrap();
+    assert_eq!(r.topic_id.as_deref(), Some(t.as_str()));
+    assert_eq!(r.topic_name.as_deref(), Some("Atlas CRM rebuild"));
+    let r = rows.iter().find(|r| r.item.id == plain).unwrap();
+    assert!(r.topic_id.is_none() && r.topic_name.is_none());
+    let detail = Todo::get_detail(pool, &item).await.unwrap().unwrap();
+    assert_eq!(detail.topic_name.as_deref(), Some("Atlas CRM rebuild"));
+}
+
+/// specs/0089 final fix: the detail page reads the topic off the detail payload, beside
+/// `item` (the `ActionItem` row has no topic field). The frontend test fixture
+/// (`app/tasks/item/__tests__/topic-pick.test.tsx`) copies this exact shape.
+#[tokio::test]
+async fn detail_wire_shape_carries_the_topic_beside_the_item() {
+    let (_d, db) = fresh_db().await;
+    let pool = db.pool();
+    meeting(pool, "m-wire", 1).await;
+    let x = extracted(pool, "m-wire", "x", "listed", "open").await;
+    let topic = app_lib::topics::repo::TopicsRepository::create(pool, "Atlas CRM rebuild", "")
+        .await
+        .unwrap();
+    assert!(Todo::set_topic(pool, &x, Some(&topic.id)).await.unwrap());
+    let d = Todo::get_detail(pool, &x).await.unwrap().unwrap();
+    let wire = serde_json::to_value(&d).unwrap();
+    assert_eq!(wire["topicId"], serde_json::json!(topic.id));
+    assert_eq!(wire["topicName"], serde_json::json!("Atlas CRM rebuild"));
+    assert!(wire["item"].get("topicId").is_none(), "{wire}");
+    assert!(wire["item"].get("topic_id").is_none(), "{wire}");
 }

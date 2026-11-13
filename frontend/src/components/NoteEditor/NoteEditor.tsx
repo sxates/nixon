@@ -35,6 +35,8 @@ interface NoteEditorProps {
   frame?: (parts: { toolbar: React.ReactNode; body: React.ReactNode }) => React.ReactNode;
   /** Imperative hooks for the owning panel (quick-add appends a "☐ To-do:" line). */
   apiRef?: React.MutableRefObject<NoteEditorApi | null>;
+  /** Accessible name of the editable body. */
+  ariaLabel?: string;
 }
 
 export interface NoteEditorApi {
@@ -52,6 +54,7 @@ export function NoteEditor({
   bodyClassName = '',
   frame,
   apiRef,
+  ariaLabel = 'Meeting notes',
 }: NoteEditorProps) {
   const elRef = useRef<HTMLDivElement | null>(null);
 
@@ -160,7 +163,7 @@ export function NoteEditor({
       onPaste={handlePaste}
       role="textbox"
       aria-multiline="true"
-      aria-label="Meeting notes"
+      aria-label={ariaLabel}
       className={`note-editor min-h-0 flex-1 overflow-y-auto text-sm leading-[1.65] text-foreground ${bodyClassName}`}
     />
   );

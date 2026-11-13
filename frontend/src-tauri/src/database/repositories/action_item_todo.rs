@@ -50,6 +50,9 @@ pub struct TodoRow {
     pub latest_context: Option<String>,
     /// `'yellow' | 'green'`, or `None` (To-do list highlight, ⌘4 / ⌘5).
     pub highlight: Option<String>,
+    /// The topic this to-do is tagged with (specs/0089), and its name.
+    pub topic_id: Option<String>,
+    pub topic_name: Option<String>,
 }
 
 #[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
@@ -68,6 +71,8 @@ pub struct ActionItemDetail {
     pub item: ActionItem,
     pub sources: Vec<SourceRow>,
     pub person_ids: Vec<String>,
+    pub topic_id: Option<String>,
+    pub topic_name: Option<String>,
 }
 
 /// Meeting ids an item was mentioned in (sources plus its own meeting).
@@ -135,19 +140,104 @@ impl ActionItemTodoRepository {
                 "ai.updated_at DESC",
             ),
         };
+        Self::rows(pool, filter, order, None).await
+    }
+
+    /// A topic's to-do list items, in list order (specs/0089): the open ones, plus completed
+    /// ones not dismissed from the topic since they were last completed (they stay on the
+    /// card, ticked off, until [`Self::clear_done_for_topic`]).
+    pub async fn list_for_topic(
+        pool: &SqlitePool,
+        topic_id: &str,
+    ) -> Result<Vec<TodoRow>, SqlxError> {
+        Self::rows(
+            pool,
+            "ai.triage = 'listed' AND ai.topic_id = ? AND (ai.status = 'open' OR \
+             (ai.status = 'completed' AND (ai.topic_cleared_at IS NULL \
+               OR ai.completed_at IS NULL OR ai.topic_cleared_at < ai.completed_at)))",
+            "ai.sort_order IS NULL, ai.sort_order ASC, ai.created_at ASC",
+            Some(topic_id),
+        )
+        .await
+    }
+
+    /// Dismiss completed to-dos from a topic's card. Open items and items tagged to another
+    /// topic are left alone. Returns how many were dismissed.
+    pub async fn clear_done_for_topic(
+        pool: &SqlitePool,
+        topic_id: &str,
+        ids: &[String],
+    ) -> Result<u64, SqlxError> {
+        if ids.is_empty() {
+            return Ok(0);
+        }
+        let ph = std::iter::repeat_n("?", ids.len())
+            .collect::<Vec<_>>()
+            .join(", ");
+        let sql = format!(
+            "UPDATE action_items SET topic_cleared_at = ? \
+             WHERE topic_id = ? AND status = 'completed' AND id IN ({ph})"
+        );
+        let mut q = sqlx::query(&sql)
+            .bind(chrono::Utc::now().to_rfc3339())
+            .bind(topic_id);
+        for id in ids {
+            q = q.bind(id);
+        }
+        Ok(q.execute(pool).await?.rows_affected())
+    }
+
+    async fn rows(
+        pool: &SqlitePool,
+        filter: &str,
+        order: &str,
+        bind: Option<&str>,
+    ) -> Result<Vec<TodoRow>, SqlxError> {
         let sql = format!(
             "SELECT {COLS}, m.title AS meeting_title, m.created_at AS meeting_created_at, \
              (SELECT COUNT(*) FROM ({SOURCE_IDS}) WHERE meeting_id IS NOT NULL) AS source_count, \
              lm.created_at AS latest_source_at, \
              (SELECT s.context FROM action_item_sources s \
                WHERE s.action_item_id = ai.id AND s.meeting_id = lm.id) AS latest_context, \
-             ai.highlight \
+             ai.highlight, ai.topic_id, t.name AS topic_name \
              FROM action_items ai \
              LEFT JOIN meetings m ON m.id = ai.meeting_id {} \
+             LEFT JOIN topics t ON t.id = ai.topic_id \
              WHERE {filter} ORDER BY {order}",
             latest_join()
         );
-        sqlx::query_as::<_, TodoRow>(&sql).fetch_all(pool).await
+        let mut q = sqlx::query_as::<_, TodoRow>(&sql);
+        if let Some(b) = bind {
+            q = q.bind(b);
+        }
+        q.fetch_all(pool).await
+    }
+
+    /// Tag (or, with `None`, untag) a to-do. `Ok(false)` = the item is gone. Tagging refuses a
+    /// missing or closed topic; untagging is always allowed.
+    pub async fn set_topic(
+        pool: &SqlitePool,
+        id: &str,
+        topic_id: Option<&str>,
+    ) -> anyhow::Result<bool> {
+        if let Some(t) = topic_id {
+            let status: Option<String> =
+                sqlx::query_scalar("SELECT status FROM topics WHERE id = ?")
+                    .bind(t)
+                    .fetch_optional(pool)
+                    .await?;
+            match status.as_deref() {
+                None => anyhow::bail!("Topic not found."),
+                Some("open") => {}
+                Some(_) => anyhow::bail!("That topic is closed."),
+            }
+        }
+        let res = sqlx::query("UPDATE action_items SET topic_id = ?2 WHERE id = ?1")
+            .bind(id)
+            .bind(topic_id)
+            .execute(pool)
+            .await?;
+        Ok(res.rows_affected() > 0)
     }
 
     pub async fn inbox_count(pool: &SqlitePool) -> Result<i64, SqlxError> {
@@ -290,10 +380,19 @@ impl ActionItemTodoRepository {
         .bind(id)
         .fetch_all(pool)
         .await?;
+        let (topic_id, topic_name) = sqlx::query_as::<_, (Option<String>, Option<String>)>(
+            "SELECT ai.topic_id, t.name FROM action_items ai \
+             LEFT JOIN topics t ON t.id = ai.topic_id WHERE ai.id = ?",
+        )
+        .bind(id)
+        .fetch_one(pool)
+        .await?;
         Ok(Some(ActionItemDetail {
             item,
             sources,
             person_ids,
+            topic_id,
+            topic_name,
         }))
     }
 

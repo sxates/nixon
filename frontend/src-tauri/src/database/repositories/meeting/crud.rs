@@ -457,6 +457,7 @@ async fn delete_meeting_with_transaction(
         .bind(meeting_id)
         .execute(&mut *transaction)
         .await?;
+    crate::topics::repo::cascade_meeting_delete(&mut *transaction, meeting_id).await?;
 
     // 9. Delete the manual series link (specs/0041 WS4). FK is ON DELETE CASCADE and
     // enforced; explicit children-first delete mirrors the meeting_notes handling.

@@ -21,7 +21,7 @@ export function IconSlot({ name, children }: { name: string; children: React.Rea
 }
 
 /** The 1.5px amber bar that indexes the active row. Same x in both states. */
-function IndexBar({ active }: { active: boolean }) {
+export function IndexBar({ active }: { active: boolean }) {
   return (
     <span
       aria-hidden

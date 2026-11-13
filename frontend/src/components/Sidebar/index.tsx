@@ -18,6 +18,7 @@ import { cn } from '@/lib/utils';
 import { QueueRow } from './QueueRow';
 import { IconSlot, NavRow } from './SidebarRow';
 import { SIDEBAR_LABEL, SIDEBAR_ROW } from './row';
+import { TopicsNav } from './TopicsNavList';
 import { UpdateRow } from './UpdateRow';
 
 import DevBadge from '../DevBadge';
@@ -162,6 +163,9 @@ const Sidebar: React.FC = () => {
               onClick={() => router.push(item.path)}
             />
           ))}
+          {/* Topics last: its open-topics list grows below the row and must not push
+              People and Ask AI down (specs/0089). It lights per topic, so it owns its row. */}
+          <TopicsNav collapsed={isCollapsed} />
         </nav>
 
         <div className="flex-shrink-0 py-2">

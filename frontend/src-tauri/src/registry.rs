@@ -13,7 +13,7 @@ use crate::{
     action_items, agent_access, aggregation, anthropic, audio, calendar, cli_llm, database,
     diarization, fs_guard, groq, llm_activity, meetings, notifications, ollama, onboarding,
     onboarding_disk, openai, openrouter, parakeet_engine, people, power, search, settings, summary,
-    transcripts, updater, utils, whisper_engine, zoom,
+    topics, transcripts, updater, utils, whisper_engine, zoom,
 };
 // specs/0059: the whole `dev_fixtures` module is `#![cfg(debug_assertions)]`-gated, so
 // this import must be too — a release build has no `crate::dev_fixtures` to resolve.
@@ -415,6 +415,25 @@ pub fn invoke_handler() -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Sen
         action_items::todo_commands::api_set_action_item_notes,
         action_items::todo_commands::api_set_action_item_highlight,
         action_items::todo_commands::api_dismiss_suggestions_older_than,
+        // Topics (specs/0089)
+        topics::commands::api_list_topics,
+        topics::commands::api_get_topic,
+        topics::commands::api_create_topic,
+        topics::commands::api_update_topic,
+        topics::commands::api_set_topic_notes,
+        topics::commands::api_delete_topic,
+        topics::commands::api_link_topic,
+        topics::commands::api_unlink_topic,
+        topics::commands::api_topics_for_meeting,
+        topics::commands::api_draft_topic_description,
+        topics::commands::api_edit_topic_entry,
+        topics::commands::api_revert_topic_entry,
+        topics::commands::api_rewrite_topic_entry,
+        topics::commands::api_add_manual_topic_entry,
+        topics::commands::api_delete_topic_entry,
+        topics::commands::api_resolve_topic_suggestion,
+        topics::commands::api_set_action_item_topic,
+        topics::commands::api_clear_topic_todos,
         // Background LLM activity indicator (specs/0052)
         llm_activity::commands::api_llm_activity_snapshot,
         llm_activity::commands::api_llm_activity_dismiss,

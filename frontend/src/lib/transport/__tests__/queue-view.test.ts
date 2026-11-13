@@ -143,7 +143,7 @@ describe('buildQueueView', () => {
     expect(v.rows[0].action).toBe('retry');
   });
 
-  it.each(['prepBrief', 'meetingSummary', 'actionItems', 'diarization'] as const)(
+  it.each(['prepBrief', 'meetingSummary', 'actionItems', 'diarization', 'topics'] as const)(
     'marks a failed %s task retryable when it has a meeting',
     (kind) => {
       const v = buildQueueView(

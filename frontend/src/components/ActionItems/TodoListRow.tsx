@@ -2,9 +2,11 @@
 
 /**
  * One row of the To-do tab (specs/0088), laid out in columns so each item takes a
- * single line where its title fits: grip · checkbox · title · Due · open/menu. The column
- * template lives in `TODO_GRID` so the list header lines up with the rows; a Topics
- * column (specs/0089) slots in before Due.
+ * single line where its title fits: grip · checkbox · title · Topic · Due · open/menu. The
+ * column template comes from `todoGrid` so the list header lines up with the rows. The Topic
+ * column (specs/0089) is there only when some row in the view is tagged, so untagged lists
+ * keep their full title width; its chip opens the topic, and `@topic` in the inline edit
+ * re-tags the item either way.
  *
  * Selection and editing are driven by the list (see `useTodoListKeys`): a click on the
  * row selects it, a click on the title of the selected row edits it in place (Enter
@@ -12,8 +14,8 @@
  * detail page. A highlight (⌘4 yellow / ⌘5 green) marks the title like a highlighter pen.
  */
 
-import type { ReactNode } from 'react';
-import { ChevronRight, EyeOff, Trash2 } from '@/components/ui/icons';
+import { useEffect, useState, type ReactNode } from 'react';
+import { ChevronRight, EyeOff, Trash2, X } from '@/components/ui/icons';
 import { Checkbox } from '@/components/ui/checkbox';
 import { DeckIcon } from '@/components/ui/deck-icon';
 import { IconButton } from '@/components/ui/icon-button';
@@ -30,8 +32,9 @@ import type { Highlight } from '@/hooks/useTodoListKeys';
 import { parseTodoText, titleSegments } from '@/lib/todo-parse';
 import { cn } from '@/lib/utils';
 import type { ActionItem, ActionItemStatus } from '@/types';
+import { TopicChip } from './TopicChip';
 import { DueDateControl } from './DueDateControl';
-import { MentionInput } from './MentionInput';
+import { MentionInput, type MentionTopic } from './MentionInput';
 
 /**
  * checkbox · title · due · actions — shared by the header and every row. Every cell's
@@ -40,8 +43,10 @@ import { MentionInput } from './MentionInput';
  * line (`text-sm leading-5`), so a long title wraps downward without dragging the
  * checkbox or the date off its first line.
  */
-export const TODO_GRID =
-  'grid grid-cols-[1rem_minmax(0,1fr)_7.5rem_3.5rem] items-start gap-x-3';
+export const todoGrid = (withTopic: boolean) =>
+  withTopic
+    ? 'grid grid-cols-[1rem_minmax(0,1fr)_8rem_7.5rem_3.5rem] items-start gap-x-3'
+    : 'grid grid-cols-[1rem_minmax(0,1fr)_7.5rem_3.5rem] items-start gap-x-3';
 
 /** Highlighter-pen washes on the title text. */
 const HIGHLIGHT_CLASS: Record<Highlight, string> = {
@@ -63,14 +68,28 @@ interface TodoListRowProps {
   onSelect: (item: ActionItem) => void;
   onStartEdit: (item: ActionItem) => void;
   /** Enter / blur in the edit field: the title with any trailing "(date)" split off. */
-  onCommitEdit: (item: ActionItem, title: string, dueDate: string | null) => void;
+  onCommitEdit: (
+    item: ActionItem,
+    title: string,
+    dueDate: string | null,
+    /** The topic picked during this edit; undefined = not touched. */
+    topic?: MentionTopic | null,
+  ) => void;
   onCancelEdit: () => void;
   onOpen: (item: ActionItem) => void;
   onSetStatus: (item: ActionItem, status: ActionItemStatus) => void | Promise<void>;
   onSetDueDate: (item: ActionItem, dueDate: string | null) => void | Promise<void>;
   onDelete: (item: ActionItem) => void | Promise<void>;
   onToggleHighlight: (item: ActionItem, color: Highlight) => void;
-  onMoveToTop: (item: ActionItem) => void;
+  /** Omitted where the list has no order of its own (a topic's items follow To-do's). */
+  onMoveToTop?: (item: ActionItem) => void;
+  /** A ticked-off row's ✕: take it off this list (a topic's dismiss, specs/0089). */
+  onDismissDone?: (item: ActionItem) => void;
+  /** Open topics for the `@` picker (specs/0089). */
+  topics?: MentionTopic[];
+  onOpenTopic?: (topicId: string) => void;
+  /** Render the Topic column; the list passes whether any row in the view is tagged. */
+  showTopic?: boolean;
 }
 
 export function TodoListRow({
@@ -92,7 +111,12 @@ export function TodoListRow({
   onDelete,
   onToggleHighlight,
   onMoveToTop,
+  onDismissDone,
+  topics,
+  onOpenTopic,
+  showTopic = true,
 }: TodoListRowProps) {
+  const [pickedTopic, setPickedTopic] = useState<MentionTopic | null | undefined>(undefined);
   const completed = item.status === 'completed';
   const meta = [
     sourceCount !== undefined && sourceCount > 1 ? `from ${sourceCount} meetings` : null,
@@ -101,17 +125,25 @@ export function TodoListRow({
 
   const commit = (serialized: string) => {
     const { title, dueDate } = parseTodoText(serialized.trim(), new Date());
-    onCommitEdit(item, title, dueDate);
+    onCommitEdit(item, title, dueDate, pickedTopic);
   };
+  useEffect(() => {
+    if (!editing) setPickedTopic(undefined);
+  }, [editing]);
+  const topicId = pickedTopic === undefined ? (item.topicId ?? null) : (pickedTopic?.id ?? null);
 
   return (
     <div
       id={todoRowDomId(item.id)}
       role="option"
       aria-selected={selected}
-      onClick={() => onSelect(item)}
+      // While editing, a click inside the field only moves the cursor: re-selecting the row
+      // would focus the list, blur the field and end the edit.
+      onClick={() => {
+        if (!editing) onSelect(item);
+      }}
       className={cn(
-        TODO_GRID,
+        todoGrid(showTopic),
         'group relative rounded-lg px-2 py-1 transition-colors',
         selected
           ? 'bg-accent ring-1 ring-inset ring-rule group-focus/list:ring-brand-edge'
@@ -139,6 +171,9 @@ export function TodoListRow({
             multiline
             autoFocus
             variant="bare"
+            topics={topics}
+            topicId={topicId}
+            onTopicChange={setPickedTopic}
             ariaLabel="Edit to-do"
             className="-mx-1 -my-0.5 leading-5"
           />
@@ -180,12 +215,32 @@ export function TodoListRow({
         )}
       </div>
 
+      {showTopic ? (
+        <span className="flex h-5 min-w-0 items-center">
+          {item.topicId && item.topicName && (
+            <TopicChip name={item.topicName} onClick={() => onOpenTopic?.(item.topicId!)} className="-ml-1" />
+          )}
+        </span>
+      ) : null}
+
       <span className="flex h-5 min-w-0 items-center">
         {/* -ml-1 cancels the control's hover padding so the date sits under the header. */}
         <DueDateControl item={item} onSetDueDate={onSetDueDate} quietWhenEmpty className="-ml-1 max-w-full" />
       </span>
 
       <span className="flex h-5 items-center justify-end gap-0.5">
+        {completed && onDismissDone ? (
+          <IconButton
+            variant="ghost"
+            size="sm"
+            label={`Dismiss "${item.description}" from this topic`}
+            icon={<DeckIcon icon={X} size={14} />}
+            onClick={(e) => {
+              e.stopPropagation();
+              onDismissDone(item);
+            }}
+          />
+        ) : (
         <IconButton
           variant="ghost"
           size="sm"
@@ -200,6 +255,7 @@ export function TodoListRow({
             selected && 'opacity-100',
           )}
         />
+        )}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <MenuButton
@@ -208,9 +264,11 @@ export function TodoListRow({
             />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
-            <DropdownMenuItem onSelect={() => onMoveToTop(item)}>
-              Move to top <DropdownMenuShortcut>⌘1</DropdownMenuShortcut>
-            </DropdownMenuItem>
+            {onMoveToTop && (
+              <DropdownMenuItem onSelect={() => onMoveToTop(item)}>
+                Move to top <DropdownMenuShortcut>⌘1</DropdownMenuShortcut>
+              </DropdownMenuItem>
+            )}
             <DropdownMenuItem onSelect={() => onToggleHighlight(item, 'yellow')}>
               {highlight === 'yellow' ? 'Remove highlight' : 'Highlight yellow'}
               <DropdownMenuShortcut>⌘4</DropdownMenuShortcut>

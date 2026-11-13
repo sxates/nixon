@@ -18,9 +18,11 @@ vi.mock('@/components/Sidebar/SidebarProvider', () => ({
 
 let pathname = '/meetings';
 const push = vi.fn();
+const search = '';
 vi.mock('next/navigation', () => ({
   usePathname: () => pathname,
   useRouter: () => ({ push }),
+  useSearchParams: () => new URLSearchParams(search),
 }));
 
 // The To-do row's inbox badge reads `api_inbox_count`; every other command answers null.
@@ -74,7 +76,7 @@ vi.mock('@/contexts/UpdateStatusContext', () => ({
 import Sidebar from '@/components/Sidebar';
 
 // Today and All meetings merged into one Meetings page.
-const NAV_NAMES = ['Meetings', 'To-do', 'People', 'Ask AI'];
+const NAV_NAMES = ['Meetings', 'To-do', 'People', 'Ask AI', 'Topics'];
 
 describe('Sidebar (specs/0057 Plan 3 Task 3)', () => {
   beforeEach(() => {
@@ -87,6 +89,16 @@ describe('Sidebar (specs/0057 Plan 3 Task 3)', () => {
     for (const name of NAV_NAMES) {
       expect(screen.getByRole('button', { name })).toBeInTheDocument();
     }
+  });
+
+  it('puts Topics after Ask AI and lights it on /topics paths', () => {
+    pathname = '/topics/topic';
+    render(<Sidebar />);
+    const labels = Array.from(document.querySelectorAll('nav [data-sidebar-row]')).map((b) =>
+      b.getAttribute('aria-label'),
+    );
+    expect(labels.indexOf('Topics')).toBe(labels.indexOf('Ask AI') + 1);
+    expect(screen.getByRole('button', { name: 'Topics' })).toHaveAttribute('aria-current', 'page');
   });
 
   it('marks the active destination with aria-current="page" when expanded', () => {
@@ -223,6 +235,13 @@ describe('Sidebar parity (specs/0069 W1)', () => {
     sidebarState.isCollapsed = true;
     const collapsed = render(<Sidebar />);
     expect(slotOrder(collapsed.container)).toEqual(expandedSlots);
+  });
+
+  it('puts Topics last in the nav, so its growing list never pushes People and Ask AI down', () => {
+    sidebarState.isCollapsed = false;
+    const { container } = render(<Sidebar />);
+    const nav = slotOrder(container.querySelector('nav') as HTMLElement);
+    expect(nav).toEqual(['meetings', 'tasks', 'people', 'ask', 'topics']);
   });
 
   it("gives every slot's ROW the shared row classes, in both states", () => {

@@ -12,6 +12,7 @@ import {
   AudioLines,
   Calendar,
   FileText,
+  FolderKanban,
   LayoutList,
   ListPlus,
   Mic,
@@ -29,6 +30,8 @@ import {
   CommandShortcut,
 } from '@/components/ui/command';
 import { formatMeetingDate } from '@/lib/format-date';
+import { listTopics } from '@/lib/topics';
+import type { TopicSummary } from '@/types';
 
 // Shape returned by `api_get_meetings` (mirrors app/page.tsx DashboardMeeting).
 // `gist`/`durationSeconds` may be absent.
@@ -122,6 +125,9 @@ export default function CommandPalette() {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [meetings, setMeetings] = useState<PaletteMeeting[]>([]);
+  // Topics (specs/0089): a typed query puts matching topics first, so a topic is a few
+  // keystrokes and Enter away.
+  const [topics, setTopics] = useState<TopicSummary[]>([]);
   // Controlled cmdk input — drives the debounced backend search (specs/0033).
   const [query, setQuery] = useState('');
   const [hits, setHits] = useState<MeetingSearchHit[]>([]);
@@ -165,6 +171,14 @@ export default function CommandPalette() {
         if (!cancelled) setMeetings(Array.isArray(result) ? result : []);
       } catch (err) {
         console.error('[CommandPalette] Failed to load meetings:', err);
+      }
+    })();
+    (async () => {
+      try {
+        const result = await listTopics();
+        if (!cancelled) setTopics(Array.isArray(result) ? result : []);
+      } catch (err) {
+        console.error('[CommandPalette] Failed to load topics:', err);
       }
     })();
     return () => {
@@ -287,6 +301,39 @@ export default function CommandPalette() {
   ];
 
   const visibleActions = actions.filter((a) => manualMatch(a.label, a.keywords));
+  // Open topics first, then most recent activity.
+  const visibleTopics = topics
+    .filter((t) => manualMatch(`${t.name} ${t.id}`, [t.name, 'topic']))
+    .sort(
+      (a, b) =>
+        Number(a.status === 'closed') - Number(b.status === 'closed') ||
+        (b.lastActivity ?? '').localeCompare(a.lastActivity ?? ''),
+    );
+  const topicsGroup =
+    visibleTopics.length > 0 ? (
+      <CommandGroup heading="Topics">
+        {visibleTopics.map((t) => (
+          <CommandItem
+            key={t.id}
+            value={`${t.name} ${t.id}`}
+            keywords={[t.name, 'topic']}
+            onSelect={() =>
+              runCommand(() => router.push(`/topics/topic?id=${encodeURIComponent(t.id)}`))
+            }
+          >
+            <FolderKanban />
+            <span className="min-w-0 flex-1 truncate">{t.name}</span>
+            {t.status === 'closed' && (
+              <span className="ml-auto flex-shrink-0 text-xs text-muted-foreground">Closed</span>
+            )}
+          </CommandItem>
+        ))}
+      </CommandGroup>
+    ) : null;
+  // Typing: topics lead, so type-then-Enter opens one. Empty query: Actions stay first
+  // (Enter still starts nothing surprising) and topics follow them.
+  const topicsFirst = trimmedQuery.length > 0;
+
   const visibleMeetings = meetings.filter((m) => {
     const title = m.title?.trim() || 'Untitled meeting';
     // Same surface as the CommandItem below (value=`${title} ${id}`, keywords=[title])
@@ -302,6 +349,8 @@ export default function CommandPalette() {
         onValueChange={setQuery}
       />
       <CommandList>
+        {topicsFirst && topicsGroup}
+        {topicsFirst && topicsGroup && visibleActions.length > 0 && <CommandSeparator />}
         {visibleActions.length > 0 && (
           <CommandGroup heading="Actions">
             {visibleActions.map((a) => (
@@ -316,6 +365,13 @@ export default function CommandPalette() {
               </CommandItem>
             ))}
           </CommandGroup>
+        )}
+
+        {!topicsFirst && topicsGroup && (
+          <>
+            <CommandSeparator />
+            {topicsGroup}
+          </>
         )}
 
         {visibleMeetings.length > 0 && (
@@ -395,6 +451,7 @@ export default function CommandPalette() {
             all, and it says what's actually empty. */}
         {backendSearchActive &&
           visibleActions.length === 0 &&
+          visibleTopics.length === 0 &&
           visibleMeetings.length === 0 &&
           hits.length === 0 && (
             <div className="py-6 text-center text-sm text-muted-foreground">

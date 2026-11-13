@@ -27,6 +27,7 @@ import {
   type AssigneeSelection,
   type BulkFilter,
 } from '@/lib/action-items';
+import { setActionItemTopic } from '@/lib/topics';
 import type { ActionItem, ActionItemStatus } from '@/types';
 
 export type TriageAction = 'add_to_list' | 'adopt' | 'dismiss' | 'restore';
@@ -45,7 +46,7 @@ export interface UseActionItemMutationsOptions<T extends ActionItem> {
   /** Runs after an assignee change commits (e.g. re-scope a person-filtered view). */
   onAssigned?: (updated: ActionItem) => void | Promise<void>;
   /** Runs after a manual add commits (e.g. success toast). */
-  onAdded?: (created: ActionItem) => void;
+  onAdded?: (created: ActionItem, tagFailed?: boolean) => void;
   /** Whether a just-created item belongs in the current view (default: always). */
   appendCreated?: (created: ActionItem) => boolean;
 }
@@ -56,7 +57,7 @@ export interface ActionItemMutations {
   assign: (item: ActionItem, selection: AssigneeSelection) => Promise<void>;
   deleteItem: (item: ActionItem) => Promise<void>;
   /** Returns false on failure so `AddActionItemRow` keeps the typed draft. */
-  add: (description: string, dueDate?: string) => Promise<boolean>;
+  add: (description: string, dueDate?: string, topicId?: string | null) => Promise<boolean>;
   /** Set (ISO `YYYY-MM-DD`) or clear (`null`) an item's structured due date (WS1.a). */
   setDueDate: (item: ActionItem, dueDate: string | null) => Promise<void>;
   /**
@@ -212,18 +213,31 @@ export function useActionItemMutations<T extends ActionItem>({
   const dismissOlderThan = (days: 14 | 30 | 60) =>
     invoke<string[]>('api_dismiss_suggestions_older_than', { days });
 
-  const add = async (description: string, dueDate?: string): Promise<boolean> => {
+  const add = async (description: string, dueDate?: string, topicId?: string | null): Promise<boolean> => {
     try {
-      const created = await invoke<ActionItem>('api_create_action_item', {
+      let tagFailed = false;
+      let created = await invoke<ActionItem>('api_create_action_item', {
         meetingId,
         description,
         ...(dueDate ? { dueDate } : {}),
       });
+      if (topicId) {
+        // Tagging is its own command (specs/0089): the item exists either way, so a
+        // refused tag (closed topic) warns instead of failing the add.
+        try {
+          await setActionItemTopic(created.id, topicId);
+          created = { ...created, topicId };
+        } catch (err) {
+          tagFailed = true;
+          toast.error('Added, but not to the topic', { description: errorDescription(err) });
+        }
+      }
       if (!appendCreated || appendCreated(created)) {
         const row = lift(created);
         setItems((prev) => (prev.some((i) => i.id === row.id) ? prev : [...prev, row]));
       }
-      onAdded?.(created);
+      if (tagFailed) onAdded?.(created, true);
+      else onAdded?.(created);
       return true;
     } catch (err) {
       console.error('Failed to add action item:', err);

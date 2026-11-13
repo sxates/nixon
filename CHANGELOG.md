@@ -21,6 +21,20 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 _(nothing yet)_
 
+## [0.18.0] - 2026-11-13
+
+### Added
+
+- **Topics** keep a running log for a project or subject. Link a topic to meetings or to a whole series and Nixon adds a dated entry, with decisions called out, after each one. When the topic comes up in a meeting that is not linked, you get a suggested note with a link to the moment it was said. Write your own notes on the topic page, edit any entry, and tag to-dos with @topic to see them in one place, where they work just like your To-do list and stay ticked off until you dismiss them. Jump to any topic from ⌘K.
+
+### Changed
+
+- Clicking inside a to-do you're editing now places the cursor there instead of saving the edit.
+
+### Internal
+
+- Topics eval harness (precision, recall and time-validity checks), ADR-0020 (automatic processes append, only the owner edits) and the source-scan test that enforces it.
+
 ## [0.17.0] - 2026-11-12
 
 ### Added

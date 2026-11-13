@@ -54,7 +54,7 @@ async function main() {
   const chrome = await launchChrome();
   try {
     const browser = openSession(chrome.browserWs); await browser.ready;
-    const mock = readFileSync(join(here, 'tauri-mock.js'), 'utf8');
+    const mock = readFileSync(join(here, 'topics-mock.js'), 'utf8') + readFileSync(join(here, 'tauri-mock.js'), 'utf8');
     mkdirSync(opt.out, { recursive: true });
     let shots = expand(loadManifest(), { headless: true });
     if (opt.only) shots = shots.filter((s) => opt.only.includes(s.name));

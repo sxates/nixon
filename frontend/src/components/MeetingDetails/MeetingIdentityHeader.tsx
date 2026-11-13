@@ -36,6 +36,8 @@ interface MeetingIdentityHeaderProps {
   onBack?: () => void;
   /** Right-hand cluster: the scheduled record control and the meeting's overflow menu. */
   actions?: ReactNode;
+  /** The column the title row aligns to (`PageHeader`'s `width`). */
+  width?: 'page' | 'doc' | 'none';
   className?: string;
 }
 
@@ -90,6 +92,7 @@ export function MeetingIdentityHeader({
   voices,
   onBack,
   actions,
+  width,
   className,
 }: MeetingIdentityHeaderProps) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -213,6 +216,7 @@ export function MeetingIdentityHeader({
   // the sidebar (owner feedback 2026-09-19). The caller owns the outer padding.
   return (
     <PageHeader
+      width={width}
       className={className}
       back={onBack ? { label: 'Back to meetings', onClick: onBack } : undefined}
       title={titleField}

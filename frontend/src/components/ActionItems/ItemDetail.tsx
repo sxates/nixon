@@ -25,7 +25,10 @@ import { Panel } from '@/components/ui/panel';
 import { avatarColorClass } from '@/lib/avatar-colors';
 import { ListRow } from '@/components/ui/list-row';
 import { PageHeader } from '@/components/ui/page-header';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { useTopics } from '@/hooks/useTopics';
+import { setActionItemTopic } from '@/lib/topics';
 import { useActionItemMutations } from '@/hooks/useActionItemMutations';
 import { formatMeetingDate } from '@/lib/format-date';
 import { parseTodoText, titleSegments } from '@/lib/todo-parse';
@@ -33,7 +36,7 @@ import { PAGE_CONTENT_WIDTH, PAGE_GUTTER } from '@/lib/page-width';
 import { cn } from '@/lib/utils';
 import type { ActionItem, ActionItemDetail, Person } from '@/types';
 import { DueDateControl } from './DueDateControl';
-import { MentionInput } from './MentionInput';
+import { MentionInput, type MentionTopic } from './MentionInput';
 
 export const NOTES_DEBOUNCE_MS = 600;
 
@@ -64,7 +67,8 @@ export function ItemDetail({ id }: { id: string }) {
     try {
       const d = await invoke<ActionItemDetail>('api_get_action_item_detail', { id });
       if (seq !== loadSeq.current) return;
-      setItem(d.item);
+      // The topic travels beside `item` on the wire; fold it in so the field can read it.
+      setItem({ ...d.item, topicId: d.topicId ?? null, topicName: d.topicName ?? null });
       setSources(d.sources ?? []);
       // Never overwrite text the user is mid-way through typing, or text saved while this
       // request was in flight (its notes are older than what we hold).
@@ -140,13 +144,32 @@ export function ItemDetail({ id }: { id: string }) {
 
   // ---- title ----
   const [titleReset, setTitleReset] = useState(0);
+  const { data: openTopics } = useTopics('open');
+  const topicOptions = useMemo<MentionTopic[]>(
+    () => (openTopics ?? []).map((t) => ({ id: t.id, name: t.name })),
+    [openTopics],
+  );
+  // The topic is tagged on its own command (specs/0089); `load` re-reads the name after.
+  const changeTopic = async (topicId: string | null) => {
+    try {
+      await setActionItemTopic(id, topicId);
+      await load();
+    } catch (err) {
+      console.error('Failed to set the topic:', err);
+      toast.error('Could not change the topic', { description: errorText(err) });
+    }
+  };
+  const [pickedTopic, setPickedTopic] = useState<MentionTopic | null>(null);
   const finishTitle = async (serialized: string) => {
     if (!item) return;
+    const topic = pickedTopic;
+    setPickedTopic(null);
     try {
       const { title, dueDate } = parseTodoText(serialized.trim(), new Date());
       if (!title) return; // empty title: revert (below)
       if (title !== item.description) await editDescription(item, title);
       if (dueDate) await setDueDate(item, dueDate);
+      if (topic && topic.id !== item.topicId) await changeTopic(topic.id);
     } finally {
       // Always show the saved text: a parsed `(Nov 20)` leaves the field, an empty title reverts.
       setTitleReset((n) => n + 1);
@@ -297,7 +320,10 @@ export function ItemDetail({ id }: { id: string }) {
                 <MentionInput
                   value={item.description}
                   onSubmit={(v) => void finishTitle(v)}
-                  onCancel={() => setTitleReset((n) => n + 1)}
+                  onCancel={() => {
+                    setPickedTopic(null);
+                    setTitleReset((n) => n + 1);
+                  }}
                   resetKey={titleReset}
                   submitOnBlur
                   multiline
@@ -305,6 +331,9 @@ export function ItemDetail({ id }: { id: string }) {
                   placeholder="Title"
                   variant="bare"
                   size="title"
+                  topics={topicOptions}
+                  topicId={pickedTopic?.id ?? item.topicId ?? null}
+                  onTopicChange={setPickedTopic}
                   className={cn('-mx-1', completed && 'text-muted-foreground line-through')}
                 />
               </div>
@@ -313,6 +342,31 @@ export function ItemDetail({ id }: { id: string }) {
               {/* -ml-1 cancels the control's hover padding so its text lines up with the title's. */}
               <DueDateControl item={item} onSetDueDate={setDueDate} size="body" className="-ml-1" />
               {actions}
+            </div>
+            <div className={cn('flex items-center gap-2', listed && 'pl-7')}>
+              <span className="u-section-label-sm">Topic</span>
+              <Select
+                value={item.topicId ?? 'none'}
+                onValueChange={(v) => void changeTopic(v === 'none' ? null : v)}
+              >
+                <SelectTrigger aria-label="Topic" className="h-8 w-56 text-sm">
+                  <SelectValue placeholder="None" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">None</SelectItem>
+                  {/* A tagged topic that has since closed is not in the open list. */}
+                  {item.topicId && item.topicName && !topicOptions.some((t) => t.id === item.topicId) && (
+                    <SelectItem value={item.topicId} disabled>
+                      {item.topicName}
+                    </SelectItem>
+                  )}
+                  {topicOptions.map((t) => (
+                    <SelectItem key={t.id} value={t.id}>
+                      {t.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
 

@@ -172,3 +172,46 @@ describe('MentionInput multiline', () => {
     }
   });
 });
+
+describe('MentionInput topics (specs/0089)', () => {
+  const topics = [
+    { id: 'topic-1', name: 'Atlas CRM rebuild' },
+    { id: 'topic-2', name: 'Pricing review' },
+  ];
+
+  it('lists a Topics group above People', async () => {
+    const { input } = await setup({ topics });
+    type(input, 'Do it @a');
+    await screen.findByText('Topics');
+    const headings = screen.getAllByText(/^(Topics|People)$/).map((n) => n.textContent);
+    expect(headings).toEqual(['Topics', 'People']);
+    expect(screen.getByText('Atlas CRM rebuild')).toBeTruthy();
+    expect(screen.queryByText('Pricing review')).toBeNull();
+  });
+
+  it('picking a topic removes the @query text and reports the topic', async () => {
+    const onTopicChange = vi.fn();
+    const { input, onSubmit } = await setup({ topics, onTopicChange });
+    type(input, 'Draft sync doc @Atl');
+    await screen.findByText('Atlas CRM rebuild');
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(input.value).toBe('Draft sync doc ');
+    expect(onTopicChange).toHaveBeenCalledWith({ id: 'topic-1', name: 'Atlas CRM rebuild' });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(onSubmit).toHaveBeenCalledWith('Draft sync doc ');
+  });
+
+  it('hints Replaces {name} on other topics when one is already set', async () => {
+    const { input } = await setup({ topics, topicId: 'topic-1' });
+    type(input, '@pri');
+    await screen.findByText('Pricing review');
+    expect(screen.getByText('Replaces Atlas CRM rebuild')).toBeTruthy();
+  });
+
+  it('shows no hint when no topic is set', async () => {
+    const { input } = await setup({ topics });
+    type(input, '@pri');
+    await screen.findByText('Pricing review');
+    expect(screen.queryByText(/^Replaces/)).toBeNull();
+  });
+});

@@ -507,6 +507,9 @@
     // action_items/commands.rs 0088 commands. camelCase args; `api_list_todo_view` rows are
     // ActionItem + meeting join + source summary.
     api_list_todo_view: ({ view }) => todoStore().filter((r) => inView(r, view)),
+    // specs/0089 (topics-mock.js, prepended by run.mjs / screenshot.mjs). Guarded so a
+    // consumer that loads this file alone still boots.
+    ...(globalThis.__nixonTopicsMock?.({ MEETINGS, todoStore }) ?? {}),
     api_inbox_count: () => todoStore().filter((r) => inView(r, 'inbox')).length,
     api_triage_action_item: ({ id, action }) => {
       const r = todoById(id);
@@ -552,6 +555,9 @@
         item: r,
         sources,
         personIds: r.assigneePersonId ? [r.assigneePersonId] : [],
+        // Beside `item`, as the Rust ActionItemDetail sends it (specs/0089).
+        topicId: r.topicId ?? null,
+        topicName: r.topicName ?? null,
       };
     },
     api_set_action_item_notes: ({ id, markdown }) => {

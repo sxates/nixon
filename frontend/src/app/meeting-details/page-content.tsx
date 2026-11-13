@@ -9,6 +9,7 @@ import { MeetingIdentityHeader } from '@/components/MeetingDetails/MeetingIdenti
 import { DeleteMeetingDialog } from '@/components/MeetingDetails/DeleteMeetingDialog';
 import { AddMeetingDialog } from '@/components/Today/AddMeetingDialog';
 import { localDateKey } from '@/lib/today-timeline';
+import { MeetingTopicsRow } from '@/components/Topics/MeetingTopicsRow';
 import { ParticipantsPanel } from '@/components/Participants/ParticipantsPanel';
 import { ScheduledRecordControl } from '@/components/MeetingDetails/ScheduledRecordControl';
 import { MeetingOptionsMenu } from '@/components/MeetingDetails/MeetingOptionsMenu';
@@ -317,13 +318,14 @@ export default function PageContent({
       transition={{ duration: 0.14, ease: 'easeOut' }}
       className="flex h-page flex-col bg-background"
     >
-      {/* The identity header sits on the same reading column as the document below it
-          (docs/design-system.md §Spacing: title, tabs and first card share one left edge).
-          It sits OUTSIDE the scroll column (as on the person page), so the back button and
+      {/* The identity header spans the page column like every other page's header, so the
+          title and actions don't jump inward when you open a meeting; the document below
+          keeps the narrower reading column. It sits OUTSIDE the scroll column (as on the person page), so the back button and
           title stay put while a long transcript scrolls; the sticky tab bar then pins
           directly beneath it. */}
-      <div data-testid="meeting-header" className={cn('mx-auto w-full flex-shrink-0', DOC_CONTENT_WIDTH)}>
+      <div data-testid="meeting-header" className="w-full flex-shrink-0">
             <MeetingIdentityHeader
+              width="page"
               className="pb-0 pt-6"
               onBack={() => {
                 // Return to wherever the user came from (day view, All meetings,
@@ -421,6 +423,7 @@ export default function PageContent({
           <div className="mt-4">
             <ParticipantsPanel meetingId={meeting.id} />
           </div>
+          <MeetingTopicsRow meetingId={meeting.id} title={meetingData.meetingTitle} seriesKey={meeting.calendarSeriesKey} />
 
           {/* Channel strip (specs/0057 Plan 3) — who is on this reel, stated once on the
               document above the tabs rather than buried in the Transcript tab. Renders

@@ -21,7 +21,7 @@ if (!url || !out) {
   console.error('usage: node screenshot.mjs <url> <out.png> [w] [h] [waitMs] [mockFile]');
   process.exit(2);
 }
-const MOCK = readFileSync(mockFile, 'utf8');
+const MOCK = readFileSync(join(here, 'topics-mock.js'), 'utf8') + readFileSync(mockFile, 'utf8');
 const LOG = out + '.log';
 const log = (m) => { try { appendFileSync(LOG, m + '\n'); } catch {} };
 writeFileSync(LOG, '');

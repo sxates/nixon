@@ -13,7 +13,9 @@ export type LlmTaskKind =
   | 'rollup'
   // Not an LLM task, but the registry tracks it too (specs/0063 W3) — an offline
   // diarization pass, surfaced in the same queue as everything else the machine is busy with.
-  | 'diarization';
+  | 'diarization'
+  // specs/0089 — the post-summary topic entry writer + mention detector.
+  | 'topics';
 
 export interface RunningTask {
   id: number;

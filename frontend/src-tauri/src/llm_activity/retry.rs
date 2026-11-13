@@ -23,6 +23,7 @@ pub fn is_retryable(kind: TaskKind) -> bool {
             | TaskKind::MeetingSummary
             | TaskKind::ActionItems
             | TaskKind::Diarization
+            | TaskKind::Topics
     )
 }
 
@@ -142,6 +143,33 @@ pub async fn retry_task<R: Runtime>(app: &AppHandle<R>, task_id: u64) -> Result<
             .map(|_| ())
             .map_err(|e| format!("{e:#}"))
         }
+        TaskKind::Topics => {
+            let pool = app
+                .try_state::<AppState>()
+                .ok_or_else(|| "App state unavailable".to_string())?
+                .db_manager
+                .pool()
+                .clone();
+            let ExtractionInputs {
+                summary_markdown,
+                user_notes,
+                provider_config,
+            } = load_extraction_inputs(&pool, &meeting_id).await?;
+            with_priority(
+                Priority::Interactive,
+                crate::topics::jobs::run_for_retry(
+                    app,
+                    &pool,
+                    &meeting_id,
+                    &summary_markdown,
+                    user_notes.as_deref(),
+                    &provider_config,
+                ),
+            )
+            .await
+            .map(|_| ())
+            .map_err(|e| format!("{e:#}"))
+        }
         TaskKind::Diarization => {
             // specs/0066 W2: `diarize_meeting` returns false when a pass is ALREADY running
             // for this meeting (`launch.rs` registry guard). The first version of this arm
@@ -171,6 +199,7 @@ mod tests {
         assert!(is_retryable(TaskKind::MeetingSummary));
         assert!(is_retryable(TaskKind::ActionItems));
         assert!(is_retryable(TaskKind::Diarization));
+        assert!(is_retryable(TaskKind::Topics));
         assert!(!is_retryable(TaskKind::AskAI));
         assert!(!is_retryable(TaskKind::Rollup));
         assert!(!is_retryable(TaskKind::NoteEnhancement));

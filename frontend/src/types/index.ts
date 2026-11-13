@@ -322,6 +322,9 @@ export interface ActionItem {
   triage: 'suggested' | 'listed' | 'record';
   adoptedAt: string | null;
   notesMarkdown: string | null;
+  /** specs/0089: the open topic this to-do is tagged to, if any. */
+  topicId?: string | null;
+  topicName?: string | null;
 }
 
 /** Hub-query row (specs/0034): an action item joined to its source meeting
@@ -358,6 +361,10 @@ export interface ActionItemDetail {
   item: ActionItem;
   sources: SourceRow[];
   personIds: string[];
+  /** The item's topic (specs/0089). Beside `item`, not inside it: the Rust `ActionItem` row
+   *  carries no topic field. */
+  topicId: string | null;
+  topicName: string | null;
 }
 
 /** Payload of the `action-items-updated` Tauri event (specs/0034), emitted after a
@@ -402,4 +409,118 @@ export interface VoiceprintSampleDto {
   createdAt: string;
   sampleQuality: number | null;
   quarantined: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// Topics (specs/0089) — mirror src-tauri/src/topics/{model,links}.rs (camelCase).
+// ---------------------------------------------------------------------------
+
+export type TopicStatus = 'open' | 'closed';
+export type TopicLinkKind = 'series' | 'title' | 'meeting';
+export type TopicEntryKind = 'series' | 'mention' | 'manual';
+export type TopicSuggestionKind = 'note' | 'revision';
+
+export interface Topic {
+  id: string;
+  name: string;
+  description: string;
+  status: TopicStatus;
+  notesMarkdown: string | null;
+  notesJson: string | null;
+  createdAt: string;
+  updatedAt: string;
+  closedAt: string | null;
+}
+
+/** Index row (`api_list_topics`). */
+export interface TopicSummary {
+  id: string;
+  name: string;
+  description: string;
+  status: TopicStatus;
+  lastActivity: string | null;
+  pendingCount: number;
+  meetingCount: number;
+}
+
+export interface TopicLink {
+  topicId: string;
+  kind: TopicLinkKind;
+  ref: string;
+  title: string | null;
+  label: string;
+}
+
+export interface Bullet {
+  text: string;
+  /** Seconds into the source meeting; absent when the model's cited time was invalid. */
+  t?: number | null;
+}
+
+export interface Decision {
+  id: string;
+  text: string;
+  t?: number | null;
+}
+
+export interface EntryBody {
+  bullets: Bullet[];
+  decisions: Decision[];
+}
+
+export interface TopicRevision {
+  id: string;
+  entryId: string;
+  decisionId: string | null;
+  text: string;
+  sourceMeetingId: string | null;
+  tStart: number | null;
+  sourceDeletedAt: string | null;
+  createdAt: string;
+}
+
+export interface TopicEntry {
+  id: string;
+  topicId: string;
+  meetingId: string | null;
+  meetingTitle: string | null;
+  kind: TopicEntryKind;
+  occurredAt: string;
+  /** The AI's original body (for Revert); null on manual entries. */
+  aiBody: EntryBody | null;
+  body: EntryBody;
+  editedAt: string | null;
+  sourceDeletedAt: string | null;
+  createdAt: string;
+  revisions: TopicRevision[];
+}
+
+export interface TopicSuggestion {
+  id: string;
+  topicId: string;
+  kind: TopicSuggestionKind;
+  meetingId: string;
+  meetingTitle: string | null;
+  tStart: number | null;
+  targetEntryId: string | null;
+  targetDecisionId: string | null;
+  targetDecisionText: string | null;
+  targetOccurredAt: string | null;
+  text: string;
+  status: 'pending' | 'accepted' | 'dismissed';
+  createdAt: string;
+}
+
+/** `api_get_topic`. */
+export interface TopicDetail {
+  topic: Topic;
+  links: TopicLink[];
+  entries: TopicEntry[];
+  suggestions: TopicSuggestion[];
+  todos: TodoRow[];
+}
+
+/** Payload of the `topics-updated` event. `topic_id` null = several topics changed. */
+export interface TopicsUpdatedPayload {
+  topic_id: string | null;
 }
