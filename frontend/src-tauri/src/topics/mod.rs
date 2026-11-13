@@ -8,6 +8,7 @@
 
 pub mod detector;
 pub mod evidence;
+pub mod jobs;
 pub mod ledger;
 pub mod limits;
 pub mod links;

@@ -511,6 +511,28 @@ impl SummaryService {
                     // stripped) markdown, so the manual command's re-read fingerprints
                     // identically.
                     let extract_enabled = resolved.extract_action_items;
+                    // specs/0089: topics run beside extraction, not after it, and do not
+                    // depend on the per-prompt extraction switch.
+                    let topics_job = (
+                        app.clone(),
+                        pool.clone(),
+                        meeting_id.clone(),
+                        stored_summary_markdown.clone(),
+                        user_notes.clone(),
+                        provider_config.clone(),
+                    );
+                    tauri::async_runtime::spawn(async move {
+                        let (app, pool, meeting_id, summary, notes, config) = topics_job;
+                        crate::topics::jobs::run_background(
+                            &app,
+                            &pool,
+                            &meeting_id,
+                            &summary,
+                            notes.as_deref(),
+                            &config,
+                        )
+                        .await;
+                    });
                     tauri::async_runtime::spawn(async move {
                         crate::action_items::run_background_extraction(
                             &app,

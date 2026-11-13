@@ -57,7 +57,7 @@ const ACTIVE: BacklogItemStatus[] = ['transcribing', 'diarizing', 'summarizing']
  * this array must change with it, or a queue row will offer a Retry that fails, or hide
  * one that would have worked.
  */
-const RETRYABLE_KINDS: readonly LlmTaskKind[] = ['prepBrief', 'meetingSummary', 'actionItems', 'diarization'];
+const RETRYABLE_KINDS: readonly LlmTaskKind[] = ['prepBrief', 'meetingSummary', 'actionItems', 'diarization', 'topics'];
 
 /**
  * specs/0074 W4: "Done" prep rows share the queue's done section with finished backlog

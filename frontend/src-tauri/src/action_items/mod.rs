@@ -376,6 +376,11 @@ async fn run_extraction_inner<R: Runtime>(
         }
     };
 
+    // specs/0089: a lone matching topic tags the new suggestions. Never fails extraction.
+    if let Err(e) = crate::topics::jobs::pretag_suggestions(pool, meeting_id).await {
+        warn!("Topic pre-tag for meeting_id {meeting_id} failed (extraction unaffected): {e:#}");
+    }
+
     let _ = app.emit(
         ACTION_ITEMS_UPDATED_EVENT,
         serde_json::json!({ "meeting_id": meeting_id }),

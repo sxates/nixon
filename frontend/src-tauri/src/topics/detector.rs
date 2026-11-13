@@ -23,6 +23,18 @@ pub fn mention_options() -> GenerationOptions {
     }
 }
 
+/// What the mention scan last saw for a meeting: the summary plus the topic set it was
+/// matched against (ids, names, descriptions, sorted by id). Equal fingerprints skip the call.
+pub fn fingerprint(summary: &str, topics: &[Topic]) -> String {
+    let mut sorted: Vec<&Topic> = topics.iter().collect();
+    sorted.sort_by(|a, b| a.id.cmp(&b.id));
+    let mut parts = vec![summary.trim().to_string()];
+    for t in sorted {
+        parts.push(format!("{}\u{1f}{}\u{1f}{}", t.id, t.name, t.description));
+    }
+    crate::action_items::diff::stable_text_fingerprint(&parts.join("\u{1e}"))
+}
+
 /// Returns (topic, one-sentence summary, cited time). No topics, or no evidence to show,
 /// means no call at all.
 pub async fn detect_with_llm<F, Fut>(
@@ -93,6 +105,27 @@ pub async fn detect(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn fingerprint_ignores_topic_order_and_tracks_changes() {
+        let mk = |id: &str, name: &str| Topic {
+            id: id.into(),
+            name: name.into(),
+            description: String::new(),
+            status: "open".into(),
+            notes_markdown: None,
+            notes_json: None,
+            created_at: String::new(),
+            updated_at: String::new(),
+            closed_at: None,
+        };
+        let (a, b) = (mk("topic-a", "Atlas"), mk("topic-b", "Beta"));
+        let f1 = fingerprint("s", &[a.clone(), b.clone()]);
+        assert_eq!(f1, fingerprint("s", &[b.clone(), a.clone()]));
+        assert_ne!(f1, fingerprint("s", std::slice::from_ref(&a)));
+        assert_ne!(f1, fingerprint("s2", &[a.clone(), b.clone()]));
+        assert_ne!(f1, fingerprint("s", &[a, mk("topic-b", "Beta 2")]));
+    }
 
     #[tokio::test]
     async fn detector_returns_empty_for_no_topics_without_calling_llm() {

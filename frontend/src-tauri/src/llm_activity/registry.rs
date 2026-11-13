@@ -27,6 +27,8 @@ pub enum TaskKind {
     /// specs/0063 W3 — an offline diarization pass. Not an LLM task, but the queue is the
     /// one place the user looks to find out what the machine is busy with.
     Diarization,
+    /// specs/0089 — the post-summary topic entry writer and mention detector.
+    Topics,
 }
 
 /// `Background` tasks surface in the sidebar indicator. `Foreground` tasks are recorded for
