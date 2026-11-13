@@ -2,10 +2,9 @@
 
 import { useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { invoke } from '@tauri-apps/api/core'
 import { getCurrent, onOpenUrl } from '@tauri-apps/plugin-deep-link'
 import { toast } from 'sonner'
-import { parseMeetingLink } from '@/lib/meetingLink'
+import { parseMeetingLink, openMeetingMoment } from '@/lib/meetingLink'
 
 // specs/0087 — opens `nixon://meeting/<id>?t=<s>` links. Links only navigate: the single
 // command called is the read-only resolver, and navigation is a plain router.push exactly
@@ -14,11 +13,6 @@ import { parseMeetingLink } from '@/lib/meetingLink'
 // A cold start delivers the URL through onOpenUrl (getCurrent() can be empty), so both
 // paths are wired and an identical URL seen twice within DEDUPE_MS opens once.
 const DEDUPE_MS = 2000
-
-interface LinkTarget {
-  exists: boolean
-  segmentId: string | null
-}
 
 export function DeepLinkListener() {
   const router = useRouter()
@@ -41,25 +35,7 @@ export function DeepLinkListener() {
         toast.error("Nixon couldn't open that link.")
         return
       }
-      try {
-        const target = await invoke<LinkTarget>('api_resolve_meeting_link', {
-          meetingId: link.meetingId,
-          t: link.t,
-        })
-        if (!target.exists) {
-          toast.error("That meeting isn't in Nixon anymore.")
-          return
-        }
-        const id = encodeURIComponent(link.meetingId)
-        routerRef.current.push(
-          target.segmentId
-            ? `/meeting-details?id=${id}&segment=${encodeURIComponent(target.segmentId)}`
-            : `/meeting-details?id=${id}`,
-        )
-      } catch (e) {
-        console.error('[DeepLink] resolve failed:', e)
-        toast.error("Nixon couldn't open that link.")
-      }
+      await openMeetingMoment(routerRef.current, link.meetingId, link.t)
     }
 
     const openAll = (urls: string[] | null | undefined) => {

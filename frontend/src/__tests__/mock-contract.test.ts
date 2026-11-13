@@ -103,3 +103,38 @@ describe('llm activity commands (specs/0074)', () => {
     expect(used.filter((c) => !new RegExp(`::${c}\\b`).test(registry))).toEqual([]);
   });
 });
+
+// specs/0089 — the Topics handlers live in scripts/shots/topics-mock.js (prepended by the
+// shots runners, spread into FIXTURES by tauri-mock.js). Same contract: every handler is a
+// registered command, and the seeded store has the shape the UI expects.
+describe('topics screenshot mock (specs/0089)', () => {
+  const topicsSrc = readFileSync(join(root, 'scripts', 'shots', 'topics-mock.js'), 'utf8');
+  const handlers = (() => {
+    // eslint-disable-next-line no-new-func
+    new Function(topicsSrc).call(globalThis);
+    const todos = [{ id: 'a', meetingId: 'demo-01', status: 'open' }];
+    return (globalThis as unknown as { __nixonTopicsMock: (c: unknown) => Record<string, (a?: unknown) => any> })
+      .__nixonTopicsMock({ MEETINGS: [{ id: 'demo-01', title: 'Product sync' }], todoStore: () => todos });
+  })();
+
+  it('spreads into FIXTURES with one line', () => {
+    expect(mock).toContain('__nixonTopicsMock({ MEETINGS, todoStore })');
+  });
+
+  it('every handler is a registered command', () => {
+    const missing = Object.keys(handlers).filter((c) => !new RegExp(`::${c}\\b`).test(registry));
+    expect(missing).toEqual([]);
+  });
+
+  it('seeds an open Atlas topic with 3 entries, 2 suggestions, and a closed topic', () => {
+    const all = handlers.api_list_topics({});
+    expect(all.filter((t: any) => t.status === 'closed')).toHaveLength(1);
+    const detail = handlers.api_get_topic({ id: 'topic-atlas' });
+    expect(detail.topic.name).toBe('Atlas CRM rebuild');
+    expect(detail.entries).toHaveLength(3);
+    expect(detail.suggestions.map((s: any) => s.kind).sort()).toEqual(['note', 'revision']);
+    expect(detail.entries.some((e: any) => e.editedAt)).toBe(true);
+    expect(detail.entries.some((e: any) => e.body.bullets.length === 0 && e.body.decisions.length === 0)).toBe(true);
+    expect(detail.entries.some((e: any) => e.revisions.length > 0)).toBe(true);
+  });
+});

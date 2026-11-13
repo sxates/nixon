@@ -507,6 +507,7 @@
     // action_items/commands.rs 0088 commands. camelCase args; `api_list_todo_view` rows are
     // ActionItem + meeting join + source summary.
     api_list_todo_view: ({ view }) => todoStore().filter((r) => inView(r, view)),
+    ...globalThis.__nixonTopicsMock({ MEETINGS, todoStore }), // specs/0089 (topics-mock.js)
     api_inbox_count: () => todoStore().filter((r) => inView(r, 'inbox')).length,
     api_triage_action_item: ({ id, action }) => {
       const r = todoById(id);
