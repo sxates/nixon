@@ -203,3 +203,242 @@ async fn meeting_delete_keeps_entries_and_drops_pending() {
             .unwrap();
     assert_eq!(tid.as_deref(), Some(t.id.as_str()));
 }
+
+// ---- Task 2: links, membership, backfill (specs/0089) ----
+
+mod links_tests {
+    use super::*;
+    use app_lib::topics::links::{self, LinkKind};
+    use chrono::{DateTime, Duration, Utc};
+    use std::collections::BTreeSet;
+
+    async fn meeting(
+        pool: &SqlitePool,
+        id: &str,
+        title: &str,
+        key: Option<&str>,
+        at: DateTime<Utc>,
+        summary: bool,
+    ) {
+        sqlx::query(
+            "INSERT INTO meetings (id, title, created_at, updated_at, calendar_series_key)
+             VALUES (?, ?, ?, ?, ?)",
+        )
+        .bind(id)
+        .bind(title)
+        .bind(at)
+        .bind(at)
+        .bind(key)
+        .execute(pool)
+        .await
+        .unwrap();
+        if summary {
+            sqlx::query(
+                "INSERT INTO summary_processes (meeting_id, status, created_at, updated_at)
+                 VALUES (?, 'completed', ?, ?)",
+            )
+            .bind(id)
+            .bind(NOW)
+            .bind(NOW)
+            .execute(pool)
+            .await
+            .unwrap();
+        }
+    }
+
+    async fn series_links(pool: &SqlitePool) -> i64 {
+        sqlx::query_scalar("SELECT COUNT(*) FROM meeting_series_links")
+            .fetch_one(pool)
+            .await
+            .unwrap()
+    }
+
+    async fn members(pool: &SqlitePool, topic: &str, ids: &[&str]) -> BTreeSet<String> {
+        let mut out = BTreeSet::new();
+        for id in ids {
+            let ts = links::topics_for_meeting(pool, id, false).await.unwrap();
+            if ts.iter().any(|t| t.id == topic) {
+                out.insert(id.to_string());
+            }
+        }
+        out
+    }
+
+    #[tokio::test]
+    async fn membership_matches_find_prior_series_occurrences() {
+        let (_d, m) = fresh_db().await;
+        let p = m.pool();
+        let base = Utc::now() - Duration::days(30);
+        let mut all: Vec<String> = Vec::new();
+        for (i, id) in ["a1", "a2", "a3"].iter().enumerate() {
+            meeting(
+                p,
+                id,
+                "Weekly 1:1",
+                Some("cal:a"),
+                base + Duration::days(i as i64),
+                true,
+            )
+            .await;
+            all.push(id.to_string());
+        }
+        for (i, id) in ["b1", "b2"].iter().enumerate() {
+            meeting(
+                p,
+                id,
+                "weekly 1:1 ",
+                Some("cal:b"),
+                base + Duration::days(i as i64),
+                true,
+            )
+            .await;
+            all.push(id.to_string());
+        }
+        meeting(p, "u1", " WEEKLY 1:1", None, base + Duration::days(4), true).await;
+        all.push("u1".into());
+        for (i, id) in ["t1", "t2"].iter().enumerate() {
+            meeting(
+                p,
+                id,
+                "Atlas sync",
+                None,
+                base + Duration::days(i as i64),
+                true,
+            )
+            .await;
+            all.push(id.to_string());
+        }
+        let ids: Vec<&str> = all.iter().map(String::as_str).collect();
+        let far = Utc::now() + Duration::days(3650);
+
+        let ta = Topics::create(p, "A", "").await.unwrap();
+        let la = links::link_series_of(p, &ta.id, "a3").await.unwrap();
+        assert_eq!(la.kind, LinkKind::Series);
+        assert_eq!(la.ref_, "cal:a");
+        let mut want: BTreeSet<String> = MeetingsRepository::find_prior_series_occurrences(
+            p,
+            Some("cal:a"),
+            "Weekly 1:1",
+            far,
+            500,
+        )
+        .await
+        .unwrap()
+        .into_iter()
+        .collect();
+        want.insert("a3".into());
+        let got = members(p, &ta.id, &ids).await;
+        assert_eq!(got, want);
+        assert!(got.contains("u1"), "unaffiliated same-title joins");
+        assert!(
+            !got.contains("b1") && !got.contains("b2"),
+            "series B never matches A"
+        );
+
+        let tt = Topics::create(p, "Atlas", "").await.unwrap();
+        let lt = links::link_series_of(p, &tt.id, "t2").await.unwrap();
+        assert_eq!(lt.kind, LinkKind::Title);
+        assert_eq!(lt.ref_, "atlas sync");
+        let mut want: BTreeSet<String> =
+            MeetingsRepository::find_prior_series_occurrences(p, None, "Atlas sync", far, 500)
+                .await
+                .unwrap()
+                .into_iter()
+                .collect();
+        want.insert("t2".into());
+        assert_eq!(members(p, &tt.id, &ids).await, want);
+    }
+
+    #[tokio::test]
+    async fn link_series_never_writes_series_links() {
+        let (_d, m) = fresh_db().await;
+        let p = m.pool();
+        meeting(p, "a1", "Weekly", Some("cal:a"), Utc::now(), true).await;
+        meeting(p, "n1", "  ", None, Utc::now(), true).await;
+        let t = Topics::create(p, "A", "").await.unwrap();
+        let before = series_links(p).await;
+        links::link_series_of(p, &t.id, "a1").await.unwrap();
+        links::link_meeting(p, &t.id, "a1").await.unwrap();
+        let after = series_links(p).await;
+        assert_eq!(before, after);
+
+        let err = links::link_series_of(p, &t.id, "n1").await.unwrap_err();
+        assert_eq!(err.to_string(), "This meeting isn't part of a series.");
+    }
+
+    #[tokio::test]
+    async fn backfill_candidates_oldest_first_within_90_days() {
+        let (_d, m) = fresh_db().await;
+        let p = m.pool();
+        let now = Utc::now();
+        meeting(
+            p,
+            "old",
+            "W",
+            Some("cal:a"),
+            now - Duration::days(100),
+            true,
+        )
+        .await;
+        meeting(
+            p,
+            "nosum",
+            "W",
+            Some("cal:a"),
+            now - Duration::days(10),
+            false,
+        )
+        .await;
+        meeting(p, "m3", "W", Some("cal:a"), now - Duration::days(5), true).await;
+        meeting(p, "m1", "W", Some("cal:a"), now - Duration::days(60), true).await;
+        meeting(p, "m2", "W", Some("cal:a"), now - Duration::days(20), true).await;
+        let t = Topics::create(p, "A", "").await.unwrap();
+        let l = links::link_series_of(p, &t.id, "m3").await.unwrap();
+        let got = links::backfill_candidates(p, &l, now).await.unwrap();
+        assert_eq!(got, ["m1", "m2", "m3"]);
+    }
+
+    #[tokio::test]
+    async fn link_is_idempotent_and_unlink_removes() {
+        let (_d, m) = fresh_db().await;
+        let p = m.pool();
+        meeting(p, "a1", "Weekly", Some("cal:a"), Utc::now(), true).await;
+        let t = Topics::create(p, "A", "").await.unwrap();
+        links::link_meeting(p, &t.id, "a1").await.unwrap();
+        let l = links::link_meeting(p, &t.id, "a1").await.unwrap();
+        assert_eq!(l.label, "Weekly");
+        assert_eq!(links::links_for_topic(p, &t.id).await.unwrap().len(), 1);
+        links::link_series_of(p, &t.id, "a1").await.unwrap();
+        links::link_series_of(p, &t.id, "a1").await.unwrap();
+        assert_eq!(links::links_for_topic(p, &t.id).await.unwrap().len(), 2);
+        assert!(links::unlink(p, &t.id, LinkKind::Meeting, "a1")
+            .await
+            .unwrap());
+        assert!(!links::unlink(p, &t.id, LinkKind::Meeting, "a1")
+            .await
+            .unwrap());
+        assert_eq!(links::links_for_topic(p, &t.id).await.unwrap().len(), 1);
+        // open_only excludes closed topics
+        assert_eq!(
+            links::topics_for_meeting(p, "a1", true)
+                .await
+                .unwrap()
+                .len(),
+            1
+        );
+        Topics::update(p, &t.id, None, None, Some("closed"))
+            .await
+            .unwrap();
+        assert!(links::topics_for_meeting(p, "a1", true)
+            .await
+            .unwrap()
+            .is_empty());
+        assert_eq!(
+            links::topics_for_meeting(p, "a1", false)
+                .await
+                .unwrap()
+                .len(),
+            1
+        );
+    }
+}

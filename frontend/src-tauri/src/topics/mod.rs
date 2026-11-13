@@ -5,6 +5,7 @@
 //! (`repo::set_notes`). Deleting a source meeting keeps its entries, marked `source_deleted_at`.
 
 pub mod limits;
+pub mod links;
 pub mod model;
 pub mod repo;
 
