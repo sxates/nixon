@@ -980,3 +980,78 @@ async fn merge_into_owner_edited_entry_keeps_edit_and_appends() {
     assert_eq!(ai, ["orig", "extra"]);
     assert!(e.edited_at.is_some());
 }
+
+// ---- Task 7: commands' building blocks ----------------------------------------------------
+
+async fn occurrence(pool: &SqlitePool, id: &str, created_at: &str, key: &str, summarised: bool) {
+    sqlx::query(
+        "INSERT INTO meetings (id, title, created_at, updated_at, origin, calendar_series_key)
+         VALUES (?1, 'Weekly sync', ?2, ?2, 'recorded', ?3)",
+    )
+    .bind(id)
+    .bind(created_at)
+    .bind(key)
+    .execute(pool)
+    .await
+    .unwrap();
+    if summarised {
+        use app_lib::database::repositories::summary::SummaryProcessesRepository as Sp;
+        Sp::create_or_reset_process(pool, id).await.unwrap();
+        Sp::update_process_completed(
+            pool,
+            id,
+            serde_json::json!({ "markdown": "s", "english_cache": null }),
+            1,
+            0.5,
+            false,
+            &app_lib::summary::refresh::generation_fingerprint("s"),
+            &app_lib::summary::refresh::speaker_names_fingerprint(std::iter::empty()),
+        )
+        .await
+        .unwrap();
+    }
+}
+
+#[tokio::test]
+async fn create_topic_with_series_link_and_backfill_queues_oldest_first() {
+    use app_lib::topics::links;
+    let (_d, m) = fresh_db().await;
+    let p = m.pool();
+    let now = chrono::DateTime::parse_from_rfc3339("2026-06-01T00:00:00Z")
+        .unwrap()
+        .with_timezone(&chrono::Utc);
+    let day = |n: i64| (now - chrono::Duration::days(n)).to_rfc3339();
+    occurrence(p, "old", &day(200), "S1", true).await; // outside the 90-day window
+    occurrence(p, "newer", &day(10), "S1", true).await;
+    occurrence(p, "older", &day(60), "S1", true).await;
+    occurrence(p, "nosummary", &day(30), "S1", false).await;
+    occurrence(p, "other-series", &day(20), "S2", true).await;
+    occurrence(p, "seed", &now.to_rfc3339(), "S1", true).await;
+    let t = Topics::create(p, "Atlas CRM rebuild", "").await.unwrap();
+    let link = links::link_series_of(p, &t.id, "seed").await.unwrap();
+    let ids = links::backfill_candidates(p, &link, now).await.unwrap();
+    assert_eq!(ids, ["older", "newer"]);
+}
+
+#[tokio::test]
+async fn draft_description_without_links_errors() {
+    use app_lib::summary::llm_client::LLMProvider;
+    use app_lib::summary::provider_config::ProviderConfig;
+    let (_d, m) = fresh_db().await;
+    let t = Topics::create(m.pool(), "Atlas", "").await.unwrap();
+    let config = ProviderConfig {
+        provider: LLMProvider::Ollama,
+        model_provider: "ollama".into(),
+        model_name: "m".into(),
+        api_key: String::new(),
+        ollama_endpoint: None,
+        custom_openai_endpoint: None,
+        custom_openai_max_tokens: None,
+        custom_openai_temperature: None,
+        custom_openai_top_p: None,
+    };
+    let err = app_lib::topics::describe::draft(&reqwest::Client::new(), &config, None, &t, &[])
+        .await
+        .unwrap_err();
+    assert_eq!(err.to_string(), "Link a meeting or series first.");
+}

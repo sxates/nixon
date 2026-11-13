@@ -255,3 +255,25 @@ pub async fn backfill_candidates(
     .await?;
     Ok(rows.into_iter().map(|(id,)| id).collect())
 }
+
+/// The newest `limit` meetings any of the topic's links match that have a completed
+/// summary, newest first. One query over the same membership predicate.
+pub async fn recent_summarised_meetings(
+    pool: &SqlitePool,
+    topic_id: &str,
+    limit: usize,
+) -> Result<Vec<String>> {
+    let rows: Vec<(String,)> = sqlx::query_as(&format!(
+        "SELECT m.id FROM meetings m
+         LEFT JOIN meeting_series_links l ON l.meeting_id = m.id
+         WHERE EXISTS (SELECT 1 FROM topic_links tl WHERE tl.topic_id = ?1 AND {MATCHES_LINK})
+           AND EXISTS (SELECT 1 FROM summary_processes sp
+                       WHERE sp.meeting_id = m.id AND sp.status = 'completed')
+         ORDER BY m.created_at DESC, m.id LIMIT ?2"
+    ))
+    .bind(topic_id)
+    .bind(limit as i64)
+    .fetch_all(pool)
+    .await?;
+    Ok(rows.into_iter().map(|(id,)| id).collect())
+}
