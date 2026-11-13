@@ -10,6 +10,7 @@ describe('Callout', () => {
     ['warn', ['border-brand', 'bg-brand-wash']],
     ['error', ['border-destructive-edge', 'bg-destructive-wash']],
     ['muted', ['border-border', 'bg-muted']],
+    ['success', ['border-success-edge', 'bg-success-wash']],
   ] as const)('tone %s', (tone, classes) => {
     render(<Callout tone={tone}>note</Callout>);
     const box = screen.getByText('note');

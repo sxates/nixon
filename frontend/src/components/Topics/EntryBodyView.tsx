@@ -2,12 +2,13 @@
 
 /**
  * The read-only body of a timeline entry (specs/0089): bullets with their time links, then
- * Decision call-outs (`success`) with the revisions attached to them, dated. A revision
+ * Decision call-outs (`Callout tone="success"`) with the revisions attached to them, dated. A revision
  * whose decision is no longer in the body (edited out, or re-minted by a rewrite) renders
  * at the entry's foot so it is never lost.
  */
 
 import { Badge } from '@/components/ui/badge';
+import { Callout } from '@/components/ui/callout';
 import { formatDecisionDate } from '@/lib/topics';
 import { cn } from '@/lib/utils';
 import type { EntryBody, TopicRevision } from '@/types';
@@ -43,10 +44,12 @@ export function EntryBodyView({ body, meetingId, revisions = [], className }: En
         </ul>
       ) : null}
       {body.decisions.map((d) => (
-        <div
+        <Callout
           key={d.id || d.text}
+          tone="success"
+          size="compact"
           data-decision-id={d.id}
-          className="flex flex-col gap-1 rounded-md border-l-2 border-success bg-success-wash px-3 py-2"
+          className="flex flex-col gap-1"
         >
           <div className="flex items-baseline gap-2">
             <Badge tone="success">Decision</Badge>
@@ -58,7 +61,7 @@ export function EntryBodyView({ body, meetingId, revisions = [], className }: En
             .map((r) => (
               <RevisionLine key={r.id} r={r} />
             ))}
-        </div>
+        </Callout>
       ))}
       {orphans.length > 0 ? (
         <div data-entry-foot className="flex flex-col gap-1 border-t border-rule pt-2">

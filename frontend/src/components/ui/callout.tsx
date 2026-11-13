@@ -10,6 +10,8 @@
  *   - `error` — destructive wash + edge, `role="alert"`. Replaces the hand-made
  *               `border-destructive/30 bg-destructive/5` boxes.
  *   - `muted` — a flat `bg-muted` note.
+ *   - `success` — success wash + edge: a settled fact, e.g. a topic timeline's Decision
+ *               (green there means "decided", the owner-approved second meaning of ready).
  *
  * Structured use: `title` (one `font-medium` line), children (the body, muted under a
  * title), and an `action` slot on the right (primary action first, `Button size="sm"`).
@@ -29,6 +31,7 @@ export const CALLOUT_TONES = {
   warn: 'border-brand bg-brand-wash',
   error: 'border-destructive-edge bg-destructive-wash',
   muted: 'border-border bg-muted',
+  success: 'border-success-edge bg-success-wash',
 } as const;
 
 export type CalloutTone = keyof typeof CALLOUT_TONES;
