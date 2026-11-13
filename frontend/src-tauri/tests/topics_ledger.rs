@@ -3,6 +3,8 @@
 mod common;
 
 use app_lib::database::repositories::meeting::MeetingsRepository;
+use app_lib::topics::ledger::{self, NewSuggestion};
+use app_lib::topics::model::{Bullet, Decision, EntryBody};
 use app_lib::topics::repo::TopicsRepository as Topics;
 use common::fresh_db;
 use sqlx::SqlitePool;
@@ -441,4 +443,459 @@ mod links_tests {
             1
         );
     }
+}
+
+// ---- ledger (task 3) ----
+
+fn bullet(t: &str) -> Bullet {
+    Bullet {
+        text: t.into(),
+        t: Some(12.0),
+    }
+}
+
+fn body(bullets: &[&str], decisions: &[(&str, &str)]) -> EntryBody {
+    EntryBody {
+        bullets: bullets.iter().map(|b| bullet(b)).collect(),
+        decisions: decisions
+            .iter()
+            .map(|(id, t)| Decision {
+                id: (*id).into(),
+                text: (*t).into(),
+                t: None,
+            })
+            .collect(),
+    }
+}
+
+async fn meeting(pool: &SqlitePool, id: &str) {
+    sqlx::query(
+        "INSERT INTO meetings (id, title, created_at, updated_at) VALUES (?, 'Weekly sync', ?, ?)",
+    )
+    .bind(id)
+    .bind(NOW)
+    .bind(NOW)
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+async fn body_raw(pool: &SqlitePool, id: &str) -> String {
+    sqlx::query_scalar("SELECT body_json FROM topic_entries WHERE id = ?")
+        .bind(id)
+        .fetch_one(pool)
+        .await
+        .unwrap()
+}
+
+fn sug(topic: &str, kind: &str, meeting: &str, text: &str) -> NewSuggestion {
+    NewSuggestion {
+        topic_id: topic.into(),
+        kind: kind.into(),
+        meeting_id: meeting.into(),
+        t_start: Some(30.0),
+        target_entry_id: None,
+        target_decision_id: None,
+        text: text.into(),
+    }
+}
+
+#[tokio::test]
+async fn insert_entry_refuses_closed_topic_or_deleted_meeting() {
+    let (_d, m) = fresh_db().await;
+    let p = m.pool();
+    let t = Topics::create(p, "Atlas", "").await.unwrap();
+    meeting(p, "m-1").await;
+    assert!(
+        ledger::insert_machine_entry(p, &t.id, "gone", "series", body(&["a"], &[]))
+            .await
+            .unwrap()
+            .is_none()
+    );
+    Topics::update(p, &t.id, None, None, Some("closed"))
+        .await
+        .unwrap();
+    assert!(
+        ledger::insert_machine_entry(p, &t.id, "m-1", "series", body(&["a"], &[]))
+            .await
+            .unwrap()
+            .is_none()
+    );
+    assert!(
+        ledger::insert_machine_entry(p, "nope", "m-1", "series", body(&["a"], &[]))
+            .await
+            .unwrap()
+            .is_none()
+    );
+    assert_eq!(
+        count(
+            p,
+            "SELECT COUNT(*) FROM topic_entries WHERE topic_id = ?",
+            &t.id
+        )
+        .await,
+        0
+    );
+    // suggestions respect closed topics too
+    assert_eq!(
+        ledger::insert_suggestions(p, &[sug(&t.id, "note", "m-1", "x")])
+            .await
+            .unwrap(),
+        0
+    );
+}
+
+#[tokio::test]
+async fn insert_entry_is_idempotent_per_meeting() {
+    let (_d, m) = fresh_db().await;
+    let p = m.pool();
+    let t = Topics::create(p, "Atlas", "").await.unwrap();
+    meeting(p, "m-1").await;
+    let id = ledger::insert_machine_entry(p, &t.id, "m-1", "series", body(&["first"], &[]))
+        .await
+        .unwrap()
+        .unwrap();
+    let before = body_raw(p, &id).await;
+    assert!(
+        ledger::insert_machine_entry(p, &t.id, "m-1", "series", body(&["second"], &[]))
+            .await
+            .unwrap()
+            .is_none()
+    );
+    assert_eq!(body_raw(p, &id).await, before);
+    let e = &ledger::entries_for_topic(p, &t.id).await.unwrap()[0];
+    assert_eq!(e.occurred_at, NOW);
+    assert_eq!(e.meeting_title.as_deref(), Some("Weekly sync"));
+    assert_eq!(e.ai_body.as_ref(), Some(&e.body));
+    assert!(ledger::has_entry(p, &t.id, "m-1").await.unwrap());
+}
+
+#[tokio::test]
+async fn machine_supplied_decision_ids_are_replaced() {
+    let (_d, m) = fresh_db().await;
+    let p = m.pool();
+    let t = Topics::create(p, "Atlas", "").await.unwrap();
+    meeting(p, "m-1").await;
+    ledger::insert_machine_entry(p, &t.id, "m-1", "series", body(&[], &[("evil", "Ship it")]))
+        .await
+        .unwrap()
+        .unwrap();
+    let e = &ledger::entries_for_topic(p, &t.id).await.unwrap()[0];
+    assert!(e.body.decisions[0].id.starts_with("dec-"));
+    assert_ne!(e.body.decisions[0].id, "evil");
+}
+
+#[tokio::test]
+async fn edit_marks_edited_and_revert_restores() {
+    let (_d, m) = fresh_db().await;
+    let p = m.pool();
+    let t = Topics::create(p, "Atlas", "").await.unwrap();
+    meeting(p, "m-1").await;
+    let id =
+        ledger::insert_machine_entry(p, &t.id, "m-1", "series", body(&["orig"], &[("x", "D1")]))
+            .await
+            .unwrap()
+            .unwrap();
+    let orig = ledger::entries_for_topic(p, &t.id).await.unwrap()[0].clone();
+    let did = orig.body.decisions[0].id.clone();
+    let mut edited = body(&["mine"], &[]);
+    edited.decisions = vec![
+        Decision {
+            id: did.clone(),
+            text: "D1 fixed".into(),
+            t: None,
+        },
+        Decision {
+            id: "forged".into(),
+            text: "New".into(),
+            t: None,
+        },
+    ];
+    assert!(ledger::edit_entry(p, &id, edited).await.unwrap());
+    let e = ledger::entries_for_topic(p, &t.id).await.unwrap().remove(0);
+    assert!(e.edited_at.is_some());
+    assert_eq!(e.body.decisions[0].id, did);
+    assert!(e.body.decisions[1].id.starts_with("dec-"));
+    assert_eq!(e.ai_body, orig.ai_body);
+    assert!(!ledger::edit_entry(p, "nope", body(&[], &[])).await.unwrap());
+    assert!(ledger::revert_entry(p, &id).await.unwrap());
+    let e = ledger::entries_for_topic(p, &t.id).await.unwrap().remove(0);
+    assert_eq!(e.body, orig.body);
+    assert!(e.edited_at.is_none());
+    // manual entries have nothing to revert to
+    let man = ledger::add_manual_entry(p, &t.id, body(&["note"], &[]))
+        .await
+        .unwrap();
+    assert!(!ledger::revert_entry(p, &man).await.unwrap());
+    assert!(!ledger::rewrite_entry(p, &man, body(&["x"], &[]))
+        .await
+        .unwrap());
+    let me = ledger::entries_for_topic(p, &t.id)
+        .await
+        .unwrap()
+        .into_iter()
+        .find(|e| e.id == man)
+        .unwrap();
+    assert_eq!(
+        (me.kind.as_str(), me.meeting_id, me.ai_body),
+        ("manual", None, None)
+    );
+}
+
+#[tokio::test]
+async fn rewrite_refused_once_edited() {
+    let (_d, m) = fresh_db().await;
+    let p = m.pool();
+    let t = Topics::create(p, "Atlas", "").await.unwrap();
+    meeting(p, "m-1").await;
+    let id = ledger::insert_machine_entry(p, &t.id, "m-1", "series", body(&["orig"], &[]))
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(ledger::rewrite_entry(p, &id, body(&["regen"], &[]))
+        .await
+        .unwrap());
+    ledger::edit_entry(p, &id, body(&["mine"], &[]))
+        .await
+        .unwrap();
+    let before = body_raw(p, &id).await;
+    assert!(!ledger::rewrite_entry(p, &id, body(&["regen2"], &[]))
+        .await
+        .unwrap());
+    assert_eq!(body_raw(p, &id).await, before);
+    ledger::revert_entry(p, &id).await.unwrap();
+    let e = &ledger::entries_for_topic(p, &t.id).await.unwrap()[0];
+    assert_eq!(e.body.bullets[0].text, "regen");
+}
+
+#[tokio::test]
+async fn accept_note_creates_mention_then_merges_second() {
+    let (_d, m) = fresh_db().await;
+    let p = m.pool();
+    let t = Topics::create(p, "Atlas", "").await.unwrap();
+    meeting(p, "m-2").await;
+    let n = ledger::insert_suggestions(
+        p,
+        &[
+            sug(&t.id, "note", "m-2", "first"),
+            sug(&t.id, "note", "m-2", "second"),
+        ],
+    )
+    .await
+    .unwrap();
+    assert_eq!(n, 2);
+    let pend = ledger::pending_suggestions(p, &t.id).await.unwrap();
+    assert_eq!(pend[0].meeting_title.as_deref(), Some("Weekly sync"));
+    let o1 = ledger::resolve_suggestion(p, &pend[0].id, true)
+        .await
+        .unwrap();
+    let eid = o1.entry_id.unwrap();
+    let first_raw = ledger::entries_for_topic(p, &t.id).await.unwrap()[0]
+        .body
+        .bullets[0]
+        .clone();
+    let o2 = ledger::resolve_suggestion(p, &pend[1].id, true)
+        .await
+        .unwrap();
+    assert_eq!(o2.entry_id.as_deref(), Some(eid.as_str()));
+    let es = ledger::entries_for_topic(p, &t.id).await.unwrap();
+    assert_eq!(es.len(), 1);
+    assert_eq!(es[0].kind, "mention");
+    assert_eq!(es[0].body.bullets.len(), 2);
+    assert_eq!(es[0].body.bullets[0], first_raw);
+    assert_eq!(es[0].ai_body.as_ref().unwrap().bullets.len(), 2);
+    assert!(ledger::pending_suggestions(p, &t.id)
+        .await
+        .unwrap()
+        .is_empty());
+}
+
+async fn series_entry_with_revision(pool: &SqlitePool, topic: &str) -> (String, String, String) {
+    meeting(pool, "m-1").await;
+    meeting(pool, "m-2").await;
+    let eid = ledger::insert_machine_entry(
+        pool,
+        topic,
+        "m-1",
+        "series",
+        body(&["a"], &[("x", "Use Postgres")]),
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    let did = ledger::entries_for_topic(pool, topic).await.unwrap()[0]
+        .body
+        .decisions[0]
+        .id
+        .clone();
+    let mut s = sug(topic, "revision", "m-2", "Maybe MySQL");
+    s.target_entry_id = Some(eid.clone());
+    s.target_decision_id = Some(did.clone());
+    ledger::insert_suggestions(pool, &[s]).await.unwrap();
+    let sid = ledger::pending_suggestions(pool, topic).await.unwrap()[0]
+        .id
+        .clone();
+    (eid, did, sid)
+}
+
+#[tokio::test]
+async fn accept_revision_attaches_without_touching_body() {
+    let (_d, m) = fresh_db().await;
+    let p = m.pool();
+    let t = Topics::create(p, "Atlas", "").await.unwrap();
+    let (eid, did, sid) = series_entry_with_revision(p, &t.id).await;
+    let pend = &ledger::pending_suggestions(p, &t.id).await.unwrap()[0];
+    assert_eq!(pend.target_decision_text.as_deref(), Some("Use Postgres"));
+    assert_eq!(pend.target_occurred_at.as_deref(), Some(NOW));
+    let before = body_raw(p, &eid).await;
+    let out = ledger::resolve_suggestion(p, &sid, true).await.unwrap();
+    assert_eq!(out.entry_id.as_deref(), Some(eid.as_str()));
+    assert_eq!(body_raw(p, &eid).await, before);
+    let e = &ledger::entries_for_topic(p, &t.id).await.unwrap()[0];
+    assert_eq!(e.revisions.len(), 1);
+    assert_eq!(e.revisions[0].decision_id.as_deref(), Some(did.as_str()));
+    assert_eq!(e.revisions[0].text, "Maybe MySQL");
+    assert_eq!(e.revisions[0].source_meeting_id.as_deref(), Some("m-2"));
+    assert!(e.edited_at.is_none());
+}
+
+#[tokio::test]
+async fn accept_revision_after_target_deleted() {
+    let (_d, m) = fresh_db().await;
+    let p = m.pool();
+    let t = Topics::create(p, "Atlas", "").await.unwrap();
+    let (eid, _did, sid) = series_entry_with_revision(p, &t.id).await;
+    ledger::delete_entry(p, &eid).await.unwrap();
+    let err = ledger::resolve_suggestion(p, &sid, true).await.unwrap_err();
+    assert_eq!(err.to_string(), "That entry was deleted.");
+    let st: String = sqlx::query_scalar("SELECT status FROM topic_suggestions WHERE id = ?")
+        .bind(&sid)
+        .fetch_one(p)
+        .await
+        .unwrap();
+    assert_eq!(st, "dismissed");
+    assert_eq!(
+        count(
+            p,
+            "SELECT COUNT(*) FROM topic_revisions WHERE entry_id = ?",
+            &eid
+        )
+        .await,
+        0
+    );
+}
+
+#[tokio::test]
+async fn accept_revision_after_decision_edited_out() {
+    let (_d, m) = fresh_db().await;
+    let p = m.pool();
+    let t = Topics::create(p, "Atlas", "").await.unwrap();
+    let (eid, did, sid) = series_entry_with_revision(p, &t.id).await;
+    ledger::edit_entry(p, &eid, body(&["a"], &[]))
+        .await
+        .unwrap();
+    ledger::resolve_suggestion(p, &sid, true).await.unwrap();
+    let e = &ledger::entries_for_topic(p, &t.id).await.unwrap()[0];
+    assert_eq!(e.revisions[0].decision_id.as_deref(), Some(did.as_str()));
+    assert!(e.body.decisions.is_empty());
+}
+
+#[tokio::test]
+async fn note_suggestion_skipped_when_any_prior_suggestion_or_entry_exists() {
+    let (_d, m) = fresh_db().await;
+    let p = m.pool();
+    let t = Topics::create(p, "Atlas", "").await.unwrap();
+    meeting(p, "m-1").await;
+    meeting(p, "m-2").await;
+    assert_eq!(
+        ledger::insert_suggestions(p, &[sug(&t.id, "note", "m-1", "a")])
+            .await
+            .unwrap(),
+        1
+    );
+    let sid = ledger::pending_suggestions(p, &t.id).await.unwrap()[0]
+        .id
+        .clone();
+    ledger::resolve_suggestion(p, &sid, false).await.unwrap();
+    assert_eq!(
+        ledger::insert_suggestions(p, &[sug(&t.id, "note", "m-1", "again")])
+            .await
+            .unwrap(),
+        0
+    );
+    ledger::insert_machine_entry(p, &t.id, "m-2", "series", body(&["x"], &[]))
+        .await
+        .unwrap();
+    assert_eq!(
+        ledger::insert_suggestions(p, &[sug(&t.id, "note", "m-2", "b")])
+            .await
+            .unwrap(),
+        0
+    );
+    let long = "é".repeat(400);
+    meeting(p, "m-3").await;
+    ledger::insert_suggestions(p, &[sug(&t.id, "note", "m-3", &long)])
+        .await
+        .unwrap();
+    assert_eq!(
+        ledger::pending_suggestions(p, &t.id).await.unwrap()[0]
+            .text
+            .chars()
+            .count(),
+        280
+    );
+}
+
+#[tokio::test]
+async fn resolve_twice_errors() {
+    let (_d, m) = fresh_db().await;
+    let p = m.pool();
+    let t = Topics::create(p, "Atlas", "").await.unwrap();
+    meeting(p, "m-1").await;
+    ledger::insert_suggestions(p, &[sug(&t.id, "note", "m-1", "a")])
+        .await
+        .unwrap();
+    let sid = ledger::pending_suggestions(p, &t.id).await.unwrap()[0]
+        .id
+        .clone();
+    ledger::resolve_suggestion(p, &sid, true).await.unwrap();
+    for accept in [true, false] {
+        let e = ledger::resolve_suggestion(p, &sid, accept)
+            .await
+            .unwrap_err();
+        assert_eq!(e.to_string(), "That suggestion was already handled.");
+    }
+    assert_eq!(ledger::entries_for_topic(p, &t.id).await.unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn open_decisions_read_owner_text_newest_first_capped() {
+    let (_d, m) = fresh_db().await;
+    let p = m.pool();
+    let t = Topics::create(p, "Atlas", "").await.unwrap();
+    meeting(p, "m-1").await;
+    let e1 = ledger::insert_machine_entry(
+        p,
+        &t.id,
+        "m-1",
+        "series",
+        body(&[], &[("x", "Old text"), ("y", "Second")]),
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    let cur = ledger::entries_for_topic(p, &t.id).await.unwrap()[0]
+        .body
+        .clone();
+    let mut fixed = cur.clone();
+    fixed.decisions[0].text = "Owner text".into();
+    ledger::edit_entry(p, &e1, fixed).await.unwrap();
+    let all = ledger::open_decisions(p, &t.id, 30).await.unwrap();
+    assert_eq!(all[0].text, "Owner text");
+    assert_eq!(ledger::open_decisions(p, &t.id, 1).await.unwrap().len(), 1);
+    assert!(ledger::delete_entry(p, &e1).await.unwrap());
+    assert!(ledger::open_decisions(p, &t.id, 30)
+        .await
+        .unwrap()
+        .is_empty());
 }

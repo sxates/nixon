@@ -4,6 +4,7 @@
 //! and "My notes". `ai_body_json` is never written after insert, and `notes_*` has one writer
 //! (`repo::set_notes`). Deleting a source meeting keeps its entries, marked `source_deleted_at`.
 
+pub mod ledger;
 pub mod limits;
 pub mod links;
 pub mod model;

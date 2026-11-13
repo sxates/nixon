@@ -54,3 +54,51 @@ pub struct EntryBody {
     #[serde(default)]
     pub decisions: Vec<Decision>,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct TopicRevision {
+    pub id: String,
+    pub entry_id: String,
+    pub decision_id: Option<String>,
+    pub text: String,
+    pub source_meeting_id: Option<String>,
+    pub t_start: Option<f64>,
+    pub source_deleted_at: Option<String>,
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct TopicEntry {
+    pub id: String,
+    pub topic_id: String,
+    pub meeting_id: Option<String>,
+    pub meeting_title: Option<String>,
+    pub kind: String,
+    pub occurred_at: String,
+    pub ai_body: Option<EntryBody>,
+    pub body: EntryBody,
+    pub edited_at: Option<String>,
+    pub source_deleted_at: Option<String>,
+    pub created_at: String,
+    pub revisions: Vec<TopicRevision>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct TopicSuggestion {
+    pub id: String,
+    pub topic_id: String,
+    pub kind: String,
+    pub meeting_id: String,
+    pub meeting_title: Option<String>,
+    pub t_start: Option<f64>,
+    pub target_entry_id: Option<String>,
+    pub target_decision_id: Option<String>,
+    pub target_decision_text: Option<String>,
+    pub target_occurred_at: Option<String>,
+    pub text: String,
+    pub status: String,
+    pub created_at: String,
+}
