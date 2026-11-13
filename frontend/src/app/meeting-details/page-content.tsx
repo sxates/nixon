@@ -9,6 +9,7 @@ import { MeetingIdentityHeader } from '@/components/MeetingDetails/MeetingIdenti
 import { DeleteMeetingDialog } from '@/components/MeetingDetails/DeleteMeetingDialog';
 import { AddMeetingDialog } from '@/components/Today/AddMeetingDialog';
 import { localDateKey } from '@/lib/today-timeline';
+import { MeetingTopicsRow } from '@/components/Topics/MeetingTopicsRow';
 import { ParticipantsPanel } from '@/components/Participants/ParticipantsPanel';
 import { ScheduledRecordControl } from '@/components/MeetingDetails/ScheduledRecordControl';
 import { MeetingOptionsMenu } from '@/components/MeetingDetails/MeetingOptionsMenu';
@@ -421,6 +422,7 @@ export default function PageContent({
           <div className="mt-4">
             <ParticipantsPanel meetingId={meeting.id} />
           </div>
+          <MeetingTopicsRow meetingId={meeting.id} title={meetingData.meetingTitle} seriesKey={meeting.calendarSeriesKey} />
 
           {/* Channel strip (specs/0057 Plan 3) — who is on this reel, stated once on the
               document above the tabs rather than buried in the Transcript tab. Renders

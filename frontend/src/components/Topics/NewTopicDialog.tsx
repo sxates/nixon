@@ -10,7 +10,6 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
 import {
   Dialog,
   DialogContent,
@@ -20,9 +19,9 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { SegmentedControl } from '@/components/ui/segmented-control';
 import { Textarea } from '@/components/ui/textarea';
 import { createTopic } from '@/lib/topics';
+import { TopicScopeChoice, type TopicScope } from './TopicScopeChoice';
 
 export interface NewTopicDialogProps {
   open: boolean;
@@ -31,13 +30,11 @@ export interface NewTopicDialogProps {
   meetingId?: string;
 }
 
-type Scope = 'meeting' | 'series';
-
 export function NewTopicDialog({ open, onOpenChange, meetingId }: NewTopicDialogProps) {
   const router = useRouter();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
-  const [scope, setScope] = useState<Scope>('series');
+  const [scope, setScope] = useState<TopicScope>('series');
   const [backfill, setBackfill] = useState(true);
   const [busy, setBusy] = useState(false);
 
@@ -107,25 +104,12 @@ export function NewTopicDialog({ open, onOpenChange, meetingId }: NewTopicDialog
             />
           </div>
           {meetingId ? (
-            <div className="flex flex-col gap-2">
-              <SegmentedControl
-                aria-label="Which meetings"
-                size="lg"
-                value={scope}
-                onChange={(v) => setScope(v as Scope)}
-                options={[
-                  { value: 'meeting', label: 'This meeting' },
-                  { value: 'series', label: 'Every meeting in this series' },
-                ]}
-              />
-              {series ? (
-                <Checkbox
-                  checked={backfill}
-                  onCheckedChange={setBackfill}
-                  label="Also add this series' meetings from the last 90 days"
-                />
-              ) : null}
-            </div>
+            <TopicScopeChoice
+              scope={scope}
+              onScopeChange={setScope}
+              backfill={backfill}
+              onBackfillChange={setBackfill}
+            />
           ) : null}
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

@@ -8,6 +8,8 @@ export interface SegmentedOption {
   value: string;
   label: string;
   icon?: React.ReactNode;
+  /** Not selectable (dimmed, skipped by the arrow keys). */
+  disabled?: boolean;
 }
 
 export interface SegmentedControlProps {
@@ -55,7 +57,7 @@ export function SegmentedControl({
   /** Focus `index` and select it. Index is always derived from the CURRENT value. */
   const select = (index: number) => {
     const target = options[index];
-    if (!target) return;
+    if (!target || target.disabled) return;
     buttonRefs.current[index]?.focus();
     if (target.value !== value) onChange(target.value);
   };
@@ -90,6 +92,7 @@ export function SegmentedControl({
               buttonRefs.current[index] = el;
             }}
             type="button"
+            disabled={option.disabled}
             aria-pressed={active}
             // Roving tabindex: only the active option is in the Tab order.
             tabIndex={active || (noneActive && index === 0) ? 0 : -1}
@@ -112,7 +115,7 @@ export function SegmentedControl({
               }
             }}
             className={cn(
-              'inline-flex items-center gap-1.5 rounded-sm font-semibold transition-colors [transition-duration:140ms] focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+              'inline-flex items-center gap-1.5 rounded-sm font-semibold disabled:pointer-events-none disabled:opacity-50 transition-colors [transition-duration:140ms] focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
               size === 'compact' ? 'px-2 text-caption' : 'px-3 text-xs',
               active
                 ? 'bg-card text-foreground shadow-sm'
