@@ -662,7 +662,66 @@ async fn list_for_topic_returns_listed_open_in_order() {
         .unwrap();
     let rows = Todo::list_for_topic(pool, &t).await.unwrap();
     let got: Vec<&str> = rows.iter().map(|r| r.item.id.as_str()).collect();
-    assert_eq!(got, [b.as_str(), a.as_str()]);
+    // A completed item stays on the topic (ticked off) until it is dismissed there.
+    assert_eq!(got, [b.as_str(), a.as_str(), done.as_str()]);
+}
+
+#[tokio::test]
+async fn topic_keeps_done_items_until_cleared_and_shows_them_again_when_redone() {
+    let (_d, db) = fresh_db().await;
+    let pool = db.pool();
+    meeting(pool, "m1", 1).await;
+    let t = topic(pool, "Atlas").await;
+    let item = extracted(pool, "m1", "a", "listed", "open").await;
+    let open = extracted(pool, "m1", "b", "listed", "open").await;
+    tag(pool, &item, &t).await;
+    tag(pool, &open, &t).await;
+    let listed = |pool: &SqlitePool, t: String| {
+        let pool = pool.clone();
+        async move {
+            Todo::list_for_topic(&pool, &t)
+                .await
+                .unwrap()
+                .into_iter()
+                .map(|r| (r.item.id, r.item.status))
+                .collect::<Vec<_>>()
+        }
+    };
+
+    ActionItemsRepository::set_status(pool, &item, "completed")
+        .await
+        .unwrap();
+    let rows = listed(pool, t.clone()).await;
+    assert!(rows.contains(&(item.clone(), "completed".to_string())));
+
+    // Only completed items clear; an open one is left alone.
+    let cleared = Todo::clear_done_for_topic(pool, &t, &[item.clone(), open.clone()])
+        .await
+        .unwrap();
+    assert_eq!(cleared, 1);
+    let rows = listed(pool, t.clone()).await;
+    assert_eq!(rows, vec![(open.clone(), "open".to_string())]);
+
+    // Reopened, it is back; completed again, it stays (ticked off) until the next clear.
+    ActionItemsRepository::set_status(pool, &item, "open")
+        .await
+        .unwrap();
+    assert_eq!(listed(pool, t.clone()).await.len(), 2);
+    ActionItemsRepository::set_status(pool, &item, "completed")
+        .await
+        .unwrap();
+    assert!(listed(pool, t.clone())
+        .await
+        .contains(&(item.clone(), "completed".to_string())));
+
+    // Clearing is per topic: another topic's id does nothing.
+    let other = topic(pool, "Other").await;
+    assert_eq!(
+        Todo::clear_done_for_topic(pool, &other, &[item.clone()])
+            .await
+            .unwrap(),
+        0
+    );
 }
 
 #[tokio::test]

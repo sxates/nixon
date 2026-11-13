@@ -16,6 +16,7 @@ import { detail, noteSuggestion } from '@/components/Topics/__tests__/fixtures';
 let current: TopicDetail = detail();
 vi.mock('@/hooks/useTopics', () => ({
   useTopic: () => ({ data: current, loading: false, error: null, refresh: async () => {} }),
+  useTopics: () => ({ data: [], loading: false, error: null, refresh: async () => {} }),
 }));
 
 import TopicPage from '@/app/topics/topic/page';
@@ -25,7 +26,7 @@ describe('/topics/topic', () => {
     current = detail();
     render(<TopicPage />);
     expect(screen.getByText('My notes')).toBeInTheDocument();
-    expect(screen.getByText('My open action items')).toBeInTheDocument();
+    expect(screen.getByText('My action items')).toBeInTheDocument();
     expect(screen.getByText('Timeline')).toBeInTheDocument();
     expect(screen.queryByText('Suggested notes')).toBeNull();
   });

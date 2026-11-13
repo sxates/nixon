@@ -464,3 +464,17 @@ pub async fn api_set_action_item_topic<R: Runtime>(
     emit_updated(&app, None);
     Ok(())
 }
+
+/// Dismiss completed to-dos from a topic's card (they stay ticked off there until this).
+#[tauri::command]
+pub async fn api_clear_topic_todos<R: Runtime>(
+    app: AppHandle<R>,
+    topic_id: String,
+    ids: Vec<String>,
+) -> Result<u64, String> {
+    let n = Todo::clear_done_for_topic(&pool_of(&app), &topic_id, &ids)
+        .await
+        .map_err(|e| format!("Couldn't dismiss those to-dos: {e}"))?;
+    emit_updated(&app, Some(&topic_id));
+    Ok(n)
+}

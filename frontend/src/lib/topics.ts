@@ -109,3 +109,7 @@ export function formatDecisionDate(iso: string): string {
   if (Number.isNaN(d.getTime())) return '';
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
+
+/** Dismiss completed to-dos from a topic's card; returns how many were dismissed. */
+export const clearTopicTodos = (topicId: string, ids: string[]) =>
+  invoke<number>('api_clear_topic_todos', { topicId, ids });

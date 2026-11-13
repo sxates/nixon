@@ -1,21 +1,26 @@
 'use client';
 
 /**
- * My open action items (specs/0089 §Action items integration): the listed, open to-dos
- * tagged to this topic, in the To-do order the backend returns them. Checking one completes
- * it through the same command the To-do list uses, so it is done everywhere. The quick-add
- * row creates a standalone to-do and then tags it with this topic.
+ * My action items (specs/0089 §Action items integration): the to-dos tagged to this topic,
+ * as the same list the To-do page uses — quick-add on top, then ↑↓ select, Space edit, ⌘D
+ * done, ⌘4 / ⌘5 highlight. The order follows your To-do list, so there is no reordering
+ * here. A ticked-off item stays on the card, struck through, until you dismiss it (its ✕,
+ * or "Dismiss done" for all of them); it is done everywhere the moment you tick it.
  */
 
-import { useCallback, useState } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { AddActionItemRow } from '@/components/ActionItems/AddActionItemRow';
-import { Checkbox } from '@/components/ui/checkbox';
+import { TodoList, todoKeysHint } from '@/components/ActionItems/TodoList';
+import type { MentionTopic } from '@/components/ActionItems/MentionInput';
+import { Button } from '@/components/ui/button';
 import { Panel } from '@/components/ui/panel';
-import { titleSegments } from '@/lib/todo-parse';
-import { setActionItemTopic } from '@/lib/topics';
-import type { ActionItem, TodoRow } from '@/types';
+import { useActionItemMutations } from '@/hooks/useActionItemMutations';
+import { useTodoHighlight } from '@/hooks/useTodoHighlight';
+import { useTopics } from '@/hooks/useTopics';
+import { clearTopicTodos, setActionItemTopic } from '@/lib/topics';
+import type { ActionItem, ActionItemStatus, TodoRow } from '@/types';
 
 const NO_NAMES = new Map<string, string>();
 const errorText = (err: unknown) => (err instanceof Error ? err.message : String(err));
@@ -28,88 +33,117 @@ interface TopicTodosCardProps {
 }
 
 export function TopicTodosCard({ topicId, todos, onChanged }: TopicTodosCardProps) {
-  // Optimistically hide a checked item until the refetch lands (or put it back on failure).
-  const [done, setDone] = useState<Set<string>>(new Set());
+  const router = useRouter();
+  // Mirrored locally so ticking, editing and highlighting are optimistic.
+  const [items, setItems] = useState<TodoRow[]>(todos);
+  useEffect(() => setItems(todos), [todos]);
 
-  const complete = useCallback(
-    async (item: TodoRow) => {
-      setDone((prev) => new Set(prev).add(item.id));
+  const { data: openTopics } = useTopics('open');
+  const topicOptions = useMemo<MentionTopic[]>(
+    () => (Array.isArray(openTopics) ? openTopics : []).map((t) => ({ id: t.id, name: t.name })),
+    [openTopics],
+  );
+
+  const { setStatus, editDescription, deleteItem, add, setDueDate } = useActionItemMutations<TodoRow>({
+    setItems,
+    meetingId: null, // a standalone to-do, tagged to this topic
+    toRow: (item) => ({
+      meetingTitle: null,
+      meetingCreatedAt: null,
+      sourceCount: 0,
+      latestSourceAt: null,
+      latestContext: null,
+      ...item,
+    }),
+    onStatusChanged: () => void onChanged(),
+    onAdded: () => void onChanged(),
+  });
+  const toggleHighlight = useTodoHighlight(items, setItems);
+
+  const handleSetStatus = useCallback(
+    (item: ActionItem, status: ActionItemStatus) => setStatus(item, status),
+    [setStatus],
+  );
+
+  const commitEdit = async (
+    item: ActionItem,
+    title: string,
+    dueDate: string | null,
+    topic?: MentionTopic | null,
+  ) => {
+    if (title && title !== item.description) await editDescription(item, title);
+    if (title && dueDate) await setDueDate(item, dueDate);
+    if (topic && topic.id !== item.topicId) {
       try {
-        await invoke<ActionItem>('api_set_action_item_status', { id: item.id, status: 'completed' });
+        await setActionItemTopic(item.id, topic.id);
+      } catch (err) {
+        toast.error('Could not tag the topic', { description: errorText(err) });
+      }
+    }
+    await onChanged();
+  };
+
+  const handleDelete = async (item: ActionItem) => {
+    await deleteItem(item);
+    await onChanged();
+  };
+
+  const dismiss = useCallback(
+    async (ids: string[]) => {
+      if (ids.length === 0) return;
+      const before = items;
+      setItems((prev) => prev.filter((i) => !ids.includes(i.id)));
+      try {
+        await clearTopicTodos(topicId, ids);
         await onChanged();
       } catch (err) {
-        console.error('Failed to complete the to-do:', err);
-        toast.error('Could not update the item', { description: errorText(err) });
-        setDone((prev) => {
-          const next = new Set(prev);
-          next.delete(item.id);
-          return next;
-        });
+        setItems(before);
+        toast.error('Could not dismiss that', { description: errorText(err) });
       }
     },
-    [onChanged],
+    [items, topicId, onChanged],
   );
 
-  const add = useCallback(
-    async (description: string, dueDate?: string) => {
-      let created: ActionItem;
-      try {
-        created = await invoke<ActionItem>('api_create_action_item', {
-          meetingId: null,
-          description,
-          ...(dueDate ? { dueDate } : {}),
-        });
-      } catch (err) {
-        console.error('Failed to add the to-do:', err);
-        toast.error('Could not add the item', { description: errorText(err) });
-        return false;
-      }
-      // The item exists now: a refused tag must not make the owner retry (a duplicate).
-      try {
-        await setActionItemTopic(created.id, topicId);
-      } catch (err) {
-        toast.error('Added, but not to the topic', { description: errorText(err) });
-      }
-      await onChanged();
-      return true;
-    },
-    [topicId, onChanged],
-  );
-
-  const open = todos.filter((t) => t.status === 'open' && !done.has(t.id));
+  const openCount = items.filter((i) => i.status === 'open').length;
+  const doneIds = items.filter((i) => i.status === 'completed').map((i) => i.id);
 
   return (
-    <Panel title="My open action items" count={open.length}>
+    <Panel
+      title="My action items"
+      count={openCount}
+      action={
+        doneIds.length > 0 ? (
+          <Button size="xs" variant="ghost" onClick={() => void dismiss(doneIds)}>
+            Dismiss done
+          </Button>
+        ) : null
+      }
+    >
       <div className="flex flex-col gap-2">
         <AddActionItemRow
           placeholder="Add an action item…"
           ariaLabel="Add an action item to this topic"
-          onAdd={add}
+          onAdd={(description, due) => add(description, due, topicId)}
         />
-        {open.length > 0 && (
-          <ul className="flex flex-col gap-1.5">
-            {open.map((item) => (
-              <li key={item.id} className="flex items-start gap-3 text-sm leading-5">
-                <Checkbox
-                  checked={false}
-                  aria-label={`Mark "${item.description}" as completed`}
-                  onCheckedChange={() => void complete(item)}
-                  className="mt-0.5"
-                />
-                <span className="min-w-0 text-foreground">
-                  {titleSegments(item.description, NO_NAMES).map((seg, i) =>
-                    seg.kind === 'person' ? (
-                      <span key={i} className="font-medium">
-                        @{seg.name}
-                      </span>
-                    ) : (
-                      <span key={i}>{seg.text}</span>
-                    ),
-                  )}
-                </span>
-              </li>
-            ))}
-          </ul>
+        {items.length > 0 && (
+          <>
+            <TodoList
+              className="-mx-1"
+              rows={items}
+              ariaLabel="This topic's action items"
+              nameById={NO_NAMES}
+              topics={topicOptions}
+              showTopic={false}
+              onSetStatus={handleSetStatus}
+              onCommitEdit={commitEdit}
+              onSetDueDate={setDueDate}
+              onDelete={handleDelete}
+              onOpen={(item) => router.push(`/tasks/item?id=${item.id}`)}
+              onToggleHighlight={(id, color) => void toggleHighlight(id, color)}
+              onDismissDone={(item) => void dismiss([item.id])}
+            />
+            <p className="px-2 text-caption text-muted-foreground">{todoKeysHint(false)}</p>
+          </>
         )}
       </div>
     </Panel>

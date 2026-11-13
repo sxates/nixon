@@ -18,15 +18,12 @@
  * here also call `reload()` so the screen settles without waiting for the event.
  */
 
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { invoke } from '@tauri-apps/api/core';
 import { toast } from 'sonner';
 import { Callout } from '@/components/ui/callout';
-import { DeckIcon } from '@/components/ui/deck-icon';
 import { EmptyState, PageLoading } from '@/components/ui/empty-state';
-import { IconButton } from '@/components/ui/icon-button';
-import { GripVertical } from '@/components/ui/icons';
 import { MenuButton } from '@/components/ui/menu-button';
 import { PageHeader } from '@/components/ui/page-header';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -41,9 +38,8 @@ import { AddActionItemRow } from '@/components/ActionItems/AddActionItemRow';
 import type { AssigneeCandidate } from '@/components/ActionItems/AssigneePicker';
 import { DoneList } from '@/components/ActionItems/DoneList';
 import { InboxRow } from '@/components/ActionItems/InboxRow';
-import { TodoListRow, todoGrid, todoRowDomId } from '@/components/ActionItems/TodoListRow';
-import { REORDER_ATTR, useDragReorder } from '@/hooks/useDragReorder';
-import { moveToIndex, useTodoListKeys, type Highlight } from '@/hooks/useTodoListKeys';
+import { TodoList, todoKeysHint } from '@/components/ActionItems/TodoList';
+import { useTodoHighlight } from '@/hooks/useTodoHighlight';
 import {
   FOCUS_QUICK_ADD_EVENT,
   QUICK_ADD_LABEL,
@@ -55,7 +51,6 @@ import { setActionItemTopic } from '@/lib/topics';
 import type { MentionTopic } from '@/components/ActionItems/MentionInput';
 import { useTodoViews } from '@/hooks/useTodoViews';
 import {
-  adoptedFromName,
   updateAssigneeArgs,
   type AssigneeSelection,
 } from '@/lib/action-items';
@@ -189,85 +184,13 @@ function TasksPageContent() {
     },
     [items, setStatus],
   );
-  const toggleDone = useCallback(
-    (id: string) => {
-      const row = listRows.find((r) => r.id === id);
-      if (row) void setListStatus(row, lingering.has(id) ? 'open' : 'completed');
-    },
-    [listRows, lingering, setListStatus],
-  );
-
-  const openIds = useMemo(() => listRows.map((i) => i.id), [listRows]);
   // Ticked-off rows hold their place on screen but are no longer part of the saved order.
   const applyOrder = useCallback(
     (next: string[]) => void reorder(next.filter((id) => !lingering.has(id))),
     [reorder, lingering],
   );
-  const { draggingId, overId, gripProps } = useDragReorder(openIds, applyOrder);
 
-  // ---- To-do selection, inline edit, highlight (keyboard model in useTodoListKeys) ----
-  const listRef = useRef<HTMLDivElement>(null);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  // The Topic column only when some row in this view is tagged (specs/0089). While an inline
-  // edit is open the layout holds still, so a re-tag landing mid-edit can't shift the field.
-  const anyTagged = listRows.some((i) => !!i.topicId);
-  const shownTopicColumn = useRef(anyTagged);
-  if (editingId === null || anyTagged) shownTopicColumn.current = anyTagged;
-  const showTopic = shownTopicColumn.current;
-  const selectRow = useCallback((id: string | null) => {
-    setSelectedId(id);
-    if (id) document.getElementById(todoRowDomId(id))?.scrollIntoView({ block: 'nearest' });
-  }, []);
-  // Hand focus back to the list after an edit so the keys keep working.
-  const endEdit = useCallback(() => {
-    setEditingId(null);
-    requestAnimationFrame(() => listRef.current?.focus({ preventScroll: true }));
-  }, []);
-  // A click anywhere outside the list releases the selection — except inside a row's own
-  // popovers (date picker, ⋯ menu), which render in a portal outside the list's DOM.
-  useEffect(() => {
-    if (!selectedId) return;
-    const onPointerDown = (e: PointerEvent) => {
-      const t = e.target as Element | null;
-      if (!t || listRef.current?.contains(t)) return;
-      if (t.closest('[data-radix-popper-content-wrapper], [role="menu"], [role="dialog"]')) return;
-      setSelectedId(null);
-      setEditingId(null);
-    };
-    document.addEventListener('pointerdown', onPointerDown);
-    return () => document.removeEventListener('pointerdown', onPointerDown);
-  }, [selectedId]);
-  // A row that leaves the list (completed, dismissed) takes the selection with it.
-  useEffect(() => {
-    if (selectedId && !openIds.includes(selectedId)) setSelectedId(null);
-  }, [openIds, selectedId]);
-
-  const toggleHighlight = useCallback(
-    async (id: string, color: Highlight) => {
-      const current = items.find((i) => i.id === id)?.highlight ?? null;
-      const next = current === color ? null : color;
-      setItems((prev) => prev.map((i) => (i.id === id ? { ...i, highlight: next } : i)));
-      try {
-        await invoke('api_set_action_item_highlight', { id, highlight: next });
-      } catch (err) {
-        setItems((prev) => prev.map((i) => (i.id === id ? { ...i, highlight: current } : i)));
-        toast.error('Could not change the highlight', { description: errorText(err) });
-      }
-    },
-    [items],
-  );
-
-  const onListKeyDown = useTodoListKeys({
-    ids: openIds,
-    selectedId,
-    editing: editingId !== null,
-    select: selectRow,
-    startEdit: setEditingId,
-    reorder: applyOrder,
-    toggleHighlight: (id, color) => void toggleHighlight(id, color),
-    toggleDone,
-  });
+  const toggleHighlight = useTodoHighlight(items, setItems);
 
   const commitEdit = async (
     item: ActionItem,
@@ -275,7 +198,6 @@ function TasksPageContent() {
     dueDate: string | null,
     topic?: MentionTopic | null,
   ) => {
-    endEdit();
     if (title && title !== item.description) await editDescription(item, title);
     if (title && dueDate) await setDueDate(item, dueDate);
     if (topic && topic.id !== item.topicId) {
@@ -444,80 +366,22 @@ function TasksPageContent() {
                     />
                   ) : (
                     <>
-                    <div
-                      ref={listRef}
-                      className="group/list mt-3 px-1 focus:outline-none"
-                      role="listbox"
-                      aria-label="To-do list"
-                      tabIndex={0}
-                      aria-activedescendant={selectedId ? todoRowDomId(selectedId) : undefined}
-                      onKeyDown={onListKeyDown}
-                    >
-                      <div className={cn(todoGrid(showTopic), 'px-2 pb-1')} aria-hidden>
-                        <span />
-                        <span className="u-section-label-sm">Item</span>
-                        {showTopic ? <span className="u-section-label-sm">Topic</span> : null}
-                        <span className="u-section-label-sm">Due</span>
-                      </div>
-                      {listRows.map((item) => (
-                        <div
-                          key={item.id}
-                          role="presentation"
-                          {...{ [REORDER_ATTR]: item.id }}
-                          className={cn(
-                            'rounded-lg transition-shadow',
-                            draggingId === item.id && 'opacity-50',
-                            overId === item.id &&
-                              draggingId &&
-                              draggingId !== item.id &&
-                              'ring-2 ring-brand-edge',
-                          )}
-                        >
-                          <TodoListRow
-                            item={item}
-                            nameById={nameById}
-                            sourceCount={item.sourceCount}
-                            adoptedFrom={adoptedFromName(item, nameById)}
-                            highlight={item.highlight ?? null}
-                            selected={selectedId === item.id}
-                            editing={editingId === item.id}
-                            onSelect={(row) => {
-                              selectRow(row.id);
-                              listRef.current?.focus({ preventScroll: true });
-                            }}
-                            onStartEdit={(row) => setEditingId(row.id)}
-                            onCommitEdit={(row, title, due, topic) => void commitEdit(row, title, due, topic)}
-                            topics={topicOptions}
-                            showTopic={showTopic}
-                            onOpenTopic={(topicId) => router.push(`/topics/topic?id=${encodeURIComponent(topicId)}`)}
-                            onCancelEdit={endEdit}
-                            onToggleHighlight={(row, color) => void toggleHighlight(row.id, color)}
-                            onMoveToTop={(row) => applyOrder(moveToIndex(openIds, row.id, 0))}
-                            onOpen={openItem}
-                            onSetStatus={setListStatus}
-                            onSetDueDate={setDueDate}
-                            onDelete={handleDelete}
-                            dragHandle={
-                              <IconButton
-                                variant="ghost"
-                                label="Drag to reorder"
-                                {...gripProps(item.id)}
-                                icon={<DeckIcon icon={GripVertical} size={14} />}
-                                // A narrow grip in the row's gutter, not a 28px key: it shows
-                                // on row hover and reads as a handle, not a button.
-                                className={cn(
-                                  'h-[18px] w-4 cursor-grab touch-none text-muted-foreground/40 opacity-0 transition-opacity hover:bg-transparent hover:text-muted-foreground focus-visible:opacity-100 group-hover:opacity-100 active:cursor-grabbing',
-                                  draggingId === item.id && 'opacity-100',
-                                )}
-                              />
-                            }
-                          />
-                        </div>
-                      ))}
-                    </div>
-                    <p className="mt-4 px-3 text-caption text-muted-foreground">
-                      ↑↓ select · Space edit · ⌘D done · ⌘↑↓ move · ⌘1–3 move to 1st–3rd · ⌘4 / ⌘5 highlight
-                    </p>
+                      <TodoList
+                        className="mt-3"
+                        rows={listRows}
+                        ariaLabel="To-do list"
+                        nameById={nameById}
+                        topics={topicOptions}
+                        onSetStatus={setListStatus}
+                        onCommitEdit={commitEdit}
+                        onSetDueDate={setDueDate}
+                        onDelete={handleDelete}
+                        onOpen={openItem}
+                        onOpenTopic={(topicId) => router.push(`/topics/topic?id=${encodeURIComponent(topicId)}`)}
+                        onToggleHighlight={(id, color) => void toggleHighlight(id, color)}
+                        reorder={applyOrder}
+                      />
+                      <p className="mt-4 px-3 text-caption text-muted-foreground">{todoKeysHint(true)}</p>
                     </>
                   )}
                 </TabsContent>

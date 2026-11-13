@@ -15,7 +15,7 @@
  */
 
 import { useEffect, useState, type ReactNode } from 'react';
-import { ChevronRight, EyeOff, Trash2 } from '@/components/ui/icons';
+import { ChevronRight, EyeOff, Trash2, X } from '@/components/ui/icons';
 import { Checkbox } from '@/components/ui/checkbox';
 import { DeckIcon } from '@/components/ui/deck-icon';
 import { IconButton } from '@/components/ui/icon-button';
@@ -81,7 +81,10 @@ interface TodoListRowProps {
   onSetDueDate: (item: ActionItem, dueDate: string | null) => void | Promise<void>;
   onDelete: (item: ActionItem) => void | Promise<void>;
   onToggleHighlight: (item: ActionItem, color: Highlight) => void;
-  onMoveToTop: (item: ActionItem) => void;
+  /** Omitted where the list has no order of its own (a topic's items follow To-do's). */
+  onMoveToTop?: (item: ActionItem) => void;
+  /** A ticked-off row's ✕: take it off this list (a topic's dismiss, specs/0089). */
+  onDismissDone?: (item: ActionItem) => void;
   /** Open topics for the `@` picker (specs/0089). */
   topics?: MentionTopic[];
   onOpenTopic?: (topicId: string) => void;
@@ -108,6 +111,7 @@ export function TodoListRow({
   onDelete,
   onToggleHighlight,
   onMoveToTop,
+  onDismissDone,
   topics,
   onOpenTopic,
   showTopic = true,
@@ -133,7 +137,11 @@ export function TodoListRow({
       id={todoRowDomId(item.id)}
       role="option"
       aria-selected={selected}
-      onClick={() => onSelect(item)}
+      // While editing, a click inside the field only moves the cursor: re-selecting the row
+      // would focus the list, blur the field and end the edit.
+      onClick={() => {
+        if (!editing) onSelect(item);
+      }}
       className={cn(
         todoGrid(showTopic),
         'group relative rounded-lg px-2 py-1 transition-colors',
@@ -221,6 +229,18 @@ export function TodoListRow({
       </span>
 
       <span className="flex h-5 items-center justify-end gap-0.5">
+        {completed && onDismissDone ? (
+          <IconButton
+            variant="ghost"
+            size="sm"
+            label={`Dismiss "${item.description}" from this topic`}
+            icon={<DeckIcon icon={X} size={14} />}
+            onClick={(e) => {
+              e.stopPropagation();
+              onDismissDone(item);
+            }}
+          />
+        ) : (
         <IconButton
           variant="ghost"
           size="sm"
@@ -235,6 +255,7 @@ export function TodoListRow({
             selected && 'opacity-100',
           )}
         />
+        )}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <MenuButton
@@ -243,9 +264,11 @@ export function TodoListRow({
             />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
-            <DropdownMenuItem onSelect={() => onMoveToTop(item)}>
-              Move to top <DropdownMenuShortcut>⌘1</DropdownMenuShortcut>
-            </DropdownMenuItem>
+            {onMoveToTop && (
+              <DropdownMenuItem onSelect={() => onMoveToTop(item)}>
+                Move to top <DropdownMenuShortcut>⌘1</DropdownMenuShortcut>
+              </DropdownMenuItem>
+            )}
             <DropdownMenuItem onSelect={() => onToggleHighlight(item, 'yellow')}>
               {highlight === 'yellow' ? 'Remove highlight' : 'Highlight yellow'}
               <DropdownMenuShortcut>⌘4</DropdownMenuShortcut>

@@ -143,18 +143,48 @@ impl ActionItemTodoRepository {
         Self::rows(pool, filter, order, None).await
     }
 
-    /// A topic's open to-do list items, in list order (specs/0089).
+    /// A topic's to-do list items, in list order (specs/0089): the open ones, plus completed
+    /// ones not dismissed from the topic since they were last completed (they stay on the
+    /// card, ticked off, until [`Self::clear_done_for_topic`]).
     pub async fn list_for_topic(
         pool: &SqlitePool,
         topic_id: &str,
     ) -> Result<Vec<TodoRow>, SqlxError> {
         Self::rows(
             pool,
-            "ai.triage = 'listed' AND ai.status = 'open' AND ai.topic_id = ?",
+            "ai.triage = 'listed' AND ai.topic_id = ? AND (ai.status = 'open' OR \
+             (ai.status = 'completed' AND (ai.topic_cleared_at IS NULL \
+               OR ai.completed_at IS NULL OR ai.topic_cleared_at < ai.completed_at)))",
             "ai.sort_order IS NULL, ai.sort_order ASC, ai.created_at ASC",
             Some(topic_id),
         )
         .await
+    }
+
+    /// Dismiss completed to-dos from a topic's card. Open items and items tagged to another
+    /// topic are left alone. Returns how many were dismissed.
+    pub async fn clear_done_for_topic(
+        pool: &SqlitePool,
+        topic_id: &str,
+        ids: &[String],
+    ) -> Result<u64, SqlxError> {
+        if ids.is_empty() {
+            return Ok(0);
+        }
+        let ph = std::iter::repeat_n("?", ids.len())
+            .collect::<Vec<_>>()
+            .join(", ");
+        let sql = format!(
+            "UPDATE action_items SET topic_cleared_at = ? \
+             WHERE topic_id = ? AND status = 'completed' AND id IN ({ph})"
+        );
+        let mut q = sqlx::query(&sql)
+            .bind(chrono::Utc::now().to_rfc3339())
+            .bind(topic_id);
+        for id in ids {
+            q = q.bind(id);
+        }
+        Ok(q.execute(pool).await?.rows_affected())
     }
 
     async fn rows(

@@ -433,6 +433,7 @@ pub fn invoke_handler() -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Sen
         topics::commands::api_delete_topic_entry,
         topics::commands::api_resolve_topic_suggestion,
         topics::commands::api_set_action_item_topic,
+        topics::commands::api_clear_topic_todos,
         // Background LLM activity indicator (specs/0052)
         llm_activity::commands::api_llm_activity_snapshot,
         llm_activity::commands::api_llm_activity_dismiss,
