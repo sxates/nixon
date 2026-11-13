@@ -6,10 +6,12 @@
 //! (appends one bullet). `notes_*` has one writer (`repo::set_notes`). Deleting a source
 //! meeting keeps its entries, marked `source_deleted_at`.
 
+pub mod evidence;
 pub mod ledger;
 pub mod limits;
 pub mod links;
 pub mod model;
+pub mod prompts;
 pub mod repo;
 
 pub use repo::{emit_updated, TOPICS_UPDATED_EVENT};
