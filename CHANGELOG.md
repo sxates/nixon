@@ -19,6 +19,10 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 ## [Unreleased]
 
+_(nothing yet)_
+
+## [0.17.0] - 2026-11-12
+
 ### Added
 
 - **To-do** is now a list you work from: one list you order yourself by dragging, with quick-add at the top. Type a due date in the title, like "(Nov 20)" or "(Tuesday)", and it becomes the due date. Type @ to mention a person.
