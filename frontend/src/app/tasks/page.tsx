@@ -41,7 +41,7 @@ import { AddActionItemRow } from '@/components/ActionItems/AddActionItemRow';
 import type { AssigneeCandidate } from '@/components/ActionItems/AssigneePicker';
 import { DoneList } from '@/components/ActionItems/DoneList';
 import { InboxRow } from '@/components/ActionItems/InboxRow';
-import { TODO_GRID, TodoListRow, todoRowDomId } from '@/components/ActionItems/TodoListRow';
+import { TodoListRow, todoGrid, todoRowDomId } from '@/components/ActionItems/TodoListRow';
 import { REORDER_ATTR, useDragReorder } from '@/hooks/useDragReorder';
 import { moveToIndex, useTodoListKeys, type Highlight } from '@/hooks/useTodoListKeys';
 import {
@@ -209,6 +209,12 @@ function TasksPageContent() {
   const listRef = useRef<HTMLDivElement>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
+  // The Topic column only when some row in this view is tagged (specs/0089). While an inline
+  // edit is open the layout holds still, so a re-tag landing mid-edit can't shift the field.
+  const anyTagged = listRows.some((i) => !!i.topicId);
+  const shownTopicColumn = useRef(anyTagged);
+  if (editingId === null || anyTagged) shownTopicColumn.current = anyTagged;
+  const showTopic = shownTopicColumn.current;
   const selectRow = useCallback((id: string | null) => {
     setSelectedId(id);
     if (id) document.getElementById(todoRowDomId(id))?.scrollIntoView({ block: 'nearest' });
@@ -447,10 +453,10 @@ function TasksPageContent() {
                       aria-activedescendant={selectedId ? todoRowDomId(selectedId) : undefined}
                       onKeyDown={onListKeyDown}
                     >
-                      <div className={cn(TODO_GRID, 'px-2 pb-1')} aria-hidden>
+                      <div className={cn(todoGrid(showTopic), 'px-2 pb-1')} aria-hidden>
                         <span />
                         <span className="u-section-label-sm">Item</span>
-                        <span className="u-section-label-sm">Topic</span>
+                        {showTopic ? <span className="u-section-label-sm">Topic</span> : null}
                         <span className="u-section-label-sm">Due</span>
                       </div>
                       {listRows.map((item) => (
@@ -482,6 +488,7 @@ function TasksPageContent() {
                             onStartEdit={(row) => setEditingId(row.id)}
                             onCommitEdit={(row, title, due, topic) => void commitEdit(row, title, due, topic)}
                             topics={topicOptions}
+                            showTopic={showTopic}
                             onOpenTopic={(topicId) => router.push(`/topics/topic?id=${encodeURIComponent(topicId)}`)}
                             onCancelEdit={endEdit}
                             onToggleHighlight={(row, color) => void toggleHighlight(row.id, color)}

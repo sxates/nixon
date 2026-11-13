@@ -12,7 +12,7 @@ import { ListRow } from '@/components/ui/list-row';
 import { PageHeader } from '@/components/ui/page-header';
 import { NewTopicDialog } from '@/components/Topics/NewTopicDialog';
 import { useTopics } from '@/hooks/useTopics';
-import { formatDecisionDate } from '@/lib/topics';
+import { formatDecisionDate, pendingLabel } from '@/lib/topics';
 import { PAGE_CONTENT_WIDTH, PAGE_GUTTER } from '@/lib/page-width';
 import { cn } from '@/lib/utils';
 import type { TopicSummary } from '@/types';
@@ -27,12 +27,20 @@ function TopicRows({ topics, onOpen }: { topics: TopicSummary[]; onOpen: (id: st
             key={t.id}
             ruled
             title={t.name}
-            meta={[t.description.split('\n')[0], when && `Last activity ${when}`]
+            meta={[
+              t.description.split('\n')[0],
+              when && `Last activity ${when}`,
+              t.pendingCount > 0 && pendingLabel(t.pendingCount),
+            ]
               .filter(Boolean)
               .join(' · ')}
             trailing={
               t.pendingCount > 0 ? (
-                <Badge tone="brand" title={`${t.pendingCount} waiting`}>
+                <Badge
+                  tone="brand"
+                  title={pendingLabel(t.pendingCount)}
+                  aria-label={pendingLabel(t.pendingCount)}
+                >
                   {t.pendingCount}
                 </Badge>
               ) : null
@@ -83,7 +91,11 @@ export default function TopicsPage() {
         ) : error ? (
           <Callout tone="error">{error}</Callout>
         ) : open.length === 0 && closed.length === 0 ? (
-          <EmptyState title="No topics yet" action={newButton} />
+          // The header already carries New topic; one call to action is enough.
+          <EmptyState
+            title="No topics yet"
+            body="A topic keeps a running log for one project across its meetings."
+          />
         ) : (
           <>
             <TopicRows topics={open} onOpen={openTopic} />

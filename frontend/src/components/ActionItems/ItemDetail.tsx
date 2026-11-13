@@ -67,7 +67,8 @@ export function ItemDetail({ id }: { id: string }) {
     try {
       const d = await invoke<ActionItemDetail>('api_get_action_item_detail', { id });
       if (seq !== loadSeq.current) return;
-      setItem(d.item);
+      // The topic travels beside `item` on the wire; fold it in so the field can read it.
+      setItem({ ...d.item, topicId: d.topicId ?? null, topicName: d.topicName ?? null });
       setSources(d.sources ?? []);
       // Never overwrite text the user is mid-way through typing, or text saved while this
       // request was in flight (its notes are older than what we hold).

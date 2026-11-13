@@ -57,7 +57,7 @@ describe('TopicHeader', () => {
 
   it('Draft from meetings fills the description and saves only on blur', async () => {
     render(<TopicHeader detail={linked()} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Description' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Edit description' }));
     fireEvent.click(screen.getByRole('button', { name: 'Draft from meetings' }));
     const box = await screen.findByDisplayValue('A drafted description.');
     expect(updateTopic).not.toHaveBeenCalled();

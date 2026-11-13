@@ -117,8 +117,11 @@ describe('topics screenshot mock (specs/0089)', () => {
       .__nixonTopicsMock({ MEETINGS: [{ id: 'demo-01', title: 'Product sync' }], todoStore: () => todos });
   })();
 
-  it('spreads into FIXTURES with one line', () => {
-    expect(mock).toContain('__nixonTopicsMock({ MEETINGS, todoStore })');
+  it('spreads into FIXTURES with one guarded line, and the generator emits it', () => {
+    expect(mock).toContain('...(globalThis.__nixonTopicsMock?.({ MEETINGS, todoStore }) ?? {})');
+    // A `pnpm shots:mock` regeneration must not drop the topics commands.
+    const generator = readFileSync(join(root, 'scripts', 'shots', 'build-mock.mjs'), 'utf8');
+    expect(generator).toContain('...(globalThis.__nixonTopicsMock?.({');
   });
 
   it('every handler is a registered command', () => {

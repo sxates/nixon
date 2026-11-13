@@ -50,7 +50,7 @@ export function TopicView({ id }: { id: string }) {
   }
 
   return (
-    <div className="h-page animate-fade-in overflow-y-auto bg-background">
+    <div data-testid="topic-scroll" className="h-page animate-fade-in overflow-y-auto bg-background">
       <TopicHeader detail={data} onChanged={refresh} />
       <div className={cn('mx-auto flex w-full flex-col gap-3 pb-12 pt-6', PAGE_CONTENT_WIDTH, PAGE_GUTTER)}>
         <div className="grid grid-cols-1 gap-3 min-[900px]:grid-cols-2">

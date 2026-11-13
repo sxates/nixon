@@ -118,6 +118,7 @@ export function AddToTopicDialog({
           if (!o) onOpenChange(false);
         }}
         meetingId={meetingId}
+        seriesAvailable={seriesAvailable}
       />
     </>
   );

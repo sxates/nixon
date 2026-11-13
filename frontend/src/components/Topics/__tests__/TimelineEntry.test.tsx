@@ -77,6 +77,22 @@ describe('TimelineEntry', () => {
     expect(screen.getByRole('button', { name: 'Edit' })).toBeInTheDocument();
   });
 
+  it('never offers Rewrite on a Mention entry: it holds a note the owner accepted', () => {
+    // An accepted note has a meeting and an AI body, but rewriting it would replace the note.
+    render(<TimelineEntry entry={entry({ kind: 'mention' })} />);
+    expect(screen.queryByRole('button', { name: 'Rewrite from meeting' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Edit' })).toBeInTheDocument();
+  });
+
+  it('uses the quiet outline chip for every kind (amber means armed, not authorship)', () => {
+    const { rerender } = render(<TimelineEntry entry={entry()} />);
+    expect(screen.getByText('Series')).toHaveAttribute('data-tone', 'outline');
+    rerender(<TimelineEntry entry={entry({ kind: 'mention' })} />);
+    expect(screen.getByText('Mention')).toHaveAttribute('data-tone', 'outline');
+    rerender(<TimelineEntry entry={entry({ kind: 'manual', meetingId: null, meetingTitle: null, aiBody: null })} />);
+    expect(screen.getByText('Yours')).toHaveAttribute('data-tone', 'outline');
+  });
+
   it('shows Source meeting deleted in place of the link', () => {
     render(<TimelineEntry entry={entry({ meetingId: null, sourceDeletedAt: '2026-11-05T12:00:00Z' })} />);
     expect(screen.getByText('Source meeting deleted')).toBeInTheDocument();
@@ -89,6 +105,16 @@ describe('TimelineEntry', () => {
     render(<TimelineEntry entry={entry({ body: empty, aiBody: empty })} />);
     const line = screen.getByText('No discussion of this topic');
     expect(line.className).toMatch(/text-muted-foreground/);
+  });
+
+  it('a No discussion row still has Edit, and Rewrite from meeting when it is a series entry', async () => {
+    const empty = { bullets: [], decisions: [] };
+    render(<TimelineEntry entry={entry({ body: empty, aiBody: empty })} />);
+    expect(screen.getByText('No discussion of this topic')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Rewrite from meeting' }));
+    await waitFor(() => expect(rewriteTopicEntry).toHaveBeenCalledWith('te-1'));
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    expect(screen.queryByText('No discussion of this topic')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Edit' })).toBeNull();
   });
 

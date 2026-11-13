@@ -99,6 +99,10 @@ export const resolveTopicSuggestion = (id: string, accept: boolean) =>
 export const setActionItemTopic = (id: string, topicId: string | null) =>
   invoke<void>('api_set_action_item_topic', { id, topicId });
 
+/** "1 suggestion waiting" / "N suggestions waiting": the words behind a pending badge. */
+export const pendingLabel = (n: number) =>
+  n === 1 ? '1 suggestion waiting' : `${n} suggestions waiting`;
+
 /** RFC 3339 time -> "Nov 3" (local day); "" when unparseable. */
 export function formatDecisionDate(iso: string): string {
   const d = new Date(iso);

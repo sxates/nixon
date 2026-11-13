@@ -361,6 +361,10 @@ export interface ActionItemDetail {
   item: ActionItem;
   sources: SourceRow[];
   personIds: string[];
+  /** The item's topic (specs/0089). Beside `item`, not inside it: the Rust `ActionItem` row
+   *  carries no topic field. */
+  topicId: string | null;
+  topicName: string | null;
 }
 
 /** Payload of the `action-items-updated` Tauri event (specs/0034), emitted after a

@@ -28,13 +28,20 @@ export interface NewTopicDialogProps {
   onOpenChange: (open: boolean) => void;
   /** A meeting to link the new topic to; adds the This meeting / series choice. */
   meetingId?: string;
+  /** False when the meeting has no series key and no title: only This meeting is offered. */
+  seriesAvailable?: boolean;
 }
 
-export function NewTopicDialog({ open, onOpenChange, meetingId }: NewTopicDialogProps) {
+export function NewTopicDialog({
+  open,
+  onOpenChange,
+  meetingId,
+  seriesAvailable = true,
+}: NewTopicDialogProps) {
   const router = useRouter();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
-  const [scope, setScope] = useState<TopicScope>('series');
+  const [scope, setScope] = useState<TopicScope>(seriesAvailable ? 'series' : 'meeting');
   const [backfill, setBackfill] = useState(true);
   const [busy, setBusy] = useState(false);
 
@@ -43,13 +50,13 @@ export function NewTopicDialog({ open, onOpenChange, meetingId }: NewTopicDialog
     if (!open) return;
     setName('');
     setDescription('');
-    setScope('series');
+    setScope(seriesAvailable ? 'series' : 'meeting');
     setBackfill(true);
     setBusy(false);
-  }, [open]);
+  }, [open, seriesAvailable]);
 
   const canCreate = name.trim().length > 0 && !busy;
-  const series = !!meetingId && scope === 'series';
+  const series = !!meetingId && seriesAvailable && scope === 'series';
 
   const submit = async () => {
     if (!canCreate) return;
@@ -109,6 +116,7 @@ export function NewTopicDialog({ open, onOpenChange, meetingId }: NewTopicDialog
               onScopeChange={setScope}
               backfill={backfill}
               onBackfillChange={setBackfill}
+              seriesAvailable={seriesAvailable}
             />
           ) : null}
           <DialogFooter>

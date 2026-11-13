@@ -4,7 +4,8 @@
  * One timeline entry (specs/0089 §UI). Machines append, owners edit: the AI's original
  * (`aiBody`) is never changed by an edit, so an edited entry shows an "edited" marker that
  * reveals the original read-only, with Revert to original. Rewrite from meeting re-runs the
- * writer, only while the entry is unedited and still has its meeting.
+ * writer, only on a Series entry that is unedited and still has its meeting (a Mention holds
+ * a note the owner accepted; the command refuses it too).
  */
 
 import { useState } from 'react';
@@ -53,7 +54,7 @@ export function TimelineEntry({ entry, onChanged }: TimelineEntryProps) {
   const edited = !!entry.editedAt;
   const empty = entry.body.bullets.length === 0 && entry.body.decisions.length === 0;
   const noDiscussion = empty && !edited && entry.revisions.length === 0;
-  const canRewrite = !edited && !!meetingId && !!entry.aiBody;
+  const canRewrite = entry.kind === 'series' && !edited && !!meetingId && !!entry.aiBody;
 
   const run = async (kind: 'revert' | 'rewrite' | 'delete', fn: () => Promise<void>, fail: string) => {
     setBusy(kind);
@@ -103,7 +104,32 @@ export function TimelineEntry({ entry, onChanged }: TimelineEntryProps) {
 
   const date = <span className="u-row-meta tabular-nums">{formatMeetingDate(entry.occurredAt)}</span>;
 
-  if (noDiscussion) {
+  // Every entry has Edit; Rewrite only where `canRewrite` allows.
+  const actions = (
+    <>
+      {!editing ? (
+        <Button size="xs" variant="ghost" onClick={() => setEditing(true)}>
+          Edit
+        </Button>
+      ) : null}
+      {canRewrite && !editing ? (
+        <Button
+          size="xs"
+          variant="ghost"
+          disabled={busy === 'rewrite'}
+          onClick={() =>
+            void run('rewrite', () => rewriteTopicEntry(entry.id), 'Could not rewrite the entry')
+          }
+        >
+          {busy === 'rewrite' ? <Spinner /> : <DeckIcon icon={Sparkles} size={14} />}
+          Rewrite from meeting
+        </Button>
+      ) : null}
+      {menu}
+    </>
+  );
+
+  if (noDiscussion && !editing) {
     return (
       <article className="flex min-h-7 items-center gap-2" aria-label="Timeline entry">
         {date}
@@ -111,7 +137,7 @@ export function TimelineEntry({ entry, onChanged }: TimelineEntryProps) {
         <span className="min-w-0 flex-1 truncate text-meta text-muted-foreground">
           No discussion of this topic
         </span>
-        {menu}
+        <div className="flex items-center gap-1">{actions}</div>
         {deleteDialog}
       </article>
     );
@@ -122,7 +148,7 @@ export function TimelineEntry({ entry, onChanged }: TimelineEntryProps) {
       <header className="flex min-h-7 flex-wrap items-center gap-2">
         {date}
         {source}
-        <Badge tone={entry.kind === 'manual' ? 'brand' : 'muted'}>{KIND_LABEL[entry.kind]}</Badge>
+        <Badge tone="outline">{KIND_LABEL[entry.kind]}</Badge>
         {edited ? (
           <Button
             type="button"
@@ -134,27 +160,7 @@ export function TimelineEntry({ entry, onChanged }: TimelineEntryProps) {
             edited
           </Button>
         ) : null}
-        <div className="ml-auto flex items-center gap-1">
-          {!editing ? (
-            <Button size="xs" variant="ghost" onClick={() => setEditing(true)}>
-              Edit
-            </Button>
-          ) : null}
-          {canRewrite && !editing ? (
-            <Button
-              size="xs"
-              variant="ghost"
-              disabled={busy === 'rewrite'}
-              onClick={() =>
-                void run('rewrite', () => rewriteTopicEntry(entry.id), 'Could not rewrite the entry')
-              }
-            >
-              {busy === 'rewrite' ? <Spinner /> : <DeckIcon icon={Sparkles} size={14} />}
-              Rewrite from meeting
-            </Button>
-          ) : null}
-          {menu}
-        </div>
+        <div className="ml-auto flex items-center gap-1">{actions}</div>
       </header>
 
       {editing ? (

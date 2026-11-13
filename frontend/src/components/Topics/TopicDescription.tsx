@@ -1,16 +1,17 @@
 'use client';
 
 /**
- * The topic's Description (specs/0089 §UI): collapsed under the header, a textarea that
- * saves on blur. Draft from meetings fills the textarea with an LLM draft but saves
- * nothing until the owner blurs the field or presses Save.
+ * The topic's Description (specs/0089 §UI): shown in full under the header (it's how a topic
+ * is recognised), with Edit opening a textarea that saves on blur. Draft from meetings fills
+ * the textarea with an LLM draft but saves nothing until the owner blurs the field or
+ * presses Save.
  */
 
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { DeckIcon } from '@/components/ui/deck-icon';
-import { ChevronDown, ChevronRight, Sparkles } from '@/components/ui/icons';
+import { Sparkles } from '@/components/ui/icons';
 import { Spinner } from '@/components/ui/spinner';
 import { Textarea } from '@/components/ui/textarea';
 import { draftTopicDescription, updateTopic } from '@/lib/topics';
@@ -29,10 +30,13 @@ export function TopicDescription({ topicId, description, onChanged }: TopicDescr
   const [drafting, setDrafting] = useState(false);
   const saved = useRef(description);
 
-  // Take a newer saved description unless the owner has unsaved text in the field.
+  // Take a newer saved description unless the owner has unsaved text in the field. Compare
+  // against the previous saved text, captured before it is overwritten (the updater can run
+  // after this effect returns).
   useEffect(() => {
-    setDraft((cur) => (cur === saved.current ? description : cur));
+    const prev = saved.current;
     saved.current = description;
+    setDraft((cur) => (cur === prev ? description : cur));
   }, [description]);
 
   const save = async () => {
@@ -63,16 +67,15 @@ export function TopicDescription({ topicId, description, onChanged }: TopicDescr
 
   return (
     <div className="flex flex-col gap-1.5">
-      <div>
+      <div className="flex items-center gap-2">
+        <span className="u-section-label-sm">Description</span>
         <Button
           size="xs"
           variant="ghost"
-          aria-expanded={open}
+          aria-label={open ? 'Done editing the description' : 'Edit description'}
           onClick={() => setOpen((v) => !v)}
-          className="-ml-2.5"
         >
-          <DeckIcon icon={open ? ChevronDown : ChevronRight} size={14} />
-          Description
+          {open ? 'Done' : 'Edit'}
         </Button>
       </div>
       {open ? (
@@ -101,7 +104,7 @@ export function TopicDescription({ topicId, description, onChanged }: TopicDescr
           </div>
         </>
       ) : description.trim() ? (
-        <p className="line-clamp-2 text-meta text-muted-foreground">{description}</p>
+        <p className="whitespace-pre-line text-meta text-muted-foreground">{description}</p>
       ) : null}
     </div>
   );

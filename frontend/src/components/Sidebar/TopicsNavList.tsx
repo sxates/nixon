@@ -10,6 +10,7 @@ import React, { useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Badge } from '@/components/ui/badge';
 import { useTopics } from '@/hooks/useTopics';
+import { pendingLabel } from '@/lib/topics';
 import { SIDEBAR_ICON_SLOT, SIDEBAR_ROW } from './row';
 import { cn } from '@/lib/utils';
 
@@ -39,14 +40,19 @@ export function TopicsNavList({ collapsed }: { collapsed: boolean }) {
         <button // ui-gate: allow sidebar sub-row: shares the rail's icon-column geometry (row.ts); ListRow's padding would shift the label
           key={t.id}
           type="button"
-          aria-label={t.name}
+          aria-label={t.pendingCount > 0 ? `${t.name}, ${pendingLabel(t.pendingCount)}` : t.name}
           onClick={() => router.push(`/topics/topic?id=${encodeURIComponent(t.id)}`)}
           className={cn(ROW_CLASS, 'text-engrave hover:text-foreground')}
         >
           <span aria-hidden className={SIDEBAR_ICON_SLOT} />
           <span className="min-w-0 flex-1 truncate pr-2 text-left text-sm">{t.name}</span>
           {t.pendingCount > 0 ? (
-            <Badge tone="brand" title={`${t.pendingCount} waiting`} className="mr-3.5">
+            <Badge
+              tone="brand"
+              title={pendingLabel(t.pendingCount)}
+              aria-label={pendingLabel(t.pendingCount)}
+              className="mr-3.5"
+            >
               {t.pendingCount}
             </Badge>
           ) : null}

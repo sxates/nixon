@@ -280,6 +280,26 @@ describe('TasksPage (specs/0088 To-do / Inbox / Done)', () => {
     ).toBeInTheDocument();
   });
 
+  it('shows the Topic column only when a row in the view has a topic (specs/0089)', async () => {
+    const store = { rows: [todoRow({ id: 'a', description: 'Send the deck' })] };
+    stubInvoke(store);
+    const { unmount } = render(<TasksPage />);
+    const row = (await screen.findByText('Send the deck')).closest('[role="option"]') as HTMLElement;
+    expect(screen.queryByText('Topic')).toBeNull();
+    expect(row.className).not.toMatch(/8rem/);
+    unmount();
+
+    store.rows = [
+      todoRow({ id: 'a', description: 'Send the deck' }),
+      todoRow({ id: 'b', description: 'Renew the domain', topicId: 'topic-1', topicName: 'Atlas CRM rebuild' }),
+    ];
+    render(<TasksPage />);
+    expect(await screen.findByRole('button', { name: 'Open topic Atlas CRM rebuild' })).toBeInTheDocument();
+    expect(screen.getByText('Topic')).toBeInTheDocument();
+    const tagged = screen.getByText('Send the deck').closest('[role="option"]') as HTMLElement;
+    expect(tagged.className).toMatch(/8rem/);
+  });
+
   it('no meeting grouping on to-do tab', async () => {
     stubInvoke({
       rows: [

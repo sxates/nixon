@@ -75,6 +75,8 @@ const detail = (over: Partial<ActionItemDetail> = {}): ActionItemDetail => ({
     },
   ],
   personIds: [],
+  topicId: null,
+  topicName: null,
   ...over,
 });
 

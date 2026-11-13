@@ -35,6 +35,7 @@ describe('TopicsNavList', () => {
     render(<TopicsNavList collapsed={false} />);
     const names = screen.getAllByRole('button').map((b) => b.getAttribute('aria-label'));
     expect(names.slice(0, 6)).toEqual([8, 7, 6, 5, 4, 3].map((i) => `Topic ${i}`));
+    // No count: the name alone.
     fireEvent.click(screen.getByRole('button', { name: '+3 more' }));
     expect(push).toHaveBeenCalledWith('/topics');
   });
@@ -42,8 +43,9 @@ describe('TopicsNavList', () => {
   it('shows a pending badge and opens the topic', () => {
     rows = mk(1);
     render(<TopicsNavList collapsed={false} />);
-    expect(screen.getByText('3')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Topic 0' }));
+    expect(screen.getByText('3')).toHaveAttribute('aria-label', '3 suggestions waiting');
+    // The row's accessible name carries the count, not just the topic name.
+    fireEvent.click(screen.getByRole('button', { name: 'Topic 0, 3 suggestions waiting' }));
     expect(push).toHaveBeenCalledWith('/topics/topic?id=t0');
     expect(screen.queryByRole('button', { name: /more/ })).toBeNull();
   });

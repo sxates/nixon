@@ -22,6 +22,14 @@ export interface SuggestionStripProps {
   onChanged?: () => void;
 }
 
+/** "May change the {Mon D} decision: {text}". The target entry may be gone (no date) or the
+ *  decision edited out (no text); then the line says what it still knows, with no empty tail. */
+export function revisionHeadline(when: string, text: string | null | undefined): string {
+  const subject = when ? `the ${when} decision` : 'an earlier decision';
+  const t = text?.trim();
+  return t ? `May change ${subject}: ${t}` : `May change ${subject}.`;
+}
+
 export function SuggestionStrip({ suggestions, onChanged }: SuggestionStripProps) {
   const [busy, setBusy] = useState<string | null>(null);
   if (suggestions.length === 0) return null;
@@ -80,7 +88,7 @@ function SuggestionRow({
       </div>
       {revision ? (
         <p className="text-sm font-medium text-foreground">
-          {`May change the ${when} decision: ${s.targetDecisionText ?? ''}`}
+          {revisionHeadline(when, s.targetDecisionText)}
         </p>
       ) : null}
       <p className={revision ? 'text-sm text-muted-foreground' : 'text-sm text-foreground'}>{s.text}</p>

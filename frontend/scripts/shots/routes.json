@@ -795,6 +795,21 @@
     ]
   },
   {
+    "name": "topic-timeline",
+    "route": "/topics/topic?id=topic-atlas",
+    "headless_only": true,
+    "scroll": { "selector": "[data-testid=topic-scroll]", "top": 100000 },
+    "ignore": [
+      {
+        "x": 338,
+        "y": 816,
+        "w": 106,
+        "h": 22,
+        "why": "footer TapeCounter roller digits (specs/0060 Task 3)."
+      }
+    ]
+  },
+  {
     "name": "topic-closed",
     "route": "/topics/topic?id=topic-vendor-eval",
     "ignore": [

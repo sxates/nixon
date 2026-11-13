@@ -23,12 +23,23 @@ const t = (id: string, name: string, status: 'open' | 'closed', pending = 0) => 
 describe('/topics', () => {
   beforeEach(() => push.mockReset());
 
-  it('shows the empty state and a New topic button', () => {
+  it('shows the empty state with one New topic button and a body line', () => {
     rows = [];
     render(<TopicsPage />);
     expect(screen.getByText('No topics yet')).toBeInTheDocument();
-    fireEvent.click(screen.getAllByRole('button', { name: 'New topic' })[0]);
+    expect(screen.getByText('A topic keeps a running log for one project across its meetings.')).toBeInTheDocument();
+    const buttons = screen.getAllByRole('button', { name: 'New topic' });
+    expect(buttons).toHaveLength(1);
+    fireEvent.click(buttons[0]);
     expect(screen.getByRole('dialog')).toBeInTheDocument();
+  });
+
+  it('labels the pending count in the row meta and on the badge', () => {
+    rows = [t('a', 'Atlas', 'open', 2), t('c', 'Beta', 'open', 1)];
+    render(<TopicsPage />);
+    expect(screen.getByText(/2 suggestions waiting/)).toBeInTheDocument();
+    expect(screen.getByText(/1 suggestion waiting/)).toBeInTheDocument();
+    expect(screen.getByText('2')).toHaveAttribute('aria-label', '2 suggestions waiting');
   });
 
   it('lists open topics and keeps Closed topics collapsed until opened', () => {

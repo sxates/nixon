@@ -51,4 +51,12 @@ describe('TodoListRow topic chip', () => {
     render(<TodoListRow {...props} item={{ ...item, topicId: null, topicName: null }} />);
     expect(screen.queryByRole('button', { name: /Open topic/ })).toBeNull();
   });
+
+  it('without the Topic column the row has no topic cell and the narrower grid', () => {
+    render(<TodoListRow {...props} item={item} showTopic={false} />);
+    expect(screen.queryByRole('button', { name: /Open topic/ })).toBeNull();
+    const row = screen.getByRole('option');
+    expect(row.className).not.toMatch(/8rem/);
+    expect(row.children).toHaveLength(4); // checkbox, title, due, actions: four columns
+  });
 });

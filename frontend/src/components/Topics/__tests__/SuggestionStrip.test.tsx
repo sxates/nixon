@@ -59,6 +59,21 @@ describe('SuggestionStrip', () => {
     await waitFor(() => expect(resolveTopicSuggestion).toHaveBeenCalledWith('ts-2', true));
   });
 
+  it('words a revision whose target date or decision text is gone without a broken tail', () => {
+    render(
+      <SuggestionStrip
+        suggestions={[
+          revisionSuggestion({ id: 'ts-a', targetOccurredAt: null }),
+          revisionSuggestion({ id: 'ts-b', targetDecisionText: null }),
+          revisionSuggestion({ id: 'ts-c', targetOccurredAt: null, targetDecisionText: null }),
+        ]}
+      />,
+    );
+    expect(screen.getByText('May change an earlier decision: Migrate in two waves.')).toBeInTheDocument();
+    expect(screen.getByText('May change the Nov 3 decision.')).toBeInTheDocument();
+    expect(screen.getByText('May change an earlier decision.')).toBeInTheDocument();
+  });
+
   it('toasts a resolve error', async () => {
     resolveTopicSuggestion.mockRejectedValue('That entry was deleted.');
     render(<SuggestionStrip suggestions={[revisionSuggestion()]} />);
