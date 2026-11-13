@@ -899,3 +899,84 @@ async fn open_decisions_read_owner_text_newest_first_capped() {
         .unwrap()
         .is_empty());
 }
+
+#[tokio::test]
+async fn add_manual_entry_checks_topic_and_propagates_db_errors() {
+    let (_d, m) = fresh_db().await;
+    let p = m.pool();
+    let err = ledger::add_manual_entry(p, "nope", body(&["x"], &[]))
+        .await
+        .unwrap_err();
+    assert_eq!(err.to_string(), "That topic no longer exists.");
+    let t = Topics::create(p, "Atlas", "").await.unwrap();
+    let broken = p.clone();
+    broken.close().await;
+    let err = ledger::add_manual_entry(&broken, &t.id, body(&["x"], &[]))
+        .await
+        .unwrap_err();
+    assert_ne!(err.to_string(), "That topic no longer exists.");
+}
+
+#[tokio::test]
+async fn merge_into_unreadable_body_errors_and_writes_nothing() {
+    let (_d, m) = fresh_db().await;
+    let p = m.pool();
+    let t = Topics::create(p, "Atlas", "").await.unwrap();
+    meeting(p, "m-1").await;
+    let eid = ledger::insert_machine_entry(p, &t.id, "m-1", "series", body(&["orig"], &[]))
+        .await
+        .unwrap()
+        .unwrap();
+    ledger::insert_suggestions(p, &[sug(&t.id, "note", "m-9", "x")])
+        .await
+        .unwrap();
+    // a note for m-1 would be blocked by the entry; seed a pending one directly
+    sqlx::query("INSERT INTO topic_suggestions (id, topic_id, kind, meeting_id, text, status, created_at) VALUES ('ts-x', ?, 'note', 'm-1', 'new', 'pending', ?)")
+        .bind(&t.id).bind(NOW).execute(p).await.unwrap();
+    sqlx::query("UPDATE topic_entries SET body_json = 'not json' WHERE id = ?")
+        .bind(&eid)
+        .execute(p)
+        .await
+        .unwrap();
+    let err = ledger::resolve_suggestion(p, "ts-x", true)
+        .await
+        .unwrap_err();
+    assert!(err.to_string().contains("nothing was changed"));
+    assert_eq!(body_raw(p, &eid).await, "not json");
+    let st: String = sqlx::query_scalar("SELECT status FROM topic_suggestions WHERE id = 'ts-x'")
+        .fetch_one(p)
+        .await
+        .unwrap();
+    assert_eq!(st, "pending");
+}
+
+#[tokio::test]
+async fn merge_into_owner_edited_entry_keeps_edit_and_appends() {
+    let (_d, m) = fresh_db().await;
+    let p = m.pool();
+    let t = Topics::create(p, "Atlas", "").await.unwrap();
+    meeting(p, "m-1").await;
+    let eid = ledger::insert_machine_entry(p, &t.id, "m-1", "series", body(&["orig"], &[]))
+        .await
+        .unwrap()
+        .unwrap();
+    ledger::edit_entry(p, &eid, body(&["mine"], &[]))
+        .await
+        .unwrap();
+    sqlx::query("INSERT INTO topic_suggestions (id, topic_id, kind, meeting_id, text, status, created_at) VALUES ('ts-x', ?, 'note', 'm-1', 'extra', 'pending', ?)")
+        .bind(&t.id).bind(NOW).execute(p).await.unwrap();
+    ledger::resolve_suggestion(p, "ts-x", true).await.unwrap();
+    let e = &ledger::entries_for_topic(p, &t.id).await.unwrap()[0];
+    let texts: Vec<_> = e.body.bullets.iter().map(|b| b.text.as_str()).collect();
+    assert_eq!(texts, ["mine", "extra"]);
+    let ai: Vec<_> = e
+        .ai_body
+        .as_ref()
+        .unwrap()
+        .bullets
+        .iter()
+        .map(|b| b.text.as_str())
+        .collect();
+    assert_eq!(ai, ["orig", "extra"]);
+    assert!(e.edited_at.is_some());
+}
