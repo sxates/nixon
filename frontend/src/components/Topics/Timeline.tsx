@@ -34,8 +34,8 @@ export function Timeline({ topicId, entries, onChanged }: TimelineProps) {
       }
       action={
         adding ? null : (
-          <Button size="xs" variant="ghost" onClick={() => setAdding(true)}>
-            <DeckIcon icon={Plus} size={14} />
+          <Button size="xs" variant="dashed" onClick={() => setAdding(true)}>
+            <Plus />
             Add entry
           </Button>
         )

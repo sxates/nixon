@@ -60,9 +60,7 @@ export default function TopicsPage() {
   const [showClosed, setShowClosed] = useState(false);
 
   const { open, closed } = useMemo(() => {
-    const all = [...(data ?? [])].sort((a, b) =>
-      (b.lastActivity ?? '').localeCompare(a.lastActivity ?? ''),
-    );
+    const all = [...(data ?? [])].sort((a, b) => (b.lastActivity ?? '').localeCompare(a.lastActivity ?? ''));
     return {
       open: all.filter((t) => t.status === 'open'),
       closed: all.filter((t) => t.status === 'closed'),
@@ -71,8 +69,8 @@ export default function TopicsPage() {
 
   const openTopic = (id: string) => router.push(`/topics/topic?id=${encodeURIComponent(id)}`);
   const newButton = (
-    <Button onClick={() => setCreating(true)}>
-      <DeckIcon icon={Plus} size={16} />
+    <Button variant="brand" onClick={() => setCreating(true)}>
+      <Plus aria-hidden="true" />
       New topic
     </Button>
   );
@@ -85,36 +83,39 @@ export default function TopicsPage() {
         subtitle="Ongoing subjects that span meetings"
         actions={newButton}
       />
-      <div className={cn('mx-auto w-full pb-10', PAGE_CONTENT_WIDTH, PAGE_GUTTER)}>
-        {loading ? (
-          <PageLoading fill="pane" />
-        ) : error ? (
-          <Callout tone="error">{error}</Callout>
-        ) : open.length === 0 && closed.length === 0 ? (
-          // The header already carries New topic; one call to action is enough.
-          <EmptyState
-            title="No topics yet"
-            body="A topic keeps a running log for one project across its meetings."
-          />
-        ) : (
-          <>
-            <TopicRows topics={open} onOpen={openTopic} />
-            {closed.length > 0 ? (
-              <section className="mt-6">
-                <Button
-                  variant="ghost"
-                  size="xs"
-                  aria-expanded={showClosed}
-                  onClick={() => setShowClosed((v) => !v)}
-                >
-                  <DeckIcon icon={showClosed ? ChevronDown : ChevronRight} size={14} />
-                  {`Closed topics (${closed.length})`}
-                </Button>
-                {showClosed ? <TopicRows topics={closed} onOpen={openTopic} /> : null}
-              </section>
-            ) : null}
-          </>
-        )}
+      {/* Gutter outside the column, as PageHeader does, so rows span the header's width. */}
+      <div className={cn('pb-10', PAGE_GUTTER)}>
+        <div className={cn('mx-auto w-full', PAGE_CONTENT_WIDTH)}>
+          {loading ? (
+            <PageLoading fill="pane" />
+          ) : error ? (
+            <Callout tone="error">{error}</Callout>
+          ) : open.length === 0 && closed.length === 0 ? (
+            // The header already carries New topic; one call to action is enough.
+            <EmptyState
+              title="No topics yet"
+              body="A topic keeps a running log for one project across its meetings."
+            />
+          ) : (
+            <>
+              <TopicRows topics={open} onOpen={openTopic} />
+              {closed.length > 0 ? (
+                <section className="mt-6">
+                  <Button
+                    variant="ghost"
+                    size="xs"
+                    aria-expanded={showClosed}
+                    onClick={() => setShowClosed((v) => !v)}
+                  >
+                    <DeckIcon icon={showClosed ? ChevronDown : ChevronRight} size={14} />
+                    {`Closed topics (${closed.length})`}
+                  </Button>
+                  {showClosed ? <TopicRows topics={closed} onOpen={openTopic} /> : null}
+                </section>
+              ) : null}
+            </>
+          )}
+        </div>
       </div>
       <NewTopicDialog open={creating} onOpenChange={setCreating} />
     </div>

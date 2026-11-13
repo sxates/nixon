@@ -459,3 +459,43 @@ describe('CommandPalette — Ask AI action (specs/0035)', () => {
     expect(screen.getByText('No matching meetings')).toBeInTheDocument();
   });
 });
+
+describe('CommandPalette — topics (specs/0089)', () => {
+  const TOPICS = [
+    { id: 't-old', name: 'Kickoff retro', description: '', status: 'closed', lastActivity: '2026-11-01T10:00:00Z', pendingCount: 0, meetingCount: 1 },
+    { id: 't-1', name: 'Kickoff launch', description: '', status: 'open', lastActivity: '2026-10-01T10:00:00Z', pendingCount: 0, meetingCount: 2 },
+  ];
+  const withTopics = () =>
+    invokeMock.mockImplementation((command: unknown) => {
+      if (command === 'api_get_meetings') return Promise.resolve(MEETINGS);
+      if (command === 'api_list_topics') return Promise.resolve(TOPICS);
+      if (command === 'api_search_meetings') return Promise.resolve(HITS);
+      return Promise.resolve(null);
+    });
+  const headings = () =>
+    Array.from(document.querySelectorAll('[cmdk-group-heading]')).map((el) => el.textContent);
+
+  it('a typed query puts matching topics first, open before closed, and selects the top one', async () => {
+    withTopics();
+    await openPalette();
+    typeQuery('kickoff');
+    await screen.findByText('Kickoff launch');
+    expect(headings()[0]).toBe('Topics');
+    const items = Array.from(document.querySelectorAll('[cmdk-item]')).map((el) => el.textContent);
+    expect(items.slice(0, 2)).toEqual(['Kickoff launch', 'Kickoff retroClosed']);
+    await waitFor(() =>
+      expect(document.querySelector('[cmdk-item][aria-selected="true"]')?.textContent).toBe(
+        'Kickoff launch',
+      ),
+    );
+    fireEvent.click(screen.getByText('Kickoff launch'));
+    expect(pushMock).toHaveBeenCalledWith('/topics/topic?id=t-1');
+  });
+
+  it('with an empty query, Actions stay first and topics follow them', async () => {
+    withTopics();
+    await openPalette();
+    await screen.findByText('Kickoff launch');
+    expect(headings()).toEqual(['Actions', 'Topics', 'Meetings']);
+  });
+});

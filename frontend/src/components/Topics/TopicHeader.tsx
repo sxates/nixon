@@ -128,9 +128,11 @@ export function TopicHeader({ detail, onChanged }: TopicHeaderProps) {
         }
         actions={actions}
       />
-      <div className={cn('mx-auto flex w-full flex-col gap-2', PAGE_CONTENT_WIDTH, PAGE_GUTTER)}>
-        <TopicLinks topicId={topic.id} links={links} meetingCount={meetingCount} onChanged={onChanged} />
-        <TopicDescription topicId={topic.id} description={topic.description} onChanged={onChanged} />
+      <div className={PAGE_GUTTER}>
+        <div className={cn('mx-auto flex w-full flex-col gap-2', PAGE_CONTENT_WIDTH)}>
+          <TopicLinks topicId={topic.id} links={links} meetingCount={meetingCount} onChanged={onChanged} />
+          <TopicDescription topicId={topic.id} description={topic.description} onChanged={onChanged} />
+        </div>
       </div>
       <ConfirmDialog
         open={confirmDelete}

@@ -41,8 +41,10 @@ export function TopicView({ id }: { id: string }) {
             }
           />
         ) : (
-          <div className={cn('mx-auto w-full', PAGE_CONTENT_WIDTH, PAGE_GUTTER)}>
-            <Callout tone="error">{error}</Callout>
+          <div className={PAGE_GUTTER}>
+            <div className={cn('mx-auto w-full', PAGE_CONTENT_WIDTH)}>
+              <Callout tone="error">{error}</Callout>
+            </div>
           </div>
         )}
       </div>
@@ -52,13 +54,15 @@ export function TopicView({ id }: { id: string }) {
   return (
     <div data-testid="topic-scroll" className="h-page animate-fade-in overflow-y-auto bg-background">
       <TopicHeader detail={data} onChanged={refresh} />
-      <div className={cn('mx-auto flex w-full flex-col gap-3 pb-12 pt-6', PAGE_CONTENT_WIDTH, PAGE_GUTTER)}>
-        <div className="grid grid-cols-1 gap-3 min-[900px]:grid-cols-2">
-          <TopicNotesCard key={data.topic.id} topic={data.topic} />
-          <TopicTodosCard topicId={data.topic.id} todos={data.todos} onChanged={refresh} />
+      <div className={cn('pb-12 pt-6', PAGE_GUTTER)}>
+        <div className={cn('mx-auto flex w-full flex-col gap-3', PAGE_CONTENT_WIDTH)}>
+          <div className="grid grid-cols-1 gap-3 min-[900px]:grid-cols-2">
+            <TopicNotesCard key={data.topic.id} topic={data.topic} />
+            <TopicTodosCard topicId={data.topic.id} todos={data.todos} onChanged={refresh} />
+          </div>
+          <SuggestionStrip suggestions={data.suggestions} onChanged={refresh} />
+          <Timeline topicId={data.topic.id} entries={data.entries} onChanged={refresh} />
         </div>
-        <SuggestionStrip suggestions={data.suggestions} onChanged={refresh} />
-        <Timeline topicId={data.topic.id} entries={data.entries} onChanged={refresh} />
       </div>
     </div>
   );
