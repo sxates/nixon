@@ -1,0 +1,762 @@
+[
+ {
+  "name": "named-mention-atlas",
+  "topics": [
+   {
+    "name": "Atlas CRM rebuild",
+    "description": "Replacing the old customer database with a new web app"
+   },
+   {
+    "name": "Q3 hiring",
+    "description": "Hiring two backend engineers"
+   }
+  ],
+  "linked": null,
+  "summary": "Standup. The team covered the sprint board, a flaky test, and a slip in the Atlas CRM rebuild data migration.",
+  "segments": [
+   {
+    "t": 60.0,
+    "speaker": "Dana",
+    "text": "Morning. Quick round, anything blocking?"
+   },
+   {
+    "t": 80.0,
+    "speaker": "Eli",
+    "text": "The nightly build was flaky again, I re-ran it twice."
+   },
+   {
+    "t": 100.0,
+    "speaker": "Priya",
+    "text": "On the Atlas CRM rebuild, the data migration is slipping about a week because the contact export has duplicate rows."
+   },
+   {
+    "t": 120.0,
+    "speaker": "Dana",
+    "text": "Do we know how many duplicates?"
+   },
+   {
+    "t": 140.0,
+    "speaker": "Priya",
+    "text": "Roughly twelve percent of contacts. I will write a dedupe script and share it Thursday."
+   },
+   {
+    "t": 160.0,
+    "speaker": "Eli",
+    "text": "Fine by me. I will pair on the script if you want."
+   },
+   {
+    "t": 180.0,
+    "speaker": "Dana",
+    "text": "Great. Anything else? Lunch order is due at noon."
+   },
+   {
+    "t": 200.0,
+    "speaker": "Eli",
+    "text": "Nothing from me."
+   }
+  ],
+  "expect": {
+   "mentions": [
+    {
+     "topic": "Atlas CRM rebuild",
+     "t_from": 100.0,
+     "t_to": 140.0
+    }
+   ],
+   "revises": [],
+   "prior_decisions": []
+  }
+ },
+ {
+  "name": "paraphrase-mac-app",
+  "topics": [
+   {
+    "name": "Desktop client",
+    "description": "The native macOS application we plan to ship"
+   },
+   {
+    "name": "Q3 hiring",
+    "description": "Hiring two backend engineers"
+   }
+  ],
+  "linked": null,
+  "summary": "Product sync. The team agreed the Mac app needs a signed build before the beta and discussed pricing copy.",
+  "segments": [
+   {
+    "t": 60.0,
+    "speaker": "Dana",
+    "text": "Let us start with the beta checklist."
+   },
+   {
+    "t": 80.0,
+    "speaker": "Eli",
+    "text": "The Mac app still ships unsigned, so testers hit the Gatekeeper warning on first open."
+   },
+   {
+    "t": 100.0,
+    "speaker": "Priya",
+    "text": "I can get the signing certificate sorted this week."
+   },
+   {
+    "t": 120.0,
+    "speaker": "Eli",
+    "text": "Good, then the Mac app beta can go out Friday to the first twenty people."
+   },
+   {
+    "t": 140.0,
+    "speaker": "Dana",
+    "text": "Now pricing copy. The annual plan line reads awkwardly."
+   },
+   {
+    "t": 160.0,
+    "speaker": "Priya",
+    "text": "I will rewrite it and send two options."
+   },
+   {
+    "t": 180.0,
+    "speaker": "Dana",
+    "text": "Perfect, thanks everyone."
+   }
+  ],
+  "expect": {
+   "mentions": [
+    {
+     "topic": "Desktop client",
+     "t_from": 80.0,
+     "t_to": 120.0
+    }
+   ],
+   "revises": [],
+   "prior_decisions": []
+  }
+ },
+ {
+  "name": "paraphrase-login-site",
+  "topics": [
+   {
+    "name": "Customer portal revamp",
+    "description": "Redesign of the self-service site clients log into"
+   },
+   {
+    "name": "Atlas CRM rebuild",
+    "description": "Replacing the old customer database with a new web app"
+   }
+  ],
+  "linked": null,
+  "summary": "Design review. Looked at mockups for the login site clients use and agreed on a simpler navigation.",
+  "segments": [
+   {
+    "t": 60.0,
+    "speaker": "Dana",
+    "text": "Let us walk through the mockups."
+   },
+   {
+    "t": 80.0,
+    "speaker": "Eli",
+    "text": "For the site that clients log into, I cut the menu from nine items down to four."
+   },
+   {
+    "t": 100.0,
+    "speaker": "Priya",
+    "text": "Does that hide invoices? Clients use the invoices page the most."
+   },
+   {
+    "t": 120.0,
+    "speaker": "Eli",
+    "text": "No, invoices stay on the front page. The self-service pages just get a cleaner layout."
+   },
+   {
+    "t": 140.0,
+    "speaker": "Priya",
+    "text": "Then I am happy. Colors next?"
+   },
+   {
+    "t": 160.0,
+    "speaker": "Dana",
+    "text": "Colors are fixed by the brand guide, nothing to decide."
+   },
+   {
+    "t": 180.0,
+    "speaker": "Priya",
+    "text": "Okay, then we are done."
+   }
+  ],
+  "expect": {
+   "mentions": [
+    {
+     "topic": "Customer portal revamp",
+     "t_from": 80.0,
+     "t_to": 120.0
+    }
+   ],
+   "revises": [],
+   "prior_decisions": []
+  }
+ },
+ {
+  "name": "named-mention-among-three",
+  "topics": [
+   {
+    "name": "Atlas CRM rebuild",
+    "description": "Replacing the old customer database with a new web app"
+   },
+   {
+    "name": "Desktop client",
+    "description": "The native macOS application we plan to ship"
+   },
+   {
+    "name": "Q3 hiring",
+    "description": "Hiring two backend engineers"
+   }
+  ],
+  "linked": null,
+  "summary": "Leadership weekly. Budget reviewed; Q3 hiring is on track with two offers out; offsite date set.",
+  "segments": [
+   {
+    "t": 60.0,
+    "speaker": "Dana",
+    "text": "Budget first. We are four percent under plan."
+   },
+   {
+    "t": 80.0,
+    "speaker": "Eli",
+    "text": "Good. Next, recruiting."
+   },
+   {
+    "t": 100.0,
+    "speaker": "Priya",
+    "text": "Q3 hiring: two backend offers are out, one candidate has already accepted."
+   },
+   {
+    "t": 120.0,
+    "speaker": "Eli",
+    "text": "What is the start date?"
+   },
+   {
+    "t": 140.0,
+    "speaker": "Priya",
+    "text": "First of October, so right on schedule."
+   },
+   {
+    "t": 160.0,
+    "speaker": "Dana",
+    "text": "Offsite is the 14th. Please block the day."
+   },
+   {
+    "t": 180.0,
+    "speaker": "Eli",
+    "text": "Done."
+   }
+  ],
+  "expect": {
+   "mentions": [
+    {
+     "topic": "Q3 hiring",
+     "t_from": 100.0,
+     "t_to": 140.0
+    }
+   ],
+   "revises": [],
+   "prior_decisions": []
+  }
+ },
+ {
+  "name": "near-miss-rebuild",
+  "topics": [
+   {
+    "name": "Atlas CRM rebuild",
+    "description": "Replacing the old customer database with a new web app"
+   }
+  ],
+  "linked": null,
+  "summary": "Infra check-in. Rebuilt the staging cluster after a failed upgrade and rotated credentials.",
+  "segments": [
+   {
+    "t": 60.0,
+    "speaker": "Dana",
+    "text": "Staging is back. I had to rebuild the cluster from scratch after the upgrade failed."
+   },
+   {
+    "t": 80.0,
+    "speaker": "Eli",
+    "text": "How long did the rebuild take?"
+   },
+   {
+    "t": 100.0,
+    "speaker": "Dana",
+    "text": "About three hours, mostly waiting on images."
+   },
+   {
+    "t": 120.0,
+    "speaker": "Eli",
+    "text": "Did we lose any data?"
+   },
+   {
+    "t": 140.0,
+    "speaker": "Dana",
+    "text": "No, it only holds synthetic test data."
+   },
+   {
+    "t": 160.0,
+    "speaker": "Eli",
+    "text": "Good. Credentials were rotated this morning too."
+   },
+   {
+    "t": 180.0,
+    "speaker": "Dana",
+    "text": "Yes, new keys are in the vault."
+   }
+  ],
+  "expect": {
+   "mentions": [],
+   "revises": [],
+   "prior_decisions": []
+  }
+ },
+ {
+  "name": "near-miss-hiring-news",
+  "topics": [
+   {
+    "name": "Q3 hiring",
+    "description": "Hiring two backend engineers"
+   }
+  ],
+  "linked": null,
+  "summary": "Coffee chat. Discussed a competitor's announcement and weekend plans.",
+  "segments": [
+   {
+    "t": 60.0,
+    "speaker": "Dana",
+    "text": "Did you see the competitor posted their hiring page and a new logo?"
+   },
+   {
+    "t": 80.0,
+    "speaker": "Eli",
+    "text": "Yes, the logo looks a lot like ours."
+   },
+   {
+    "t": 100.0,
+    "speaker": "Dana",
+    "text": "Funny. Anyway, how was the weekend?"
+   },
+   {
+    "t": 120.0,
+    "speaker": "Eli",
+    "text": "Hiked the ridge trail, very muddy."
+   },
+   {
+    "t": 140.0,
+    "speaker": "Dana",
+    "text": "I stayed in and fixed the bike."
+   },
+   {
+    "t": 160.0,
+    "speaker": "Eli",
+    "text": "Nice. Back to work then."
+   }
+  ],
+  "expect": {
+   "mentions": [],
+   "revises": [],
+   "prior_decisions": []
+  }
+ },
+ {
+  "name": "near-miss-security-deposit",
+  "topics": [
+   {
+    "name": "Vendor security review",
+    "description": "Annual security questionnaire for the payment vendor"
+   }
+  ],
+  "linked": null,
+  "summary": "Office logistics. Security deposit for the new office, badge printers, and parking.",
+  "segments": [
+   {
+    "t": 60.0,
+    "speaker": "Dana",
+    "text": "The landlord wants a security deposit of two months for the new office."
+   },
+   {
+    "t": 80.0,
+    "speaker": "Eli",
+    "text": "Is that negotiable?"
+   },
+   {
+    "t": 100.0,
+    "speaker": "Dana",
+    "text": "They moved to one month after I asked."
+   },
+   {
+    "t": 120.0,
+    "speaker": "Eli",
+    "text": "Great. Badge printers arrive Tuesday, and the front desk security guard needs a list of staff."
+   },
+   {
+    "t": 140.0,
+    "speaker": "Dana",
+    "text": "I will send it. Parking passes are next."
+   },
+   {
+    "t": 160.0,
+    "speaker": "Eli",
+    "text": "Twelve spots, first come first served."
+   },
+   {
+    "t": 180.0,
+    "speaker": "Dana",
+    "text": "Fine."
+   }
+  ],
+  "expect": {
+   "mentions": [],
+   "revises": [],
+   "prior_decisions": []
+  }
+ },
+ {
+  "name": "near-miss-atlas-word",
+  "topics": [
+   {
+    "name": "Atlas CRM rebuild",
+    "description": "Replacing the old customer database with a new web app"
+   },
+   {
+    "name": "Q3 hiring",
+    "description": "Hiring two backend engineers"
+   }
+  ],
+  "linked": null,
+  "summary": "Planning. Reviewed a printed atlas for the sales territories map and trimmed the roadmap.",
+  "segments": [
+   {
+    "t": 60.0,
+    "speaker": "Dana",
+    "text": "For the territories map I borrowed an old atlas from the library."
+   },
+   {
+    "t": 80.0,
+    "speaker": "Eli",
+    "text": "Is it current? Borders change."
+   },
+   {
+    "t": 100.0,
+    "speaker": "Dana",
+    "text": "It is from 2019 but fine for rough regions."
+   },
+   {
+    "t": 120.0,
+    "speaker": "Eli",
+    "text": "We should use it only as a sketch."
+   },
+   {
+    "t": 140.0,
+    "speaker": "Dana",
+    "text": "Agreed. Roadmap is next, we cut two stretch items."
+   },
+   {
+    "t": 160.0,
+    "speaker": "Eli",
+    "text": "Good call."
+   }
+  ],
+  "expect": {
+   "mentions": [],
+   "revises": [],
+   "prior_decisions": []
+  }
+ },
+ {
+  "name": "linked-reverses-database",
+  "topics": [
+   {
+    "name": "Atlas CRM rebuild",
+    "description": "Replacing the old customer database with a new web app"
+   },
+   {
+    "name": "Q3 hiring",
+    "description": "Hiring two backend engineers"
+   }
+  ],
+  "linked": 0,
+  "summary": "Atlas sync. The team decided to retire the old customer database in January instead of keeping it until March.",
+  "segments": [
+   {
+    "t": 60.0,
+    "speaker": "Dana",
+    "text": "Status on Atlas first."
+   },
+   {
+    "t": 80.0,
+    "speaker": "Eli",
+    "text": "The new system has run in parallel for a month with no data drift."
+   },
+   {
+    "t": 100.0,
+    "speaker": "Priya",
+    "text": "Given that, I do not see why we keep the old customer database until March. It costs us every month."
+   },
+   {
+    "t": 120.0,
+    "speaker": "Dana",
+    "text": "Agreed. Let us retire the old database in January, after the year-end report is exported."
+   },
+   {
+    "t": 140.0,
+    "speaker": "Eli",
+    "text": "I will schedule the final export for the second week of December."
+   },
+   {
+    "t": 160.0,
+    "speaker": "Priya",
+    "text": "I will tell finance."
+   },
+   {
+    "t": 180.0,
+    "speaker": "Dana",
+    "text": "Good. That is all."
+   }
+  ],
+  "expect": {
+   "mentions": [
+    {
+     "topic": "Atlas CRM rebuild",
+     "t_from": 100.0,
+     "t_to": 140.0
+    }
+   ],
+   "revises": [
+    "old customer database"
+   ],
+   "prior_decisions": [
+    "Keep the old customer database running until March"
+   ]
+  }
+ },
+ {
+  "name": "linked-reverses-headcount",
+  "topics": [
+   {
+    "name": "Q3 hiring",
+    "description": "Hiring two backend engineers"
+   },
+   {
+    "name": "Atlas CRM rebuild",
+    "description": "Replacing the old customer database with a new web app"
+   }
+  ],
+  "linked": 0,
+  "summary": "Hiring check-in. With one offer declined and budget tight, the team decided to hire one backend engineer instead of two.",
+  "segments": [
+   {
+    "t": 60.0,
+    "speaker": "Dana",
+    "text": "Hiring update."
+   },
+   {
+    "t": 80.0,
+    "speaker": "Eli",
+    "text": "One finalist declined, and the other asked for more than the band allows."
+   },
+   {
+    "t": 100.0,
+    "speaker": "Priya",
+    "text": "Given the budget, let us hire one backend engineer this quarter, not two."
+   },
+   {
+    "t": 120.0,
+    "speaker": "Dana",
+    "text": "Agreed, one backend hire, and we revisit the second role in January."
+   },
+   {
+    "t": 140.0,
+    "speaker": "Eli",
+    "text": "I will pause the second requisition."
+   },
+   {
+    "t": 160.0,
+    "speaker": "Priya",
+    "text": "Thanks."
+   },
+   {
+    "t": 180.0,
+    "speaker": "Dana",
+    "text": "Moving on."
+   }
+  ],
+  "expect": {
+   "mentions": [
+    {
+     "topic": "Q3 hiring",
+     "t_from": 100.0,
+     "t_to": 120.0
+    }
+   ],
+   "revises": [
+    "two backend"
+   ],
+   "prior_decisions": [
+    "Hire two backend engineers by end of Q3"
+   ]
+  }
+ },
+ {
+  "name": "linked-no-discussion",
+  "topics": [
+   {
+    "name": "Desktop client",
+    "description": "The native macOS application we plan to ship"
+   }
+  ],
+  "linked": 0,
+  "summary": "Offsite planning. Chose the venue, catering and the agenda for the team offsite.",
+  "segments": [
+   {
+    "t": 60.0,
+    "speaker": "Dana",
+    "text": "Offsite venue: the lakeside lodge fits thirty people."
+   },
+   {
+    "t": 80.0,
+    "speaker": "Eli",
+    "text": "Catering?"
+   },
+   {
+    "t": 100.0,
+    "speaker": "Dana",
+    "text": "Vegetarian options needed for six people."
+   },
+   {
+    "t": 120.0,
+    "speaker": "Priya",
+    "text": "I will ask the lodge about breakfast too."
+   },
+   {
+    "t": 140.0,
+    "speaker": "Eli",
+    "text": "Agenda draft: strategy morning, workshops after lunch."
+   },
+   {
+    "t": 160.0,
+    "speaker": "Dana",
+    "text": "Looks right. Send it to the group."
+   },
+   {
+    "t": 180.0,
+    "speaker": "Priya",
+    "text": "Will do."
+   }
+  ],
+  "expect": {
+   "mentions": [],
+   "revises": [],
+   "prior_decisions": [
+    "Ship the beta of the Mac app to twenty testers"
+   ]
+  }
+ },
+ {
+  "name": "linked-restates-no-reversal",
+  "topics": [
+   {
+    "name": "Atlas CRM rebuild",
+    "description": "Replacing the old customer database with a new web app"
+   }
+  ],
+  "linked": 0,
+  "summary": "Atlas sync. Confirmed the plan to export contacts weekly; nothing changed.",
+  "segments": [
+   {
+    "t": 60.0,
+    "speaker": "Dana",
+    "text": "Atlas CRM rebuild status: the weekly contact export is running as planned."
+   },
+   {
+    "t": 80.0,
+    "speaker": "Eli",
+    "text": "Great, no changes to the plan from my side."
+   },
+   {
+    "t": 100.0,
+    "speaker": "Priya",
+    "text": "Same here. We keep the weekly export and review the logs on Fridays."
+   },
+   {
+    "t": 120.0,
+    "speaker": "Dana",
+    "text": "Perfect."
+   }
+  ],
+  "expect": {
+   "mentions": [
+    {
+     "topic": "Atlas CRM rebuild",
+     "t_from": 60.0,
+     "t_to": 100.0
+    }
+   ],
+   "revises": [],
+   "prior_decisions": [
+    "Export contacts weekly during the Atlas migration"
+   ]
+  }
+ },
+ {
+  "name": "paraphrase-no-term-overlap",
+  "topics": [
+   {
+    "name": "Desktop client",
+    "description": "The native macOS application we plan to ship"
+   },
+   {
+    "name": "Q3 hiring",
+    "description": "Hiring two backend engineers"
+   }
+  ],
+  "linked": null,
+  "summary": "Retro. The Mac app crashed on wake for two testers; fix is in review. Also trimmed the standup length.",
+  "segments": [
+   {
+    "t": 60.0,
+    "speaker": "Dana",
+    "text": "Retro time. What went badly?"
+   },
+   {
+    "t": 80.0,
+    "speaker": "Eli",
+    "text": "Two testers said the Mac app crashes whenever the laptop wakes from sleep."
+   },
+   {
+    "t": 100.0,
+    "speaker": "Priya",
+    "text": "I reproduced it, the audio session was not being released. The fix is in review."
+   },
+   {
+    "t": 120.0,
+    "speaker": "Eli",
+    "text": "Good. Anything on how we run standups?"
+   },
+   {
+    "t": 140.0,
+    "speaker": "Dana",
+    "text": "They run long. Let us cap them at ten minutes."
+   },
+   {
+    "t": 160.0,
+    "speaker": "Priya",
+    "text": "Agreed."
+   }
+  ],
+  "expect": {
+   "mentions": [
+    {
+     "topic": "Desktop client",
+     "t_from": 80.0,
+     "t_to": 100.0
+    }
+   ],
+   "revises": [],
+   "prior_decisions": []
+  }
+ }
+]
