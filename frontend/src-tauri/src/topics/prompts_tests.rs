@@ -103,6 +103,50 @@ fn mentions_capped_per_topic() {
 }
 
 #[test]
+fn parse_entry_accepts_bare_string_items() {
+    // Small local models (the built-in qwen3.5:2b) ignore the item objects and reply with
+    // plain strings; those used to be dropped, saving an empty entry.
+    let reply = r#"{"bullets":["Maya will reproduce the drift on rev B.","  "],"decisions":["Freeze date is Sept 25."],"revises":[]}"#;
+    let p = parse_entry(reply, &evidence(), &[]).unwrap();
+    let bullets: Vec<_> = p
+        .body
+        .bullets
+        .iter()
+        .map(|b| (b.text.as_str(), b.t))
+        .collect();
+    assert_eq!(
+        bullets,
+        vec![("Maya will reproduce the drift on rev B.", None)]
+    );
+    let decisions: Vec<_> = p
+        .body
+        .decisions
+        .iter()
+        .map(|d| (d.text.as_str(), d.t))
+        .collect();
+    assert_eq!(decisions, vec![("Freeze date is Sept 25.", None)]);
+}
+
+#[test]
+fn parse_entry_caps_bullets_and_decisions() {
+    let many = |n: usize| {
+        (0..n)
+            .map(|i| format!("\"point {i}\""))
+            .collect::<Vec<_>>()
+            .join(",")
+    };
+    let reply = format!(
+        r#"{{"bullets":[{}],"decisions":[{}],"revises":[]}}"#,
+        many(12),
+        many(9)
+    );
+    let p = parse_entry(&reply, &evidence(), &[]).unwrap();
+    assert_eq!(p.body.bullets.len(), 8);
+    assert_eq!(p.body.bullets[7].text, "point 7");
+    assert_eq!(p.body.decisions.len(), 5);
+}
+
+#[test]
 fn parse_tolerates_prose_around_json() {
     let ts = [topic("t1", "Atlas", "")];
     let wrapped = "<think>maybe {\"x\":1}</think>Sure! Here you go:\n```json\n{\"mentions\":[{\"topic\":1,\"summary\":\"s\",\"t\":\"00:10\"}]}\n```\nHope that helps.";
@@ -134,6 +178,7 @@ fn prompts_contain_pinned_instructions() {
     for s in [
         "Write only about the topic; ignore everything else in the meeting.",
         "If the meeting did not discuss the topic, return empty bullets and decisions.",
+        "Write at most 8 bullets and at most 5 decisions, each different from the others; never repeat a point.",
         "Only list a revision when the meeting clearly changes a numbered decision.",
         "Cite times only as they appear in square brackets in the transcript",
     ] {

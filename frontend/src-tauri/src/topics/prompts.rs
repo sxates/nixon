@@ -10,7 +10,7 @@ use serde_json::{json, Value};
 
 use super::evidence::Evidence;
 use super::ledger::OpenDecision;
-use super::limits::MAX_MENTIONS_PER_TOPIC;
+use super::limits::{ENTRY_MAX_BULLETS, ENTRY_MAX_DECISIONS, MAX_MENTIONS_PER_TOPIC};
 use super::model::{Bullet, Decision, EntryBody, Topic};
 
 const CITE_RULE: &str = "Cite times only as they appear in square brackets in the transcript, \
@@ -93,6 +93,8 @@ pub fn entry_prompt(
 write that meeting's entry for the topic.\n\
 Write only about the topic; ignore everything else in the meeting.\n\
 If the meeting did not discuss the topic, return empty bullets and decisions.\n\
+Write at most {ENTRY_MAX_BULLETS} bullets and at most {ENTRY_MAX_DECISIONS} decisions, each \
+different from the others; never repeat a point.\n\
 Bullets are short factual points (what was said, learned or done). Decisions are things the \
 meeting actually decided. Do not invent anything the meeting did not say.\n\
 Only list a revision when the meeting clearly changes a numbered decision. A revision names \
@@ -175,6 +177,19 @@ fn str_field(v: &Value, key: &str) -> Option<String> {
     (!s.is_empty()).then(|| s.to_string())
 }
 
+/// A bullet's or decision's text: the `text` field, or the item itself when a small model
+/// replies with bare strings instead of objects (the built-in qwen3.5:2b does). A bare
+/// string carries no time.
+fn item_text(v: &Value) -> Option<String> {
+    match v.as_str() {
+        Some(s) => {
+            let s = s.trim();
+            (!s.is_empty()).then(|| s.to_string())
+        }
+        None => str_field(v, "text"),
+    }
+}
+
 fn cited_time(v: &Value, evidence: &Evidence) -> Option<f64> {
     evidence.resolve(v.get("t")?.as_str()?)
 }
@@ -198,20 +213,22 @@ pub fn parse_entry(
         .iter()
         .filter_map(|b| {
             Some(Bullet {
-                text: str_field(b, "text")?,
+                text: item_text(b)?,
                 t: cited_time(b, evidence),
             })
         })
+        .take(ENTRY_MAX_BULLETS)
         .collect();
     let decs = items(&root, "decisions")
         .iter()
         .filter_map(|d| {
             Some(Decision {
                 id: String::new(),
-                text: str_field(d, "text")?,
+                text: item_text(d)?,
                 t: cited_time(d, evidence),
             })
         })
+        .take(ENTRY_MAX_DECISIONS)
         .collect();
     let revisions = items(&root, "revises")
         .iter()

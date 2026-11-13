@@ -6,6 +6,10 @@ pub const EVIDENCE_CHAR_BUDGET: usize = 24_000;
 pub const BLOCK_SECONDS: f64 = 30.0;
 /// Most open decisions shown to the revision detector per topic.
 pub const OPEN_DECISIONS_CAP: usize = 30;
+/// Most bullets and decisions in one meeting's entry. The cap is in the prompt too: without
+/// it the built-in 2B model repeats one bullet until it runs out of tokens on a long meeting.
+pub const ENTRY_MAX_BULLETS: usize = 8;
+pub const ENTRY_MAX_DECISIONS: usize = 5;
 /// Most open topics considered by one mention scan.
 pub const MENTION_TOPICS_CAP: usize = 20;
 /// Most mention suggestions kept per topic per meeting.
