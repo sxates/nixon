@@ -48,6 +48,8 @@ pub struct TodoRow {
     pub source_count: i64,
     pub latest_source_at: Option<String>,
     pub latest_context: Option<String>,
+    /// `'yellow' | 'green'`, or `None` (To-do list highlight, ⌘4 / ⌘5).
+    pub highlight: Option<String>,
 }
 
 #[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
@@ -138,7 +140,8 @@ impl ActionItemTodoRepository {
              (SELECT COUNT(*) FROM ({SOURCE_IDS}) WHERE meeting_id IS NOT NULL) AS source_count, \
              lm.created_at AS latest_source_at, \
              (SELECT s.context FROM action_item_sources s \
-               WHERE s.action_item_id = ai.id AND s.meeting_id = lm.id) AS latest_context \
+               WHERE s.action_item_id = ai.id AND s.meeting_id = lm.id) AS latest_context, \
+             ai.highlight \
              FROM action_items ai \
              LEFT JOIN meetings m ON m.id = ai.meeting_id {} \
              WHERE {filter} ORDER BY {order}",
@@ -242,6 +245,26 @@ impl ActionItemTodoRepository {
                 .bind(id)
                 .execute(pool)
                 .await?;
+        Ok(res.rows_affected() > 0)
+    }
+
+    /// Set (`'yellow'` / `'green'`) or clear (`None`) an item's highlight. Not a content
+    /// edit: `user_edited` and `updated_at` are left alone. Any other colour is an error.
+    pub async fn set_highlight(
+        pool: &SqlitePool,
+        id: &str,
+        highlight: Option<&str>,
+    ) -> Result<bool, SqlxError> {
+        if let Some(h) = highlight {
+            if h != "yellow" && h != "green" {
+                return Err(SqlxError::Protocol(format!("unknown highlight '{h}'")));
+            }
+        }
+        let res = sqlx::query("UPDATE action_items SET highlight = ? WHERE id = ?")
+            .bind(highlight)
+            .bind(id)
+            .execute(pool)
+            .await?;
         Ok(res.rows_affected() > 0)
     }
 

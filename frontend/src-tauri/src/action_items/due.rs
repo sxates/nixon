@@ -31,8 +31,10 @@ const MONTHS: [(&str, &str); 12] = [
 ];
 
 /// Resolves the text inside a due-date parenthesis (trimmed, case-insensitive). The same
-/// weekday as `today` means today; `next week` is the Monday after `today`; a month-day
-/// (US order, `M/D`) before `today` rolls to next year. Anything else is `None`.
+/// weekday as `today` means today; `this <weekday>` is the bare weekday; `next <weekday>`
+/// is that weekday in the next Monday-start week; `next week` is the Monday after `today`;
+/// a month-day (US order, `M/D`) before `today` rolls to next year. Anything else is
+/// `None`.
 pub fn resolve_due_phrase(phrase: &str, today: NaiveDate) -> Option<NaiveDate> {
     let lower = phrase.trim().to_lowercase();
     let words: Vec<&str> = lower.split_whitespace().collect();
@@ -48,13 +50,23 @@ pub fn resolve_due_phrase(phrase: &str, today: NaiveDate) -> Option<NaiveDate> {
         _ => {}
     }
 
+    // `this <weekday>` = the bare weekday; `next <weekday>` = that weekday in the next
+    // (Monday-start) calendar week.
+    let (which, wd_text) = match words.as_slice() {
+        [q @ ("this" | "next"), w] => (Some(*q), *w),
+        _ => (None, norm.as_str()),
+    };
     if let Some((_, _, wd)) = WEEKDAYS
         .iter()
-        .find(|(full, abbr, _)| norm == *full || norm == *abbr)
+        .find(|(full, abbr, _)| wd_text == *full || wd_text == *abbr)
     {
-        let ahead = (i64::from(wd.num_days_from_monday())
-            - i64::from(today.weekday().num_days_from_monday()))
-        .rem_euclid(7);
+        let wd = i64::from(wd.num_days_from_monday());
+        let now = i64::from(today.weekday().num_days_from_monday());
+        let ahead = if which == Some("next") {
+            7 - now + wd
+        } else {
+            (wd - now).rem_euclid(7)
+        };
         return today.checked_add_signed(Duration::days(ahead));
     }
 

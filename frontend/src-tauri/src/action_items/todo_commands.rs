@@ -101,6 +101,24 @@ pub async fn api_set_action_item_notes<R: Runtime>(
 }
 
 #[tauri::command]
+pub async fn api_set_action_item_highlight<R: Runtime>(
+    app: AppHandle<R>,
+    id: String,
+    highlight: Option<String>,
+) -> Result<(), String> {
+    let state = app.state::<AppState>();
+    let pool = state.db_manager.pool();
+    if !Todo::set_highlight(pool, &id, highlight.as_deref())
+        .await
+        .map_err(|e| format!("Failed to save the highlight: {e}"))?
+    {
+        return Err(GONE.to_string());
+    }
+    emit_updated(&app, None);
+    Ok(())
+}
+
+#[tauri::command]
 pub async fn api_dismiss_suggestions_older_than<R: Runtime>(
     app: AppHandle<R>,
     days: i64,

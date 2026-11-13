@@ -69,7 +69,9 @@ function monthDay(month: number, day: number, today: Date): string | null {
 
 /**
  * Resolves the text inside a due-date parenthesis (trimmed, case-insensitive). Same
- * weekday as today = today; `next week` = the Monday after today; M/D is US order.
+ * weekday as today = today; `this <weekday>` = the bare weekday; `next <weekday>` = that
+ * weekday in the next Monday-start week; `next week` = the Monday after today; M/D is US
+ * order.
  */
 export function resolveDuePhrase(phrase: string, today: Date): string | null {
   const words = phrase.trim().toLowerCase().split(/\s+/).filter(Boolean);
@@ -79,8 +81,14 @@ export function resolveDuePhrase(phrase: string, today: Date): string | null {
   if (norm === 'tomorrow') return addDays(today, 1);
   if (norm === 'next week') return addDays(today, 7 - mondayIndex(today));
 
-  const wd = WEEKDAYS.findIndex(([full, abbr]) => norm === full || norm === abbr);
+  // `this <weekday>` = bare weekday; `next <weekday>` = that weekday in the next
+  // (Monday-start) calendar week.
+  const qualified = /^(this|next) (\S+)$/.exec(norm);
+  const which = qualified ? qualified[1] : null;
+  const wdText = qualified ? qualified[2] : norm;
+  const wd = WEEKDAYS.findIndex(([full, abbr]) => wdText === full || wdText === abbr);
   if (wd >= 0) {
+    if (which === 'next') return addDays(today, 7 - mondayIndex(today) + wd);
     return addDays(today, (((wd - mondayIndex(today)) % 7) + 7) % 7);
   }
 
@@ -104,6 +112,21 @@ export function resolveDuePhrase(phrase: string, today: Date): string | null {
   }
 
   return null;
+}
+
+const HINT_PREFIXES = ['by ', 'on ', 'due ', 'before '];
+
+/**
+ * Resolves an extraction `due` hint ("by Friday", "(Nov 20)", "2026-07-10") against
+ * `anchor` (the local date the hint was said). Mirrors Rust `resolve_due_hint`.
+ */
+export function resolveDueHint(hint: string, anchor: Date): string | null {
+  let h = hint.trim();
+  if (h.startsWith('(') && h.endsWith(')')) h = h.slice(1, -1).trim();
+  const lower = h.toLowerCase();
+  const prefix = HINT_PREFIXES.find((p) => lower.startsWith(p));
+  if (prefix) h = h.slice(prefix.length).trim();
+  return resolveDuePhrase(h, anchor);
 }
 
 const TRAILING_PAREN = /\s*\*?\s*\(([^)]*)\)\s*$/;

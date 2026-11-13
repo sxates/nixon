@@ -1,5 +1,5 @@
 {
-  "_comment": "Contract shared by Rust (src/action_items/due.rs) and TypeScript (src/lib/todo-parse.ts). 2026-11-12 is a Thursday. Rules: weekday (full or 3-letter, any case) = next occurrence, same weekday means today; today; tomorrow; next week = the Monday after today; Mon D / Month D / M/D (US order) = this year, or next year if before today; YYYY-MM-DD; anything else null. 'titles' is TypeScript only: a trailing parenthesised phrase, optionally preceded by '*', is removed from the title when it resolves.",
+  "_comment": "Contract shared by Rust (src/action_items/due.rs) and TypeScript (src/lib/todo-parse.ts). 2026-11-12 is a Thursday. Rules: weekday (full or 3-letter, any case) = next occurrence, same weekday means today; 'this <weekday>' = the same as the bare weekday; 'next <weekday>' = that weekday in the NEXT Monday-start calendar week (the Monday after today plus the weekday's offset); today; tomorrow; next week = the Monday after today; Mon D / Month D / M/D (US order) = this year, or next year if before today; YYYY-MM-DD; anything else null. 'titles' is TypeScript only: a trailing parenthesised phrase, optionally preceded by '*', is removed from the title when it resolves.",
   "phrases": [
     {
       "text": "Thursday",
@@ -65,6 +65,101 @@
       "text": "wed",
       "today": "2026-11-12",
       "expect": "2026-11-18"
+    },
+    {
+      "text": "this wednesday",
+      "today": "2026-11-12",
+      "expect": "2026-11-18"
+    },
+    {
+      "text": "This Wed",
+      "today": "2026-11-12",
+      "expect": "2026-11-18"
+    },
+    {
+      "text": "this thursday",
+      "today": "2026-11-12",
+      "expect": "2026-11-12"
+    },
+    {
+      "text": "this fri",
+      "today": "2026-11-12",
+      "expect": "2026-11-13"
+    },
+    {
+      "text": "next wednesday",
+      "today": "2026-11-12",
+      "expect": "2026-11-18"
+    },
+    {
+      "text": "Next Wed",
+      "today": "2026-11-12",
+      "expect": "2026-11-18"
+    },
+    {
+      "text": "next thursday",
+      "today": "2026-11-12",
+      "expect": "2026-11-19"
+    },
+    {
+      "text": "next thu",
+      "today": "2026-11-12",
+      "expect": "2026-11-19"
+    },
+    {
+      "text": "next monday",
+      "today": "2026-11-12",
+      "expect": "2026-11-16"
+    },
+    {
+      "text": "next sun",
+      "today": "2026-11-12",
+      "expect": "2026-11-22"
+    },
+    {
+      "text": "next friday",
+      "today": "2026-11-12",
+      "expect": "2026-11-20"
+    },
+    {
+      "text": "next monday",
+      "today": "2026-11-16",
+      "expect": "2026-11-23"
+    },
+    {
+      "text": "next sunday",
+      "today": "2026-11-15",
+      "expect": "2026-11-22"
+    },
+    {
+      "text": "next tue",
+      "today": "2026-12-31",
+      "expect": "2027-01-05"
+    },
+    {
+      "text": "next",
+      "today": "2026-11-12",
+      "expect": null
+    },
+    {
+      "text": "this",
+      "today": "2026-11-12",
+      "expect": null
+    },
+    {
+      "text": "next thing",
+      "today": "2026-11-12",
+      "expect": null
+    },
+    {
+      "text": "this week",
+      "today": "2026-11-12",
+      "expect": null
+    },
+    {
+      "text": "next next friday",
+      "today": "2026-11-12",
+      "expect": null
     },
     {
       "text": "today",
@@ -261,6 +356,12 @@
       "today": "2026-11-12",
       "title": "Check in with team",
       "due": "2026-11-17"
+    },
+    {
+      "input": "Send the deck (next Wed)",
+      "today": "2026-11-12",
+      "title": "Send the deck",
+      "due": "2026-11-18"
     },
     {
       "input": "Do the thing (Thursday)",

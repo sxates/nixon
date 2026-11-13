@@ -96,6 +96,16 @@ function stubInvoke(
     if (cmd === 'api_list_todo_view') return store.rows.filter((r) => inView(r, args.view));
     if (cmd === 'api_inbox_count') return store.rows.filter((r) => inView(r, 'inbox')).length;
     if (cmd === 'api_list_people') return PEOPLE;
+    if (cmd === 'api_list_people_ranked') return [];
+    if (cmd === 'api_set_action_item_highlight') {
+      store.rows.find((x) => x.id === args.id)!.highlight = args.highlight;
+      return null;
+    }
+    if (cmd === 'api_update_action_item') {
+      const r = store.rows.find((x) => x.id === args.id)!;
+      if (args.description !== undefined) r.description = args.description;
+      return r;
+    }
     if (cmd === 'api_triage_action_item') {
       const r = store.rows.find((x) => x.id === args.id)!;
       if (args.action === 'add_to_list') r.triage = 'listed';
@@ -207,7 +217,7 @@ describe('TasksPage (specs/0088 To-do / Inbox / Done)', () => {
     stubInvoke({ rows: [] });
     render(<TasksPage />);
 
-    const input = await screen.findByLabelText('New item — add a to-do…');
+    const input = await screen.findByLabelText('New to-do');
     fireEvent.change(input, { target: { value: 'Send the deck (Nov 20)' } });
     fireEvent.submit(input);
 
@@ -301,19 +311,147 @@ describe('TasksPage (specs/0088 To-do / Inbox / Done)', () => {
       screen.getAllByRole('button', { name: /^(First|Second) item$/ }).map((b) => b.textContent);
     expect(order()).toEqual(['First item', 'Second item']);
 
-    fireEvent.dragStart(screen.getByText('Second item'));
-    fireEvent.dragOver(screen.getByText('First item'));
-    fireEvent.drop(screen.getByText('First item'));
+    // Pointer-driven, not HTML5 drag: a native drag session also reaches the window's
+    // file-drop handler and raised the import overlay.
+    const [, secondGrip] = screen.getAllByRole('button', { name: 'Drag to reorder' });
+    const firstRow = screen.getByText('First item');
+    const original = document.elementFromPoint;
+    document.elementFromPoint = () => firstRow;
+    try {
+      fireEvent.pointerDown(secondGrip!, { button: 0, pointerId: 1 });
+      fireEvent.pointerMove(secondGrip!, { pointerId: 1, clientX: 5, clientY: 5 });
+      fireEvent.pointerUp(secondGrip!, { pointerId: 1, clientX: 5, clientY: 5 });
+    } finally {
+      document.elementFromPoint = original;
+    }
 
     await waitFor(() => expect(order()).toEqual(['Second item', 'First item']));
     expect(callsTo('api_reorder_action_items').at(-1)![1]).toEqual({ orderedIds: ['b', 'a'] });
+    expect(document.querySelector('[draggable="true"]')).toBeNull();
   });
 
-  it('opens an item from its title', async () => {
+  it('ArrowUp on a grip moves that row up one place', async () => {
+    stubInvoke({
+      rows: [
+        todoRow({ id: 'a', description: 'First item', sortOrder: 0 }),
+        todoRow({ id: 'b', description: 'Second item', sortOrder: 1 }),
+      ],
+    });
+    render(<TasksPage />);
+    await screen.findByText('First item');
+    const [, secondGrip] = screen.getAllByRole('button', { name: 'Drag to reorder' });
+    fireEvent.keyDown(secondGrip!, { key: 'ArrowUp' });
+    await waitFor(() =>
+      expect(callsTo('api_reorder_action_items').at(-1)![1]).toEqual({ orderedIds: ['b', 'a'] }),
+    );
+  });
+
+  it('opens an item from its chevron, not its title', async () => {
     stubInvoke({ rows: [todoRow({ id: 'a', description: 'Send the deck' })] });
     render(<TasksPage />);
     fireEvent.click(await screen.findByRole('button', { name: 'Send the deck' }));
+    expect(pushMock).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Open details' }));
     expect(pushMock).toHaveBeenCalledWith('/tasks/item?id=a');
+  });
+
+  it('first click selects, second click edits, Enter saves and keeps the selection', async () => {
+    stubInvoke({ rows: [todoRow({ id: 'a', description: 'Send the deck' })] });
+    render(<TasksPage />);
+    const title = await screen.findByRole('button', { name: 'Send the deck' });
+    fireEvent.click(title);
+    expect(screen.getByRole('option')).toHaveAttribute('aria-selected', 'true');
+    expect(screen.queryByLabelText('Edit to-do')).toBeNull();
+
+    fireEvent.click(title);
+    const field = await screen.findByLabelText('Edit to-do');
+    fireEvent.change(field, { target: { value: 'Send the final deck' } });
+    fireEvent.keyDown(field, { key: 'Enter' });
+
+    await waitFor(() =>
+      expect(callsTo('api_update_action_item').at(-1)![1]).toMatchObject({
+        id: 'a',
+        description: 'Send the final deck',
+      }),
+    );
+    expect(screen.queryByLabelText('Edit to-do')).toBeNull();
+    expect(screen.getByRole('option')).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('a ticked-off item stays in place until you leave; unticking or ⌘D brings it back', async () => {
+    const store = {
+      rows: [
+        todoRow({ id: 'a', description: 'First item', sortOrder: 0 }),
+        todoRow({ id: 'b', description: 'Second item', sortOrder: 1 }),
+      ],
+    };
+    stubInvoke(store);
+    render(<TasksPage />);
+    await screen.findByText('First item');
+    const titles = () => screen.getAllByRole('option').map((o) => o.textContent);
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Mark "First item" as completed' }));
+    await waitFor(() => expect(callsTo('api_set_action_item_status').length).toBe(1));
+    // Still listed, in its place, now ticked.
+    await waitFor(() =>
+      expect(screen.getByRole('checkbox', { name: 'Mark "First item" as open' })).toBeChecked(),
+    );
+    expect(titles()[0]).toContain('First item');
+
+    // Ticking selected the row; ⌘D on it toggles it back to open.
+    expect(screen.getAllByRole('option')[0]).toHaveAttribute('aria-selected', 'true');
+    fireEvent.keyDown(screen.getByRole('listbox', { name: 'To-do list' }), { key: 'd', metaKey: true });
+    await waitFor(() =>
+      expect(callsTo('api_set_action_item_status').at(-1)![1]).toMatchObject({ id: 'a', status: 'open' }),
+    );
+    expect(screen.getByRole('checkbox', { name: 'Mark "First item" as completed' })).not.toBeChecked();
+  });
+
+  it('a click outside the list releases the selection', async () => {
+    stubInvoke({ rows: [todoRow({ id: 'a', description: 'Send the deck' })] });
+    render(<TasksPage />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Send the deck' }));
+    expect(screen.getByRole('option')).toHaveAttribute('aria-selected', 'true');
+    fireEvent.pointerDown(document.body);
+    expect(screen.getByRole('option')).toHaveAttribute('aria-selected', 'false');
+  });
+
+  it('keyboard: arrows select, Space edits, ⌘1 moves to the top, ⌘4 highlights', async () => {
+    stubInvoke({
+      rows: [
+        todoRow({ id: 'a', description: 'First item', sortOrder: 0 }),
+        todoRow({ id: 'b', description: 'Second item', sortOrder: 1 }),
+        todoRow({ id: 'c', description: 'Third item', sortOrder: 2 }),
+      ],
+    });
+    render(<TasksPage />);
+    await screen.findByText('First item');
+    const list = screen.getByRole('listbox', { name: 'To-do list' });
+    const selected = () =>
+      screen.getAllByRole('option').find((o) => o.getAttribute('aria-selected') === 'true')
+        ?.textContent;
+
+    fireEvent.keyDown(list, { key: 'ArrowDown' });
+    fireEvent.keyDown(list, { key: 'ArrowDown' });
+    fireEvent.keyDown(list, { key: 'ArrowDown' });
+    expect(selected()).toContain('Third item');
+
+    fireEvent.keyDown(list, { key: '1', metaKey: true });
+    await waitFor(() =>
+      expect(callsTo('api_reorder_action_items').at(-1)![1]).toEqual({ orderedIds: ['c', 'a', 'b'] }),
+    );
+
+    fireEvent.keyDown(list, { key: '4', metaKey: true });
+    await waitFor(() =>
+      expect(callsTo('api_set_action_item_highlight').at(-1)![1]).toEqual({ id: 'c', highlight: 'yellow' }),
+    );
+    fireEvent.keyDown(list, { key: '4', metaKey: true });
+    await waitFor(() =>
+      expect(callsTo('api_set_action_item_highlight').at(-1)![1]).toEqual({ id: 'c', highlight: null }),
+    );
+
+    fireEvent.keyDown(list, { key: ' ' });
+    expect(await screen.findByLabelText('Edit to-do')).toBeInTheDocument();
   });
 
   it('assigning an inbox suggestion to someone else updates it and the row leaves', async () => {

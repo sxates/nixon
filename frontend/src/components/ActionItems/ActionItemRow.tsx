@@ -207,6 +207,12 @@ export function ActionItemRow({
           {adoptedFrom && (
             <span className="text-caption text-muted-foreground">adopted from {adoptedFrom}</span>
           )}
+          {/* On a meeting page, say where your own items went: they are on your To-do list. */}
+          {triageHandler && item.triage === 'listed' && !dismissed && (
+            <span className="u-section-label-sm rounded-sm bg-brand-wash px-1.5 py-px text-brand">
+              Added To-Do
+            </span>
+          )}
           {meetingChip}
           {triageHandler && suggestedInline && (
             <>

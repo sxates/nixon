@@ -206,6 +206,8 @@
       sourceCount: 0,
       latestSourceAt: null,
       latestContext: null,
+      // One highlighted row so the To-do shot shows the ⌘4 marker.
+      highlight: 'yellow',
     });
     TODO_STORE = rows;
     return rows;
@@ -555,6 +557,11 @@
     api_set_action_item_notes: ({ id, markdown }) => {
       const r = todoById(id);
       if (r) r.notesMarkdown = markdown || null;
+      return null;
+    },
+    api_set_action_item_highlight: ({ id, highlight }) => {
+      const r = todoById(id);
+      if (r) r.highlight = highlight || null;
       return null;
     },
     api_dismiss_suggestions_older_than: ({ days }) => {

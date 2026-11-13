@@ -21,6 +21,8 @@ import { Button } from '@/components/ui/button';
 import { Callout } from '@/components/ui/callout';
 import { Checkbox } from '@/components/ui/checkbox';
 import { EmptyState, PageLoading } from '@/components/ui/empty-state';
+import { Panel } from '@/components/ui/panel';
+import { avatarColorClass } from '@/lib/avatar-colors';
 import { ListRow } from '@/components/ui/list-row';
 import { PageHeader } from '@/components/ui/page-header';
 import { Textarea } from '@/components/ui/textarea';
@@ -265,22 +267,9 @@ export function ItemDetail({ id }: { id: string }) {
         Adopt
       </Button>
     );
-  } else if (completed) {
-    actions = (
-      <Button size="sm" variant="outline" onClick={() => void setItemStatus(item, 'open')}>
-        Reopen
-      </Button>
-    );
-  } else {
-    actions = (
-      <Checkbox
-        checked={false}
-        label="Complete"
-        aria-label={`Mark "${displayTitle}" as completed`}
-        onCheckedChange={() => void setItemStatus(item, 'completed')}
-      />
-    );
   }
+  // A listed item is yours to tick off: the checkbox sits beside the title, as on the list.
+  const listed = !dismissed && item.triage === 'listed';
 
   return (
     <div className="flex h-page animate-fade-in flex-col bg-background">
@@ -289,24 +278,40 @@ export function ItemDetail({ id }: { id: string }) {
         title="To-do"
         back={{ label: 'To-do', onClick: () => router.push('/tasks') }}
       />
-      <div className={cn('flex-1 overflow-y-auto pb-12', PAGE_GUTTER)}>
+      {/* pt-1: the scroll box clips overflow, and the title's focus ring sits outside it. */}
+      <div className={cn('flex-1 overflow-y-auto pb-12 pt-1', PAGE_GUTTER)}>
         <div className={cn('mx-auto flex w-full flex-col gap-6', PAGE_CONTENT_WIDTH)}>
           <div className="flex flex-col gap-3">
-            <MentionInput
-              value={item.description}
-              onSubmit={(v) => void finishTitle(v)}
-              onCancel={() => setTitleReset((n) => n + 1)}
-              resetKey={titleReset}
-              submitOnBlur
-              multiline
-              ariaLabel="To-do title"
-              placeholder="Title"
-              variant="bare"
-              size="title"
-              className={cn('-mx-1', completed && 'text-muted-foreground line-through')}
-            />
-            <div className="flex flex-wrap items-center gap-3">
-              <DueDateControl item={item} onSetDueDate={setDueDate} />
+            <div className="flex items-start gap-3">
+              {listed && (
+                <Checkbox
+                  checked={completed}
+                  aria-label={
+                    completed ? `Mark "${displayTitle}" as open` : `Mark "${displayTitle}" as completed`
+                  }
+                  onCheckedChange={(next) => void setItemStatus(item, next ? 'completed' : 'open')}
+                  className="mt-2.5 shrink-0"
+                />
+              )}
+              <div className="min-w-0 flex-1">
+                <MentionInput
+                  value={item.description}
+                  onSubmit={(v) => void finishTitle(v)}
+                  onCancel={() => setTitleReset((n) => n + 1)}
+                  resetKey={titleReset}
+                  submitOnBlur
+                  multiline
+                  ariaLabel="To-do title"
+                  placeholder="Title"
+                  variant="bare"
+                  size="title"
+                  className={cn('-mx-1', completed && 'text-muted-foreground line-through')}
+                />
+              </div>
+            </div>
+            <div className={cn('flex flex-wrap items-center gap-3', listed && 'pl-7')}>
+              {/* -ml-1 cancels the control's hover padding so its text lines up with the title's. */}
+              <DueDateControl item={item} onSetDueDate={setDueDate} size="body" className="-ml-1" />
               {actions}
             </div>
           </div>
@@ -337,14 +342,22 @@ export function ItemDetail({ id }: { id: string }) {
             {sources.length === 0 ? (
               <p className="text-sm text-muted-foreground">Added by hand, not from a meeting.</p>
             ) : (
-              <div className="flex flex-col">
+              // Styled as the Meetings list: a panel of ruled rows, each with the meeting's spine.
+              <Panel className="overflow-hidden p-0 [&>*:last-child]:border-b-0">
                 {sources.map((s) => (
                   <ListRow
                     key={s.meetingId}
+                    ruled
+                    lead={
+                      <span
+                        className={cn('block h-4 w-[3px] flex-none', avatarColorClass(s.meetingId))}
+                        aria-hidden="true"
+                      />
+                    }
                     title={s.meetingTitle ?? 'Untitled meeting'}
                     meta={s.context ?? undefined}
                     trailing={
-                      <span className="text-caption text-muted-foreground">
+                      <span className="u-row-meta tabular-nums">
                         {formatMeetingDate(s.meetingCreatedAt)}
                       </span>
                     }
@@ -352,7 +365,7 @@ export function ItemDetail({ id }: { id: string }) {
                     onClick={() => router.push(`/meeting-details?id=${s.meetingId}`)}
                   />
                 ))}
-              </div>
+              </Panel>
             )}
           </section>
         </div>

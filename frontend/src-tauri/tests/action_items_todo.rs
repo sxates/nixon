@@ -576,3 +576,26 @@ async fn tracked_for_merge_orders_groups_strips_tokens_and_windows_completed() {
     assert_eq!(got[0].description, "Check in with Sam");
     assert_eq!(got[0].meeting_id.as_deref(), Some("m1"));
 }
+
+#[tokio::test]
+async fn highlight_round_trips_on_the_list_view_and_rejects_unknown_colours() {
+    let (_d, db) = fresh_db().await;
+    let pool = db.pool();
+    let item = ActionItemsRepository::create(pool, None, &cand("typed"), "manual", "typed")
+        .await
+        .unwrap();
+    let highlight = |rows: Vec<app_lib::database::repositories::action_item_todo::TodoRow>| {
+        rows.into_iter().find(|r| r.item.id == item.id).unwrap().highlight
+    };
+
+    assert!(Todo::set_highlight(pool, &item.id, Some("yellow")).await.unwrap());
+    assert_eq!(highlight(Todo::list_view(pool, TodoView::List).await.unwrap()), Some("yellow".into()));
+    // A highlight is not a content edit: re-extraction protection stays as it was.
+    let after = ActionItemsRepository::get(pool, &item.id).await.unwrap().unwrap();
+    assert_eq!(after.updated_at, item.updated_at);
+
+    assert!(Todo::set_highlight(pool, &item.id, Some("purple")).await.is_err());
+    assert!(Todo::set_highlight(pool, &item.id, None).await.unwrap());
+    assert_eq!(highlight(Todo::list_view(pool, TodoView::List).await.unwrap()), None);
+    assert!(!Todo::set_highlight(pool, "ai-missing", None).await.unwrap());
+}

@@ -413,6 +413,7 @@ pub fn invoke_handler() -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Sen
         action_items::todo_commands::api_triage_action_item,
         action_items::todo_commands::api_get_action_item_detail,
         action_items::todo_commands::api_set_action_item_notes,
+        action_items::todo_commands::api_set_action_item_highlight,
         action_items::todo_commands::api_dismiss_suggestions_older_than,
         // Background LLM activity indicator (specs/0052)
         llm_activity::commands::api_llm_activity_snapshot,

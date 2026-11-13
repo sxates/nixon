@@ -343,13 +343,35 @@ fn build_system_prompt(roster: &[MeetingParticipant], owner: &OwnerIdentity) -> 
 /// pay nothing. Descriptions are not filtered: the numbering must match what
 /// `merge::route_candidates` indexes. The closing line restates the output
 /// contract because trailing instructions are the ones small models obey best.
+/// Marker the quick-add dialog writes into My Notes for a to-do it already created
+/// (`frontend/src/lib/notes-append.ts` `TODO_NOTE_PREFIX`).
+const TODO_NOTE_PREFIX: &str = "☐ To-do:";
+
+/// The notes without quick-add marker lines (optionally list-bulleted): those to-dos exist
+/// already, so they must not come back as suggestions.
+fn without_todo_lines(notes: &str) -> String {
+    notes
+        .lines()
+        .filter(|line| {
+            let t = line.trim_start();
+            let t = t
+                .strip_prefix("- ")
+                .or_else(|| t.strip_prefix("* "))
+                .unwrap_or(t);
+            !t.starts_with(TODO_NOTE_PREFIX)
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 fn build_user_prompt(
     summary_markdown: &str,
     user_notes: Option<&str>,
     tracked: &[TrackedItem],
 ) -> String {
     let mut prompt = format!("MEETING SUMMARY:\n\n{summary_markdown}");
-    if let Some(notes) = user_notes.map(str::trim).filter(|n| !n.is_empty()) {
+    let notes = user_notes.map(without_todo_lines);
+    if let Some(notes) = notes.as_deref().map(str::trim).filter(|n| !n.is_empty()) {
         prompt.push_str(&format!("\n\nMEETING OWNER'S NOTES:\n\n{notes}"));
     }
     if !tracked.is_empty() {
@@ -774,6 +796,17 @@ mod tests {
         assert!(!without.contains("MEETING OWNER'S NOTES"));
         let blank = build_user_prompt("## Summary", Some("   "), &[]);
         assert!(!blank.contains("MEETING OWNER'S NOTES"));
+    }
+
+    #[test]
+    fn user_prompt_drops_quick_add_todo_lines_from_notes() {
+        let notes = "remember the deck\n☐ To-do: Send Maya the numbers (due Friday)\n- ☐ To-do: Call Sam\nship it";
+        let prompt = build_user_prompt("## Summary", Some(notes), &[]);
+        assert!(prompt.contains("remember the deck\nship it"));
+        assert!(!prompt.contains("To-do:"));
+        // Notes that were only marker lines leave no notes section.
+        let only = build_user_prompt("## Summary", Some("☐ To-do: Call Sam"), &[]);
+        assert!(!only.contains("MEETING OWNER'S NOTES"));
     }
 
     fn tracked_item(id: &str, meeting: &str, text: &str) -> TrackedItem {

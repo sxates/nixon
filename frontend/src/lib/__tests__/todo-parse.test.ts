@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import fixture from '../__fixtures__/due-dates.json';
 import {
   parseTodoText,
+  resolveDueHint,
   resolveDuePhrase,
   serializeMentions,
   deserializeMentions,
@@ -20,6 +21,23 @@ describe('resolveDuePhrase (shared fixture)', () => {
       expect(resolveDuePhrase(c.text, day(c.today))).toBe(c.expect);
     });
   }
+});
+
+describe('resolveDueHint (mirrors Rust resolve_due_hint)', () => {
+  const a = day('2026-11-12');
+  it('strips by / on / due / before and parens', () => {
+    expect(resolveDueHint('by Friday', a)).toBe('2026-11-13');
+    expect(resolveDueHint('(on tue)', a)).toBe('2026-11-17');
+    expect(resolveDueHint('Due 2026-07-10', a)).toBe('2026-07-10');
+    expect(resolveDueHint('before Nov 20', a)).toBe('2026-11-20');
+    expect(resolveDueHint('By next Wednesday', a)).toBe('2026-11-18');
+    expect(resolveDueHint('this Wednesday', a)).toBe('2026-11-18');
+  });
+  it('null for anything the phrase resolver rejects', () => {
+    expect(resolveDueHint('by end of Q3', a)).toBeNull();
+    expect(resolveDueHint('before freeze', a)).toBeNull();
+    expect(resolveDueHint('  ', a)).toBeNull();
+  });
 });
 
 describe('parseTodoText (shared fixture)', () => {

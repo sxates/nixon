@@ -23,12 +23,15 @@ interface AddActionItemRowProps {
   /** Create handler. Return `false` (or throw) to signal failure and keep the draft. */
   onAdd: (description: string, dueDate?: string) => boolean | void | Promise<boolean | void>;
   className?: string;
+  /** Accessible name for the field (⌘T focuses the To-do page's by this label). */
+  ariaLabel?: string;
 }
 
 export function AddActionItemRow({
   placeholder = 'Add an action item…',
   onAdd,
   className,
+  ariaLabel,
 }: AddActionItemRowProps) {
   const [draft, setDraft] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -62,6 +65,7 @@ export function AddActionItemRow({
         onChange={setDraft}
         onSubmit={(v) => void submit(v)}
         placeholder={placeholder}
+        ariaLabel={ariaLabel}
         className="h-8 text-sm"
       />
       <Button

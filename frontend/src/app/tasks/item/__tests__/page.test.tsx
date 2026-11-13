@@ -177,7 +177,8 @@ describe('to-do detail page', () => {
 
     stub(detail({ item: item({ status: 'completed' }) }));
     const r4 = render(<TaskItemPage />);
-    await screen.findByRole('button', { name: 'Reopen' });
+    // A completed item shows a ticked checkbox beside the title; unticking reopens it.
+    expect(await screen.findByRole('checkbox', { name: /Mark .* as open/ })).toBeChecked();
     r4.unmount();
 
     stub(detail());

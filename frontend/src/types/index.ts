@@ -341,6 +341,8 @@ export interface TodoRow extends ActionItemWithMeeting {
   sourceCount: number;
   latestSourceAt: string | null;
   latestContext: string | null;
+  /** To-do list highlight (⌘4 / ⌘5); absent on older payloads. */
+  highlight?: 'yellow' | 'green' | null;
 }
 
 /** One meeting that mentions an item (`api_get_action_item_detail`). */
