@@ -754,5 +754,57 @@
         "why": "footer TapeCounter roller digits (specs/0060 Task 3). Moved here in specs/0066: specs/0064 W6 reordered the rail (reel, then counter-over-meter, then title, keys right), so the old box at x=470 sat over \"Deck ready\" while the digits flaked unignored at x=343..434 \u2014 measured, not guessed."
       }
     ]
+  },
+  {
+    "name": "topics",
+    "route": "/topics",
+    "ignore": [
+      {
+        "x": 338,
+        "y": 816,
+        "w": 106,
+        "h": 22,
+        "why": "footer TapeCounter roller digits (specs/0060 Task 3)."
+      }
+    ]
+  },
+  {
+    "name": "topics-empty",
+    "route": "/topics?topics=empty",
+    "ignore": [
+      {
+        "x": 338,
+        "y": 816,
+        "w": 106,
+        "h": 22,
+        "why": "footer TapeCounter roller digits (specs/0060 Task 3)."
+      }
+    ]
+  },
+  {
+    "name": "topic",
+    "route": "/topics/topic?id=topic-atlas",
+    "ignore": [
+      {
+        "x": 338,
+        "y": 816,
+        "w": 106,
+        "h": 22,
+        "why": "footer TapeCounter roller digits (specs/0060 Task 3)."
+      }
+    ]
+  },
+  {
+    "name": "topic-closed",
+    "route": "/topics/topic?id=topic-vendor-eval",
+    "ignore": [
+      {
+        "x": 338,
+        "y": 816,
+        "w": 106,
+        "h": 22,
+        "why": "footer TapeCounter roller digits (specs/0060 Task 3)."
+      }
+    ]
   }
 ]

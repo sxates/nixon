@@ -98,7 +98,7 @@ globalThis.__nixonTopicsMock = function ({ MEETINGS, todoStore }) {
   };
 
   return {
-    api_list_topics: ({ status }) => { tagOne(); return store().topics.filter((t) => !status || t.status === status).map(summary); },
+    api_list_topics: ({ status }) => { tagOne(); if (new URLSearchParams(location.search).get('topics') === 'empty') return []; return store().topics.filter((t) => !status || t.status === status).map(summary); },
     api_get_topic: ({ id }) => {
       tagOne();
       const t = topicOf(id);
