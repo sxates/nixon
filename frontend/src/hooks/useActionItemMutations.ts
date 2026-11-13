@@ -46,7 +46,7 @@ export interface UseActionItemMutationsOptions<T extends ActionItem> {
   /** Runs after an assignee change commits (e.g. re-scope a person-filtered view). */
   onAssigned?: (updated: ActionItem) => void | Promise<void>;
   /** Runs after a manual add commits (e.g. success toast). */
-  onAdded?: (created: ActionItem) => void;
+  onAdded?: (created: ActionItem, tagFailed?: boolean) => void;
   /** Whether a just-created item belongs in the current view (default: always). */
   appendCreated?: (created: ActionItem) => boolean;
 }
@@ -215,6 +215,7 @@ export function useActionItemMutations<T extends ActionItem>({
 
   const add = async (description: string, dueDate?: string, topicId?: string | null): Promise<boolean> => {
     try {
+      let tagFailed = false;
       let created = await invoke<ActionItem>('api_create_action_item', {
         meetingId,
         description,
@@ -227,6 +228,7 @@ export function useActionItemMutations<T extends ActionItem>({
           await setActionItemTopic(created.id, topicId);
           created = { ...created, topicId };
         } catch (err) {
+          tagFailed = true;
           toast.error('Added, but not to the topic', { description: errorDescription(err) });
         }
       }
@@ -234,7 +236,8 @@ export function useActionItemMutations<T extends ActionItem>({
         const row = lift(created);
         setItems((prev) => (prev.some((i) => i.id === row.id) ? prev : [...prev, row]));
       }
-      onAdded?.(created);
+      if (tagFailed) onAdded?.(created, true);
+      else onAdded?.(created);
       return true;
     } catch (err) {
       console.error('Failed to add action item:', err);

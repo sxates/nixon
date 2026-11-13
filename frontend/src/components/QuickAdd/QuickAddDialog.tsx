@@ -103,6 +103,7 @@ export function QuickAddDialog({ open, onOpenChange, liveMeeting }: QuickAddDial
         return;
       }
     }
+    if (tagFailed) return;
     toast.success(meeting ? `To-do added to your list and to “${meeting.title}”` : 'To-do added', {
       action: { label: 'View', onClick: () => router.push('/tasks?tab=todo') },
     });

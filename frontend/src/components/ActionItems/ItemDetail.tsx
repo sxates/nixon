@@ -319,7 +319,10 @@ export function ItemDetail({ id }: { id: string }) {
                 <MentionInput
                   value={item.description}
                   onSubmit={(v) => void finishTitle(v)}
-                  onCancel={() => setTitleReset((n) => n + 1)}
+                  onCancel={() => {
+                    setPickedTopic(null);
+                    setTitleReset((n) => n + 1);
+                  }}
                   resetKey={titleReset}
                   submitOnBlur
                   multiline

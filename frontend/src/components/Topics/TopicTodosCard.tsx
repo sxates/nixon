@@ -13,9 +13,11 @@ import { toast } from 'sonner';
 import { AddActionItemRow } from '@/components/ActionItems/AddActionItemRow';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Panel } from '@/components/ui/panel';
+import { titleSegments } from '@/lib/todo-parse';
 import { setActionItemTopic } from '@/lib/topics';
 import type { ActionItem, TodoRow } from '@/types';
 
+const NO_NAMES = new Map<string, string>();
 const errorText = (err: unknown) => (err instanceof Error ? err.message : String(err));
 
 interface TopicTodosCardProps {
@@ -50,20 +52,26 @@ export function TopicTodosCard({ topicId, todos, onChanged }: TopicTodosCardProp
 
   const add = useCallback(
     async (description: string, dueDate?: string) => {
+      let created: ActionItem;
       try {
-        const created = await invoke<ActionItem>('api_create_action_item', {
+        created = await invoke<ActionItem>('api_create_action_item', {
           meetingId: null,
           description,
           ...(dueDate ? { dueDate } : {}),
         });
-        await setActionItemTopic(created.id, topicId);
-        await onChanged();
-        return true;
       } catch (err) {
         console.error('Failed to add the to-do:', err);
         toast.error('Could not add the item', { description: errorText(err) });
         return false;
       }
+      // The item exists now: a refused tag must not make the owner retry (a duplicate).
+      try {
+        await setActionItemTopic(created.id, topicId);
+      } catch (err) {
+        toast.error('Added, but not to the topic', { description: errorText(err) });
+      }
+      await onChanged();
+      return true;
     },
     [topicId, onChanged],
   );
@@ -88,7 +96,17 @@ export function TopicTodosCard({ topicId, todos, onChanged }: TopicTodosCardProp
                   onCheckedChange={() => void complete(item)}
                   className="mt-0.5"
                 />
-                <span className="min-w-0 text-foreground">{item.description}</span>
+                <span className="min-w-0 text-foreground">
+                  {titleSegments(item.description, NO_NAMES).map((seg, i) =>
+                    seg.kind === 'person' ? (
+                      <span key={i} className="font-medium">
+                        @{seg.name}
+                      </span>
+                    ) : (
+                      <span key={i}>{seg.text}</span>
+                    ),
+                  )}
+                </span>
               </li>
             ))}
           </ul>

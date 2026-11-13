@@ -65,4 +65,37 @@ describe('TopicTodosCard', () => {
       expect.objectContaining({ description: 'Book the kickoff', meetingId: null }),
     );
   });
+
+  it('a refused tag still counts as added: warns, no duplicate-prone error', async () => {
+    const { toast } = await import('sonner');
+    invokeMock.mockImplementation(async (cmd: string) => {
+      if (cmd === 'api_create_action_item') return { id: 'new-1' };
+      if (cmd === 'api_list_people_ranked') return [];
+      if (cmd === 'api_set_action_item_topic') throw new Error('That topic is closed.');
+      return null;
+    });
+    const onChanged = vi.fn();
+    render(<TopicTodosCard topicId="topic-1" todos={[]} onChanged={onChanged} />);
+    const field = screen.getByLabelText('Add an action item to this topic') as HTMLInputElement;
+    fireEvent.change(field, { target: { value: 'Book the kickoff' } });
+    fireEvent.keyDown(field, { key: 'Enter' });
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith('Added, but not to the topic', expect.anything()),
+    );
+    expect(toast.error).not.toHaveBeenCalledWith('Could not add the item', expect.anything());
+    await waitFor(() => expect(field.value).toBe(''));
+    expect(onChanged).toHaveBeenCalled();
+  });
+
+  it('shows a person mention as the plain name', () => {
+    render(
+      <TopicTodosCard
+        topicId="topic-1"
+        todos={[row('a1', 'Ping @[Sam Rivera](person:p-1) about it')]}
+        onChanged={vi.fn()}
+      />,
+    );
+    expect(screen.getByText('@Sam Rivera')).toBeTruthy();
+    expect(screen.queryByText(/person:p-1/)).toBeNull();
+  });
 });

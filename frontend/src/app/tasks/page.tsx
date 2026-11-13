@@ -140,8 +140,8 @@ function TasksPageContent() {
     // The legacy commands emit no event: re-read so the lists and badge stay correct.
     onStatusChanged: () => void reload(),
     onAssigned: () => reload(),
-    onAdded: () => {
-      toast.success('To-do added');
+    onAdded: (_created, tagFailed) => {
+      if (!tagFailed) toast.success('To-do added');
       void reload();
     },
   });
