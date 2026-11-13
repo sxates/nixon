@@ -10,7 +10,9 @@
  *
  * Keys: ↑/↓ move, Enter picks, Esc closes the list only (a second Esc is the caller's
  * cancel), a space with no remaining match closes it. The list is built from `groups`
- * (`{ heading, items }[]`) so a Topics group can sit above People without a rewrite.
+ * (`{ heading, items }[]`): Topics (specs/0089, open topics passed in by the caller) sit
+ * above People. Picking a topic is not a mention: it removes the `@query` text and calls
+ * `onTopicChange`, because a to-do holds at most one topic and the caller owns the tag.
  */
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent, type ComponentProps, forwardRef, type KeyboardEvent, type SyntheticEvent } from 'react';
@@ -25,8 +27,16 @@ import type { Person } from '@/types';
 export interface MentionGroupItem {
   key: string;
   label: string;
-  /** Called when the row is picked; returns the mention to remember. */
-  mention: PickedMention;
+  /** A person row: the mention to remember when picked. */
+  mention?: PickedMention;
+  /** A topic row (specs/0089): picking it tags the to-do instead of inserting text. */
+  topic?: MentionTopic;
+  /** Muted trailing hint (e.g. "Replaces Atlas CRM rebuild"). */
+  hint?: string;
+}
+export interface MentionTopic {
+  id: string;
+  name: string;
 }
 export interface MentionGroup {
   heading: string;
@@ -62,6 +72,11 @@ interface MentionInputProps {
   /** Bump to force the field back to `value` even when `value` itself didn't change
    *  (after a save that normalised the text, or a cancel). */
   resetKey?: number;
+  /** Open topics offered under `@` (above People). Omit for a person-only picker. */
+  topics?: MentionTopic[];
+  /** The topic the to-do already has: other topics then show "Replaces {name}". */
+  topicId?: string | null;
+  onTopicChange?: (topic: MentionTopic | null) => void;
 }
 
 export function MentionInput({
@@ -78,6 +93,9 @@ export function MentionInput({
   resetKey = 0,
   variant = 'default',
   size,
+  topics,
+  topicId = null,
+  onTopicChange,
 }: MentionInputProps) {
   // cmdk owns the listbox's id, so read it back from the DOM once the list mounts.
   const [listId, setListId] = useState<string | undefined>(undefined);
@@ -162,6 +180,16 @@ export function MentionInput({
 
   const groups: MentionGroup[] = useMemo(() => {
     if (!match) return [];
+    const current = topicId ? topics?.find((t) => t.id === topicId) : undefined;
+    const topicItems = (topics ?? [])
+      .filter((t) => t.name.toLowerCase().includes(query))
+      .slice(0, MAX_RESULTS)
+      .map((t) => ({
+        key: `topic-${t.id}`,
+        label: t.name,
+        topic: t,
+        hint: current && current.id !== t.id ? `Replaces ${current.name}` : undefined,
+      }));
     const items = people
       .filter((p) => p.displayName.toLowerCase().includes(query))
       .slice(0, MAX_RESULTS)
@@ -170,8 +198,11 @@ export function MentionInput({
         label: p.displayName,
         mention: { name: p.displayName, personId: p.id },
       }));
-    return items.length ? [{ heading: 'People', items }] : [];
-  }, [people, query, match?.[0]]); // eslint-disable-line react-hooks/exhaustive-deps
+    const out: MentionGroup[] = [];
+    if (topicItems.length) out.push({ heading: 'Topics', items: topicItems });
+    if (items.length) out.push({ heading: 'People', items });
+    return out;
+  }, [people, topics, topicId, query, match?.[0]]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const flat = groups.flatMap((g) => g.items);
   const open = flat.length > 0 && dismissedAt !== atIndex;
@@ -187,12 +218,24 @@ export function MentionInput({
   };
 
   const pick = (item: MentionGroupItem) => {
+    if (item.topic) {
+      // A topic pick leaves no text behind: drop `@query`, keep the rest.
+      const nextText = text.slice(0, atIndex) + text.slice(caret);
+      setText(nextText);
+      pendingCaret.current = atIndex;
+      setCaret(atIndex);
+      setActive(0);
+      emit(nextText, picked);
+      onTopicChange?.(item.topic);
+      return;
+    }
+    const mention = item.mention!;
     const before = text.slice(0, atIndex);
-    const insert = `@${item.mention.name} `;
+    const insert = `@${mention.name} `;
     const nextText = before + insert + text.slice(caret);
-    const nextPicked = picked.some((p) => p.personId === item.mention.personId)
+    const nextPicked = picked.some((p) => p.personId === mention.personId)
       ? picked
-      : [...picked, item.mention];
+      : [...picked, mention];
     setText(nextText);
     setPicked(nextPicked);
     pendingCaret.current = before.length + insert.length;
@@ -351,6 +394,9 @@ export function MentionInput({
                   return (
                     <CommandItem key={item.key} value={`mention-${idx}`} onSelect={() => pick(item)}>
                       {item.label}
+                      {item.hint && (
+                        <span className="ml-auto pl-2 text-caption text-muted-foreground">{item.hint}</span>
+                      )}
                     </CommandItem>
                   );
                 })}

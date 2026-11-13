@@ -21,7 +21,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { MentionInput } from '@/components/ActionItems/MentionInput';
+import { MentionInput, type MentionTopic } from '@/components/ActionItems/MentionInput';
+import { TopicChip } from '@/components/ActionItems/TopicChip';
+import { useTopics } from '@/hooks/useTopics';
+import { setActionItemTopic } from '@/lib/topics';
 import { friendlyDue } from '@/lib/due-label';
 import { appendLineToMeetingNotes, todoNoteLine } from '@/lib/notes-append';
 import { deserializeMentions, parseTodoText } from '@/lib/todo-parse';
@@ -43,11 +46,14 @@ export function QuickAddDialog({ open, onOpenChange, liveMeeting }: QuickAddDial
   const [draft, setDraft] = useState('');
   const [linkMeeting, setLinkMeeting] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [topic, setTopic] = useState<MentionTopic | null>(null);
+  const { data: openTopics } = useTopics('open');
   // Each opening starts fresh: empty field, meeting link back on.
   const [resetKey, setResetKey] = useState(0);
   useEffect(() => {
     if (!open) return;
     setDraft('');
+    setTopic(null);
     setLinkMeeting(true);
     setResetKey((k) => k + 1);
   }, [open]);
@@ -59,12 +65,20 @@ export function QuickAddDialog({ open, onOpenChange, liveMeeting }: QuickAddDial
     const description = title || text;
     const meeting = linkMeeting ? liveMeeting : null;
     setBusy(true);
+    let tagFailed: string | null = null;
     try {
-      await invoke('api_create_action_item', {
+      const created = await invoke<{ id: string } | null>('api_create_action_item', {
         meetingId: meeting?.id ?? null,
         description,
         dueDate: title ? dueDate : null,
       });
+      if (topic && created?.id) {
+        try {
+          await setActionItemTopic(created.id, topic.id);
+        } catch (err) {
+          tagFailed = err instanceof Error ? err.message : String(err);
+        }
+      }
     } catch (err) {
       setBusy(false);
       toast.error('Could not add the to-do', {
@@ -74,6 +88,7 @@ export function QuickAddDialog({ open, onOpenChange, liveMeeting }: QuickAddDial
     }
     setBusy(false);
     onOpenChange(false);
+    if (tagFailed) toast.error('Added, but not to the topic', { description: tagFailed });
 
     if (meeting) {
       const plain = deserializeMentions(description).text;
@@ -99,7 +114,7 @@ export function QuickAddDialog({ open, onOpenChange, liveMeeting }: QuickAddDial
         <DialogHeader>
           <DialogTitle>New to-do</DialogTitle>
           <DialogDescription>
-            Enter adds it to your list. @ to mention someone, a trailing (Friday) sets the due date.
+            Enter adds it to your list. @ to mention someone or tag a topic, a trailing (Friday) sets the due date.
           </DialogDescription>
         </DialogHeader>
         <MentionInput
@@ -112,7 +127,16 @@ export function QuickAddDialog({ open, onOpenChange, liveMeeting }: QuickAddDial
           ariaLabel="Quick add to-do"
           autoFocus
           className="h-9 text-sm"
+          topics={openTopics ?? undefined}
+          topicId={topic?.id ?? null}
+          onTopicChange={setTopic}
         />
+        {topic && (
+          <div className="flex items-center gap-1.5 text-caption text-muted-foreground">
+            Topic
+            <TopicChip name={topic.name} label={`Remove topic ${topic.name}`} onClick={() => setTopic(null)} />
+          </div>
+        )}
         {liveMeeting && (
           <Checkbox
             checked={linkMeeting}

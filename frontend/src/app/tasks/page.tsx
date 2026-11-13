@@ -50,6 +50,9 @@ import {
   focusQuickAdd,
 } from '@/components/QuickAdd/QuickAddShortcut';
 import { useActionItemMutations } from '@/hooks/useActionItemMutations';
+import { useTopics } from '@/hooks/useTopics';
+import { setActionItemTopic } from '@/lib/topics';
+import type { MentionTopic } from '@/components/ActionItems/MentionInput';
 import { useTodoViews } from '@/hooks/useTodoViews';
 import {
   adoptedFromName,
@@ -86,6 +89,11 @@ function TasksPageContent() {
   const views = useTodoViews({ includeDismissed: showDismissed });
   const { reload } = views;
 
+  const { data: openTopics } = useTopics('open');
+  const topicOptions = useMemo<MentionTopic[]>(
+    () => (openTopics ?? []).map((t) => ({ id: t.id, name: t.name })),
+    [openTopics],
+  );
   const [people, setPeople] = useState<Person[]>([]);
   useEffect(() => {
     void (async () => {
@@ -255,10 +263,23 @@ function TasksPageContent() {
     toggleDone,
   });
 
-  const commitEdit = async (item: ActionItem, title: string, dueDate: string | null) => {
+  const commitEdit = async (
+    item: ActionItem,
+    title: string,
+    dueDate: string | null,
+    topic?: MentionTopic | null,
+  ) => {
     endEdit();
     if (title && title !== item.description) await editDescription(item, title);
     if (title && dueDate) await setDueDate(item, dueDate);
+    if (topic && topic.id !== item.topicId) {
+      try {
+        await setActionItemTopic(item.id, topic.id);
+        void reload();
+      } catch (err) {
+        toast.error('Could not tag the topic', { description: errorText(err) });
+      }
+    }
   };
 
   // ⌘T (QuickAddShortcut): focus the new-item field, on arrival (?add=1) or in place.
@@ -407,6 +428,7 @@ function TasksPageContent() {
                     placeholder="New item — add a to-do…  (⌘⇧T from anywhere)"
                     ariaLabel={QUICK_ADD_LABEL}
                     onAdd={add}
+                    topics={topicOptions}
                   />
                   {listRows.length === 0 ? (
                     <EmptyState
@@ -428,6 +450,7 @@ function TasksPageContent() {
                       <div className={cn(TODO_GRID, 'px-2 pb-1')} aria-hidden>
                         <span />
                         <span className="u-section-label-sm">Item</span>
+                        <span className="u-section-label-sm">Topic</span>
                         <span className="u-section-label-sm">Due</span>
                       </div>
                       {listRows.map((item) => (
@@ -457,7 +480,9 @@ function TasksPageContent() {
                               listRef.current?.focus({ preventScroll: true });
                             }}
                             onStartEdit={(row) => setEditingId(row.id)}
-                            onCommitEdit={(row, title, due) => void commitEdit(row, title, due)}
+                            onCommitEdit={(row, title, due, topic) => void commitEdit(row, title, due, topic)}
+                            topics={topicOptions}
+                            onOpenTopic={(topicId) => router.push(`/topics/topic?id=${encodeURIComponent(topicId)}`)}
                             onCancelEdit={endEdit}
                             onToggleHighlight={(row, color) => void toggleHighlight(row.id, color)}
                             onMoveToTop={(row) => applyOrder(moveToIndex(openIds, row.id, 0))}

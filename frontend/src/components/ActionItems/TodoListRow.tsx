@@ -2,9 +2,9 @@
 
 /**
  * One row of the To-do tab (specs/0088), laid out in columns so each item takes a
- * single line where its title fits: grip · checkbox · title · Due · open/menu. The column
- * template lives in `TODO_GRID` so the list header lines up with the rows; a Topics
- * column (specs/0089) slots in before Due.
+ * single line where its title fits: grip · checkbox · title · Topic · Due · open/menu. The
+ * column template lives in `TODO_GRID` so the list header lines up with the rows. The Topic
+ * chip (specs/0089) opens the topic; `@topic` in the inline edit re-tags the item.
  *
  * Selection and editing are driven by the list (see `useTodoListKeys`): a click on the
  * row selects it, a click on the title of the selected row edits it in place (Enter
@@ -12,7 +12,7 @@
  * detail page. A highlight (⌘4 yellow / ⌘5 green) marks the title like a highlighter pen.
  */
 
-import type { ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { ChevronRight, EyeOff, Trash2 } from '@/components/ui/icons';
 import { Checkbox } from '@/components/ui/checkbox';
 import { DeckIcon } from '@/components/ui/deck-icon';
@@ -30,8 +30,9 @@ import type { Highlight } from '@/hooks/useTodoListKeys';
 import { parseTodoText, titleSegments } from '@/lib/todo-parse';
 import { cn } from '@/lib/utils';
 import type { ActionItem, ActionItemStatus } from '@/types';
+import { TopicChip } from './TopicChip';
 import { DueDateControl } from './DueDateControl';
-import { MentionInput } from './MentionInput';
+import { MentionInput, type MentionTopic } from './MentionInput';
 
 /**
  * checkbox · title · due · actions — shared by the header and every row. Every cell's
@@ -41,7 +42,7 @@ import { MentionInput } from './MentionInput';
  * checkbox or the date off its first line.
  */
 export const TODO_GRID =
-  'grid grid-cols-[1rem_minmax(0,1fr)_7.5rem_3.5rem] items-start gap-x-3';
+  'grid grid-cols-[1rem_minmax(0,1fr)_8rem_7.5rem_3.5rem] items-start gap-x-3';
 
 /** Highlighter-pen washes on the title text. */
 const HIGHLIGHT_CLASS: Record<Highlight, string> = {
@@ -63,7 +64,13 @@ interface TodoListRowProps {
   onSelect: (item: ActionItem) => void;
   onStartEdit: (item: ActionItem) => void;
   /** Enter / blur in the edit field: the title with any trailing "(date)" split off. */
-  onCommitEdit: (item: ActionItem, title: string, dueDate: string | null) => void;
+  onCommitEdit: (
+    item: ActionItem,
+    title: string,
+    dueDate: string | null,
+    /** The topic picked during this edit; undefined = not touched. */
+    topic?: MentionTopic | null,
+  ) => void;
   onCancelEdit: () => void;
   onOpen: (item: ActionItem) => void;
   onSetStatus: (item: ActionItem, status: ActionItemStatus) => void | Promise<void>;
@@ -71,6 +78,9 @@ interface TodoListRowProps {
   onDelete: (item: ActionItem) => void | Promise<void>;
   onToggleHighlight: (item: ActionItem, color: Highlight) => void;
   onMoveToTop: (item: ActionItem) => void;
+  /** Open topics for the `@` picker (specs/0089). */
+  topics?: MentionTopic[];
+  onOpenTopic?: (topicId: string) => void;
 }
 
 export function TodoListRow({
@@ -92,7 +102,10 @@ export function TodoListRow({
   onDelete,
   onToggleHighlight,
   onMoveToTop,
+  topics,
+  onOpenTopic,
 }: TodoListRowProps) {
+  const [pickedTopic, setPickedTopic] = useState<MentionTopic | null | undefined>(undefined);
   const completed = item.status === 'completed';
   const meta = [
     sourceCount !== undefined && sourceCount > 1 ? `from ${sourceCount} meetings` : null,
@@ -101,8 +114,12 @@ export function TodoListRow({
 
   const commit = (serialized: string) => {
     const { title, dueDate } = parseTodoText(serialized.trim(), new Date());
-    onCommitEdit(item, title, dueDate);
+    onCommitEdit(item, title, dueDate, pickedTopic);
   };
+  useEffect(() => {
+    if (!editing) setPickedTopic(undefined);
+  }, [editing]);
+  const topicId = pickedTopic === undefined ? (item.topicId ?? null) : (pickedTopic?.id ?? null);
 
   return (
     <div
@@ -139,6 +156,9 @@ export function TodoListRow({
             multiline
             autoFocus
             variant="bare"
+            topics={topics}
+            topicId={topicId}
+            onTopicChange={setPickedTopic}
             ariaLabel="Edit to-do"
             className="-mx-1 -my-0.5 leading-5"
           />
@@ -179,6 +199,12 @@ export function TodoListRow({
           </>
         )}
       </div>
+
+      <span className="flex h-5 min-w-0 items-center">
+        {item.topicId && item.topicName && (
+          <TopicChip name={item.topicName} onClick={() => onOpenTopic?.(item.topicId!)} className="-ml-1" />
+        )}
+      </span>
 
       <span className="flex h-5 min-w-0 items-center">
         {/* -ml-1 cancels the control's hover padding so the date sits under the header. */}

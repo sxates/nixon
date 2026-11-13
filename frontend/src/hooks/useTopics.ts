@@ -57,7 +57,7 @@ function useLoaded<T>(
   useEffect(
     () =>
       safeListen<TopicsUpdatedPayload>('topics-updated', (e) => {
-        if (matchRef.current(e.payload?.topic_id ?? null)) void refresh();
+        if (matchRef.current(e?.payload?.topic_id ?? null)) void refresh();
       }),
     [refresh],
   );

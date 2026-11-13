@@ -15,6 +15,10 @@ vi.mock('next/navigation', () => ({
 }));
 vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn() }));
 vi.mock('@tauri-apps/api/event', () => ({ listen: vi.fn() }));
+// The Topic field's list would register its own `listen` and steal this file's captured listener.
+vi.mock('@/hooks/useTopics', () => ({
+  useTopics: () => ({ data: [], loading: false, error: null, refresh: async () => {} }),
+}));
 vi.mock('sonner', () => {
   const base = vi.fn();
   return { toast: Object.assign(base, { success: vi.fn(), error: vi.fn() }) };

@@ -8,7 +8,8 @@
  *
  * A trailing due phrase — `Send the deck (Friday)` — is split off on submit with
  * `parseTodoText` (specs/0088) and handed over as `dueDate`, an ISO local date. `@Name`
- * opens a People picker; picked names go out as `@[Name](person:<id>)` tokens.
+ * opens a People picker; picked names go out as `@[Name](person:<id>)` tokens. With `topics`
+ * (specs/0089) the picker also offers open topics; a pick is handed over as `topicId`.
  */
 
 import { useState } from 'react';
@@ -16,12 +17,19 @@ import { Plus } from '@/components/ui/icons';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { parseTodoText } from '@/lib/todo-parse';
-import { MentionInput } from './MentionInput';
+import { MentionInput, type MentionTopic } from './MentionInput';
+import { TopicChip } from './TopicChip';
 
 interface AddActionItemRowProps {
   placeholder?: string;
   /** Create handler. Return `false` (or throw) to signal failure and keep the draft. */
-  onAdd: (description: string, dueDate?: string) => boolean | void | Promise<boolean | void>;
+  onAdd: (
+    description: string,
+    dueDate?: string,
+    topicId?: string | null,
+  ) => boolean | void | Promise<boolean | void>;
+  /** Open topics for the `@` picker. */
+  topics?: MentionTopic[];
   className?: string;
   /** Accessible name for the field (⌘T focuses the To-do page's by this label). */
   ariaLabel?: string;
@@ -32,8 +40,10 @@ export function AddActionItemRow({
   onAdd,
   className,
   ariaLabel,
+  topics,
 }: AddActionItemRowProps) {
   const [draft, setDraft] = useState('');
+  const [topic, setTopic] = useState<MentionTopic | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const submit = async (raw: string = draft) => {
@@ -43,8 +53,12 @@ export function AddActionItemRow({
     const description = title || text;
     setIsSubmitting(true);
     try {
-      const ok = await (dueDate && title ? onAdd(description, dueDate) : onAdd(description));
-      if (ok !== false) setDraft('');
+      const due = dueDate && title ? dueDate : undefined;
+      const ok = await (topic ? onAdd(description, due, topic.id) : due ? onAdd(description, due) : onAdd(description));
+      if (ok !== false) {
+        setDraft('');
+        setTopic(null);
+      }
     } catch {
       // The parent surfaces the error; keep the draft so the text isn't lost.
     } finally {
@@ -67,7 +81,13 @@ export function AddActionItemRow({
         placeholder={placeholder}
         ariaLabel={ariaLabel}
         className="h-8 text-sm"
+        topics={topics}
+        topicId={topic?.id ?? null}
+        onTopicChange={setTopic}
       />
+      {topic && (
+        <TopicChip name={topic.name} label={`Remove topic ${topic.name}`} onClick={() => setTopic(null)} className="flex-shrink-0" />
+      )}
       <Button
         type="submit"
         size="sm"
