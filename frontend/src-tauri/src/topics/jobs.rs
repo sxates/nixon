@@ -21,7 +21,7 @@ use super::model::Topic;
 use super::repo::{emit_updated, TopicsRepository};
 use super::writer::{entry_options, write_entry_with_llm};
 use crate::database::repositories::meeting::MeetingsRepository;
-use crate::llm_activity::{LlmActivityState, Origin, TaskKind};
+use crate::llm_activity::{LlmActivityState, Origin, TaskHandle, TaskKind};
 use crate::summary::provider_config::ProviderConfig;
 
 /// Which of the two prompts a model call serves; they carry different JSON schemas.
@@ -131,7 +131,8 @@ where
 }
 
 /// The entry-writer half for every open linked topic without an entry yet. One topic's
-/// failure (model or database) is logged and the rest continue.
+/// failure (model or database) is collected and the rest continue; the caller turns any
+/// failure into an error so the queue row can be retried.
 async fn write_entries<F, Fut>(
     pool: &SqlitePool,
     meeting_id: &str,
@@ -139,6 +140,7 @@ async fn write_entries<F, Fut>(
     notes: Option<&str>,
     blocks: &[Block],
     llm: &F,
+    failures: &mut Vec<String>,
 ) -> JobReport
 where
     F: Fn(JobCall, String, String) -> Fut,
@@ -149,15 +151,19 @@ where
         Ok(t) => t,
         Err(e) => {
             log::warn!("Couldn't list topics for meeting_id {meeting_id}: {e:#}");
+            failures.push(format!("Couldn't list this meeting's topics: {e:#}"));
             return report;
         }
     };
     for topic in topics {
         match write_one(pool, &topic, meeting_id, summary, notes, blocks, llm).await {
             Ok(r) => report.add(r),
-            Err(e) => log::warn!(
-                "Topic entry for meeting_id {meeting_id} failed (others continue): {e:#}"
-            ),
+            Err(e) => {
+                log::warn!(
+                    "Topic entry for meeting_id {meeting_id} failed (others continue): {e:#}"
+                );
+                failures.push(format!("{}: {e:#}", topic.name));
+            }
         }
     }
     report
@@ -280,21 +286,44 @@ where
         log::info!("meeting_id {meeting_id} has no timed transcript; topic entries use the summary and notes only");
     }
     // Entries need no transcript (summary + notes suffice, any cited time resolves to None).
-    let mut report = write_entries(pool, meeting_id, summary, notes, &blocks, &llm).await;
+    let mut failures = Vec::new();
+    let mut report = write_entries(
+        pool,
+        meeting_id,
+        summary,
+        notes,
+        &blocks,
+        &llm,
+        &mut failures,
+    )
+    .await;
     if detect && !blocks.is_empty() {
         match detect_mentions(pool, meeting_id, summary, &blocks, &llm).await {
             Ok(n) => report.suggestions += n,
-            Err(e) => log::warn!("Topic mention scan for meeting_id {meeting_id} failed: {e:#}"),
+            Err(e) => {
+                log::warn!("Topic mention scan for meeting_id {meeting_id} failed: {e:#}");
+                failures.push(format!("Suggestions: {e:#}"));
+            }
         }
     }
     if report.entries > 0 || report.suggestions > 0 {
         emit_updated(app, None);
     }
-    Ok(report)
+    // Whatever succeeded is kept; any failure fails the run so its queue row offers Retry.
+    // A retry is safe: entries are written once per (topic, meeting) and the scan is
+    // fingerprinted, so only the failed halves do any work.
+    match failures.as_slice() {
+        [] => Ok(report),
+        [one] => Err(anyhow::anyhow!("Couldn't update a topic. {one}")),
+        [first, ..] => Err(anyhow::anyhow!(
+            "Couldn't update {} topic jobs. {first}",
+            failures.len()
+        )),
+    }
 }
 
 /// Entry writer for linked topics, then the mention detector for the rest. One topic's
-/// failure is logged and the others continue.
+/// failure doesn't stop the others, but any failure makes the run an error.
 pub async fn run_for_meeting_with<R, F, Fut>(
     app: &AppHandle<R>,
     pool: &SqlitePool,
@@ -385,6 +414,26 @@ pub async fn run_for_retry<R: Runtime>(
     .await
 }
 
+/// A background `Topics` queue row for one meeting, so a failure is visible and its Retry
+/// reruns the job for that meeting. `None` when the activity registry isn't managed (tests).
+async fn start_row<R: Runtime>(
+    app: &AppHandle<R>,
+    pool: &SqlitePool,
+    meeting_id: &str,
+) -> Option<TaskHandle> {
+    let state = app.try_state::<LlmActivityState>()?;
+    let title = match MeetingsRepository::get_meeting_metadata(pool, meeting_id).await {
+        Ok(Some(meta)) => format!("Updating topics — {}", meta.title),
+        _ => "Updating topics".to_string(),
+    };
+    Some(Arc::clone(&state.0).start_for(
+        TaskKind::Topics,
+        Origin::Background,
+        title,
+        Some(meeting_id.to_string()),
+    ))
+}
+
 /// The background trigger after a summary is stored. Registers a queue row (skipped, with no
 /// row at all, when there are no open topics) and never propagates an error.
 pub async fn run_background<R: Runtime>(
@@ -403,21 +452,7 @@ pub async fn run_background<R: Runtime>(
         }
         Ok(_) => {}
     }
-    let task = match app.try_state::<LlmActivityState>() {
-        Some(state) => {
-            let title = match MeetingsRepository::get_meeting_metadata(pool, meeting_id).await {
-                Ok(Some(meta)) => format!("Updating topics — {}", meta.title),
-                _ => "Updating topics".to_string(),
-            };
-            Some(Arc::clone(&state.0).start_for(
-                TaskKind::Topics,
-                Origin::Background,
-                title,
-                Some(meeting_id.to_string()),
-            ))
-        }
-        None => None,
-    };
+    let task = start_row(app, pool, meeting_id).await;
     let result = run_for_meeting(app, pool, meeting_id, summary, notes, config).await;
     if let Err(e) = &result {
         log::warn!("Topic job for meeting_id {meeting_id} failed (summary unaffected): {e:#}");
@@ -428,8 +463,9 @@ pub async fn run_background<R: Runtime>(
 }
 
 /// Entry-writer half only, oldest first, one meeting at a time so each prompt sees the
-/// decisions the previous entries recorded. `load` supplies (summary, notes) per meeting; one
-/// that can't be loaded is logged and skipped.
+/// decisions the previous entries recorded. `load` supplies (summary, notes) per meeting. Each
+/// meeting gets its own background queue row; one that can't be loaded or fails finishes
+/// its row as failed and the rest continue.
 pub async fn backfill_with<R, L, LFut, F, Fut>(
     app: &AppHandle<R>,
     pool: &SqlitePool,
@@ -446,27 +482,30 @@ where
 {
     let mut total = JobReport::default();
     for id in meeting_ids {
-        let (summary, notes) = match load(id.clone()).await {
-            Ok(v) => v,
-            Err(e) => {
-                log::info!("Topic backfill skipped meeting_id {id}: {e}");
-                continue;
-            }
+        // One queue row per meeting: a failure stays visible and its Retry reruns that
+        // meeting alone.
+        let task = start_row(app, pool, id).await;
+        let result = match load(id.clone()).await {
+            Ok((summary, notes)) => run_inner(
+                app,
+                pool,
+                id,
+                &summary,
+                notes.as_deref(),
+                llm.clone(),
+                false,
+                Busy::Wait,
+            )
+            .await
+            .map_err(|e| format!("{e:#}")),
+            Err(e) => Err(e),
         };
-        match run_inner(
-            app,
-            pool,
-            id,
-            &summary,
-            notes.as_deref(),
-            llm.clone(),
-            false,
-            Busy::Wait,
-        )
-        .await
-        {
-            Ok(r) => total.add(r),
-            Err(e) => log::warn!("Topic backfill for meeting_id {id} failed: {e:#}"),
+        match &result {
+            Ok(r) => total.add(*r),
+            Err(e) => log::warn!("Topic backfill for meeting_id {id} failed: {e}"),
+        }
+        if let Some(t) = task {
+            t.finish(result.map(|_| ()));
         }
     }
     total

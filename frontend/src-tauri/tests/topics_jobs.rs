@@ -368,3 +368,177 @@ async fn linked_meeting_without_transcript_still_gets_an_entry() {
         .unwrap();
     assert!(!body.contains("\"t\""), "{body}");
 }
+
+// ---- Final fix wave ------------------------------------------------------------------------
+
+/// Entry calls fail for prompts mentioning `bad`, and succeed otherwise.
+fn failing_for(
+    bad: &'static str,
+) -> impl Fn(JobCall, String, String) -> std::future::Ready<Result<String, String>> + Clone {
+    move |call, _system, user| {
+        std::future::ready(match call {
+            JobCall::Entry if user.contains(bad) => Err("model is down".to_string()),
+            JobCall::Entry => Ok(ENTRY.to_string()),
+            JobCall::Mention => Ok(r#"{"mentions":[]}"#.to_string()),
+        })
+    }
+}
+
+#[tokio::test]
+async fn a_failed_topic_fails_the_run_but_the_others_are_written_and_retry_is_exactly_once() {
+    let (_d, m) = fresh_db().await;
+    let p = m.pool();
+    let good = Topics::create(p, "Atlas CRM rebuild", "").await.unwrap();
+    let bad = Topics::create(p, "Broken thing", "").await.unwrap();
+    meeting(p, "m1-8", "Sync", NOW, None).await;
+    links::link_meeting(p, &good.id, "m1-8").await.unwrap();
+    links::link_meeting(p, &bad.id, "m1-8").await.unwrap();
+    let app = tauri::test::mock_app();
+    let err = jobs::run_for_meeting_with(
+        app.handle(),
+        p,
+        "m1-8",
+        "summary",
+        None,
+        failing_for("Broken thing"),
+    )
+    .await
+    .unwrap_err();
+    assert!(format!("{err:#}").contains("model is down"), "{err:#}");
+    // The healthy topic still got its entry.
+    let written: Vec<String> = sqlx::query_scalar("SELECT topic_id FROM topic_entries")
+        .fetch_all(p)
+        .await
+        .unwrap();
+    assert_eq!(written, [good.id.as_str()]);
+    // A Retry once the model is back writes the missing entry, and only that one.
+    let r = jobs::run_for_meeting_with(
+        app.handle(),
+        p,
+        "m1-8",
+        "summary",
+        None,
+        fake(ENTRY, r#"{"mentions":[]}"#, Default::default()),
+    )
+    .await
+    .unwrap();
+    assert_eq!(r.entries, 1);
+    let r = jobs::run_for_meeting_with(
+        app.handle(),
+        p,
+        "m1-8",
+        "summary",
+        None,
+        fake(ENTRY, r#"{"mentions":[]}"#, Default::default()),
+    )
+    .await
+    .unwrap();
+    assert_eq!(r.entries, 0);
+    assert_eq!(count(p, "SELECT COUNT(*) FROM topic_entries").await, 2);
+}
+
+#[tokio::test]
+async fn a_failed_mention_scan_fails_the_run() {
+    let (_d, m) = fresh_db().await;
+    let p = m.pool();
+    Topics::create(p, "Atlas CRM rebuild", "").await.unwrap();
+    meeting(p, "m1-9", "Ad hoc", NOW, None).await;
+    let app = tauri::test::mock_app();
+    let llm = |_c: JobCall, _s: String, _u: String| {
+        std::future::ready(Err::<String, String>("model is down".to_string()))
+    };
+    let err = jobs::run_for_meeting_with(app.handle(), p, "m1-9", "summary", None, llm)
+        .await
+        .unwrap_err();
+    assert!(format!("{err:#}").contains("model is down"), "{err:#}");
+}
+
+#[tokio::test]
+async fn backfill_registers_a_queue_row_per_meeting_and_failures_stay_visible() {
+    use app_lib::llm_activity::registry::TaskOutcome;
+    use app_lib::llm_activity::{LlmActivityState, LlmTaskRegistry, TaskKind};
+    use tauri::Manager;
+    let (_d, m) = fresh_db().await;
+    let p = m.pool();
+    let t = Topics::create(p, "Atlas CRM rebuild", "").await.unwrap();
+    meeting(p, "ok-10", "Sync", "2026-01-01T00:00:00Z", Some("k")).await;
+    meeting(p, "bad-10", "Sync", "2026-01-08T00:00:00Z", Some("k")).await;
+    links::link_series_of(p, &t.id, "bad-10").await.unwrap();
+    let app = tauri::test::mock_app();
+    let registry = Arc::new(LlmTaskRegistry::new());
+    app.manage(LlmActivityState(Arc::clone(&registry)));
+    let ids = vec!["ok-10".to_string(), "bad-10".to_string()];
+    let r = jobs::backfill_with(
+        app.handle(),
+        p,
+        &ids,
+        |id: String| async move {
+            Ok((
+                if id == "bad-10" { "poison" } else { "summary" }.to_string(),
+                None,
+            ))
+        },
+        failing_for("poison"),
+    )
+    .await;
+    assert_eq!(r.entries, 1);
+    let view = registry.view();
+    assert!(view.running.is_empty());
+    let mut rows: Vec<(Option<String>, bool)> = view
+        .history
+        .iter()
+        .map(|h| {
+            assert_eq!(h.kind, TaskKind::Topics);
+            (
+                h.meeting_id.clone(),
+                matches!(h.outcome, TaskOutcome::Failed { .. }),
+            )
+        })
+        .collect();
+    rows.sort();
+    assert_eq!(
+        rows,
+        [
+            (Some("bad-10".to_string()), true),
+            (Some("ok-10".to_string()), false)
+        ]
+    );
+    assert!(view.has_failure);
+}
+
+#[tokio::test]
+async fn adding_this_meeting_to_a_topic_writes_exactly_one_entry() {
+    use app_lib::database::repositories::summary::SummaryProcessesRepository as Sp;
+    let (_d, m) = fresh_db().await;
+    let p = m.pool();
+    let t = Topics::create(p, "Atlas CRM rebuild", "").await.unwrap();
+    meeting(p, "m1-11", "Sync", NOW, None).await;
+    Sp::create_or_reset_process(p, "m1-11").await.unwrap();
+    Sp::update_process_completed(
+        p,
+        "m1-11",
+        serde_json::json!({ "markdown": "s", "english_cache": null }),
+        1,
+        0.5,
+        false,
+        &app_lib::summary::refresh::generation_fingerprint("s"),
+        &app_lib::summary::refresh::speaker_names_fingerprint(std::iter::empty()),
+    )
+    .await
+    .unwrap();
+    // "This meeting", backfill box irrelevant: the dialog sends false.
+    let link = links::link_meeting(p, &t.id, "m1-11").await.unwrap();
+    let ids = links::entry_targets(p, &link, "m1-11", false, chrono::Utc::now())
+        .await
+        .unwrap();
+    assert_eq!(ids, ["m1-11"]);
+    let app = tauri::test::mock_app();
+    let llm = fake(ENTRY, r#"{"mentions":[]}"#, Default::default());
+    let load = |_id: String| async { Ok(("summary".to_string(), None)) };
+    let r = jobs::backfill_with(app.handle(), p, &ids, load, llm.clone()).await;
+    assert_eq!(r.entries, 1);
+    // Linking again changes nothing.
+    let r = jobs::backfill_with(app.handle(), p, &ids, load, llm).await;
+    assert_eq!(r.entries, 0);
+    assert_eq!(count(p, "SELECT COUNT(*) FROM topic_entries").await, 1);
+}

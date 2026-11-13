@@ -198,12 +198,14 @@ pub async fn revert_entry(pool: &SqlitePool, entry_id: &str) -> Result<bool> {
     Ok(res.rows_affected() > 0)
 }
 
-/// Replace both bodies with a regenerated one, only while the owner hasn't edited it.
+/// Replace both bodies with a regenerated one, only while the owner hasn't edited it and
+/// only for a `series` entry: a `mention` entry holds notes the owner accepted, which the
+/// linked-meeting writer would replace.
 pub async fn rewrite_entry(pool: &SqlitePool, entry_id: &str, body: EntryBody) -> Result<bool> {
     let json = to_json(&mint_all(body))?;
     let res = sqlx::query(
         "UPDATE topic_entries SET body_json = ?2, ai_body_json = ?2
-         WHERE id = ?1 AND edited_at IS NULL AND ai_body_json IS NOT NULL",
+         WHERE id = ?1 AND kind = 'series' AND edited_at IS NULL AND ai_body_json IS NOT NULL",
     )
     .bind(entry_id)
     .bind(json)

@@ -1055,3 +1055,105 @@ async fn draft_description_without_links_errors() {
         .unwrap_err();
     assert_eq!(err.to_string(), "Link a meeting or series first.");
 }
+
+// ---- Final fix wave ------------------------------------------------------------------------
+
+#[tokio::test]
+async fn rewrite_refuses_mention_entries() {
+    // An accepted note becomes a `mention` entry with an AI body; rewriting it would run the
+    // linked-meeting writer and replace the bullet the owner accepted.
+    let (_d, m) = fresh_db().await;
+    let p = m.pool();
+    let t = Topics::create(p, "Atlas", "").await.unwrap();
+    meeting(p, "m-rw").await;
+    ledger::insert_suggestions(p, &[sug(&t.id, "note", "m-rw", "accepted note")])
+        .await
+        .unwrap();
+    let pend = ledger::pending_suggestions(p, &t.id).await.unwrap();
+    let eid = ledger::resolve_suggestion(p, &pend[0].id, true)
+        .await
+        .unwrap()
+        .entry_id
+        .unwrap();
+    let before = body_raw(p, &eid).await;
+    assert!(!ledger::rewrite_entry(p, &eid, body(&["regen"], &[]))
+        .await
+        .unwrap());
+    assert_eq!(body_raw(p, &eid).await, before);
+    let e = &ledger::entries_for_topic(p, &t.id).await.unwrap()[0];
+    assert_eq!(e.ai_body.as_ref().unwrap().bullets[0].text, "accepted note");
+}
+
+#[tokio::test]
+async fn link_queues_the_seed_meeting_whatever_the_backfill_flag() {
+    use app_lib::topics::links;
+    let (_d, m) = fresh_db().await;
+    let p = m.pool();
+    let now = chrono::DateTime::parse_from_rfc3339("2026-06-01T00:00:00Z")
+        .unwrap()
+        .with_timezone(&chrono::Utc);
+    let day = |n: i64| (now - chrono::Duration::days(n)).to_rfc3339();
+    occurrence(p, "older", &day(60), "S1", true).await;
+    occurrence(p, "seed", &day(1), "S1", true).await;
+    occurrence(p, "unsummarised", &day(2), "S2", false).await;
+    let t = Topics::create(p, "Atlas CRM rebuild", "").await.unwrap();
+
+    // "This meeting": the seed alone, with or without backfill.
+    let one = links::link_meeting(p, &t.id, "seed").await.unwrap();
+    for backfill in [false, true] {
+        let ids = links::entry_targets(p, &one, "seed", backfill, now)
+            .await
+            .unwrap();
+        assert_eq!(ids, ["seed"], "backfill={backfill}");
+    }
+    // A meeting without a completed summary has nothing to write from.
+    let bare = links::link_meeting(p, &t.id, "unsummarised").await.unwrap();
+    let ids = links::entry_targets(p, &bare, "unsummarised", false, now)
+        .await
+        .unwrap();
+    assert!(ids.is_empty());
+
+    // "Every meeting in this series": the seed alone with the box unchecked, the seed plus
+    // its earlier occurrences (oldest first, no duplicate) with it checked.
+    let series = links::link_series_of(p, &t.id, "seed").await.unwrap();
+    let ids = links::entry_targets(p, &series, "seed", false, now)
+        .await
+        .unwrap();
+    assert_eq!(ids, ["seed"]);
+    let ids = links::entry_targets(p, &series, "seed", true, now)
+        .await
+        .unwrap();
+    assert_eq!(ids, ["older", "seed"]);
+}
+
+#[tokio::test]
+async fn rewrite_command_offers_series_entries_only() {
+    use app_lib::topics::commands::{rewrite_source, SERIES_ONLY};
+    let (_d, m) = fresh_db().await;
+    let p = m.pool();
+    let t = Topics::create(p, "Atlas", "").await.unwrap();
+    meeting(p, "m-rc").await;
+    let series = ledger::insert_machine_entry(p, &t.id, "m-rc", "series", body(&["s"], &[]))
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        rewrite_source(p, &series).await.unwrap(),
+        (t.id.clone(), "m-rc".to_string())
+    );
+    let t2 = Topics::create(p, "Beta", "").await.unwrap();
+    ledger::insert_suggestions(p, &[sug(&t2.id, "note", "m-rc", "accepted")])
+        .await
+        .unwrap();
+    let pend = ledger::pending_suggestions(p, &t2.id).await.unwrap();
+    let mention = ledger::resolve_suggestion(p, &pend[0].id, true)
+        .await
+        .unwrap()
+        .entry_id
+        .unwrap();
+    assert_eq!(rewrite_source(p, &mention).await.unwrap_err(), SERIES_ONLY);
+    let manual = ledger::add_manual_entry(p, &t.id, body(&["mine"], &[]))
+        .await
+        .unwrap();
+    assert_eq!(rewrite_source(p, &manual).await.unwrap_err(), SERIES_ONLY);
+}

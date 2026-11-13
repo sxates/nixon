@@ -256,6 +256,38 @@ pub async fn backfill_candidates(
     Ok(rows.into_iter().map(|(id,)| id).collect())
 }
 
+/// Meetings to queue for the entry writer right after `link` was made from `seed`: the seed
+/// meeting itself whenever it has a completed summary (whatever `backfill` says, because the
+/// owner just added it and its summary won't run again on its own), plus, for a series or
+/// title link with `backfill`, its prior occurrences. Oldest first, no duplicates.
+pub async fn entry_targets(
+    pool: &SqlitePool,
+    link: &TopicLink,
+    seed: &str,
+    backfill: bool,
+    now: DateTime<Utc>,
+) -> Result<Vec<String>> {
+    let mut ids = if backfill {
+        backfill_candidates(pool, link, now).await?
+    } else {
+        Vec::new()
+    };
+    if !ids.iter().any(|id| id == seed) {
+        ids.push(seed.to_string());
+    }
+    let rows: Vec<(String,)> = sqlx::query_as(
+        "SELECT m.id FROM meetings m
+         WHERE m.id IN (SELECT value FROM json_each(?1))
+           AND EXISTS (SELECT 1 FROM summary_processes sp
+                       WHERE sp.meeting_id = m.id AND sp.status = 'completed')
+         ORDER BY m.created_at ASC, m.id",
+    )
+    .bind(serde_json::to_string(&ids)?)
+    .fetch_all(pool)
+    .await?;
+    Ok(rows.into_iter().map(|(id,)| id).collect())
+}
+
 /// The newest `limit` meetings any of the topic's links match that have a completed
 /// summary, newest first. One query over the same membership predicate.
 pub async fn recent_summarised_meetings(

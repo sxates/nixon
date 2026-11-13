@@ -21,6 +21,7 @@ use crate::summary::llm_gate::{with_priority, Priority};
 const TOPIC_GONE: &str = "Topic not found.";
 const ENTRY_GONE: &str = "That entry no longer exists.";
 const EDITED: &str = "Edited entries can't be rewritten.";
+pub const SERIES_ONLY: &str = "Only series entries can be rewritten.";
 
 fn pool_of<R: Runtime>(app: &AppHandle<R>) -> SqlitePool {
     app.state::<AppState>().db_manager.pool().clone()
@@ -132,18 +133,13 @@ async fn link_and_backfill<R: Runtime>(
         }
     }
     .map_err(|e| format!("{e:#}"))?;
-    if backfill {
-        // A single-meeting link backfills that meeting itself; a series link its prior
-        // occurrences (which include the seed meeting when it is summarised).
-        let ids = match link.kind {
-            LinkKind::Meeting => vec![meeting_id.to_string()],
-            _ => links::backfill_candidates(pool, &link, chrono::Utc::now())
-                .await
-                .map_err(db("Couldn't find the series' earlier meetings"))?,
-        };
-        if !ids.is_empty() {
-            jobs::spawn_backfill(app.clone(), pool.clone(), topic_id.to_string(), ids);
-        }
+    // The seed meeting is always queued when summarised; `backfill` adds the series' earlier
+    // meetings.
+    let ids = links::entry_targets(pool, &link, meeting_id, backfill, chrono::Utc::now())
+        .await
+        .map_err(db("Couldn't find the meetings to add"))?;
+    if !ids.is_empty() {
+        jobs::spawn_backfill(app.clone(), pool.clone(), topic_id.to_string(), ids);
     }
     Ok(link)
 }
@@ -316,28 +312,25 @@ pub async fn api_revert_topic_entry<R: Runtime>(
 #[derive(sqlx::FromRow)]
 struct RewriteRow {
     topic_id: String,
+    kind: String,
     meeting_id: Option<String>,
     edited_at: Option<String>,
     ai_body_json: Option<String>,
 }
 
-/// Interactive. Reloads the source meeting's summary, notes and transcript, drafts the entry
-/// again and replaces both bodies; refused once the owner has edited the entry.
-#[tauri::command]
-pub async fn api_rewrite_topic_entry<R: Runtime>(
-    app: AppHandle<R>,
-    entry_id: String,
-) -> Result<(), String> {
-    let pool = pool_of(&app);
+/// The (topic, source meeting) of an entry "Rewrite from meeting" may act on, or the
+/// user-readable reason it can't: series entries only, never once the owner edited it.
+pub async fn rewrite_source(pool: &SqlitePool, entry_id: &str) -> Result<(String, String), String> {
     let row: Option<RewriteRow> = sqlx::query_as(
-        "SELECT topic_id, meeting_id, edited_at, ai_body_json FROM topic_entries WHERE id = ?",
+        "SELECT topic_id, kind, meeting_id, edited_at, ai_body_json FROM topic_entries WHERE id = ?",
     )
-    .bind(&entry_id)
-    .fetch_optional(&pool)
+    .bind(entry_id)
+    .fetch_optional(pool)
     .await
     .map_err(|e| format!("Couldn't load the entry: {e}"))?;
     let Some(RewriteRow {
         topic_id,
+        kind,
         meeting_id,
         edited_at,
         ai_body_json: ai_body,
@@ -345,12 +338,27 @@ pub async fn api_rewrite_topic_entry<R: Runtime>(
     else {
         return Err(ENTRY_GONE.to_string());
     };
+    if kind != "series" {
+        return Err(SERIES_ONLY.to_string());
+    }
     if edited_at.is_some() {
         return Err(EDITED.to_string());
     }
     let (Some(meeting_id), Some(_)) = (meeting_id, ai_body) else {
         return Err("This entry has no source meeting to rewrite from.".to_string());
     };
+    Ok((topic_id, meeting_id))
+}
+
+/// Interactive. Reloads the source meeting's summary, notes and transcript, drafts the entry
+/// again and replaces both bodies; see [`rewrite_source`] for which entries qualify.
+#[tauri::command]
+pub async fn api_rewrite_topic_entry<R: Runtime>(
+    app: AppHandle<R>,
+    entry_id: String,
+) -> Result<(), String> {
+    let pool = pool_of(&app);
+    let (topic_id, meeting_id) = rewrite_source(&pool, &entry_id).await?;
     let topic = require_topic(&pool, &topic_id).await?;
     let inputs = load_extraction_inputs(&pool, &meeting_id).await?;
     let segments = load_segments(&pool, &meeting_id)
@@ -387,7 +395,7 @@ pub async fn api_rewrite_topic_entry<R: Runtime>(
         .await
         .map_err(db("Couldn't save the rewritten entry"))?
     {
-        // The owner edited it while the model ran.
+        // The owner edited it while the model ran (the kind never changes).
         return Err(EDITED.to_string());
     }
     emit_updated(&app, Some(&topic_id));
@@ -452,6 +460,7 @@ pub async fn api_set_action_item_topic<R: Runtime>(
         ACTION_ITEMS_UPDATED_EVENT,
         serde_json::json!({ "meeting_id": "" }),
     );
-    emit_updated(&app, topic_id.as_deref());
+    // `null`: a re-tag changes the old topic as well as the new one.
+    emit_updated(&app, None);
     Ok(())
 }

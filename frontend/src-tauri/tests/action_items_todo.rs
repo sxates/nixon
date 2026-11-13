@@ -705,3 +705,24 @@ async fn todo_rows_carry_topic_name() {
     let detail = Todo::get_detail(pool, &item).await.unwrap().unwrap();
     assert_eq!(detail.topic_name.as_deref(), Some("Atlas CRM rebuild"));
 }
+
+/// specs/0089 final fix: the detail page reads the topic off the detail payload, beside
+/// `item` (the `ActionItem` row has no topic field). The frontend test fixture
+/// (`app/tasks/item/__tests__/topic-pick.test.tsx`) copies this exact shape.
+#[tokio::test]
+async fn detail_wire_shape_carries_the_topic_beside_the_item() {
+    let (_d, db) = fresh_db().await;
+    let pool = db.pool();
+    meeting(pool, "m-wire", 1).await;
+    let x = extracted(pool, "m-wire", "x", "listed", "open").await;
+    let topic = app_lib::topics::repo::TopicsRepository::create(pool, "Atlas CRM rebuild", "")
+        .await
+        .unwrap();
+    assert!(Todo::set_topic(pool, &x, Some(&topic.id)).await.unwrap());
+    let d = Todo::get_detail(pool, &x).await.unwrap().unwrap();
+    let wire = serde_json::to_value(&d).unwrap();
+    assert_eq!(wire["topicId"], serde_json::json!(topic.id));
+    assert_eq!(wire["topicName"], serde_json::json!("Atlas CRM rebuild"));
+    assert!(wire["item"].get("topicId").is_none(), "{wire}");
+    assert!(wire["item"].get("topic_id").is_none(), "{wire}");
+}
