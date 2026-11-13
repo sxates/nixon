@@ -340,3 +340,31 @@ async fn pretag_only_when_exactly_one_topic() {
         ]
     );
 }
+
+#[tokio::test]
+async fn linked_meeting_without_transcript_still_gets_an_entry() {
+    let (_d, m) = fresh_db().await;
+    let p = m.pool();
+    let t = Topics::create(p, "Atlas CRM rebuild", "").await.unwrap();
+    sqlx::query("INSERT INTO meetings (id, title, created_at, updated_at) VALUES ('notes-only-7', 'Imported', ?, ?)")
+        .bind(NOW).bind(NOW).execute(p).await.unwrap();
+    links::link_meeting(p, &t.id, "notes-only-7").await.unwrap();
+    let app = tauri::test::mock_app();
+    let r = jobs::run_for_meeting_with(
+        app.handle(),
+        p,
+        "notes-only-7",
+        "summary",
+        Some("my notes"),
+        fake(ENTRY, r#"{"mentions":[]}"#, Default::default()),
+    )
+    .await
+    .unwrap();
+    assert_eq!(r.entries, 1);
+    // Cited times can't resolve without evidence labels.
+    let body: String = sqlx::query_scalar("SELECT body_json FROM topic_entries")
+        .fetch_one(p)
+        .await
+        .unwrap();
+    assert!(!body.contains("\"t\""), "{body}");
+}

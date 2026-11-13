@@ -157,7 +157,7 @@ pub async fn retry_task<R: Runtime>(app: &AppHandle<R>, task_id: u64) -> Result<
             } = load_extraction_inputs(&pool, &meeting_id).await?;
             with_priority(
                 Priority::Interactive,
-                crate::topics::jobs::run_for_meeting(
+                crate::topics::jobs::run_for_retry(
                     app,
                     &pool,
                     &meeting_id,

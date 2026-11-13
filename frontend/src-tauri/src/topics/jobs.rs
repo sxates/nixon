@@ -69,9 +69,22 @@ fn claim(meeting_id: &str) -> Option<Guard> {
         .then(|| Guard(meeting_id.to_string()))
 }
 
-/// The entry-writer half for every open linked topic without an entry yet.
-async fn write_entries<F, Fut>(
+/// What to do when another topic job already holds the meeting's slot.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Busy {
+    /// Log and report nothing (the post-summary run: the holder covers the same meeting).
+    Skip,
+    /// Poll for the slot, up to ten minutes (backfill must not drop a meeting).
+    Wait,
+    /// Fail, so a queue Retry never records a false success.
+    Refuse,
+}
+
+const BUSY_MESSAGE: &str = "Topics are already updating for this meeting.";
+
+async fn write_one<F, Fut>(
     pool: &SqlitePool,
+    topic: &Topic,
     meeting_id: &str,
     summary: &str,
     notes: Option<&str>,
@@ -83,50 +96,71 @@ where
     Fut: Future<Output = std::result::Result<String, String>>,
 {
     let mut report = JobReport::default();
-    for topic in topics_for_meeting(pool, meeting_id, true).await? {
-        if ledger::has_entry(pool, &topic.id, meeting_id).await? {
-            continue;
-        }
-        let evidence = for_entry(blocks, &topic_terms(&topic.name, &topic.description));
-        let decisions = ledger::open_decisions(pool, &topic.id, OPEN_DECISIONS_CAP).await?;
-        let call = |s: String, u: String| llm(JobCall::Entry, s, u);
-        let parsed =
-            match write_entry_with_llm(call, &topic, summary, notes, &evidence, &decisions).await {
-                Ok(p) => p,
-                Err(e) => {
-                    log::warn!(
-                        "Topic entry for meeting_id {meeting_id} failed (others continue): {e:#}"
-                    );
-                    continue;
-                }
-            };
-        let inserted =
-            ledger::insert_machine_entry(pool, &topic.id, meeting_id, "series", parsed.body).await;
-        let Some(_entry_id) = inserted.unwrap_or_else(|e| {
-            log::warn!("Couldn't store a topic entry for meeting_id {meeting_id}: {e:#}");
-            None
-        }) else {
-            continue; // closed, deleted or already written while the model ran
-        };
-        report.entries += 1;
-        let rows: Vec<NewSuggestion> = parsed
-            .revisions
-            .into_iter()
-            .map(|(d, note, t)| NewSuggestion {
-                topic_id: topic.id.clone(),
-                kind: "revision".into(),
-                meeting_id: meeting_id.to_string(),
-                t_start: t,
-                target_entry_id: Some(d.entry_id),
-                target_decision_id: Some(d.decision_id),
-                text: note,
-            })
-            .collect();
-        if !rows.is_empty() {
-            report.suggestions += ledger::insert_suggestions(pool, &rows).await?;
-        }
+    if ledger::has_entry(pool, &topic.id, meeting_id).await? {
+        return Ok(report);
+    }
+    let evidence = for_entry(blocks, &topic_terms(&topic.name, &topic.description));
+    let decisions = ledger::open_decisions(pool, &topic.id, OPEN_DECISIONS_CAP).await?;
+    let call = |s: String, u: String| llm(JobCall::Entry, s, u);
+    let parsed = write_entry_with_llm(call, topic, summary, notes, &evidence, &decisions).await?;
+    // `None`: closed, deleted or already written while the model ran.
+    if ledger::insert_machine_entry(pool, &topic.id, meeting_id, "series", parsed.body)
+        .await?
+        .is_none()
+    {
+        return Ok(report);
+    }
+    report.entries += 1;
+    let rows: Vec<NewSuggestion> = parsed
+        .revisions
+        .into_iter()
+        .map(|(d, note, t)| NewSuggestion {
+            topic_id: topic.id.clone(),
+            kind: "revision".into(),
+            meeting_id: meeting_id.to_string(),
+            t_start: t,
+            target_entry_id: Some(d.entry_id),
+            target_decision_id: Some(d.decision_id),
+            text: note,
+        })
+        .collect();
+    if !rows.is_empty() {
+        report.suggestions += ledger::insert_suggestions(pool, &rows).await?;
     }
     Ok(report)
+}
+
+/// The entry-writer half for every open linked topic without an entry yet. One topic's
+/// failure (model or database) is logged and the rest continue.
+async fn write_entries<F, Fut>(
+    pool: &SqlitePool,
+    meeting_id: &str,
+    summary: &str,
+    notes: Option<&str>,
+    blocks: &[Block],
+    llm: &F,
+) -> JobReport
+where
+    F: Fn(JobCall, String, String) -> Fut,
+    Fut: Future<Output = std::result::Result<String, String>>,
+{
+    let mut report = JobReport::default();
+    let topics = match topics_for_meeting(pool, meeting_id, true).await {
+        Ok(t) => t,
+        Err(e) => {
+            log::warn!("Couldn't list topics for meeting_id {meeting_id}: {e:#}");
+            return report;
+        }
+    };
+    for topic in topics {
+        match write_one(pool, &topic, meeting_id, summary, notes, blocks, llm).await {
+            Ok(r) => report.add(r),
+            Err(e) => log::warn!(
+                "Topic entry for meeting_id {meeting_id} failed (others continue): {e:#}"
+            ),
+        }
+    }
+    report
 }
 
 /// Open topics this meeting isn't linked to, most recently active first, capped.
@@ -204,6 +238,7 @@ where
     Ok(stored)
 }
 
+#[allow(clippy::too_many_arguments)] // the job's full input surface
 async fn run_inner<R, F, Fut>(
     app: &AppHandle<R>,
     pool: &SqlitePool,
@@ -212,23 +247,41 @@ async fn run_inner<R, F, Fut>(
     notes: Option<&str>,
     llm: F,
     detect: bool,
+    busy: Busy,
 ) -> Result<JobReport>
 where
     R: Runtime,
     F: Fn(JobCall, String, String) -> Fut + Clone,
     Fut: Future<Output = std::result::Result<String, String>>,
 {
-    let Some(_guard) = claim(meeting_id) else {
-        log::info!("Topic job for meeting_id {meeting_id} already running; skipping");
-        return Ok(JobReport::default());
+    let mut waited = 0u32;
+    let _guard = loop {
+        if let Some(g) = claim(meeting_id) {
+            break g;
+        }
+        match busy {
+            Busy::Skip => {
+                log::info!("Topic job for meeting_id {meeting_id} already running; skipping");
+                return Ok(JobReport::default());
+            }
+            Busy::Refuse => return Err(anyhow::anyhow!(BUSY_MESSAGE)),
+            Busy::Wait if waited >= 2400 => {
+                return Err(anyhow::anyhow!("{BUSY_MESSAGE} Gave up waiting."));
+            }
+            Busy::Wait => {
+                waited += 1;
+                tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+            }
+        }
     };
     let segments = load_segments(pool, meeting_id).await?;
     let blocks = blocks(&segments);
     if blocks.is_empty() {
-        return Ok(JobReport::default());
+        log::info!("meeting_id {meeting_id} has no timed transcript; topic entries use the summary and notes only");
     }
-    let mut report = write_entries(pool, meeting_id, summary, notes, &blocks, &llm).await?;
-    if detect {
+    // Entries need no transcript (summary + notes suffice, any cited time resolves to None).
+    let mut report = write_entries(pool, meeting_id, summary, notes, &blocks, &llm).await;
+    if detect && !blocks.is_empty() {
         match detect_mentions(pool, meeting_id, summary, &blocks, &llm).await {
             Ok(n) => report.suggestions += n,
             Err(e) => log::warn!("Topic mention scan for meeting_id {meeting_id} failed: {e:#}"),
@@ -255,7 +308,7 @@ where
     F: Fn(JobCall, String, String) -> Fut + Clone,
     Fut: Future<Output = std::result::Result<String, String>>,
 {
-    run_inner(app, pool, meeting_id, summary, notes, llm, true).await
+    run_inner(app, pool, meeting_id, summary, notes, llm, true, Busy::Skip).await
 }
 
 type LlmFuture =
@@ -307,6 +360,29 @@ pub async fn run_for_meeting<R: Runtime>(
 ) -> Result<JobReport> {
     let llm = provider_llm(config, app.path().app_data_dir().ok());
     run_for_meeting_with(app, pool, meeting_id, summary, notes, llm).await
+}
+
+/// A queue Retry: like [`run_for_meeting`] but a busy meeting is an error, not a success.
+pub async fn run_for_retry<R: Runtime>(
+    app: &AppHandle<R>,
+    pool: &SqlitePool,
+    meeting_id: &str,
+    summary: &str,
+    notes: Option<&str>,
+    config: &ProviderConfig,
+) -> Result<JobReport> {
+    let llm = provider_llm(config, app.path().app_data_dir().ok());
+    run_inner(
+        app,
+        pool,
+        meeting_id,
+        summary,
+        notes,
+        llm,
+        true,
+        Busy::Refuse,
+    )
+    .await
 }
 
 /// The background trigger after a summary is stored. Registers a queue row (skipped, with no
@@ -385,6 +461,7 @@ where
             notes.as_deref(),
             llm.clone(),
             false,
+            Busy::Wait,
         )
         .await
         {
