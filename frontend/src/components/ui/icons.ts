@@ -43,7 +43,7 @@ export { CalendarDays, Download, FileAudio, GripVertical, RotateCw } from 'lucid
 
 // Sidebar navigation. The collapsed rail is icon-only, so each destination's glyph is its
 // only visible wayfinding; the hamburger toggles the rail.
-export { CheckSquare, Menu, MessageSquare, Settings, Users } from 'lucide-react';
+export { CheckSquare, FolderKanban, Menu, MessageSquare, Settings, Users } from 'lucide-react';
 
 // Command palette (⌘K) item leading icons — the palette's rows are menu items.
 export {

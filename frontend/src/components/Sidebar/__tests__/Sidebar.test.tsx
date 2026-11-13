@@ -74,7 +74,7 @@ vi.mock('@/contexts/UpdateStatusContext', () => ({
 import Sidebar from '@/components/Sidebar';
 
 // Today and All meetings merged into one Meetings page.
-const NAV_NAMES = ['Meetings', 'To-do', 'People', 'Ask AI'];
+const NAV_NAMES = ['Meetings', 'To-do', 'Topics', 'People', 'Ask AI'];
 
 describe('Sidebar (specs/0057 Plan 3 Task 3)', () => {
   beforeEach(() => {
@@ -87,6 +87,16 @@ describe('Sidebar (specs/0057 Plan 3 Task 3)', () => {
     for (const name of NAV_NAMES) {
       expect(screen.getByRole('button', { name })).toBeInTheDocument();
     }
+  });
+
+  it('puts Topics right after To-do and lights it on /topics paths', () => {
+    pathname = '/topics/topic';
+    render(<Sidebar />);
+    const labels = Array.from(document.querySelectorAll('nav [data-sidebar-row]')).map((b) =>
+      b.getAttribute('aria-label'),
+    );
+    expect(labels.indexOf('Topics')).toBe(labels.indexOf('To-do') + 1);
+    expect(screen.getByRole('button', { name: 'Topics' })).toHaveAttribute('aria-current', 'page');
   });
 
   it('marks the active destination with aria-current="page" when expanded', () => {

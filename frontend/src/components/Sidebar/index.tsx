@@ -4,6 +4,7 @@ import React, { useEffect } from 'react';
 import {
   CalendarDays,
   CheckSquare,
+  FolderKanban,
   Menu,
   MessageSquare,
   Settings,
@@ -18,6 +19,7 @@ import { cn } from '@/lib/utils';
 import { QueueRow } from './QueueRow';
 import { IconSlot, NavRow } from './SidebarRow';
 import { SIDEBAR_LABEL, SIDEBAR_ROW } from './row';
+import { TopicsNavList } from './TopicsNavList';
 import { UpdateRow } from './UpdateRow';
 
 import DevBadge from '../DevBadge';
@@ -29,7 +31,7 @@ interface NavItem {
   /** The silkscreened glyph for this destination (specs/0057 §2). */
   icon: LucideIcon;
   /** The `data-sidebar-slot` name this destination renders (specs/0069 W1). */
-  slot: 'meetings' | 'tasks' | 'people' | 'ask';
+  slot: 'meetings' | 'tasks' | 'topics' | 'people' | 'ask';
   /** Returns true when this item should render as active for the current path. */
   isActive: (pathname: string | null) => boolean;
 }
@@ -58,6 +60,14 @@ const NAV_ITEMS: NavItem[] = [
     icon: CheckSquare,
     slot: 'tasks',
     isActive: (p) => p?.startsWith('/tasks') ?? false,
+  },
+  {
+    // Ongoing subjects that span meetings (specs/0089). Its open topics list below the row.
+    label: 'Topics',
+    path: '/topics',
+    icon: FolderKanban,
+    slot: 'topics',
+    isActive: (p) => p?.startsWith('/topics') ?? false,
   },
   {
     label: 'People',
@@ -151,16 +161,18 @@ const Sidebar: React.FC = () => {
 
         <nav className="mt-2 flex flex-1 flex-col overflow-y-auto">
           {NAV_ITEMS.map((item) => (
-            <NavRow
-              key={item.label}
-              slot={item.slot}
-              icon={item.icon}
-              label={item.label}
-              collapsed={isCollapsed}
-              active={item.isActive(pathname)}
-              badge={item.slot === 'tasks' ? inboxCount : undefined}
-              onClick={() => router.push(item.path)}
-            />
+            <React.Fragment key={item.label}>
+              <NavRow
+                slot={item.slot}
+                icon={item.icon}
+                label={item.label}
+                collapsed={isCollapsed}
+                active={item.isActive(pathname)}
+                badge={item.slot === 'tasks' ? inboxCount : undefined}
+                onClick={() => router.push(item.path)}
+              />
+              {item.slot === 'topics' && <TopicsNavList collapsed={isCollapsed} />}
+            </React.Fragment>
           ))}
         </nav>
 
