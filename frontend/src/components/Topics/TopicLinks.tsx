@@ -2,8 +2,9 @@
 
 /**
  * The topic's link chips (specs/0089 §UI): each linked series or meeting, with an unlink ✕
- * that confirms first; Link a series…, which searches recorded meetings and links the
- * picked one's whole series (optionally backfilling 90 days); and the meeting count.
+ * that confirms first; Link a series…, which searches recorded meetings and links each
+ * picked one's whole series (several at once; optionally backfilling 90 days); and the
+ * meeting count.
  */
 
 import { useState } from 'react';
@@ -90,9 +91,11 @@ export function TopicLinks({ topicId, links, meetingCount, onChanged }: TopicLin
       <LinkMeetingPicker
         open={picking}
         onOpenChange={setPicking}
-        title="Link a series"
-        description="Pick any meeting from the series. Every meeting in it feeds this topic."
+        title="Link series"
+        description="Pick a meeting from each series. Every meeting in those series feeds this topic."
         excludeIds={[]}
+        multiple
+        confirmLabel={(n) => (n === 1 ? 'Link 1 series' : `Link ${n} series`)}
         onPick={async (meetingId) => {
           await linkTopic(topicId, meetingId, 'series', backfill);
         }}
@@ -101,7 +104,7 @@ export function TopicLinks({ topicId, links, meetingCount, onChanged }: TopicLin
         <Checkbox
           checked={backfill}
           onCheckedChange={setBackfill}
-          label="Also add this series' meetings from the last 90 days"
+          label="Also add their meetings from the last 90 days"
         />
       </LinkMeetingPicker>
     </div>
