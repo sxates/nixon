@@ -63,6 +63,7 @@ pub mod state;
 pub mod summary;
 pub mod transcripts;
 pub mod tray;
+pub mod topics;
 pub mod tray_reel;
 pub mod updater;
 pub mod utils;
