@@ -555,6 +555,9 @@
         item: r,
         sources,
         personIds: r.assigneePersonId ? [r.assigneePersonId] : [],
+        // Beside `item`, as the Rust ActionItemDetail sends it (specs/0089).
+        topicId: r.topicId ?? null,
+        topicName: r.topicName ?? null,
       };
     },
     api_set_action_item_notes: ({ id, markdown }) => {
