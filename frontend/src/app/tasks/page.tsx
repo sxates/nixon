@@ -1,41 +1,35 @@
 'use client';
 
 /**
- * Task hub (specs/0034, extended by specs/0038 WS1) — every action item across meetings
- * on one page.
+ * To-do (specs/0088, replacing the meeting-grouped task hub of specs/0034/0038) — one
+ * hand-ordered list of your commitments, a suggestion Inbox, and Done history, as three
+ * tabs. The selected tab syncs to `?tab=todo|inbox|done` so a link or a screenshot can
+ * address each one.
  *
- * Filter bar: a status segmented control (Open default / Completed / Dismissed), a
- * top-level VIEW segmented control (Mine / Everyone — WS1.c) with a "By person" filter menu
- * beside it, defaulting to **Mine + Open** (the owner's primary workflow), a SORT control (Manual / Due date /
- * Meeting date — WS1.b, Meeting is the default), and a bulk "Dismiss…" menu in the Open
- * view (WS1.e). Filtering happens server-side via `api_list_action_items`.
+ *   - **To-do**: quick-add on top (a trailing `(Friday)` becomes the due date), then the
+ *     drag-ordered list (persisted via `api_reorder_action_items`). No grouping, sorting
+ *     or person filter — the order is yours.
+ *   - **Inbox**: items the extractor suggested. Add to my list / Dismiss / Assign…; the
+ *     header menu dismisses old suggestions in bulk (with an Undo toast) and toggles the
+ *     dismissed list, where each row can be restored.
+ *   - **Done**: completed items by week; the checkbox reopens one.
  *
- * Ordering:
- *   - **Meeting** (default): client-side grouping by source meeting (`groupActionItems`),
- *     newest meeting first, standalone to-dos in a trailing "Unattached" group; meeting
- *     headers deep-link to `/meeting-details?id=…`.
- *   - **Manual / Due**: a flat list (`sortActionItems`) — the source meeting becomes a
- *     deep-link chip on the row instead of a group header. Manual rows are drag-reorderable
- *     (persisted via `api_reorder_action_items`). Rows are compact (single line, expanding
- *     on hover/focus).
- *
- * "New item" creates a standalone manual to-do (`api_create_action_item` with no meeting).
- * Rows are the shared `ActionItemRow`; mutations come from the shared
- * `useActionItemMutations` hook (optimistic, per-item error reverts). A status change that
- * moves an item out of the current filter drops it locally rather than re-querying.
+ * Lists come from `useTodoViews`, which refetches on `action-items-updated`; mutations
+ * here also call `reload()` so the screen settles without waiting for the event.
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { invoke } from '@tauri-apps/api/core';
 import { toast } from 'sonner';
-import { Button } from '@/components/ui/button';
 import { Callout } from '@/components/ui/callout';
 import { DeckIcon } from '@/components/ui/deck-icon';
 import { EmptyState, PageLoading } from '@/components/ui/empty-state';
 import { IconButton } from '@/components/ui/icon-button';
-import { ChevronDown, GripVertical } from '@/components/ui/icons';
-import { LinkRow } from '@/components/ui/list-row';
+import { GripVertical } from '@/components/ui/icons';
+import { MenuButton } from '@/components/ui/menu-button';
+import { PageHeader } from '@/components/ui/page-header';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -43,123 +37,56 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { ActionItemRow } from '@/components/ActionItems/ActionItemRow';
 import { AddActionItemRow } from '@/components/ActionItems/AddActionItemRow';
 import type { AssigneeCandidate } from '@/components/ActionItems/AssigneePicker';
-import { useActionItemMutations } from '@/hooks/useActionItemMutations';
+import { DoneList } from '@/components/ActionItems/DoneList';
+import { InboxRow } from '@/components/ActionItems/InboxRow';
+import { TODO_GRID, TodoListRow, todoRowDomId } from '@/components/ActionItems/TodoListRow';
+import { REORDER_ATTR, useDragReorder } from '@/hooks/useDragReorder';
+import { moveToIndex, useTodoListKeys, type Highlight } from '@/hooks/useTodoListKeys';
 import {
-  affectedByBulk,
-  assigneeLabel,
-  buildListArgs,
-  groupActionItems,
-  reorderIds,
-  sortActionItems,
-  type BulkFilter,
-  type HubSort,
-  type PersonFilter,
-  type StatusFilter,
+  FOCUS_QUICK_ADD_EVENT,
+  QUICK_ADD_LABEL,
+  focusQuickAdd,
+} from '@/components/QuickAdd/QuickAddShortcut';
+import { useActionItemMutations } from '@/hooks/useActionItemMutations';
+import { useTodoViews } from '@/hooks/useTodoViews';
+import {
+  adoptedFromName,
+  updateAssigneeArgs,
+  type AssigneeSelection,
 } from '@/lib/action-items';
-import { formatMeetingDate } from '@/lib/format-date';
-import { safeListen } from '@/lib/safe-listen';
-import type { ActionItemWithMeeting, Person } from '@/types';
-import { cn } from '@/lib/utils';
-import { PageHeader } from '@/components/ui/page-header';
 import { PAGE_CONTENT_WIDTH, PAGE_GUTTER } from '@/lib/page-width';
-import { SegmentedControl } from '@/components/ui/segmented-control';
+import { cn } from '@/lib/utils';
+import type { ActionItem, ActionItemStatus, Person, TodoRow } from '@/types';
 
-const STATUS_SEGMENTS: Array<{ value: StatusFilter; label: string }> = [
-  { value: 'open', label: 'Open' },
-  { value: 'completed', label: 'Completed' },
-  { value: 'dismissed', label: 'Dismissed' },
-];
+type TabValue = 'todo' | 'inbox' | 'done';
+const TAB_VALUES: TabValue[] = ['todo', 'inbox', 'done'];
+const isTab = (v: string | null): v is TabValue => !!v && (TAB_VALUES as string[]).includes(v);
 
-// WS1.c — whose items. "By person" is its own filter menu beside this switch: it needs a
-// person picked, which a segment can't ask for.
-const WHOSE_SEGMENTS: Array<{ value: 'mine' | 'everyone'; label: string }> = [
-  { value: 'mine', label: 'Mine' },
-  { value: 'everyone', label: 'Everyone' },
-];
+const errorText = (err: unknown) => (err instanceof Error ? err.message : String(err));
 
-const SORT_OPTIONS: Array<{ value: HubSort; label: string }> = [
-  { value: 'meeting', label: 'Meeting date' },
-  { value: 'manual', label: 'Manual' },
-  { value: 'due', label: 'Due date' },
-];
-
-const EMPTY_COPY: Record<StatusFilter, string> = {
-  open: 'No open action items. They appear here as meeting summaries are generated — or add one yourself.',
-  completed: 'Nothing completed yet.',
-  dismissed: 'No dismissed items.',
-};
-
-/** Compact deep-link chip to an item's source meeting (WS1.b flat views). */
-function MeetingChip({
-  title,
-  createdAt,
-  onOpen,
-}: {
-  title: string;
-  createdAt: string | null;
-  onOpen: () => void;
-}) {
-  const date = formatMeetingDate(createdAt);
-  return (
-    <Button
-      variant="outline"
-      size="xs"
-      onClick={onOpen}
-      title="Open this meeting"
-      className="h-auto max-w-[220px] gap-1 px-2 py-px text-caption font-normal text-muted-foreground shadow-none"
-    >
-      <span className="truncate">{title}</span>
-      {date && <span className="flex-shrink-0 opacity-70">· {date}</span>}
-    </Button>
-  );
-}
-
-export default function TasksPage() {
+function TasksPageContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
 
-  const [items, setItems] = useState<ActionItemWithMeeting[]>([]);
-  const [people, setPeople] = useState<Person[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [status, setStatus] = useState<StatusFilter>('open');
-  // WS1.c: default to "Mine" (owner's primary workflow) — Mine + Open out of the box.
-  const [person, setPerson] = useState<PersonFilter>({ kind: 'me' });
-  // WS1.b: Meeting-date grouping is the default order.
-  const [sort, setSort] = useState<HubSort>('meeting');
-
-  // WS1.b drag state (Manual sort only).
-  const [draggingId, setDraggingId] = useState<string | null>(null);
-  const [overId, setOverId] = useState<string | null>(null);
-  const [armedId, setArmedId] = useState<string | null>(null);
-  const resetDrag = useCallback(() => {
-    setDraggingId(null);
-    setOverId(null);
-    setArmedId(null);
-  }, []);
-
-  const load = useCallback(async () => {
-    try {
-      const result = await invoke<ActionItemWithMeeting[]>(
-        'api_list_action_items',
-        buildListArgs(status, person),
-      );
-      setItems(Array.isArray(result) ? result : []);
-      setError(null);
-    } catch (err) {
-      console.error('Failed to load action items:', err);
-      setError('Could not load your action items.');
-    } finally {
-      setIsLoading(false);
-    }
-  }, [status, person]);
-
+  const paramTab = searchParams.get('tab');
+  const [tab, setTab] = useState<TabValue>(isTab(paramTab) ? paramTab : 'todo');
   useEffect(() => {
-    void load();
-  }, [load]);
+    if (isTab(paramTab)) setTab(paramTab);
+  }, [paramTab]);
+  const changeTab = (next: string) => {
+    if (!isTab(next)) return;
+    setTab(next);
+    if (next !== 'inbox') setShowDismissed(false);
+    router.replace(`/tasks?tab=${next}`);
+  };
 
+  const [showDismissed, setShowDismissed] = useState(false);
+  const views = useTodoViews({ includeDismissed: showDismissed });
+  const { reload } = views;
+
+  const [people, setPeople] = useState<Person[]>([]);
   useEffect(() => {
     void (async () => {
       try {
@@ -170,369 +97,464 @@ export default function TasksPage() {
       }
     })();
   }, []);
-
-  // Cross-meeting page: refresh on ANY extraction commit.
-  useEffect(() => safeListen('action-items-updated', () => void load()), [load]);
-
-  const nameById = useMemo(
-    () => new Map(people.map((p) => [p.id, p.displayName])),
-    [people],
-  );
+  const nameById = useMemo(() => new Map(people.map((p) => [p.id, p.displayName])), [people]);
   const candidates = useMemo<AssigneeCandidate[]>(
-    () =>
-      people.map((p) => ({ personId: p.id, displayName: p.displayName, email: p.email })),
+    () => people.map((p) => ({ personId: p.id, displayName: p.displayName, email: p.email })),
     [people],
   );
-  const groups = useMemo(() => groupActionItems(items), [items]);
-  const flatItems = useMemo(
-    () => (sort === 'meeting' ? [] : sortActionItems(items, sort)),
-    [items, sort],
-  );
 
-  const personName =
-    person.kind === 'person' ? (nameById.get(person.personId) ?? 'Person') : null;
+  // The To-do list is mirrored locally so checkbox / reorder / edit can be optimistic.
+  const [items, setItems] = useState<TodoRow[]>([]);
+  useEffect(() => setItems(views.list), [views.list]);
 
-  // Row mutations (shared hook): optimistic with per-item error reverts.
   const {
-    setStatus: setItemStatus,
+    setStatus,
     editDescription,
     assign,
     deleteItem,
     add,
-    setDueDate,
     reorder,
     bulkSetStatus,
-  } = useActionItemMutations<ActionItemWithMeeting>({
+    triage,
+    dismissOlderThan,
+    setDueDate,
+  } = useActionItemMutations<TodoRow>({
     setItems,
-    meetingId: null, // the hub's add row creates standalone to-dos
-    // Bare IPC items lack the meeting join fields; real rows keep their own.
-    toRow: (item) => ({ meetingTitle: null, meetingCreatedAt: null, ...item }),
-    onStatusChanged: (updated) => {
-      // A status change moves the item out of the current status filter —
-      // drop it locally instead of re-querying the whole list.
-      if (updated.status !== status) {
-        setItems((prev) => prev.filter((i) => i.id !== updated.id));
-      }
+    meetingId: null, // quick-add creates standalone to-dos
+    toRow: (item) => ({
+      meetingTitle: null,
+      meetingCreatedAt: null,
+      sourceCount: 0,
+      latestSourceAt: null,
+      latestContext: null,
+      ...item,
+    }),
+    // The legacy commands emit no event: re-read so the lists and badge stay correct.
+    onStatusChanged: () => void reload(),
+    onAssigned: () => reload(),
+    onAdded: () => {
+      toast.success('To-do added');
+      void reload();
     },
-    onAssigned: async () => {
-      // The change may move the item out of a person-scoped view.
-      if (person.kind !== 'anyone') await load();
-    },
-    onAdded: () => toast.success('To-do added'),
-    // A new item is 'open' and unassigned — keep it visible in whatever person view
-    // it was just created from (you added it), as long as the status filter matches.
-    appendCreated: (created) => created.status === status,
   });
 
-  // WS1.b — persist a drag drop as a new manual order (optimistic in the hook).
-  const handleDrop = useCallback(
-    (targetId: string) => {
-      if (draggingId && draggingId !== targetId) {
-        const next = reorderIds(
-          flatItems.map((i) => i.id),
-          draggingId,
-          targetId,
-        );
-        void reorder(next);
-      }
-      resetDrag();
-    },
-    [draggingId, flatItems, reorder, resetDrag],
+  const handleDelete = async (item: ActionItem) => {
+    await deleteItem(item);
+    void reload();
+  };
+
+  const openItem = useCallback(
+    (item: ActionItem) => router.push(`/tasks/item?id=${item.id}`),
+    [router],
   );
 
-  // WS1.e — bulk dismiss, with a client-side id snapshot backing the Undo.
-  const handleBulkDismiss = useCallback(
-    async (filter: BulkFilter, label: string) => {
-      const ids = affectedByBulk(items, filter);
+  // ---- To-do drag order ----
+  // Hand order: `sortOrder` ascending, unordered rows after, ties keep backend order (the
+  // sort is stable). Re-sorting here is what makes an optimistic drag land on screen.
+  const openItems = useMemo(
+    () =>
+      items
+        .filter((i) => i.status === 'open')
+        .sort((a, b) => (a.sortOrder ?? Infinity) - (b.sortOrder ?? Infinity) || 0),
+    [items],
+  );
+  // Ticked off on this visit: the row stays in place, struck through, so a mis-click can be
+  // unticked. It moves to Done once you leave the page (this state goes with it).
+  const [lingering, setLingering] = useState<Map<string, TodoRow>>(new Map());
+  const listRows = useMemo(() => {
+    const shown = openItems.filter((i) => !lingering.has(i.id));
+    return [...shown, ...lingering.values()].sort(
+      (a, b) => (a.sortOrder ?? Infinity) - (b.sortOrder ?? Infinity) || 0,
+    );
+  }, [openItems, lingering]);
+  const setListStatus = useCallback(
+    (item: ActionItem, status: ActionItemStatus) => {
+      setLingering((prev) => {
+        const next = new Map(prev);
+        if (status === 'completed') {
+          const row = items.find((i) => i.id === item.id) ?? (item as TodoRow);
+          next.set(item.id, { ...row, status: 'completed' });
+        } else next.delete(item.id);
+        return next;
+      });
+      return setStatus(item, status);
+    },
+    [items, setStatus],
+  );
+  const toggleDone = useCallback(
+    (id: string) => {
+      const row = listRows.find((r) => r.id === id);
+      if (row) void setListStatus(row, lingering.has(id) ? 'open' : 'completed');
+    },
+    [listRows, lingering, setListStatus],
+  );
+
+  const openIds = useMemo(() => listRows.map((i) => i.id), [listRows]);
+  // Ticked-off rows hold their place on screen but are no longer part of the saved order.
+  const applyOrder = useCallback(
+    (next: string[]) => void reorder(next.filter((id) => !lingering.has(id))),
+    [reorder, lingering],
+  );
+  const { draggingId, overId, gripProps } = useDragReorder(openIds, applyOrder);
+
+  // ---- To-do selection, inline edit, highlight (keyboard model in useTodoListKeys) ----
+  const listRef = useRef<HTMLDivElement>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const selectRow = useCallback((id: string | null) => {
+    setSelectedId(id);
+    if (id) document.getElementById(todoRowDomId(id))?.scrollIntoView({ block: 'nearest' });
+  }, []);
+  // Hand focus back to the list after an edit so the keys keep working.
+  const endEdit = useCallback(() => {
+    setEditingId(null);
+    requestAnimationFrame(() => listRef.current?.focus({ preventScroll: true }));
+  }, []);
+  // A click anywhere outside the list releases the selection — except inside a row's own
+  // popovers (date picker, ⋯ menu), which render in a portal outside the list's DOM.
+  useEffect(() => {
+    if (!selectedId) return;
+    const onPointerDown = (e: PointerEvent) => {
+      const t = e.target as Element | null;
+      if (!t || listRef.current?.contains(t)) return;
+      if (t.closest('[data-radix-popper-content-wrapper], [role="menu"], [role="dialog"]')) return;
+      setSelectedId(null);
+      setEditingId(null);
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    return () => document.removeEventListener('pointerdown', onPointerDown);
+  }, [selectedId]);
+  // A row that leaves the list (completed, dismissed) takes the selection with it.
+  useEffect(() => {
+    if (selectedId && !openIds.includes(selectedId)) setSelectedId(null);
+  }, [openIds, selectedId]);
+
+  const toggleHighlight = useCallback(
+    async (id: string, color: Highlight) => {
+      const current = items.find((i) => i.id === id)?.highlight ?? null;
+      const next = current === color ? null : color;
+      setItems((prev) => prev.map((i) => (i.id === id ? { ...i, highlight: next } : i)));
+      try {
+        await invoke('api_set_action_item_highlight', { id, highlight: next });
+      } catch (err) {
+        setItems((prev) => prev.map((i) => (i.id === id ? { ...i, highlight: current } : i)));
+        toast.error('Could not change the highlight', { description: errorText(err) });
+      }
+    },
+    [items],
+  );
+
+  const onListKeyDown = useTodoListKeys({
+    ids: openIds,
+    selectedId,
+    editing: editingId !== null,
+    select: selectRow,
+    startEdit: setEditingId,
+    reorder: applyOrder,
+    toggleHighlight: (id, color) => void toggleHighlight(id, color),
+    toggleDone,
+  });
+
+  const commitEdit = async (item: ActionItem, title: string, dueDate: string | null) => {
+    endEdit();
+    if (title && title !== item.description) await editDescription(item, title);
+    if (title && dueDate) await setDueDate(item, dueDate);
+  };
+
+  // ⌘T (QuickAddShortcut): focus the new-item field, on arrival (?add=1) or in place.
+  const wantsAdd = searchParams.get('add') === '1';
+  useEffect(() => {
+    if (!wantsAdd || !views.loaded) return;
+    if (focusQuickAdd()) router.replace('/tasks?tab=todo');
+  }, [wantsAdd, views.loaded, router]);
+  useEffect(() => {
+    const onFocus = () => {
+      changeTab('todo');
+      requestAnimationFrame(() => focusQuickAdd());
+    };
+    window.addEventListener(FOCUS_QUICK_ADD_EVENT, onFocus);
+    return () => window.removeEventListener(FOCUS_QUICK_ADD_EVENT, onFocus);
+  });
+
+  // ---- Inbox triage ----
+  const runTriage = async (item: TodoRow, action: 'add_to_list' | 'dismiss' | 'restore') => {
+    try {
+      await triage(item.id, action);
+    } catch (err) {
+      console.error('Failed to triage action item:', err);
+      toast.error('Could not update the item', { description: errorText(err) });
+    }
+    await reload();
+  };
+
+  const assignSuggestion = async (item: TodoRow, selection: AssigneeSelection) => {
+    // "Me" is the same as adding it to my list; anyone else takes it off my plate.
+    if (selection.kind === 'me') return runTriage(item, 'add_to_list');
+    try {
+      await invoke('api_update_action_item', updateAssigneeArgs(item.id, selection));
+    } catch (err) {
+      console.error('Failed to assign action item:', err);
+      toast.error('Could not update the assignee', { description: errorText(err) });
+    }
+    await reload();
+  };
+
+  const handleDismissOlder = async (days: 14 | 30 | 60) => {
+    try {
+      const ids = await dismissOlderThan(days);
       if (ids.length === 0) {
-        toast('Nothing to dismiss', { description: `No open items ${label}.` });
+        toast('Nothing to dismiss', {
+          description: `No suggestions older than ${days} days.`,
+        });
         return;
       }
-      const affected = new Set(ids);
-      const snapshot = items;
-      setItems((prev) => prev.filter((i) => !affected.has(i.id)));
-      try {
-        const count = await bulkSetStatus(filter, 'dismissed');
-        toast.success(`Dismissed ${count} ${count === 1 ? 'item' : 'items'}`, {
-          description: 'They won’t come back on the next scan.',
-          action: {
-            label: 'Undo',
-            onClick: () => {
-              void (async () => {
-                try {
-                  await bulkSetStatus({ mode: 'ids', ids }, 'open');
-                  await load();
-                } catch (err) {
-                  toast.error('Could not undo', {
-                    description: err instanceof Error ? err.message : String(err),
-                  });
-                }
-              })();
-            },
+      toast.success(`Dismissed ${ids.length} ${ids.length === 1 ? 'suggestion' : 'suggestions'}`, {
+        action: {
+          label: 'Undo',
+          onClick: () => {
+            void (async () => {
+              try {
+                await bulkSetStatus({ mode: 'ids', ids }, 'open');
+              } catch (err) {
+                toast.error('Could not undo', { description: errorText(err) });
+              }
+              await reload();
+            })();
           },
-        });
-      } catch (err) {
-        setItems(() => snapshot);
-        toast.error('Could not dismiss those items', {
-          description: err instanceof Error ? err.message : String(err),
-        });
-      }
-    },
-    [items, bulkSetStatus, load],
-  );
+        },
+      });
+    } catch (err) {
+      toast.error('Could not dismiss those suggestions', { description: errorText(err) });
+    }
+    await reload();
+  };
 
-  const canDismiss = status === 'open';
-  const notMeCount = useMemo(
-    () => (canDismiss ? affectedByBulk(items, { mode: 'notSelf' }).length : 0),
-    [items, canDismiss],
-  );
+  const inboxRows = showDismissed ? views.dismissed : views.inbox;
+  const doneRows = useMemo(() => views.done.filter((r) => r.status === 'completed'), [views.done]);
 
-  const viewSegment: 'mine' | 'everyone' | 'byPerson' =
-    person.kind === 'me' ? 'mine' : person.kind === 'anyone' ? 'everyone' : 'byPerson';
-
-  const rowProps = (item: ActionItemWithMeeting) =>
-    ({
-      item,
-      assigneeName: assigneeLabel(item, nameById),
-      candidates,
-      onSetStatus: setItemStatus,
-      onEditDescription: editDescription,
-      onAssign: assign,
-      onDelete: deleteItem,
-    }) as const;
+  const noun = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+  const subtitle =
+    tab === 'inbox'
+      ? inboxRows.length > 0
+        ? showDismissed
+          ? `${noun(inboxRows.length, 'dismissed suggestion', 'dismissed suggestions')}`
+          : `${noun(inboxRows.length, 'suggestion', 'suggestions')} to review`
+        : 'Suggestions from your meetings'
+      : tab === 'done'
+        ? doneRows.length > 0
+          ? `${doneRows.length} completed`
+          : 'What you finish lands here'
+        : openItems.length > 0
+          ? `${noun(openItems.length, 'item', 'items')} on your list`
+          : 'Your commitments, in the order you choose';
 
   return (
     // A short opacity fade, no travel (docs/design-system.md §Motion).
     <div className="flex h-page animate-fade-in flex-col bg-background">
       <PageHeader
         width="page"
-        title="Action items"
-        subtitle={
-          items.length > 0
-            ? `${items.length} ${items.length === 1 ? 'item' : 'items'}`
-            : 'Commitments from your meetings, in one place'
+        title="To-do"
+        subtitle={subtitle}
+        actions={
+          // The slot exists on every tab so the header doesn't jump when the menu appears.
+          <div className="size-7">
+            {tab === 'inbox' && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <MenuButton label="Inbox options" />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {([14, 30, 60] as const).map((days) => (
+                    <DropdownMenuItem key={days} onSelect={() => void handleDismissOlder(days)}>
+                      Dismiss suggestions older than {days} days
+                    </DropdownMenuItem>
+                  ))}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onSelect={() => setShowDismissed((v) => !v)}>
+                    {showDismissed ? 'Hide dismissed' : 'Show dismissed'}
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+          </div>
         }
       />
 
-      {/* Filter bar: status · view (Mine/Everyone/By person) · sort · bulk. */}
-      <div className={cn('flex-shrink-0 pb-3', PAGE_GUTTER)}>
-        <div className={cn('mx-auto flex w-full flex-wrap items-center gap-2', PAGE_CONTENT_WIDTH)}>
-          <SegmentedControl
-            aria-label="Filter by status"
-            options={STATUS_SEGMENTS}
-            value={status}
-            onChange={(value) => setStatus(value as StatusFilter)}
-          />
-
-          {/* WS1.c — top-level view: Mine / Everyone, the same SegmentedControl as status
-              (one segmented style on the page). A person filter leaves neither pressed. A
-              hairline divides the two switches, or they read as one five-way control. */}
-          <span aria-hidden="true" className="mx-1 h-5 w-px bg-border" />
-          <SegmentedControl
-            aria-label="Whose items"
-            options={WHOSE_SEGMENTS}
-            value={viewSegment}
-            onChange={(value) => setPerson(value === 'everyone' ? { kind: 'anyone' } : { kind: 'me' })}
-          />
-
-          {/* "By person" — a filter menu; its label is the person once one is picked. */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="outline"
-                size="sm"
-                aria-label="Filter by a specific person"
-                data-active={viewSegment === 'byPerson' || undefined}
-                className={cn('gap-1.5', viewSegment === 'byPerson' && 'border-brand-edge')}
-              >
-                {viewSegment === 'byPerson' ? personName : 'By person'}
-                <DeckIcon icon={ChevronDown} size={12} className="text-muted-foreground" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start">
-              {people.length === 0 ? (
-                <DropdownMenuItem disabled>No people yet</DropdownMenuItem>
-              ) : (
-                people.map((p) => (
-                  <DropdownMenuItem
-                    key={p.id}
-                    onSelect={() => setPerson({ kind: 'person', personId: p.id })}
-                  >
-                    {p.displayName}
-                  </DropdownMenuItem>
-                ))
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          {/* WS1.b — sort control. */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" aria-label="Sort" className="gap-1.5">
-                {SORT_OPTIONS.find((o) => o.value === sort)?.label}
-                <DeckIcon icon={ChevronDown} size={12} className="text-muted-foreground" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start">
-              {SORT_OPTIONS.map((o) => (
-                <DropdownMenuItem key={o.value} onSelect={() => setSort(o.value)}>
-                  {o.label}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          {/* WS1.e — bulk dismiss (Open view only; matches the backend's open-only rule). */}
-          {canDismiss && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" aria-label="Bulk dismiss" className="ml-auto gap-1.5">
-                  Dismiss
-                  <DeckIcon icon={ChevronDown} size={12} className="text-muted-foreground" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem
-                  disabled={notMeCount === 0}
-                  onSelect={() =>
-                    void handleBulkDismiss({ mode: 'notSelf' }, 'assigned to other people')
-                  }
-                >
-                  Dismiss all not assigned to me
-                  {notMeCount > 0 && (
-                    <span className="ml-auto pl-3 text-xs text-muted-foreground">
-                      {notMeCount}
-                    </span>
-                  )}
-                </DropdownMenuItem>
-                {person.kind === 'person' && personName && (
-                  <>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      onSelect={() =>
-                        void handleBulkDismiss(
-                          { mode: 'person', personId: person.personId },
-                          `from ${personName}`,
-                        )
-                      }
-                    >
-                      Dismiss all from {personName}
-                    </DropdownMenuItem>
-                  </>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
+      <Tabs value={tab} onValueChange={changeTab} className="flex min-h-0 flex-1 flex-col">
+        <div className={cn('flex-shrink-0', PAGE_GUTTER)}>
+          <TabsList className={cn('mx-auto w-full', PAGE_CONTENT_WIDTH)}>
+            <TabsTrigger value="todo">To-do</TabsTrigger>
+            <TabsTrigger value="inbox" badge={views.inboxCount > 0 ? views.inboxCount : undefined}>
+              Inbox
+            </TabsTrigger>
+            <TabsTrigger value="done">Done</TabsTrigger>
+          </TabsList>
         </div>
-      </div>
 
-      <div className={cn('flex-1 overflow-y-auto pb-12', PAGE_GUTTER)}>
-        <div className={cn('mx-auto w-full', PAGE_CONTENT_WIDTH)}>
-          {/* Standalone to-do entry — creates an "Unattached" manual item. */}
-          <AddActionItemRow placeholder="New item — add a to-do…" onAdd={add} />
-
-          {isLoading ? (
-            <PageLoading fill="pane" label="Loading action items…" />
-          ) : error ? (
-            <Callout tone="error" className="mt-4">
-              {error}
-            </Callout>
-          ) : items.length === 0 ? (
-            <EmptyState
-              className="h-[40vh]"
-              title={status === 'open' ? 'No action items' : 'Nothing here'}
-              body={EMPTY_COPY[status]}
-            />
-          ) : sort === 'meeting' ? (
-            /* Grouped-by-meeting (default). */
-            <div className="mt-4 flex flex-col gap-5">
-              {groups.map((group) => (
-                <section key={group.key} aria-label={group.title}>
-                  {group.meetingId ? (
-                    <LinkRow
-                      title={group.title}
-                      meta={formatMeetingDate(group.createdAt) || undefined}
-                      onClick={() => router.push(`/meeting-details?id=${group.meetingId}`)}
-                      hint="Open this meeting"
+        <div className={cn('flex-1 overflow-y-auto pb-12', PAGE_GUTTER)}>
+          <div className={cn('mx-auto w-full', PAGE_CONTENT_WIDTH)}>
+            {views.error && (
+              <Callout tone="error" className="mt-4">
+                {views.error}
+              </Callout>
+            )}
+            {!views.loaded ? (
+              <PageLoading fill="pane" label="Loading your to-do list…" />
+            ) : (
+              <>
+                <TabsContent value="todo" className="mt-4">
+                  <AddActionItemRow
+                    placeholder="New item — add a to-do…  (⌘⇧T from anywhere)"
+                    ariaLabel={QUICK_ADD_LABEL}
+                    onAdd={add}
+                  />
+                  {listRows.length === 0 ? (
+                    <EmptyState
+                      className="h-[40vh]"
+                      title="Nothing on your list"
+                      body="Add a to-do above, or move suggestions over from your Inbox."
                     />
                   ) : (
-                    <div className="u-row-title px-2 py-1.5">{group.title}</div>
+                    <>
+                    <div
+                      ref={listRef}
+                      className="group/list mt-3 px-1 focus:outline-none"
+                      role="listbox"
+                      aria-label="To-do list"
+                      tabIndex={0}
+                      aria-activedescendant={selectedId ? todoRowDomId(selectedId) : undefined}
+                      onKeyDown={onListKeyDown}
+                    >
+                      <div className={cn(TODO_GRID, 'px-2 pb-1')} aria-hidden>
+                        <span />
+                        <span className="u-section-label-sm">Item</span>
+                        <span className="u-section-label-sm">Due</span>
+                      </div>
+                      {listRows.map((item) => (
+                        <div
+                          key={item.id}
+                          role="presentation"
+                          {...{ [REORDER_ATTR]: item.id }}
+                          className={cn(
+                            'rounded-lg transition-shadow',
+                            draggingId === item.id && 'opacity-50',
+                            overId === item.id &&
+                              draggingId &&
+                              draggingId !== item.id &&
+                              'ring-2 ring-brand-edge',
+                          )}
+                        >
+                          <TodoListRow
+                            item={item}
+                            nameById={nameById}
+                            sourceCount={item.sourceCount}
+                            adoptedFrom={adoptedFromName(item, nameById)}
+                            highlight={item.highlight ?? null}
+                            selected={selectedId === item.id}
+                            editing={editingId === item.id}
+                            onSelect={(row) => {
+                              selectRow(row.id);
+                              listRef.current?.focus({ preventScroll: true });
+                            }}
+                            onStartEdit={(row) => setEditingId(row.id)}
+                            onCommitEdit={(row, title, due) => void commitEdit(row, title, due)}
+                            onCancelEdit={endEdit}
+                            onToggleHighlight={(row, color) => void toggleHighlight(row.id, color)}
+                            onMoveToTop={(row) => applyOrder(moveToIndex(openIds, row.id, 0))}
+                            onOpen={openItem}
+                            onSetStatus={setListStatus}
+                            onSetDueDate={setDueDate}
+                            onDelete={handleDelete}
+                            dragHandle={
+                              <IconButton
+                                variant="ghost"
+                                label="Drag to reorder"
+                                {...gripProps(item.id)}
+                                icon={<DeckIcon icon={GripVertical} size={14} />}
+                                // A narrow grip in the row's gutter, not a 28px key: it shows
+                                // on row hover and reads as a handle, not a button.
+                                className={cn(
+                                  'h-[18px] w-4 cursor-grab touch-none text-muted-foreground/40 opacity-0 transition-opacity hover:bg-transparent hover:text-muted-foreground focus-visible:opacity-100 group-hover:opacity-100 active:cursor-grabbing',
+                                  draggingId === item.id && 'opacity-100',
+                                )}
+                              />
+                            }
+                          />
+                        </div>
+                      ))}
+                    </div>
+                    <p className="mt-4 px-3 text-caption text-muted-foreground">
+                      ↑↓ select · Space edit · ⌘D done · ⌘↑↓ move · ⌘1–3 move to 1st–3rd · ⌘4 / ⌘5 highlight
+                    </p>
+                    </>
                   )}
-                  <div className="mt-0.5 flex flex-col gap-0.5">
-                    {group.items.map((item) => (
-                      <ActionItemRow key={item.id} {...rowProps(item)} onSetDueDate={setDueDate} />
-                    ))}
-                  </div>
-                </section>
-              ))}
-            </div>
-          ) : (
-            /* Flat list (Manual / Due) — meeting becomes a row chip; Manual is drag-orderable. */
-            <div className="mt-4 flex flex-col gap-0.5">
-              {flatItems.map((item) => (
-                <div
-                  key={item.id}
-                  draggable={sort === 'manual' && armedId === item.id}
-                  onDragStart={(e) => {
-                    setDraggingId(item.id);
-                    if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
-                  }}
-                  onDragOver={(e) => {
-                    if (sort === 'manual' && draggingId) {
-                      e.preventDefault();
-                      setOverId(item.id);
-                    }
-                  }}
-                  onDrop={(e) => {
-                    e.preventDefault();
-                    handleDrop(item.id);
-                  }}
-                  onDragEnd={resetDrag}
-                  className={cn(
-                    'rounded-lg transition-shadow',
-                    draggingId === item.id && 'opacity-50',
-                    overId === item.id &&
-                      draggingId &&
-                      draggingId !== item.id &&
-                      'ring-2 ring-brand-edge',
+                </TabsContent>
+
+                <TabsContent value="inbox" className="mt-4">
+                  {inboxRows.length === 0 ? (
+                    <EmptyState
+                      className="h-[40vh]"
+                      title={showDismissed ? 'Nothing dismissed' : 'Nothing waiting'}
+                      body={
+                        showDismissed
+                          ? 'Suggestions you dismiss show up here, so you can bring them back.'
+                          : 'New suggestions from your meetings land here for you to triage.'
+                      }
+                    />
+                  ) : (
+                    <div className="flex flex-col gap-0.5 px-0.5">
+                      {inboxRows.map((item) => (
+                        <InboxRow
+                          key={item.id}
+                          item={item}
+                          mode={showDismissed ? 'dismissed' : 'inbox'}
+                          nameById={nameById}
+                          candidates={candidates}
+                          onAdd={(row) => runTriage(row, 'add_to_list')}
+                          onDismiss={(row) => runTriage(row, 'dismiss')}
+                          onAssign={assignSuggestion}
+                          onRestore={(row) => runTriage(row, 'restore')}
+                          onOpen={openItem}
+                        />
+                      ))}
+                    </div>
                   )}
-                >
-                  <ActionItemRow
-                    {...rowProps(item)}
-                    compact
-                    onSetDueDate={setDueDate}
-                    meetingChip={
-                      item.meetingId ? (
-                        <MeetingChip
-                          title={item.meetingTitle?.trim() || 'Untitled meeting'}
-                          createdAt={item.meetingCreatedAt}
-                          onOpen={() =>
-                            router.push(`/meeting-details?id=${item.meetingId}`)
-                          }
-                        />
-                      ) : null
-                    }
-                    dragHandle={
-                      sort === 'manual' ? (
-                        <IconButton
-                          variant="ghost"
-                          label="Drag to reorder"
-                          onMouseDown={() => setArmedId(item.id)}
-                          onMouseUp={() => setArmedId(null)}
-                          icon={<DeckIcon icon={GripVertical} size={14} />}
-                          // A narrow grip in the row's gutter, not a 28px key: it shows on
-                          // row hover and reads as a handle, not a button.
-                          className="mt-0.5 h-[18px] w-4 cursor-grab text-muted-foreground/40 opacity-0 transition-opacity hover:bg-transparent hover:text-muted-foreground focus-visible:opacity-100 group-hover:opacity-100 active:cursor-grabbing"
-                        />
-                      ) : null
-                    }
-                  />
-                </div>
-              ))}
-            </div>
-          )}
+                </TabsContent>
+
+                <TabsContent value="done" className="mt-4">
+                  {doneRows.length === 0 ? (
+                    <EmptyState
+                      className="h-[40vh]"
+                      title="Nothing completed yet"
+                      body="Items you tick off land here."
+                    />
+                  ) : (
+                    <DoneList
+                      rows={doneRows}
+                      nameById={nameById}
+                      candidates={candidates}
+                      onSetStatus={setStatus}
+                      onEditDescription={editDescription}
+                      onAssign={assign}
+                      onDelete={handleDelete}
+                      onOpen={openItem}
+                    />
+                  )}
+                </TabsContent>
+              </>
+            )}
+          </div>
         </div>
-      </div>
+      </Tabs>
     </div>
+  );
+}
+
+export default function TasksPage() {
+  // useSearchParams requires a Suspense boundary (same pattern as the Ask page).
+  return (
+    <Suspense fallback={<PageLoading className="bg-background" />}>
+      <TasksPageContent />
+    </Suspense>
   );
 }

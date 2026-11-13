@@ -83,6 +83,21 @@ pub async fn merge_person_into_owner(pool: &SqlitePool, person_id: &str) -> Resu
     // 5. Action items (specs/0034): tasks assigned to the folded person are the OWNER's
     //    tasks — flip to the self flag and clear the FK (the owner is deliberately not a
     //    `people` row), matching how speakers/voiceprints re-point rather than strand.
+    //    specs/0088: an open `record` item that is now mine is a suggestion again, and the
+    //    person's @mention rows go (the person row does too).
+    sqlx::query(
+        "UPDATE action_items SET triage = 'suggested'
+         WHERE assignee_person_id = ? AND triage = 'record' AND status = 'open'",
+    )
+    .bind(person_id)
+    .execute(&mut *tx)
+    .await
+    .context("return folded person's open record items to the inbox")?;
+    sqlx::query("DELETE FROM action_item_people WHERE person_id = ?")
+        .bind(person_id)
+        .execute(&mut *tx)
+        .await
+        .context("drop folded person's mention rows")?;
     sqlx::query(
         "UPDATE action_items SET assignee_is_self = 1, assignee_person_id = NULL
          WHERE assignee_person_id = ?",
@@ -282,6 +297,53 @@ mod tests {
         .unwrap();
         assert!(!other_self);
         assert_eq!(other_person.as_deref(), Some("p2"));
+    }
+
+    /// specs/0088: a folded person's open `record` items are now mine -> back in the inbox;
+    /// the person's mention rows go with the person.
+    #[tokio::test]
+    async fn merge_returns_record_items_to_inbox_and_drops_mentions() {
+        let pool = test_pool().await;
+        insert_person(&pool, "p1", None).await;
+        insert_person(&pool, "p2", None).await;
+        sqlx::query(
+            "INSERT INTO action_items (id, meeting_id, description, assignee_person_id, status, triage, content_key, created_at, updated_at)
+             VALUES ('open-rec','m1','a','p1','open','record','k1','',''),
+                    ('done-rec','m1','b','p1','completed','record','k2','',''),
+                    ('other-rec','m1','c','p2','open','record','k3','','')",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        sqlx::query(
+            "INSERT INTO action_item_people (action_item_id, person_id)
+             VALUES ('open-rec','p1'), ('other-rec','p2')",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        merge_person_into_owner(&pool, "p1").await.unwrap();
+
+        let triage = |id: &'static str| {
+            let pool = pool.clone();
+            async move {
+                sqlx::query_scalar::<_, String>("SELECT triage FROM action_items WHERE id = ?")
+                    .bind(id)
+                    .fetch_one(&pool)
+                    .await
+                    .unwrap()
+            }
+        };
+        assert_eq!(triage("open-rec").await, "suggested");
+        assert_eq!(triage("done-rec").await, "record");
+        assert_eq!(triage("other-rec").await, "record");
+        let mentions: Vec<String> =
+            sqlx::query_scalar("SELECT person_id FROM action_item_people ORDER BY person_id")
+                .fetch_all(&pool)
+                .await
+                .unwrap();
+        assert_eq!(mentions, vec!["p2".to_string()]);
     }
 
     #[tokio::test]

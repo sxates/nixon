@@ -58,6 +58,9 @@ function makeItem(overrides: Partial<ActionItem> = {}): ActionItem {
     updatedAt: '2026-07-01T10:00:00Z',
     completedAt: null,
     sortOrder: null,
+    triage: 'suggested',
+    adoptedAt: null,
+    notesMarkdown: null,
     ...overrides,
   };
 }
@@ -146,9 +149,10 @@ describe('PrepPanel (specs/0036)', () => {
         makeView({
           briefStatus: 'none',
           openItems: [
-            makeItem({ id: 'mine-1', assigneeIsSelf: true, description: 'Draft the roadmap' }),
+            makeItem({ id: 'mine-1', triage: 'listed', assigneeIsSelf: true, description: 'Draft the roadmap' }),
             makeItem({
               id: 'other-1',
+              triage: 'record',
               assigneeIsSelf: false,
               assigneePersonId: 'p1',
               description: 'Send the budget',
@@ -166,6 +170,102 @@ describe('PrepPanel (specs/0036)', () => {
     expect(await screen.findByText('Send the budget')).toBeInTheDocument();
     expect(screen.getByText('Owed by others')).toBeInTheDocument();
     expect(await screen.findByText('Alice')).toBeInTheDocument();
+  });
+
+  it('Adopt on an owed-by-others row triages it, then reloads the prep view', async () => {
+    let calls = 0;
+    stubInvoke({
+      api_get_prep: () => {
+        calls += 1;
+        return makeView({
+          briefStatus: 'none',
+          openItems: [
+            makeItem({
+              id: 'other-1',
+              triage: calls > 1 ? 'listed' : 'record',
+              assigneePersonId: 'p1',
+              description: 'Send the budget',
+            }),
+          ],
+        });
+      },
+      api_list_people: () => [person('p1', 'Alice')],
+      api_triage_action_item: () => makeItem({ id: 'other-1', triage: 'listed' }),
+    });
+    render(<PrepPanel meetingId="m1" />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Adopt' }));
+
+    await waitFor(() =>
+      expect(invokeMock).toHaveBeenCalledWith('api_triage_action_item', {
+        id: 'other-1',
+        action: 'adopt',
+      }),
+    );
+    await waitFor(() => expect(calls).toBe(2));
+    expect(await screen.findByText('Your open items')).toBeInTheDocument();
+  });
+
+  it('reloads the prep view when action items change elsewhere', async () => {
+    let calls = 0;
+    stubInvoke({
+      api_get_prep: () => {
+        calls += 1;
+        return makeView({ briefStatus: 'none' });
+      },
+    });
+    const { safeListen } = await import('@/lib/safe-listen');
+    render(<PrepPanel meetingId="m1" />);
+    await waitFor(() => expect(calls).toBe(1));
+
+    const reg = vi.mocked(safeListen).mock.calls.find((c) => c[0] === 'action-items-updated');
+    expect(reg).toBeTruthy();
+    (reg![1] as () => void)();
+    await waitFor(() => expect(calls).toBe(2));
+  });
+
+  it('prep splits by triage', async () => {
+    stubInvoke({
+      api_get_prep: () =>
+        makeView({
+          briefStatus: 'none',
+          openItems: [
+            // Adopted: listed but assigned to someone else, so it is still "mine".
+            makeItem({
+              id: 'adopted',
+              triage: 'listed',
+              assigneeIsSelf: false,
+              assigneePersonId: 'p1',
+              description: 'Adopted item',
+            }),
+            // Mine by assignee but only on the record: belongs under "Owed by others".
+            makeItem({
+              id: 'rec',
+              triage: 'record',
+              assigneeIsSelf: true,
+              description: 'Recorded item',
+            }),
+          ],
+        }),
+      api_list_people: () => [person('p1', 'Alice')],
+    });
+    render(<PrepPanel meetingId="m1" />);
+
+    const mineHeading = await screen.findByText('Your open items');
+    const othersHeading = await screen.findByText('Owed by others');
+    const adopted = await screen.findByText('Adopted item');
+    const recorded = await screen.findByText('Recorded item');
+    expect(
+      mineHeading.compareDocumentPosition(adopted) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      adopted.compareDocumentPosition(othersHeading) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      othersHeading.compareDocumentPosition(recorded) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    // Record rows carry no checkbox.
+    expect(screen.getAllByRole('checkbox')).toHaveLength(1);
   });
 
   // ── specs/0041 WS4: manual series association ────────────────────────────
@@ -293,7 +393,7 @@ describe('PrepPanel (specs/0036)', () => {
     });
 
     it('checks a carried-over item off, and the row stays visible struck through', async () => {
-      const item = makeItem({ id: 'ai-9', assigneeIsSelf: true, description: 'Draft the roadmap' });
+      const item = makeItem({ id: 'ai-9', triage: 'listed', assigneeIsSelf: true, description: 'Draft the roadmap' });
       const onOpenItemsChanged = vi.fn();
       stubInvoke({
         api_get_prep: () => makeView({ openItems: [item] }),
@@ -331,7 +431,7 @@ describe('PrepPanel (specs/0036)', () => {
         api_get_prep: () =>
           makeView({
             openItems: [
-              makeItem({ id: 'o1', assigneeIsSelf: false, assigneePersonId: 'p1', description: 'Send the budget' }),
+              makeItem({ id: 'o1', triage: 'record', assigneeIsSelf: false, assigneePersonId: 'p1', description: 'Send the budget' }),
             ],
           }),
         api_list_people: () => [person('p1', 'Alice')],

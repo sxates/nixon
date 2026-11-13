@@ -318,6 +318,10 @@ export interface ActionItem {
   /** Manual drag-order key (specs/0038 WS1.b); null = unordered. Only the hub's Manual
    *  sort reads it — the default list order (meeting recency) ignores it. */
   sortOrder: number | null;
+  /** specs/0088: inbox / to-do list / someone else's (meeting record only). */
+  triage: 'suggested' | 'listed' | 'record';
+  adoptedAt: string | null;
+  notesMarkdown: string | null;
 }
 
 /** Hub-query row (specs/0034): an action item joined to its source meeting
@@ -326,6 +330,34 @@ export interface ActionItem {
 export interface ActionItemWithMeeting extends ActionItem {
   meetingTitle: string | null;
   meetingCreatedAt: string | null;
+}
+
+/** Which list `api_list_todo_view` returns (specs/0088). */
+export type TodoView = 'list' | 'inbox' | 'done' | 'dismissed';
+
+/** One row of a to-do view: the item plus its meeting join and source summary. */
+export interface TodoRow extends ActionItemWithMeeting {
+  /** Number of meetings that mention this item. */
+  sourceCount: number;
+  latestSourceAt: string | null;
+  latestContext: string | null;
+  /** To-do list highlight (⌘4 / ⌘5); absent on older payloads. */
+  highlight?: 'yellow' | 'green' | null;
+}
+
+/** One meeting that mentions an item (`api_get_action_item_detail`). */
+export interface SourceRow {
+  meetingId: string;
+  meetingTitle: string | null;
+  meetingCreatedAt: string | null;
+  context: string | null;
+  phrasing: string | null;
+}
+
+export interface ActionItemDetail {
+  item: ActionItem;
+  sources: SourceRow[];
+  personIds: string[];
 }
 
 /** Payload of the `action-items-updated` Tauri event (specs/0034), emitted after a

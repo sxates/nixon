@@ -341,6 +341,11 @@ impl PeopleRepository {
         .execute(&mut *tx)
         .await?;
 
+        sqlx::query("DELETE FROM action_item_people WHERE person_id = ?")
+            .bind(id)
+            .execute(&mut *tx)
+            .await?;
+
         let res = sqlx::query("DELETE FROM people WHERE id = ?")
             .bind(id)
             .execute(&mut *tx)

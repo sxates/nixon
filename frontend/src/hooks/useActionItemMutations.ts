@@ -29,6 +29,8 @@ import {
 } from '@/lib/action-items';
 import type { ActionItem, ActionItemStatus } from '@/types';
 
+export type TriageAction = 'add_to_list' | 'adopt' | 'dismiss' | 'restore';
+
 export interface UseActionItemMutationsOptions<T extends ActionItem> {
   setItems: Dispatch<SetStateAction<T[]>>;
   /** Meeting the add row creates items on; null = standalone hub to-do. */
@@ -54,7 +56,7 @@ export interface ActionItemMutations {
   assign: (item: ActionItem, selection: AssigneeSelection) => Promise<void>;
   deleteItem: (item: ActionItem) => Promise<void>;
   /** Returns false on failure so `AddActionItemRow` keeps the typed draft. */
-  add: (description: string) => Promise<boolean>;
+  add: (description: string, dueDate?: string) => Promise<boolean>;
   /** Set (ISO `YYYY-MM-DD`) or clear (`null`) an item's structured due date (WS1.a). */
   setDueDate: (item: ActionItem, dueDate: string | null) => Promise<void>;
   /**
@@ -69,6 +71,13 @@ export interface ActionItemMutations {
    * the current view). Throws on failure so the caller can revert.
    */
   bulkSetStatus: (filter: BulkFilter, status: ActionItemStatus) => Promise<number>;
+  /** Inbox / list triage (specs/0088). Throws on failure; callers reload their view. */
+  triage: (id: string, action: TriageAction) => Promise<ActionItem>;
+  /** Save an item's Markdown notes; `null` clears them. Throws on failure. */
+  setNotes: (id: string, markdown: string | null) => Promise<void>;
+  /** Dismiss every suggestion older than `days`; returns the ids (undo with
+   *  `bulkSetStatus({ mode: 'ids', ids }, 'open')`). Throws on failure. */
+  dismissOlderThan: (days: 14 | 30 | 60) => Promise<string[]>;
 }
 
 function errorDescription(err: unknown): string {
@@ -193,11 +202,22 @@ export function useActionItemMutations<T extends ActionItem>({
     return invoke<number>('api_bulk_set_action_item_status', { filter, status });
   };
 
-  const add = async (description: string): Promise<boolean> => {
+  const triage = (id: string, action: TriageAction) =>
+    invoke<ActionItem>('api_triage_action_item', { id, action });
+
+  const setNotes = async (id: string, markdown: string | null) => {
+    await invoke('api_set_action_item_notes', { id, markdown });
+  };
+
+  const dismissOlderThan = (days: 14 | 30 | 60) =>
+    invoke<string[]>('api_dismiss_suggestions_older_than', { days });
+
+  const add = async (description: string, dueDate?: string): Promise<boolean> => {
     try {
       const created = await invoke<ActionItem>('api_create_action_item', {
         meetingId,
         description,
+        ...(dueDate ? { dueDate } : {}),
       });
       if (!appendCreated || appendCreated(created)) {
         const row = lift(created);
@@ -212,5 +232,17 @@ export function useActionItemMutations<T extends ActionItem>({
     }
   };
 
-  return { setStatus, editDescription, assign, deleteItem, add, setDueDate, reorder, bulkSetStatus };
+  return {
+    setStatus,
+    editDescription,
+    assign,
+    deleteItem,
+    add,
+    setDueDate,
+    reorder,
+    bulkSetStatus,
+    triage,
+    setNotes,
+    dismissOlderThan,
+  };
 }

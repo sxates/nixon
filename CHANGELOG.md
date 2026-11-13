@@ -21,6 +21,37 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 _(nothing yet)_
 
+## [0.17.0] - 2026-11-12
+
+### Added
+
+- **To-do** is now a list you work from: one list you order yourself by dragging, with quick-add at the top. Type a due date in the title, like "(Nov 20)" or "(Tuesday)", and it becomes the due date. Type @ to mention a person.
+- **Inbox** collects the action items Nixon finds in your meetings as suggestions. Choose **Add to my list**, **Dismiss**, or **Assign...** for each one, right from the Inbox or from the meeting page.
+- When the same item comes up in several meetings, it appears once, with every meeting it came up in listed on its page.
+- Each to-do has its own page with notes you can write and the meetings it came from.
+- **Done** keeps a history of what you finished, grouped by week.
+- Clear out old suggestions in one step: dismiss everything in the Inbox older than 14, 30, or 60 days.
+- Items assigned to other people stay on the meeting as a record, and you can adopt one onto your list if it becomes yours.
+- Drive your To-do list from the keyboard: arrow keys to select, Space to edit in place, ⌘↑/⌘↓ to move an item, ⌘1–⌘3 to send it to the top three, ⌘D to tick it off. Click a title once to select it and again to edit it.
+- Highlight what matters with ⌘4 (yellow) or ⌘5 (green).
+- Press ⌘T anywhere to jump to your To-do list, or ⌘⇧T to add a to-do without leaving the page you're on. During a recording, the new to-do can be added to that meeting and noted in your notes for it.
+- Due dates read the way you'd say them, like Today, Tomorrow, Friday or Next Wednesday. A new date picker lets you type "next tue" or "Nov 20", tap Today, Tomorrow or Next week, or pick from a calendar.
+- An item you tick off stays put until you leave the page, so a mis-click is easy to undo.
+
+### Changed
+
+- Action items Nixon found in past meetings now wait in your Inbox; items you typed or already worked on are on your To-do list. The Everyone and By-person views are gone: other people's items stay on their meetings.
+
+### Internal
+
+- Action items gain `triage` (suggested / listed / record) beside `status`, plus `action_item_sources` and `action_item_people`; existing items are backfilled on migration.
+- Cross-meeting merge uses `same_as` from extraction with a Jaccard backstop and an absorb rule for dismissed and recently completed items; the merge eval lives in `tests/action_items_merge_eval.rs` (ignored by default, results in spec 0088).
+- Shots: `tasks-inbox`, `tasks-done` and `tasks-item` routes added to `scripts/shots/routes.json`.
+- `action_items.highlight` column (migration 20261113000000) and `api_set_action_item_highlight`; `highlight-yellow` / `highlight-green` tokens.
+- Due-phrase contract (Rust + TS fixture) adds `this <weekday>` / `next <weekday>`; new `components/ui/mini-calendar.tsx` primitive.
+- List reordering uses pointer events instead of HTML5 drag; the audio-import drop overlay now requires file paths.
+- The action-item extractor skips `☐ To-do:` marker lines in the owner's notes.
+
 ## [0.16.2] - 2026-11-12
 
 ### Changed

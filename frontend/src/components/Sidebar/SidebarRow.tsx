@@ -2,6 +2,7 @@
 
 import React from 'react';
 import type { LucideIcon } from '@/components/ui/icons';
+import { Badge } from '@/components/ui/badge';
 import { DeckIcon } from '@/components/ui/deck-icon';
 import { cn } from '@/lib/utils';
 import { SIDEBAR_GLYPH, SIDEBAR_ICON_SLOT, SIDEBAR_LABEL, SIDEBAR_ROW } from './row';
@@ -46,6 +47,7 @@ export function NavRow({
   active = false,
   onClick,
   indexBar = true,
+  badge,
 }: {
   slot: string;
   icon: LucideIcon;
@@ -54,6 +56,8 @@ export function NavRow({
   active?: boolean;
   onClick: () => void;
   indexBar?: boolean;
+  /** A count chip (the To-do row's inbox count); hidden at 0. Collapsed, it perches on the glyph. */
+  badge?: number;
 }) {
   return (
     <button // ui-gate: allow sidebar row: the shared row.ts geometry (64px icon column, no padding); ListRow's padding and radius would move the rail glyphs
@@ -74,6 +78,16 @@ export function NavRow({
         <DeckIcon icon={icon} size={SIDEBAR_GLYPH} />
       </IconSlot>
       {!collapsed && <span className={SIDEBAR_LABEL}>{label}</span>}
+      {badge ? (
+        <Badge
+          tone="brand"
+          data-sidebar-badge
+          title={`${badge} in your inbox`}
+          className={collapsed ? 'absolute right-2.5 top-1 px-1 py-0' : 'mr-3.5'}
+        >
+          {badge}
+        </Badge>
+      ) : null}
     </button>
   );
 }

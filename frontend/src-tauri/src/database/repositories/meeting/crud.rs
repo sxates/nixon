@@ -447,11 +447,12 @@ async fn delete_meeting_with_transaction(
         .await?;
 
     // 8. Delete action items + their extraction ledger row (specs/0034). FKs are doc-only,
-    // so delete explicitly. Standalone to-dos (meeting_id IS NULL) are untouched.
-    sqlx::query("DELETE FROM action_items WHERE meeting_id = ?")
-        .bind(meeting_id)
-        .execute(&mut *transaction)
-        .await?;
+    // so delete explicitly. Source-aware (specs/0088): listed items survive as standalone, multi-source items repoint.
+    crate::database::repositories::action_item_todo::cascade_meeting_delete(
+        &mut *transaction,
+        meeting_id,
+    )
+    .await?;
     sqlx::query("DELETE FROM action_item_extractions WHERE meeting_id = ?")
         .bind(meeting_id)
         .execute(&mut *transaction)

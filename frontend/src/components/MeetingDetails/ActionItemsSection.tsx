@@ -31,8 +31,8 @@ import { Spinner } from '@/components/ui/spinner';
 import { ActionItemRow } from '@/components/ActionItems/ActionItemRow';
 import { AddActionItemRow } from '@/components/ActionItems/AddActionItemRow';
 import type { AssigneeCandidate } from '@/components/ActionItems/AssigneePicker';
-import { useActionItemMutations } from '@/hooks/useActionItemMutations';
-import { assigneeLabel } from '@/lib/action-items';
+import { useActionItemMutations, type TriageAction } from '@/hooks/useActionItemMutations';
+import { adoptedFromName, assigneeLabel } from '@/lib/action-items';
 import { safeListen } from '@/lib/safe-listen';
 import type {
   ActionItem,
@@ -122,7 +122,7 @@ export function ActionItemsSection({ meetingId, hasSummary }: ActionItemsSection
     [participants],
   );
 
-  const { setStatus, editDescription, assign, deleteItem, add } = useActionItemMutations({
+  const { setStatus, editDescription, assign, deleteItem, add, triage } = useActionItemMutations({
     setItems,
     meetingId,
     onStatusChanged: (updated) => {
@@ -133,6 +133,36 @@ export function ActionItemsSection({ meetingId, hasSummary }: ActionItemsSection
       }
     },
   });
+
+  // Triage reloads rather than patching locally: an adopt or add changes which group the
+  // row belongs to, and the command also emits `action-items-updated`.
+  const handleTriage = useCallback(
+    async (item: ActionItem, action: TriageAction) => {
+      try {
+        await triage(item.id, action);
+        if (action === 'dismiss') {
+          toast.success('Item dismissed', {
+            description: "It won't come back on the next scan.",
+            action: {
+              label: 'Undo',
+              onClick: () => {
+                void triage(item.id, 'restore')
+                  .then(loadItems)
+                  .catch((err) => console.error('Failed to restore action item:', err));
+              },
+            },
+          });
+        }
+        await loadItems();
+      } catch (err) {
+        console.error('Failed to triage action item:', err);
+        toast.error('Could not update the item', {
+          description: err instanceof Error ? err.message : String(err),
+        });
+      }
+    },
+    [triage, loadItems],
+  );
 
   const handleScan = useCallback(async () => {
     setIsScanning(true);
@@ -209,6 +239,8 @@ export function ActionItemsSection({ meetingId, hasSummary }: ActionItemsSection
                 onEditDescription={editDescription}
                 onAssign={assign}
                 onDelete={deleteItem}
+                onTriage={handleTriage}
+                adoptedFrom={adoptedFromName(item, nameById)}
               />
             ))}
           </div>

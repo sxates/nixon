@@ -23,6 +23,12 @@ use sqlx::{Error as SqlxError, FromRow, SqlitePool};
 use uuid::Uuid;
 
 use crate::action_items::diff::{ExtractionDiff, ResolvedCandidate};
+use crate::action_items::merge::SourceAttach;
+use crate::action_items::triage::triage_for;
+
+use super::action_item_todo::{
+    apply_sources_in_tx, delete_item_with_links, delete_or_detach_in_tx,
+};
 
 /// One action item, serialized camelCase for the frontend.
 #[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
@@ -61,6 +67,12 @@ pub struct ActionItem {
     /// [`ActionItemsRepository::reorder`] writes dense 0,1,2,… values. The default `list`
     /// order (meeting recency) ignores this — the hub's Manual sort reads it client-side.
     pub sort_order: Option<i64>,
+    /// `'suggested' | 'listed' | 'record'` (specs/0088).
+    pub triage: String,
+    /// When the item entered the owner's to-do list.
+    pub adopted_at: Option<String>,
+    /// Owner's notes (detail page), markdown.
+    pub notes_markdown: Option<String>,
 }
 
 /// Hub row: an action item joined to its source meeting's title/date (both `None` for a
@@ -113,9 +125,10 @@ pub enum BulkStatusFilter<'a> {
     Ids(&'a [String]),
 }
 
-const SELECT_ITEM: &str = "SELECT id, meeting_id, description, assignee_person_id, \
+pub(super) const SELECT_ITEM: &str = "SELECT id, meeting_id, description, assignee_person_id, \
      assignee_is_self, assignee_raw, due_hint, due_date, status, source, user_edited, \
-     content_key, created_at, updated_at, completed_at, sort_order FROM action_items";
+     content_key, created_at, updated_at, completed_at, sort_order, triage, adopted_at, \
+     notes_markdown FROM action_items";
 
 pub struct ActionItemsRepository;
 
@@ -178,7 +191,7 @@ impl ActionItemsRepository {
             "SELECT ai.id, ai.meeting_id, ai.description, ai.assignee_person_id, \
              ai.assignee_is_self, ai.assignee_raw, ai.due_hint, ai.due_date, ai.status, \
              ai.source, ai.user_edited, ai.content_key, ai.created_at, ai.updated_at, \
-             ai.completed_at, ai.sort_order, \
+             ai.completed_at, ai.sort_order, ai.triage, ai.adopted_at, ai.notes_markdown, \
              m.title AS meeting_title, m.created_at AS meeting_created_at \
              FROM action_items ai \
              LEFT JOIN meetings m ON m.id = ai.meeting_id \
@@ -218,18 +231,34 @@ impl ActionItemsRepository {
     ) -> Result<ActionItem, SqlxError> {
         let id = format!("ai-{}", Uuid::new_v4());
         let now = Utc::now().to_rfc3339();
+        // specs/0088: a hand-typed item is a to-do (end of the list); an extracted one is
+        // triaged like any extraction candidate and is not yet adopted.
+        let manual = source == "manual";
+        // ...and it is mine unless it names someone else.
+        let assignee_is_self = candidate.assignee_is_self
+            || (manual
+                && candidate.assignee_person_id.is_none()
+                && candidate.assignee_raw.is_none());
+        let triage = if manual {
+            "listed"
+        } else {
+            triage_for(candidate).as_str()
+        };
+        let mut tx = pool.begin().await?;
         sqlx::query(
             "INSERT INTO action_items
                 (id, meeting_id, description, assignee_person_id, assignee_is_self,
                  assignee_raw, due_hint, due_date, status, source, user_edited, content_key,
-                 created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'open', ?, 0, ?, ?, ?)",
+                 created_at, updated_at, triage, adopted_at, sort_order)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'open', ?, 0, ?, ?, ?, ?, ?,
+                 CASE WHEN ? THEN (SELECT COALESCE(MAX(sort_order), -1) + 1 FROM action_items
+                                   WHERE triage = 'listed') END)",
         )
         .bind(&id)
         .bind(meeting_id)
         .bind(&candidate.description)
         .bind(candidate.assignee_person_id.as_deref())
-        .bind(candidate.assignee_is_self)
+        .bind(assignee_is_self)
         .bind(candidate.assignee_raw.as_deref())
         .bind(candidate.due_hint.as_deref())
         .bind(candidate.due_date.as_deref())
@@ -237,8 +266,25 @@ impl ActionItemsRepository {
         .bind(content_key)
         .bind(&now)
         .bind(&now)
-        .execute(pool)
+        .bind(triage)
+        .bind(manual.then_some(&now))
+        .bind(manual)
+        .execute(&mut *tx)
         .await?;
+        if let Some(meeting_id) = meeting_id {
+            sqlx::query(
+                "INSERT OR IGNORE INTO action_item_sources
+                    (action_item_id, meeting_id, context, phrasing, added_at)
+                 VALUES (?, ?, NULL, ?, ?)",
+            )
+            .bind(&id)
+            .bind(meeting_id)
+            .bind(&candidate.description)
+            .bind(&now)
+            .execute(&mut *tx)
+            .await?;
+        }
+        tx.commit().await?;
 
         // Fetch back rather than hand-assembling, so the returned row is exactly what
         // any later read will see.
@@ -414,11 +460,7 @@ impl ActionItemsRepository {
     /// Hard delete. The UI offers this for MANUAL items only — deleting an extracted item
     /// would just get re-proposed on the next run; dismissing is the persistent "no".
     pub async fn delete(pool: &SqlitePool, id: &str) -> Result<bool, SqlxError> {
-        let res = sqlx::query("DELETE FROM action_items WHERE id = ?")
-            .bind(id)
-            .execute(pool)
-            .await?;
-        Ok(res.rows_affected() > 0)
+        delete_item_with_links(pool, id).await
     }
 
     /// The meeting's extraction ledger row, if any run ever completed.
@@ -454,10 +496,12 @@ impl ActionItemsRepository {
     /// (`source = 'extracted' AND status = 'open' AND user_edited = 0`) in its WHERE
     /// clause: a row the user touched in that window is silently skipped (the user won
     /// the race), never overwritten.
+    #[allow(clippy::too_many_arguments)] // one atomic write-shape; a struct would just rename it
     pub async fn replace_extracted(
         pool: &SqlitePool,
         meeting_id: &str,
         diff: &ExtractionDiff,
+        attaches: &[SourceAttach],
         summary_fingerprint: &str,
         model_provider: &str,
         model_name: &str,
@@ -478,19 +522,13 @@ impl ActionItemsRepository {
         }
 
         for id in &diff.delete_ids {
-            // meeting_id guard: the diff was computed from this meeting's rows only, but
-            // never let a stale plan delete another meeting's item. Pristine guard: only
-            // machine-owned rows are deletable (see doc above).
-            sqlx::query(
-                "DELETE FROM action_items
-                 WHERE id = ? AND meeting_id = ?
-                   AND source = 'extracted' AND status = 'open' AND user_edited = 0",
-            )
-            .bind(id)
-            .bind(meeting_id)
-            .execute(&mut *tx)
-            .await?;
+            // Pristine-guarded; a multi-source item is handed to its oldest other source
+            // meeting instead of deleted (specs/0088, see `delete_or_detach_in_tx`).
+            delete_or_detach_in_tx(&mut tx, meeting_id, id).await?;
         }
+
+        // (item id, context, phrasing) for the primary source rows of this run.
+        let mut primaries: Vec<(String, Option<String>, String)> = Vec::new();
 
         for update in &diff.updates {
             // In-place rewrite: id, created_at, status, source, user_edited preserved.
@@ -499,7 +537,7 @@ impl ActionItemsRepository {
                 "UPDATE action_items
                  SET description = ?, assignee_person_id = ?, assignee_is_self = ?,
                      assignee_raw = ?, due_hint = ?, due_date = ?, content_key = ?,
-                     updated_at = ?
+                     updated_at = ?, triage = ?
                  WHERE id = ? AND meeting_id = ?
                    AND source = 'extracted' AND status = 'open' AND user_edited = 0",
             )
@@ -511,11 +549,19 @@ impl ActionItemsRepository {
             .bind(update.candidate.due_date.as_deref())
             .bind(&update.content_key)
             .bind(&now)
+            .bind(triage_for(&update.candidate).as_str())
             .bind(&update.id)
             .bind(meeting_id)
             .execute(&mut *tx)
             .await?;
             rows_written += res.rows_affected() as u32;
+            if res.rows_affected() > 0 {
+                primaries.push((
+                    update.id.clone(),
+                    update.candidate.context.clone(),
+                    update.candidate.description.clone(),
+                ));
+            }
         }
 
         for insert in &diff.inserts {
@@ -524,8 +570,8 @@ impl ActionItemsRepository {
                 "INSERT INTO action_items
                     (id, meeting_id, description, assignee_person_id, assignee_is_self,
                      assignee_raw, due_hint, due_date, status, source, user_edited,
-                     content_key, created_at, updated_at)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'open', 'extracted', 0, ?, ?, ?)",
+                     content_key, created_at, updated_at, triage)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'open', 'extracted', 0, ?, ?, ?, ?)",
             )
             .bind(&id)
             .bind(meeting_id)
@@ -538,10 +584,25 @@ impl ActionItemsRepository {
             .bind(&insert.content_key)
             .bind(&now)
             .bind(&now)
+            .bind(triage_for(&insert.candidate).as_str())
             .execute(&mut *tx)
             .await?;
             rows_written += 1;
+            primaries.push((
+                id,
+                insert.candidate.context.clone(),
+                insert.candidate.description.clone(),
+            ));
         }
+
+        for (id, candidate) in &diff.matched {
+            primaries.push((
+                id.clone(),
+                candidate.context.clone(),
+                candidate.description.clone(),
+            ));
+        }
+        apply_sources_in_tx(&mut tx, meeting_id, &primaries, attaches).await?;
 
         sqlx::query(
             "INSERT INTO action_item_extractions
@@ -604,6 +665,7 @@ mod action_items_tests {
             assignee_raw: None,
             due_hint: None,
             due_date: None,
+            ..Default::default()
         }
     }
 
@@ -1046,12 +1108,14 @@ mod action_items_tests {
                 content_key: diff::content_key("send deck to alice"),
             }],
             delete_ids: vec![drop_me.id.clone()],
+            ..Default::default()
         };
 
         let written = ActionItemsRepository::replace_extracted(
             &pool,
             &meeting_id,
             &plan,
+            &[],
             "fp-1",
             "ollama",
             "llama3.2:latest",
@@ -1097,6 +1161,7 @@ mod action_items_tests {
             &pool,
             &meeting_id,
             &ExtractionDiff::default(),
+            &[],
             "fp-2",
             "ollama",
             "llama3.2:latest",
@@ -1137,6 +1202,7 @@ mod action_items_tests {
             }],
             updates: vec![],
             delete_ids: vec![],
+            ..Default::default()
         };
 
         // ...then the user deletes the meeting before the apply.
@@ -1148,6 +1214,7 @@ mod action_items_tests {
             &pool,
             &meeting_id,
             &plan,
+            &[],
             "fp",
             "ollama",
             "m",
@@ -1211,6 +1278,7 @@ mod action_items_tests {
                 content_key: diff::content_key("send deck to alice"),
             }],
             delete_ids: vec![completed_target.id.clone()],
+            ..Default::default()
         };
 
         // Between snapshot and apply, the user touches BOTH rows.
@@ -1238,6 +1306,7 @@ mod action_items_tests {
             &pool,
             &meeting_id,
             &plan,
+            &[],
             "fp-race",
             "ollama",
             "m",
@@ -1345,6 +1414,7 @@ mod action_items_tests {
             &pool,
             &meeting_id,
             &ExtractionDiff::default(),
+            &[],
             "fp",
             "ollama",
             "m",
@@ -1468,7 +1538,7 @@ mod action_items_tests {
         .await
         .unwrap();
 
-        // Fresh rows have no order.
+        // Fresh extracted rows have no order.
         assert!(a.sort_order.is_none());
 
         // Reorder c, a, b — plus a ghost id that no longer exists (skipped).
@@ -1719,9 +1789,18 @@ mod action_items_tests {
             plan.is_empty(),
             "candidate absorbed by the protected dismissed row — no insert, no delete"
         );
-        ActionItemsRepository::replace_extracted(&pool, &meeting_id, &plan, "fp", "ollama", "m", 1)
-            .await
-            .unwrap();
+        ActionItemsRepository::replace_extracted(
+            &pool,
+            &meeting_id,
+            &plan,
+            &[],
+            "fp",
+            "ollama",
+            "m",
+            1,
+        )
+        .await
+        .unwrap();
 
         let rows = ActionItemsRepository::get_for_meeting(&pool, &meeting_id)
             .await

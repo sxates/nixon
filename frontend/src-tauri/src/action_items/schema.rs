@@ -10,7 +10,7 @@
 use crate::summary::summary_engine::options::GenerationOptions;
 use serde_json::{json, Value};
 
-/// `{"action_items": [{description, assignee, due}]}`, strict.
+/// `{"action_items": [{description, assignee, due, context, same_as}]}`, strict.
 pub fn action_items_schema() -> Value {
     json!({
         "type": "object",
@@ -22,11 +22,13 @@ pub fn action_items_schema() -> Value {
                 "items": {
                     "type": "object",
                     "additionalProperties": false,
-                    "required": ["description", "assignee", "due"],
+                    "required": ["description", "assignee", "due", "context", "same_as"],
                     "properties": {
                         "description": {"type": "string"},
                         "assignee": {"type": ["string", "null"]},
-                        "due": {"type": ["string", "null"]}
+                        "due": {"type": ["string", "null"]},
+                        "context": {"type": ["string", "null"]},
+                        "same_as": {"type": ["integer", "null"]}
                     }
                 }
             }
@@ -85,6 +87,8 @@ mod tests {
         assert_eq!(item["description"]["type"], "string");
         assert_eq!(item["assignee"]["type"], json!(["string", "null"]));
         assert_eq!(item["due"]["type"], json!(["string", "null"]));
+        assert_eq!(item["context"]["type"], json!(["string", "null"]));
+        assert_eq!(item["same_as"]["type"], json!(["integer", "null"]));
     }
 
     #[test]

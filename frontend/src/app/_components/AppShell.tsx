@@ -3,6 +3,7 @@ import MainContent from '@/components/MainContent'
 import { OnboardingFlow } from '@/components/onboarding'
 import { DownloadProgressToastProvider } from '@/components/shared/DownloadProgressToast'
 import CommandPalette from '@/components/CommandPalette'
+import { QuickAddShortcut } from '@/components/QuickAdd/QuickAddShortcut'
 import { LlmActivityProvider } from '@/contexts/LlmActivityProvider'
 import { ProcessingMeetingsProvider } from '@/contexts/ProcessingMeetingsContext'
 import { QueueViewProvider } from '@/contexts/QueueViewContext'
@@ -63,6 +64,8 @@ export function AppShell({ showOnboarding, onOnboardingComplete, children }: App
       </ProcessingMeetingsProvider>
       {/* ⌘K command palette — global, every route (post-onboarding) */}
       <CommandPalette />
+      {/* ⌘T: add a to-do from anywhere. */}
+      <QuickAddShortcut />
       {/* Request OS notification permission up front (post-onboarding) */}
       <NotificationPermissionBootstrap />
       {/* Zoom auto-detection — global listeners for record/stop (post-onboarding) */}

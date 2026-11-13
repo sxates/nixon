@@ -25,12 +25,13 @@
 
 use serde::Deserialize;
 use sqlx::SqlitePool;
-use tauri::{AppHandle, Manager, Runtime};
+use tauri::{AppHandle, Emitter, Manager, Runtime};
 
 use crate::action_items::diff::{self, ResolvedCandidate};
 use crate::database::repositories::action_item::{
     ActionItem, ActionItemFilters, ActionItemWithMeeting, ActionItemsRepository, BulkStatusFilter,
 };
+use crate::database::repositories::action_item_todo::ActionItemTodoRepository;
 use crate::database::repositories::meeting_note::MeetingNotesRepository;
 use crate::database::repositories::setting::SettingsRepository;
 use crate::database::repositories::summary::SummaryProcessesRepository;
@@ -112,7 +113,7 @@ pub async fn api_get_action_items<R: Runtime>(
 ) -> Result<Vec<ActionItem>, String> {
     let state = app.state::<AppState>();
     let pool = state.db_manager.pool();
-    ActionItemsRepository::get_for_meeting(pool, &meeting_id)
+    ActionItemTodoRepository::list_for_meeting_page(pool, &meeting_id)
         .await
         .map_err(|e| format!("Failed to load action items: {e}"))
 }
@@ -177,7 +178,7 @@ pub async fn api_create_action_item<R: Runtime>(
     let state = app.state::<AppState>();
     let pool = state.db_manager.pool();
     let key = diff::content_key(&description);
-    ActionItemsRepository::create(
+    let item = ActionItemsRepository::create(
         pool,
         meeting_id
             .as_deref()
@@ -194,12 +195,17 @@ pub async fn api_create_action_item<R: Runtime>(
             due_date: due_date
                 .map(|d| d.trim().to_string())
                 .filter(|d| !d.is_empty()),
+            ..Default::default()
         },
         "manual",
         &key,
     )
     .await
-    .map_err(|e| format!("Failed to create action item: {e}"))
+    .map_err(|e| format!("Failed to create action item: {e}"))?;
+    ActionItemTodoRepository::sync_mentions(pool, &item.id, &item.description)
+        .await
+        .map_err(|e| format!("Failed to save mentions: {e}"))?;
+    Ok(item)
 }
 
 /// Edit an item's content. Any content change sets `user_edited = 1` (the row becomes
@@ -292,7 +298,24 @@ pub async fn api_update_action_item<R: Runtime>(
     )
     .await
     .map_err(|e| format!("Failed to update action item: {e}"))?
-    .ok_or_else(|| "That action item no longer exists".to_string())
+    .ok_or_else(|| "That action item no longer exists".to_string())?;
+    ActionItemTodoRepository::sync_mentions(pool, &id, &description)
+        .await
+        .map_err(|e| format!("Failed to save mentions: {e}"))?;
+    // specs/0088: a suggestion handed to someone else leaves the inbox.
+    ActionItemTodoRepository::reconcile_triage_after_assignee_change(pool, &id)
+        .await
+        .map_err(|e| format!("Failed to update action item: {e}"))?;
+    let item = ActionItemsRepository::get(pool, &id)
+        .await
+        .map_err(|e| format!("Failed to update action item: {e}"))?
+        .ok_or_else(|| "That action item no longer exists".to_string())?;
+    // The inbox badge listens for this (reassigning can move a suggestion to the record).
+    let _ = app.emit(
+        super::ACTION_ITEMS_UPDATED_EVENT,
+        serde_json::json!({ "meeting_id": item.meeting_id.clone().unwrap_or_default() }),
+    );
+    Ok(item)
 }
 
 /// Flip an item's status: `'open' | 'completed' | 'dismissed'`. Completing stamps
@@ -315,10 +338,21 @@ pub async fn api_set_action_item_status<R: Runtime>(
     }
     let state = app.state::<AppState>();
     let pool = state.db_manager.pool();
-    ActionItemsRepository::set_status(pool, &id, &status)
+    let item = ActionItemsRepository::set_status(pool, &id, &status)
         .await
         .map_err(|e| format!("Failed to update action item status: {e}"))?
-        .ok_or_else(|| "That action item no longer exists".to_string())
+        .ok_or_else(|| "That action item no longer exists".to_string())?;
+    emit_updated(&app, item.meeting_id.as_deref().unwrap_or_default());
+    Ok(item)
+}
+
+/// Tell open views (the To-do page, the sidebar's inbox badge) to re-read. `""` = standalone,
+/// multi-item or unknown meeting.
+fn emit_updated<R: Runtime>(app: &AppHandle<R>, meeting_id: &str) {
+    let _ = app.emit(
+        super::ACTION_ITEMS_UPDATED_EVENT,
+        serde_json::json!({ "meeting_id": meeting_id }),
+    );
 }
 
 /// Hard-delete an action item. The UI offers this for MANUAL items only — deleting an
@@ -331,9 +365,11 @@ pub async fn api_delete_action_item<R: Runtime>(
 ) -> Result<bool, String> {
     let state = app.state::<AppState>();
     let pool = state.db_manager.pool();
-    ActionItemsRepository::delete(pool, &id)
+    let deleted = ActionItemsRepository::delete(pool, &id)
         .await
-        .map_err(|e| format!("Failed to delete action item: {e}"))
+        .map_err(|e| format!("Failed to delete action item: {e}"))?;
+    emit_updated(&app, "");
+    Ok(deleted)
 }
 
 /// Manual extraction trigger ("Scan again" / retroactive extraction for pre-0034
@@ -392,9 +428,11 @@ pub async fn api_reorder_action_items<R: Runtime>(
 ) -> Result<u64, String> {
     let state = app.state::<AppState>();
     let pool = state.db_manager.pool();
-    ActionItemsRepository::reorder(pool, &ordered_ids)
+    let written = ActionItemsRepository::reorder(pool, &ordered_ids)
         .await
-        .map_err(|e| format!("Failed to reorder action items: {e}"))
+        .map_err(|e| format!("Failed to reorder action items: {e}"))?;
+    emit_updated(&app, "");
+    Ok(written)
 }
 
 /// How `api_bulk_set_action_item_status` selects its target rows (specs/0038 WS1.e). A
@@ -452,7 +490,9 @@ pub async fn api_bulk_set_action_item_status<R: Runtime>(
 
     let state = app.state::<AppState>();
     let pool = state.db_manager.pool();
-    ActionItemsRepository::bulk_set_status(pool, &repo_filter, &status)
+    let affected = ActionItemsRepository::bulk_set_status(pool, &repo_filter, &status)
         .await
-        .map_err(|e| format!("Failed to update action items: {e}"))
+        .map_err(|e| format!("Failed to update action items: {e}"))?;
+    emit_updated(&app, "");
+    Ok(affected)
 }

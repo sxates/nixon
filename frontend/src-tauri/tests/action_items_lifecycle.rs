@@ -64,13 +64,18 @@ async fn extract_pass(
     // The zero-candidate safety valve, exactly where `run_extraction` applies it — the
     // REAL guard, not a mirror: a suspect empty extraction applies nothing and leaves
     // the ledger untouched so a later run retries.
-    if skip_zero_candidate_deletes(meeting_id, candidates.len() as u32, &plan) {
+    let has_attaches =
+        app_lib::database::repositories::action_item_todo::meeting_has_attaches(pool, meeting_id)
+            .await
+            .expect("attach check");
+    if skip_zero_candidate_deletes(meeting_id, candidates.len() as u32, &plan, has_attaches) {
         return false;
     }
     let written = ActionItemsRepository::replace_extracted(
         pool,
         meeting_id,
         &plan,
+        &[],
         &fingerprint,
         "ollama",
         "llama3.2:3b",
@@ -93,6 +98,7 @@ fn cand(description: &str) -> ResolvedCandidate {
         assignee_raw: None,
         due_hint: None,
         due_date: None,
+        ..Default::default()
     }
 }
 
@@ -135,19 +141,27 @@ async fn fresh_extraction_inserts_rows_and_ledger() {
             description: "Send the revised deck to the client".into(),
             assignee: Some("Alice".into()),
             due: Some("Friday".into()),
+            ..Default::default()
         },
         ActionItemCandidate {
             description: "Draft the beta announcement".into(),
             assignee: Some("Bob".into()),
             due: None,
+            ..Default::default()
         },
         ActionItemCandidate {
             description: "Book the retro room".into(),
             assignee: Some("me".into()),
             due: None,
+            ..Default::default()
         },
     ];
-    let candidates = resolve_candidates(raw, &roster, &OwnerIdentity::default());
+    let candidates = resolve_candidates(
+        raw,
+        &roster,
+        &OwnerIdentity::default(),
+        chrono::NaiveDate::from_ymd_opt(2026, 11, 12).unwrap(),
+    );
 
     let summary = "## Action Items\n- deck, announcement, room";
     assert!(extract_pass(pool, &meeting_id, summary, None, &candidates).await);

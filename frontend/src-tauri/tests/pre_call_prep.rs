@@ -373,3 +373,51 @@ async fn brief_cache_roundtrips_ready_and_status() {
         .unwrap();
     assert_eq!(row.status, "none");
 }
+
+#[tokio::test]
+async fn prep_shows_listed_from_series_and_record_from_previous_only() {
+    use app_lib::database::repositories::action_item_todo::ActionItemTodoRepository;
+    let (_dir, db) = fresh_db().await;
+    let pool = db.pool();
+    let old = occurrence(pool, "Weekly", "2026-06-08T10:00:00Z", "S", "a").await;
+    let prev = occurrence(pool, "Weekly", "2026-06-15T10:00:00Z", "S", "b").await;
+
+    let insert = |id: &str, meeting: &str, triage: &str, status: &str, mine: i64| {
+        let (id, meeting, triage, status) = (
+            id.to_string(),
+            meeting.to_string(),
+            triage.to_string(),
+            status.to_string(),
+        );
+        async move {
+            sqlx::query(
+                "INSERT INTO action_items (id, meeting_id, description, assignee_is_self, status, source, user_edited, content_key, created_at, updated_at, triage) \
+                 VALUES (?, ?, ?, ?, ?, 'extracted', 0, ?, '2026-06-15T10:00:00Z', '2026-06-15T10:00:00Z', ?)",
+            )
+            .bind(&id).bind(&meeting).bind(&id).bind(mine).bind(&status).bind(&id).bind(&triage)
+            .execute(pool).await.unwrap();
+        }
+    };
+    insert("rec-old", &old, "record", "open", 0).await; // absent: record, not previous
+    insert("listed-old", &old, "listed", "open", 1).await; // present: listed, in series
+    insert("rec-prev", &prev, "record", "open", 0).await; // present: previous record
+    insert("rec-prev-dismissed", &prev, "record", "dismissed", 0).await; // absent
+    insert("listed-prev-done", &prev, "listed", "completed", 1).await; // absent
+    // Adopted from old, but only sourced from `old` via a source row on a different meeting row.
+    insert("listed-src", "elsewhere", "listed", "open", 1).await;
+    sqlx::query("INSERT INTO action_item_sources (action_item_id, meeting_id, added_at) VALUES ('listed-src', ?, '2026-06-15T10:00:00Z')")
+        .bind(&old).execute(pool).await.unwrap();
+
+    let prior = vec![prev.clone(), old.clone()];
+    let got = ActionItemTodoRepository::prep_items(pool, &prior).await.unwrap();
+    let ids: Vec<&str> = got.iter().map(|i| i.id.as_str()).collect();
+    assert!(!ids.contains(&"rec-old"), "{ids:?}");
+    assert!(!ids.contains(&"rec-prev-dismissed"), "{ids:?}");
+    assert!(!ids.contains(&"listed-prev-done"), "{ids:?}");
+    for want in ["listed-old", "listed-src", "rec-prev"] {
+        assert!(ids.contains(&want), "missing {want}: {ids:?}");
+    }
+    assert_eq!(ids.len(), 3, "{ids:?}");
+    assert_eq!(ids[2], "rec-prev", "mine (listed) first: {ids:?}");
+    assert!(ActionItemTodoRepository::prep_items(pool, &[]).await.unwrap().is_empty());
+}

@@ -37,6 +37,10 @@ interface AssigneePickerProps {
   label: string | null;
   candidates: AssigneeCandidate[];
   onSelect: (selection: AssigneeSelection) => void | Promise<void>;
+  /** Chip text while unassigned (default "Assign"; the Inbox row says "Assign…"). */
+  emptyLabel?: string;
+  /** Face while unassigned: `dashed` ("+ Assign" affordance) or `ghost` (a quiet key). */
+  emptyVariant?: 'dashed' | 'ghost';
   className?: string;
 }
 
@@ -44,6 +48,8 @@ export function AssigneePicker({
   label,
   candidates,
   onSelect,
+  emptyLabel = 'Assign',
+  emptyVariant = 'dashed',
   className,
 }: AssigneePickerProps) {
   const [open, setOpen] = useState(false);
@@ -78,12 +84,12 @@ export function AssigneePicker({
       <PopoverTrigger asChild>
         <Button
           type="button"
-          variant={label ? 'outline' : 'dashed'}
+          variant={label ? 'outline' : emptyVariant}
           size="xs"
           title={label ? `Assigned to ${label} — change` : 'Assign to someone'}
           className={cn('max-w-[180px]', className)}
         >
-          <span className="truncate">{label ?? 'Assign'}</span>
+          <span className="truncate">{label ?? emptyLabel}</span>
         </Button>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-64 p-2">

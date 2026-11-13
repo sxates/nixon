@@ -37,6 +37,7 @@ vi.mock('@/components/Sidebar', () => ({ default: sidebarMock }));
 vi.mock('@/components/Transport/TransportRail', () => ({ TransportRail: transportRailMock }));
 vi.mock('@/components/MainContent', () => ({ default: mainContentMock }));
 vi.mock('@/components/CommandPalette', () => ({ default: commandPaletteMock }));
+vi.mock('@/components/QuickAdd/QuickAddShortcut', () => ({ QuickAddShortcut: vi.fn(() => null) }));
 
 vi.mock('@/components/ResumeRecordingPrompt', () => ({ default: vi.fn(() => null) }));
 vi.mock('@/components/MeetingAutoDetect', () => ({ default: vi.fn(() => null) }));

@@ -198,8 +198,10 @@ export default function RootLayout({
     const cleanedUpRef = { current: false };
 
     const setupListeners = async () => {
-      const unlistenDragEnter = makeSafeUnlisten(await listen('tauri://drag-enter', () => {
-        setShowDropOverlay(true);
+      // Only a drag that carries files is an import. Drags inside the page (the editor,
+      // list reordering) reach this native handler too, with no paths.
+      const unlistenDragEnter = makeSafeUnlisten(await listen<{ paths?: string[] }>('tauri://drag-enter', (event) => {
+        if (event.payload?.paths?.length) setShowDropOverlay(true);
       }));
       if (cleanedUpRef.current) {
         unlistenDragEnter();
@@ -221,7 +223,7 @@ export default function RootLayout({
       // Drop - process files
       const unlistenDrop = makeSafeUnlisten(await listen<{ paths: string[] }>('tauri://drag-drop', (event) => {
         setShowDropOverlay(false);
-        handleFileDrop(event.payload.paths);
+        if (event.payload?.paths?.length) handleFileDrop(event.payload.paths);
       }));
       if (cleanedUpRef.current) {
         unlistenDrop();

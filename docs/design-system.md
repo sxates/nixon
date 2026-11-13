@@ -45,6 +45,7 @@ override `disabled:` on a lamp variant.
 | `border-brand-edge` (brand 30%) | today/active outline |
 | `bg-destructive-wash` / `border-destructive-edge` (5% / 30%) | error callout |
 | `bg-success-wash` (10%) | granted badge |
+| `bg-highlight-yellow` / `bg-highlight-green` | To-do highlighter pens (⌘4 / ⌘5) behind title text; opaque, tuned per theme |
 
 Hover states come from the primitive's variant. `bg-brand/90` in a screen means someone
 hand-rolled a button.
@@ -180,6 +181,7 @@ without a visible ring.
 | Selectable card | `OptionCard` / `OptionCardGroup` | `OptionCard` `title`, `description`, `trailing`, `value` (in a group) or `selected` + `onSelect`; radio semantics. `OptionCardGroup` `value`, `onValueChange`, one Tab stop with arrow keys. Model pickers, theme choice |
 | Confirm | `ConfirmDialog` | `open`, `onOpenChange`, `title`, `body`, `confirmLabel`, `cancelLabel`, `tone` `destructive` / `brand`, `busy` (spinner, can't be dismissed), `confirmDisabled`, `onConfirm`, `children` for details |
 | Date navigation | `DateNavigator` | `label`, `onPrev`, `onNext`, `prevLabel`, `nextLabel`, `onToday`, `showToday`, `leading`, `trailing`, `labelClassName`; Today sits left of the arrows. Today is always the key, in every view (Agenda, Week, Month); the label names the period ("Thu, Nov 12", "This week", "November 2026"), never "Today" |
+| Date picker grid | `MiniCalendar` | `value` (`YYYY-MM-DD` or null), `onSelect(iso)`, `today`; one month, Monday-start, always six weeks (stable height); today is amber text with a `brand-edge` ring, the selected day the lit `bg-brand` key, neighbouring-month days engraved; prev/next month `IconButton`s; one Tab stop with arrow-key roving. Lives in a `Popover` (the to-do due-date picker). Never a native `<input type="date">` |
 | Form field | `Input`, `Textarea`, `Select`, `Switch`, `Checkbox`, `Label` (`optional` prop) | no native `<input>`/`<select>` in screens. `Input` `size` `default` (36px, 14px) / `lg` (36px, `text-lead`: the Ask question). The buttons in the row under a `lg` input are `size="sm"` |
 | Checkbox | `Checkbox` | `checked` / `defaultChecked`, `onCheckedChange`, `label` (names it), `size` `sm` (16) / `default` (18); `onClick` fires first (shift-click ranges). **Checkbox vs Switch:** pick from a list, or an option a dialog's button submits, is a `Checkbox`. A single setting that applies at once is a `Switch` |
 

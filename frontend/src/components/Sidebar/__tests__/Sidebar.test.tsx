@@ -23,7 +23,12 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ push }),
 }));
 
-vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn(async () => null) }));
+// The To-do row's inbox badge reads `api_inbox_count`; every other command answers null.
+const inboxCountState = { value: 0 };
+vi.mock('@tauri-apps/api/core', () => ({
+  invoke: vi.fn(async (cmd: string) => (cmd === 'api_inbox_count' ? inboxCountState.value : null)),
+}));
+vi.mock('@tauri-apps/api/event', () => ({ listen: vi.fn(async () => () => {}) }));
 
 vi.mock('@/contexts/RecordingStateContext', () => ({
   useRecordingState: () => ({ isRecording: false }),
@@ -69,7 +74,7 @@ vi.mock('@/contexts/UpdateStatusContext', () => ({
 import Sidebar from '@/components/Sidebar';
 
 // Today and All meetings merged into one Meetings page.
-const NAV_NAMES = ['Meetings', 'Action items', 'People', 'Ask AI'];
+const NAV_NAMES = ['Meetings', 'To-do', 'People', 'Ask AI'];
 
 describe('Sidebar (specs/0057 Plan 3 Task 3)', () => {
   beforeEach(() => {
@@ -90,7 +95,7 @@ describe('Sidebar (specs/0057 Plan 3 Task 3)', () => {
       'aria-current',
       'page',
     );
-    expect(screen.getByRole('button', { name: 'Action items' })).not.toHaveAttribute('aria-current');
+    expect(screen.getByRole('button', { name: 'To-do' })).not.toHaveAttribute('aria-current');
   });
 
   it('offers no separate Today or All meetings item any more', () => {
@@ -139,10 +144,21 @@ describe('Sidebar (specs/0057 Plan 3 Task 3)', () => {
     sidebarState.isCollapsed = true;
     pathname = '/tasks';
     render(<Sidebar />);
-    expect(screen.getByRole('button', { name: 'Action items' })).toHaveAttribute(
+    expect(screen.getByRole('button', { name: 'To-do' })).toHaveAttribute(
       'aria-current',
       'page',
     );
+  });
+
+  it('shows the inbox count on the To-do row, and nothing at zero', async () => {
+    inboxCountState.value = 4;
+    const { unmount } = render(<Sidebar />);
+    expect(await screen.findByText('4')).toBeInTheDocument();
+    unmount();
+    inboxCountState.value = 0;
+    render(<Sidebar />);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(document.querySelector('[data-sidebar-badge]')).toBeNull();
   });
 
   it('keeps a settings entry in both branches', () => {

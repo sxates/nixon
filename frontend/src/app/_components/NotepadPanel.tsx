@@ -4,7 +4,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { toast } from 'sonner';
 import { useSidebar } from '@/components/Sidebar/SidebarProvider';
-import { NoteEditor } from '@/components/NoteEditor/NoteEditor';
+import { NoteEditor, type NoteEditorApi } from '@/components/NoteEditor/NoteEditor';
+import { APPEND_NOTE_LINE_EVENT, type AppendNoteLineDetail } from '@/lib/notes-append';
 import { htmlToMarkdown, markdownToHtml, sanitizeNotesHtml, looksLikeHtml } from '@/lib/notes-html';
 
 /** Debounce interval (ms) for autosaving notes after the user stops typing. */
@@ -213,6 +214,22 @@ export function NotepadPanel({
     };
   }, [saveNotes]);
 
+  // Quick-add (⌘⇧T) appends a "☐ To-do:" line to the live meeting's notes. When those notes
+  // are the ones in this editor, take the line here so our own autosave persists it (a
+  // direct DB write would be overwritten by the next autosave).
+  const editorApi = useRef<NoteEditorApi | null>(null);
+  useEffect(() => {
+    const onAppend = (e: Event) => {
+      const detail = (e as CustomEvent<AppendNoteLineDetail>).detail;
+      if (!detail || detail.handled || detail.meetingId !== loadedMeetingIdRef.current) return;
+      if (!editorApi.current) return;
+      editorApi.current.appendParagraph(detail.line);
+      detail.handled = true;
+    };
+    window.addEventListener(APPEND_NOTE_LINE_EVENT, onAppend);
+    return () => window.removeEventListener(APPEND_NOTE_LINE_EVENT, onAppend);
+  }, []);
+
   const handleChange = useCallback(
     (html: string) => {
       htmlRef.current = html;
@@ -244,6 +261,7 @@ export function NotepadPanel({
       key={editorKey}
       initialHtml={initialHtml}
       onChange={handleChange}
+      apiRef={editorApi}
       label={label}
       className={`min-h-0 w-full flex-1 ${isBare ? '' : 'bg-card px-5 pb-3 pt-3'}`}
       bodyClassName={isBare ? 'pb-10' : 'pb-8'}

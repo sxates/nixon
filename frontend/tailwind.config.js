@@ -102,6 +102,9 @@ module.exports = {
   			'destructive-wash': 'hsl(var(--destructive) / 0.05)',
   			'destructive-edge': 'hsl(var(--destructive) / 0.3)',
   			'success-wash': 'hsl(var(--success) / 0.1)',
+  			// To-do highlighter pens (⌘4 / ⌘5), opaque per theme.
+  			'highlight-yellow': 'hsl(var(--highlight-yellow))',
+  			'highlight-green': 'hsl(var(--highlight-green))',
   			rule: 'hsl(var(--rule))',
   			// Dialog overlay; carries its own alpha per theme, so no `/N` modifier.
   			scrim: 'hsl(var(--scrim))',

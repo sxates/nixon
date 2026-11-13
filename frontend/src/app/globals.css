@@ -57,6 +57,9 @@
     --record-foreground: 40 39% 97%;
     --success: 131 39% 30%;            /* #2F6B3A READY */
     --success-foreground: 40 39% 97%;
+    /* To-do highlighter pens (⌘4 / ⌘5): a wash behind body text, so pale on paper. */
+    --highlight-yellow: 50 95% 72%;
+    --highlight-green: 115 50% 76%;
 
     /* channels: CH1 is always the owner mic (specs/0046) */
     --chart-1: 31 84% 30%;            /* ~#8C4E0C — CH1/owner, matches --brand */
@@ -195,6 +198,9 @@
     --record-foreground: 40 30% 96%;
     --success: 127 29% 50%;            /* #5AA362 */
     --success-foreground: 30 10% 8%;
+    /* Highlighter pens on the dark deck: deep enough that light text stays readable. */
+    --highlight-yellow: 48 70% 34%;
+    --highlight-green: 125 35% 30%;
 
     --chart-1: 38 87% 55%;
     --chart-2: 185 45% 52%;            /* #4FB3BC */

@@ -14,10 +14,15 @@
 
 pub mod commands;
 pub mod diff;
+pub mod due;
 pub mod extractor;
 pub mod grammar;
+pub mod mentions;
+pub mod merge;
 mod reply_parse;
 pub mod schema;
+pub mod todo_commands;
+pub mod triage;
 
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex, OnceLock};
@@ -27,7 +32,8 @@ use sqlx::SqlitePool;
 use tauri::{AppHandle, Emitter, Manager, Runtime};
 use tracing::{info, warn};
 
-use crate::database::repositories::action_item::{ActionItem, ActionItemsRepository};
+use crate::database::repositories::action_item::ActionItemsRepository;
+use crate::database::repositories::action_item_todo::{self, ActionItemTodoRepository};
 use crate::database::repositories::meeting::MeetingsRepository;
 use crate::database::repositories::meeting_participant::MeetingParticipantsRepository;
 use crate::llm_activity::{LlmActivityState, Origin, TaskKind};
@@ -75,25 +81,6 @@ fn try_claim_extraction(meeting_id: &str) -> Option<InFlightGuard> {
     })
 }
 
-/// Descriptions for the extraction prompt's ALREADY TRACKED section: the PROTECTED rows
-/// only — manual, user-edited, completed, and dismissed (a rephrased dismissed task must
-/// not resurrect; the extractor caps the list at `extractor::ALREADY_TRACKED_CAP`).
-///
-/// PRISTINE rows are deliberately excluded. Listing them would tell the model to omit
-/// their tasks from the reply, and the diff deletes unmatched pristine rows ("the new
-/// summary no longer supports them") — so every regeneration would silently wipe the
-/// user's untouched open items. Pristine rows don't need prompt dedup anyway: a weak
-/// match there nets out as delete-old + insert-new (one row, no duplicate); only
-/// protected rows — which survive unmatched forever — can double up, which is exactly
-/// what the 2026-07 template-switch incident produced.
-fn already_tracked_descriptions(existing: &[ActionItem]) -> Vec<&str> {
-    existing
-        .iter()
-        .filter(|item| diff::is_protected(item))
-        .map(|item| item.description.as_str())
-        .collect()
-}
-
 /// The zero-candidate safety valve (2026-07 incident): an extraction run that returns
 /// ZERO candidates while the diff wants to delete pristine rows is treated as SUSPECT,
 /// not as truth — an over-suppressed prompt (the ALREADY TRACKED section) or a flaky
@@ -101,8 +88,12 @@ fn already_tracked_descriptions(existing: &[ActionItem]) -> Vec<&str> {
 /// caller applies NOTHING and does NOT write the ledger fingerprint, so a later run
 /// retries against the same summary.
 ///
+/// The same goes for a zero-candidate run while the meeting holds attach rows (sources it
+/// added to items other meetings own, `has_attaches`): applying it would sweep them, and
+/// nothing would bring them back.
+///
 /// Deliberate edge: a summary that genuinely contains no action items AND no pristine
-/// rows to protect (no rows at all, or protected-only rows — either way
+/// rows to protect AND no attaches (no rows at all, or protected-only rows — either way
 /// `plan.delete_ids` is empty) does NOT trip the valve. There is nothing to delete, and
 /// writing the ledger is harmless — it preserves idempotence for genuinely empty
 /// summaries.
@@ -113,8 +104,9 @@ pub fn skip_zero_candidate_deletes(
     meeting_id: &str,
     candidate_count: u32,
     plan: &diff::ExtractionDiff,
+    has_attaches: bool,
 ) -> bool {
-    if candidate_count == 0 && !plan.delete_ids.is_empty() {
+    if candidate_count == 0 && (!plan.delete_ids.is_empty() || has_attaches) {
         warn!(
             "Action-item extraction for meeting_id {}: extractor returned no candidates; \
              skipping {} pristine delete(s) as a safety valve (nothing applied, ledger not \
@@ -300,14 +292,18 @@ async fn run_extraction_inner<R: Runtime>(
     // ("You"/owner-name/owner-email → assignee_is_self) — the roster excludes self.
     let owner = extractor::OwnerIdentity::load(pool).await?;
 
-    // Load the existing rows BEFORE the LLM call: the protected ones feed the prompt's
-    // ALREADY TRACKED section (prompt-level dedup) and the same snapshot feeds the diff
+    // Load this meeting's rows BEFORE the LLM call: the snapshot feeds routing and the diff
     // afterwards — one query, one consistent view (the in-flight guard above serializes
     // concurrent runs, so nothing mutates it mid-pass).
     let existing = ActionItemsRepository::get_for_meeting(pool, meeting_id)
         .await
         .context("Failed to load existing action items")?;
-    let already_tracked = already_tracked_descriptions(&existing);
+    // The TRACKED list shown to the model spans every meeting (listed, suggested, dismissed
+    // and recently completed items). Routing must use this exact list: `same_as` numbers
+    // refer to its order.
+    let tracked = ActionItemTodoRepository::tracked_for_merge(pool)
+        .await
+        .context("Failed to load tracked action items")?;
 
     let client = reqwest::Client::new();
     let app_data_dir = app.path().app_data_dir().ok();
@@ -317,7 +313,7 @@ async fn run_extraction_inner<R: Runtime>(
         app_data_dir.as_ref(),
         summary_markdown,
         user_notes,
-        &already_tracked,
+        &tracked,
         &roster,
         &owner,
     )
@@ -325,8 +321,16 @@ async fn run_extraction_inner<R: Runtime>(
     .context("Action-item extraction failed")?;
     let candidate_count = candidates.len() as u32;
 
-    let resolved = extractor::resolve_candidates(candidates, &roster, &owner);
-    let plan = diff::compute_diff(&existing, &resolved);
+    // Due hints resolve against the meeting's local date, not today's (specs/0088).
+    let anchor = MeetingsRepository::get_meeting_metadata(pool, meeting_id)
+        .await
+        .ok()
+        .flatten()
+        .map(|m| m.created_at.0.with_timezone(&chrono::Local).date_naive())
+        .unwrap_or_else(|| chrono::Local::now().date_naive());
+    let resolved = extractor::resolve_candidates(candidates, &roster, &owner, anchor);
+    let routed = merge::route_candidates(meeting_id, resolved, &tracked, &existing);
+    let plan = diff::compute_diff_with_forced(&existing, &routed.for_diff, &routed.kept);
 
     info!(
         "Action-item extraction for meeting_id {}: {} candidate(s) → {} insert(s), {} update(s), {} delete(s)",
@@ -339,7 +343,10 @@ async fn run_extraction_inner<R: Runtime>(
 
     // Zero-candidate safety valve: apply nothing and leave the ledger alone (see the
     // guard's doc — the 2026-07 incident's "0 candidate(s) → ... 1 delete(s)" run).
-    if skip_zero_candidate_deletes(meeting_id, candidate_count, &plan) {
+    let has_attaches = action_item_todo::meeting_has_attaches(pool, meeting_id)
+        .await
+        .context("Failed to check the meeting's attached sources")?;
+    if skip_zero_candidate_deletes(meeting_id, candidate_count, &plan, has_attaches) {
         return Ok(0);
     }
 
@@ -347,6 +354,7 @@ async fn run_extraction_inner<R: Runtime>(
         pool,
         meeting_id,
         &plan,
+        &routed.attaches,
         &fingerprint,
         &provider_config.model_provider,
         &provider_config.model_name,
@@ -379,71 +387,6 @@ async fn run_extraction_inner<R: Runtime>(
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn item(
-        id: &str,
-        description: &str,
-        status: &str,
-        source: &str,
-        user_edited: bool,
-    ) -> ActionItem {
-        ActionItem {
-            id: id.to_string(),
-            meeting_id: Some("m1".to_string()),
-            description: description.to_string(),
-            assignee_person_id: None,
-            assignee_is_self: false,
-            assignee_raw: None,
-            due_hint: None,
-            due_date: None,
-            status: status.to_string(),
-            source: source.to_string(),
-            user_edited,
-            content_key: diff::content_key(description),
-            created_at: "2026-07-01T00:00:00Z".to_string(),
-            updated_at: "2026-07-01T00:00:00Z".to_string(),
-            completed_at: None,
-            sort_order: None,
-        }
-    }
-
-    /// The ALREADY TRACKED prompt list carries every PROTECTED row — completed,
-    /// dismissed, user-edited, and manual — and deliberately excludes pristine rows
-    /// (listing those would make the model omit them and the diff delete them; see
-    /// `already_tracked_descriptions`).
-    #[test]
-    fn already_tracked_lists_protected_rows_of_every_kind_but_not_pristine() {
-        let existing = vec![
-            item("ai-1", "Set up the room", "completed", "extracted", false),
-            item(
-                "ai-2",
-                "Follow up with legal",
-                "dismissed",
-                "extracted",
-                false,
-            ),
-            item(
-                "ai-3",
-                "Send the presentation deck to participants",
-                "open",
-                "extracted",
-                true,
-            ),
-            item("ai-4", "Water the office plants", "open", "manual", false),
-            item("ai-5", "Book the retro room", "open", "extracted", false), // pristine
-        ];
-        let tracked = already_tracked_descriptions(&existing);
-        assert_eq!(
-            tracked,
-            vec![
-                "Set up the room",
-                "Follow up with legal",
-                "Send the presentation deck to participants",
-                "Water the office plants",
-            ],
-            "all protected statuses/sources listed; pristine excluded"
-        );
-    }
 
     /// Regression (concurrent-run double-insert): the per-meeting in-flight guard admits
     /// one claimant, is meeting-scoped, and releases on drop — including mid-scope drops,
@@ -484,15 +427,15 @@ mod tests {
     #[test]
     fn zero_candidate_valve_fires_only_when_pristine_deletes_are_pending() {
         assert!(
-            skip_zero_candidate_deletes("m1", 0, &plan_with_deletes(1)),
+            skip_zero_candidate_deletes("m1", 0, &plan_with_deletes(1), false),
             "the incident shape: 0 candidates, 1 pending pristine delete"
         );
         assert!(
-            !skip_zero_candidate_deletes("m1", 0, &plan_with_deletes(0)),
+            !skip_zero_candidate_deletes("m1", 0, &plan_with_deletes(0), false),
             "genuinely empty summary with nothing to delete → proceed (ledger written)"
         );
         assert!(
-            !skip_zero_candidate_deletes("m1", 2, &plan_with_deletes(1)),
+            !skip_zero_candidate_deletes("m1", 2, &plan_with_deletes(1), false),
             "a run WITH candidates may delete pristine rows (normal regeneration)"
         );
     }
@@ -526,7 +469,8 @@ mod tests {
             assert!(skip_zero_candidate_deletes(
                 "m-warn",
                 0,
-                &plan_with_deletes(3)
+                &plan_with_deletes(3),
+                false
             ));
         });
 

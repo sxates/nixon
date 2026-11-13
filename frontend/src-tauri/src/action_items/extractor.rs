@@ -1,6 +1,6 @@
 //! Action-item candidate extraction: the LLM call + owner resolution (specs/0034).
 //!
-//! The LLM returns CANDIDATES only — `{"description", "assignee", "due"}` strings. Rust
+//! The LLM returns CANDIDATES only — `{description, assignee, due, context, same_as}`. Rust
 //! owns identity, owner resolution, and the diff: assignee strings are resolved against
 //! the participant roster + the owner's identity in code ([`resolve_candidates`]); the
 //! model never sees or emits IDs. The prompt embeds the roster (display names + emails)
@@ -8,11 +8,10 @@
 //! the roster excludes self by design (migrations/20260629000000) and the summary text
 //! renders the owner as "You" (diarization default) or their real name, never as "me".
 //!
-//! The user prompt additionally carries an ALREADY TRACKED section (the protected
-//! existing rows' descriptions) so the model suppresses re-extractions of tasks the user
-//! already owns — the semantic dedup layer above the diff's token matcher (2026-07
-//! template-switch incident: rephrasings like "Set up the room" → "Look at the room" sit
-//! below any sane token-similarity threshold).
+//! The user prompt additionally carries a numbered TRACKED TASKS section (specs/0088): the
+//! model still returns every action item and sets `same_as` to the number of a tracked
+//! task it is the same underlying task as. `merge::route_candidates` turns that into a
+//! source attached to the existing item instead of a duplicate.
 
 use std::future::Future;
 use std::path::PathBuf;
@@ -24,6 +23,7 @@ use tracing::warn;
 use unicode_normalization::UnicodeNormalization;
 
 use crate::action_items::diff::ResolvedCandidate;
+use crate::action_items::merge::TrackedItem;
 use crate::action_items::reply_parse::{self, parse_candidates};
 use crate::database::repositories::meeting_participant::MeetingParticipant;
 use crate::database::repositories::owner_emails::OwnerEmailsRepository;
@@ -31,16 +31,22 @@ use crate::database::repositories::people::PeopleRepository;
 use crate::people::enroll::OWNER_PERSON_ID;
 use crate::summary::provider_config::ProviderConfig;
 
-/// One candidate as the LLM emits it: a bare JSON object of three strings. `assignee` is
+/// One candidate as the LLM emits it: a JSON object. `assignee` is
 /// expected to be a roster display name / email, the literal `"me"`, or null; `due` is a
 /// verbatim hint ("Friday", "2026-07-10") — no date parsing in v1.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct ActionItemCandidate {
     pub description: String,
     #[serde(default)]
     pub assignee: Option<String>,
     #[serde(default)]
     pub due: Option<String>,
+    /// What this meeting said about the task (specs/0088); absent in old-shape replies.
+    #[serde(default, deserialize_with = "super::merge::lenient_context")]
+    pub context: Option<String>,
+    /// 1-based number of the TRACKED task this is the same as, else null.
+    #[serde(default, deserialize_with = "super::merge::lenient_same_as")]
+    pub same_as: Option<u32>,
 }
 
 /// The meeting owner's known identity, used at BOTH ends of owner resolution (specs/0034
@@ -178,23 +184,14 @@ fn try_resolve(
     None
 }
 
-/// Parses a due hint into a structured ISO date (`YYYY-MM-DD`) IFF the whole trimmed hint
-/// is exactly that — a strict, unambiguous match (specs/0038 WS1.a). Returns `None` for
-/// fuzzy hints ("Friday", "next week") and for date-times; those stay hint-only.
-fn parse_iso_due_date(hint: &str) -> Option<String> {
-    let hint = hint.trim();
-    chrono::NaiveDate::parse_from_str(hint, "%Y-%m-%d")
-        .ok()
-        .map(|d| d.format("%Y-%m-%d").to_string())
-}
-
 /// Turns raw LLM candidates into the diff/persistence shape: trims and drops empty
 /// descriptions, resolves each assignee via [`resolve_assignee`], and carries the due
-/// hint through verbatim (plus a best-effort structured [`parse_iso_due_date`]).
+/// hint through verbatim (plus a best-effort structured date from [`super::due::resolve_due_hint`]).
 pub fn resolve_candidates(
     candidates: Vec<ActionItemCandidate>,
     roster: &[MeetingParticipant],
     owner: &OwnerIdentity,
+    anchor: chrono::NaiveDate,
 ) -> Vec<ResolvedCandidate> {
     candidates
         .into_iter()
@@ -209,10 +206,11 @@ pub fn resolve_candidates(
                 .due
                 .map(|d| d.trim().to_string())
                 .filter(|d| !d.is_empty());
-            // Best-effort structured date (specs/0038 WS1.a): only when the hint is an
-            // unambiguous full ISO date (YYYY-MM-DD). Anything fuzzy ("Friday", "next
-            // week") stays hint-only; the user sets the structured value from the UI.
-            let due_date = due_hint.as_deref().and_then(parse_iso_due_date);
+            // Resolved against the meeting's local date (specs/0088); unknown hints stay
+            // hint-only.
+            let due_date = due_hint
+                .as_deref()
+                .and_then(|h| super::due::resolve_due_hint(h, anchor));
             Some(ResolvedCandidate {
                 description,
                 assignee_person_id,
@@ -220,6 +218,11 @@ pub fn resolve_candidates(
                 assignee_raw,
                 due_hint,
                 due_date,
+                context: c
+                    .context
+                    .map(|t| t.trim().to_string())
+                    .filter(|t| !t.is_empty()),
+                same_as: c.same_as,
             })
         })
         .collect()
@@ -239,7 +242,7 @@ pub fn resolve_candidates(
 ///   bare `{"description":…,"assignee":…,"due":…}` — unparseable, AND collapsing three
 ///   real action items into one. Both attempts failed identically because extraction runs
 ///   at `temperature: 0.0`, so the retry is byte-for-byte the same reply.
-/// - **Exactly three keys, shown literally**: mirrors [`ActionItemCandidate`] so a strict
+/// - **Exactly five keys, shown literally**: mirrors [`ActionItemCandidate`] so a strict
 ///   `serde_json` parse is the only contract check we need.
 /// - **Commitments only**: the summary also contains decisions/discussion; extracting
 ///   those would flood the task hub with non-tasks.
@@ -247,39 +250,31 @@ pub fn resolve_candidates(
 ///   parsing), so a hallucinated ISO date would look authoritative while being wrong.
 /// - The roster + the `"me"` owner option are appended by [`build_system_prompt`]; the
 ///   model copies strings, it never sees IDs ([`resolve_assignee`] owns resolution).
-const SYSTEM_PROMPT_HEADER: &str = "You are the action-item extractor for a meeting assistant. You will be given a meeting's summary and, when available, notes written by the meeting owner. Identify every concrete action item: a task that someone committed to do, was assigned, or that the meeting agreed must happen.\n\nRespond with ONLY a JSON object with exactly one key, \"action_items\", whose value is an array — no prose, no explanations, no markdown, no code fences. Each element of that array must be an object with exactly these three keys:\n{\"action_items\": [{\"description\": string, \"assignee\": string or null, \"due\": string or null}]}\n\nRules:\n- description: one short, self-contained imperative sentence (e.g. \"Send the revised deck to the client\"). Merge repeated mentions of the same task into a single item.\n- assignee: copy one name or email verbatim from the ASSIGNEES list below. Use \"me\" for tasks the meeting owner took on (first-person commitments such as \"I'll send it\", or tasks the text assigns to the owner by name or as \"You\"). If the responsible person is clearly named in the text but missing from the list, copy their name exactly as written. Use null when nobody specific is responsible.\n- due: the due date or timing hint exactly as stated in the text (e.g. \"Friday\", \"by end of Q3\", \"2026-07-10\"). Use null when none is stated. Never invent dates.\n- Do not include decisions, opinions, discussion points, open questions, or work that is already done.\n- If there are no action items, return {\"action_items\": []}.\n\nASSIGNEES:";
+const SYSTEM_PROMPT_HEADER: &str = "You are the action-item extractor for a meeting assistant. You will be given a meeting's summary and, when available, notes written by the meeting owner. Identify every concrete action item: a task that someone committed to do, was assigned, or that the meeting agreed must happen.\n\nRespond with ONLY a JSON object with exactly one key, \"action_items\", whose value is an array — no prose, no explanations, no markdown, no code fences. Each element of that array must be an object with exactly these five keys:\n{\"action_items\": [{\"description\": string, \"assignee\": string or null, \"due\": string or null, \"context\": string or null, \"same_as\": integer or null}]}\n\nRules:\n- description: one short, self-contained imperative sentence (e.g. \"Send the revised deck to the client\"). Merge repeated mentions of the same task into a single item.\n- assignee: copy one name or email verbatim from the ASSIGNEES list below. Use \"me\" for tasks the meeting owner took on (first-person commitments such as \"I'll send it\", or tasks the text assigns to the owner by name or as \"You\"). If the responsible person is clearly named in the text but missing from the list, copy their name exactly as written. Use null when nobody specific is responsible.\n- due: the due date or timing hint exactly as stated in the text (e.g. \"Friday\", \"by end of Q3\", \"2026-07-10\"). Use null when none is stated. Never invent dates.\n- context: one sentence on what was said about this task in this meeting, and by whom.\n- same_as: the number of the matching task in the TRACKED TASKS list, when the user message has one; otherwise null.\n- Do not include decisions, opinions, discussion points, open questions, or work that is already done.\n- If there are no action items, return {\"action_items\": []}.\n\nASSIGNEES:";
 
 /// Appended to the retry's user prompt after the first reply failed to parse (specs/0034:
 /// one retry, then give up). A fresh single-shot call — `generate_summary` keeps no
 /// conversation state — so the reminder rides on the same prompt.
 const RETRY_REMINDER: &str = "\n\nIMPORTANT: Your previous reply could not be parsed. Return ONLY the JSON object — starting with { and ending with } — whose single key \"action_items\" holds the array, with no other text before or after it.";
 
-/// Cap on the ALREADY TRACKED list embedded in the user prompt: bounds prompt size for
+/// Cap on the TRACKED TASKS list embedded in the user prompt: bounds prompt size for
 /// long-lived meetings that accumulate many protected items (~50 one-line descriptions ≈
 /// a few hundred tokens — negligible next to the summary itself, even on small local
-/// models). Overflow items simply lose prompt-level dedup and fall back to the diff's
-/// token matcher + protected rules, which remain the hard safety guarantee.
+/// models). Overflow items are never shown, so they get NO cross-meeting matching
+/// (`merge::route_candidates` scans only the shown entries); they fall back to the diff's
+/// token matcher + protected rules within their own meeting.
 pub const ALREADY_TRACKED_CAP: usize = 50;
 
-/// Header + instruction for the ALREADY TRACKED section of the user prompt. Design intent
-/// (the second dedup layer, above [`crate::action_items::diff`]'s token matcher): a
-/// template switch can rephrase a tracked task beyond any token-level similarity
-/// ("Set up the room" → "Look at the room" — the 2026-07 dogfood incident's below-
-/// threshold pair), so the model itself is told which commitments are already tracked and
-/// asked to suppress them, HOWEVER worded. "Same commitment ... even if worded
-/// differently" targets semantic identity — the one judgment the model can make and the
-/// Rust matcher cannot. The list is descriptions only (never IDs, statuses, or assignees:
-/// nothing the model could echo back incorrectly).
-///
-/// The trailing counterweight exists because the suppress instruction alone
-/// OVER-suppressed (2026-07 zero-candidate incident: the model returned `[]` for a
-/// summary full of tasks, and the empty result read as "delete everything pristine").
-/// The tie-break is stated explicitly — include when unsure — because the two failure
-/// modes are wildly asymmetric: a false include is deduped downstream by the diff (and a
-/// zero-candidate run is additionally quarantined by
-/// `crate::action_items::skip_zero_candidate_deletes`), while a false omission deletes
-/// the user's open items.
-const ALREADY_TRACKED_HEADER: &str = "ALREADY TRACKED:\nThese tasks are already tracked from earlier extractions. Do NOT include any task that is the same commitment as one of these, even if worded differently. Only omit a task if it clearly matches one of these. When unsure, INCLUDE the task — duplicates are handled downstream. Never return an empty array just because tasks look similar to this list.";
+/// Header + instruction for the TRACKED TASKS section of the user prompt (specs/0088).
+/// Replaces the pre-0088 "do NOT include tracked tasks" suppression (2026-07 incidents:
+/// over-suppression returned `[]` and read as "delete everything"). Nothing is suppressed
+/// now: the model lists every item and flags repeats with `same_as`, and a wrong or
+/// missing flag only costs a duplicate that the diff or the similarity backstop in
+/// `merge` still sees. The list is plain descriptions with 1-based numbers (never ids or
+/// person tokens), so the number is the only thing the model can echo back; unsure means
+/// null because a false merge hides a task while a false split merely shows two.
+const TRACKED_HEADER: &str = "TRACKED TASKS:";
+const TRACKED_INSTRUCTION: &str = "Include every action item from this meeting, even if it is already tracked. If an item is the same underlying task as a TRACKED task, set \"same_as\" to that task's number; otherwise null. Tasks that merely share words are different tasks — when unsure, use null.";
 
 /// The owner's ASSIGNEES entry: the copyable token is `"me"`; the dash-separated
 /// description carries the owner's known identity (display name + emails) and the "You"
@@ -343,31 +338,48 @@ fn build_system_prompt(roster: &[MeetingParticipant], owner: &OwnerIdentity) -> 
 /// User prompt = the extraction sources, labeled, then the dedup list. The summary is the
 /// primary source (it already distilled commitments with speaker attribution); the
 /// owner's notes are the second source (they catch commitments the summary dropped —
-/// specs/0034 recall mitigation). `already_tracked` (protected rows' descriptions, capped
-/// at [`ALREADY_TRACKED_CAP`]) renders as the ALREADY TRACKED section — omitted entirely
-/// when empty, so first extractions pay nothing. The closing line restates the output
+/// specs/0034 recall mitigation). `tracked` (capped at [`ALREADY_TRACKED_CAP`]) renders as
+/// the numbered TRACKED TASKS section — omitted entirely when empty, so first extractions
+/// pay nothing. Descriptions are not filtered: the numbering must match what
+/// `merge::route_candidates` indexes. The closing line restates the output
 /// contract because trailing instructions are the ones small models obey best.
+/// Marker the quick-add dialog writes into My Notes for a to-do it already created
+/// (`frontend/src/lib/notes-append.ts` `TODO_NOTE_PREFIX`).
+const TODO_NOTE_PREFIX: &str = "☐ To-do:";
+
+/// The notes without quick-add marker lines (optionally list-bulleted): those to-dos exist
+/// already, so they must not come back as suggestions.
+fn without_todo_lines(notes: &str) -> String {
+    notes
+        .lines()
+        .filter(|line| {
+            let t = line.trim_start();
+            let t = t
+                .strip_prefix("- ")
+                .or_else(|| t.strip_prefix("* "))
+                .unwrap_or(t);
+            !t.starts_with(TODO_NOTE_PREFIX)
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 fn build_user_prompt(
     summary_markdown: &str,
     user_notes: Option<&str>,
-    already_tracked: &[&str],
+    tracked: &[TrackedItem],
 ) -> String {
     let mut prompt = format!("MEETING SUMMARY:\n\n{summary_markdown}");
-    if let Some(notes) = user_notes.map(str::trim).filter(|n| !n.is_empty()) {
+    let notes = user_notes.map(without_todo_lines);
+    if let Some(notes) = notes.as_deref().map(str::trim).filter(|n| !n.is_empty()) {
         prompt.push_str(&format!("\n\nMEETING OWNER'S NOTES:\n\n{notes}"));
     }
-    let tracked: Vec<&str> = already_tracked
-        .iter()
-        .map(|d| d.trim())
-        .filter(|d| !d.is_empty())
-        .take(ALREADY_TRACKED_CAP)
-        .collect();
     if !tracked.is_empty() {
-        prompt.push_str("\n\n");
-        prompt.push_str(ALREADY_TRACKED_HEADER);
-        for description in tracked {
-            prompt.push_str(&format!("\n- {description}"));
+        prompt.push_str(&format!("\n\n{TRACKED_HEADER}"));
+        for (n, item) in tracked.iter().take(ALREADY_TRACKED_CAP).enumerate() {
+            prompt.push_str(&format!("\n[{}] {}", n + 1, item.description));
         }
+        prompt.push_str(&format!("\n\n{TRACKED_INSTRUCTION}"));
     }
     prompt.push_str("\n\nReturn ONLY the JSON array of action items.");
     prompt
@@ -388,7 +400,7 @@ async fn extract_with_llm<F, Fut>(
     llm: F,
     summary_markdown: &str,
     user_notes: Option<&str>,
-    already_tracked: &[&str],
+    tracked: &[TrackedItem],
     roster: &[MeetingParticipant],
     owner: &OwnerIdentity,
 ) -> anyhow::Result<Vec<ActionItemCandidate>>
@@ -397,7 +409,7 @@ where
     Fut: Future<Output = Result<String, String>>,
 {
     let system_prompt = build_system_prompt(roster, owner);
-    let user_prompt = build_user_prompt(summary_markdown, user_notes, already_tracked);
+    let user_prompt = build_user_prompt(summary_markdown, user_notes, tracked);
 
     let first_reply = llm(system_prompt.clone(), user_prompt.clone())
         .await
@@ -433,10 +445,8 @@ where
 /// privacy-neutral — the same provider already saw the full transcript).
 ///
 /// `config` is the exact provider/model/key/endpoints the summary run used (decided
-/// 2026-07-03: no separate extraction provider setting). `already_tracked` is the
-/// PROTECTED existing rows' descriptions (see `run_extraction` for why pristine rows are
-/// excluded) — the prompt-level dedup layer that catches rephrasings the diff's token
-/// matcher can't ("Set up the room" → "Look at the room"). Model assumptions: the output
+/// 2026-07-03: no separate extraction provider setting). `tracked` is the numbered
+/// TRACKED TASKS list the model matches `same_as` against. Model assumptions: the output
 /// is a small JSON array, well within every provider's default output cap, so
 /// `max_tokens` is left to the provider default (a low explicit cap could truncate
 /// mid-array — truncated JSON fails the strict parse and burns the retry).
@@ -450,7 +460,7 @@ pub async fn extract_candidates(
     app_data_dir: Option<&PathBuf>,
     summary_markdown: &str,
     user_notes: Option<&str>,
-    already_tracked: &[&str],
+    tracked: &[TrackedItem],
     roster: &[MeetingParticipant],
     owner: &OwnerIdentity,
 ) -> anyhow::Result<Vec<ActionItemCandidate>> {
@@ -478,15 +488,7 @@ pub async fn extract_candidates(
         )
         .await
     };
-    extract_with_llm(
-        llm,
-        summary_markdown,
-        user_notes,
-        already_tracked,
-        roster,
-        owner,
-    )
-    .await
+    extract_with_llm(llm, summary_markdown, user_notes, tracked, roster, owner).await
 }
 
 #[cfg(test)]
@@ -663,25 +665,30 @@ mod tests {
                     description: "  Send the deck  ".to_string(),
                     assignee: Some("Alice".to_string()),
                     due: Some(" Friday ".to_string()),
+                    ..Default::default()
                 },
                 ActionItemCandidate {
                     description: "   ".to_string(), // empty → dropped
                     assignee: None,
                     due: None,
+                    ..Default::default()
                 },
                 ActionItemCandidate {
                     description: "Book the room".to_string(),
                     assignee: Some("me".to_string()),
                     due: Some("".to_string()), // blank due → None
+                    ..Default::default()
                 },
                 ActionItemCandidate {
                     description: "File the report".to_string(),
                     assignee: None,
                     due: Some("2026-07-10".to_string()), // ISO date → best-effort due_date
+                    ..Default::default()
                 },
             ],
             &roster,
             &no_owner(),
+            chrono::NaiveDate::from_ymd_opt(2026, 11, 12).unwrap(), // a Thursday
         );
 
         assert_eq!(resolved.len(), 3);
@@ -689,32 +696,14 @@ mod tests {
         assert_eq!(resolved[0].assignee_person_id.as_deref(), Some("p-alice"));
         assert!(!resolved[0].assignee_is_self);
         assert_eq!(resolved[0].due_hint.as_deref(), Some("Friday"));
-        // A fuzzy hint stays hint-only — no structured date.
-        assert!(resolved[0].due_date.is_none());
+        // A weekday hint resolves against the anchor (specs/0088).
+        assert_eq!(resolved[0].due_date.as_deref(), Some("2026-11-13"));
         assert_eq!(resolved[1].description, "Book the room");
         assert!(resolved[1].assignee_is_self);
         assert!(resolved[1].due_hint.is_none());
         // WS1.a — an unambiguous ISO hint is best-effort promoted to due_date; the hint stays.
         assert_eq!(resolved[2].due_hint.as_deref(), Some("2026-07-10"));
         assert_eq!(resolved[2].due_date.as_deref(), Some("2026-07-10"));
-    }
-
-    #[test]
-    fn parse_iso_due_date_accepts_only_full_iso_dates() {
-        assert_eq!(
-            parse_iso_due_date("2026-07-10"),
-            Some("2026-07-10".to_string())
-        );
-        assert_eq!(
-            parse_iso_due_date("  2026-01-05  "),
-            Some("2026-01-05".to_string())
-        );
-        // Fuzzy or partial hints are rejected (hint-only).
-        assert!(parse_iso_due_date("Friday").is_none());
-        assert!(parse_iso_due_date("next week").is_none());
-        assert!(parse_iso_due_date("2026-07").is_none());
-        assert!(parse_iso_due_date("2026-13-01").is_none()); // invalid month
-        assert!(parse_iso_due_date("2026-07-10T09:00:00Z").is_none()); // date-time, not a date
     }
 
     #[test]
@@ -749,7 +738,7 @@ mod tests {
         // as a hard decoding constraint.
         assert!(prompt.contains(r#"ONLY a JSON object with exactly one key, "action_items""#));
         assert!(prompt.contains(
-            r#"{"action_items": [{"description": string, "assignee": string or null, "due": string or null}]}"#
+            r#"{"action_items": [{"description": string, "assignee": string or null, "due": string or null, "context": string or null, "same_as": integer or null}]}"#
         ));
         assert!(
             !prompt.contains("bare JSON array"),
@@ -809,89 +798,130 @@ mod tests {
         assert!(!blank.contains("MEETING OWNER'S NOTES"));
     }
 
-    /// The prompt-level dedup layer (2026-07 template-switch incident): every protected
-    /// row's description — the caller passes completed, dismissed, user-edited, AND
-    /// manual alike — is listed under ALREADY TRACKED with the suppress instruction, and
-    /// the JSON contract line stays the trailing instruction.
     #[test]
-    fn user_prompt_lists_already_tracked_descriptions_with_instruction() {
+    fn user_prompt_drops_quick_add_todo_lines_from_notes() {
+        let notes = "remember the deck\n☐ To-do: Send Maya the numbers (due Friday)\n- ☐ To-do: Call Sam\nship it";
+        let prompt = build_user_prompt("## Summary", Some(notes), &[]);
+        assert!(prompt.contains("remember the deck\nship it"));
+        assert!(!prompt.contains("To-do:"));
+        // Notes that were only marker lines leave no notes section.
+        let only = build_user_prompt("## Summary", Some("☐ To-do: Call Sam"), &[]);
+        assert!(!only.contains("MEETING OWNER'S NOTES"));
+    }
+
+    fn tracked_item(id: &str, meeting: &str, text: &str) -> TrackedItem {
+        TrackedItem {
+            id: id.into(),
+            meeting_id: Some(meeting.into()),
+            description: text.into(),
+        }
+    }
+
+    #[test]
+    fn prompt_numbers_tracked_items() {
         let tracked = [
-            "Send the presentation deck to participants", // user-edited
-            "Order pizza for the meeting",                // user-edited
-            "Set up the room",                            // completed
-            "Follow up with legal",                       // dismissed
-            "Water the office plants",                    // manual
+            tracked_item("a", "m-1", "Send the presentation deck to participants"),
+            tracked_item("b", "m-2", "Order pizza for the meeting"),
         ];
         let prompt = build_user_prompt("## Summary", Some("my notes"), &tracked);
-
         assert!(prompt.contains(
-            "ALREADY TRACKED:\nThese tasks are already tracked from earlier extractions. \
-             Do NOT include any task that is the same commitment as one of these, even if \
-             worded differently."
+            "TRACKED TASKS:\n[1] Send the presentation deck to participants\n[2] Order pizza for the meeting\n\n"
         ));
-        for description in tracked {
-            assert!(
-                prompt.contains(&format!("\n- {description}")),
-                "tracked item {description:?} missing from the prompt"
-            );
-        }
-        // Section order: sources, then the dedup list, then the trailing contract line.
-        let notes_at = prompt.find("MEETING OWNER'S NOTES").unwrap();
-        let tracked_at = prompt.find("ALREADY TRACKED:").unwrap();
-        assert!(notes_at < tracked_at, "dedup list comes after the sources");
-        assert!(prompt.ends_with("Return ONLY the JSON array of action items."));
-    }
-
-    /// Regression (2026-07 zero-candidate incident): the suppress instruction alone made
-    /// the model return an empty array for a summary full of tasks. The ALREADY TRACKED
-    /// section must carry the explicit counterweight — only omit on a clear match,
-    /// include when unsure, never an empty array out of similarity — and the JSON
-    /// contract line must remain the trailing instruction.
-    #[test]
-    fn already_tracked_section_carries_the_include_when_unsure_counterweight() {
-        let prompt = build_user_prompt("## Summary", None, &["Set up the room"]);
-        assert!(prompt.contains("Only omit a task if it clearly matches one of these."));
+        assert!(prompt.contains(TRACKED_INSTRUCTION));
+        assert!(prompt.contains("Tasks that merely share words are different tasks"));
         assert!(
-            prompt.contains("When unsure, INCLUDE the task — duplicates are handled downstream.")
+            !prompt.contains("Do NOT include"),
+            "nothing is suppressed any more"
         );
-        assert!(prompt
-            .contains("Never return an empty array just because tasks look similar to this list."));
-        // The counterweight rides inside the ALREADY TRACKED section, before the list...
-        let counterweight_at = prompt.find("When unsure, INCLUDE").unwrap();
-        assert!(prompt.find("ALREADY TRACKED:").unwrap() < counterweight_at);
-        assert!(counterweight_at < prompt.find("\n- Set up the room").unwrap());
-        // ...and the JSON contract stays the trailing instruction (unchanged).
+        assert!(
+            prompt.find("MEETING OWNER'S NOTES").unwrap() < prompt.find("TRACKED TASKS:").unwrap()
+        );
         assert!(prompt.ends_with("Return ONLY the JSON array of action items."));
+        assert!(
+            prompt.find("[2] Order pizza").unwrap() < prompt.find(TRACKED_INSTRUCTION).unwrap(),
+            "the instruction follows the list"
+        );
+        // Empty list: no section at all.
+        assert!(!build_user_prompt("## Summary", None, &[]).contains("TRACKED"));
     }
 
     #[test]
-    fn user_prompt_omits_already_tracked_when_empty() {
-        assert!(!build_user_prompt("## Summary", None, &[]).contains("ALREADY TRACKED"));
-        // Blank-only entries count as empty too (nothing to suppress).
-        assert!(!build_user_prompt("## Summary", None, &["  ", ""]).contains("ALREADY TRACKED"));
+    fn prompt_tracked_has_no_person_tokens() {
+        // Rows store mentions as tokens; `tracked_for_merge` hands the prompt plain text.
+        let stored = "Check in with @[Sam](person:p-1)";
+        let tracked = [tracked_item(
+            "a",
+            "m-1",
+            &crate::action_items::mentions::plain_description(stored),
+        )];
+        let prompt = build_user_prompt("## Summary", None, &tracked);
+        assert!(prompt.contains("[1] Check in with Sam"));
+        assert!(!prompt.contains("person:") && !prompt.contains("@["));
     }
 
     #[test]
-    fn user_prompt_caps_already_tracked_list() {
-        let many: Vec<String> = (0..ALREADY_TRACKED_CAP + 10)
-            .map(|i| format!("tracked task number {i}"))
+    fn user_prompt_caps_tracked_list() {
+        let many: Vec<TrackedItem> = (0..ALREADY_TRACKED_CAP + 10)
+            .map(|i| tracked_item(&i.to_string(), "m-1", &format!("tracked task number {i}")))
             .collect();
-        let refs: Vec<&str> = many.iter().map(String::as_str).collect();
-        let prompt = build_user_prompt("## Summary", None, &refs);
+        let prompt = build_user_prompt("## Summary", None, &many);
+        assert_eq!(prompt.matches("\n[").count(), ALREADY_TRACKED_CAP);
+        assert!(prompt.contains(&format!("\n[{ALREADY_TRACKED_CAP}] ")));
+        assert!(!prompt.contains(&format!("\n[{}] ", ALREADY_TRACKED_CAP + 1)));
+    }
 
+    #[test]
+    fn parses_context_and_same_as() {
+        let parsed: Vec<ActionItemCandidate> = serde_json::from_str(
+            r#"[{"description": "Send the deck", "assignee": null, "due": null,
+                 "context": "Priya said she would send it", "same_as": 2}]"#,
+        )
+        .unwrap();
         assert_eq!(
-            prompt.matches("\n- tracked task number").count(),
-            ALREADY_TRACKED_CAP,
-            "list capped at ALREADY_TRACKED_CAP"
+            parsed[0].context.as_deref(),
+            Some("Priya said she would send it")
         );
-        assert!(prompt.contains(&format!(
-            "\n- tracked task number {}",
-            ALREADY_TRACKED_CAP - 1
-        )));
-        assert!(
-            !prompt.contains(&format!("\n- tracked task number {ALREADY_TRACKED_CAP}")),
-            "entries past the cap are dropped"
+        assert_eq!(parsed[0].same_as, Some(2));
+    }
+
+    #[test]
+    fn malformed_same_as_and_context_never_fail_the_reply() {
+        let parse = |extra: &str| -> ActionItemCandidate {
+            let json =
+                format!(r#"[{{"description": "x", "assignee": null, "due": null, {extra}}}]"#);
+            serde_json::from_str::<Vec<ActionItemCandidate>>(&json)
+                .unwrap()
+                .remove(0)
+        };
+        assert_eq!(parse(r#""same_as": "2""#).same_as, Some(2));
+        assert_eq!(parse(r#""same_as": 2.0"#).same_as, Some(2));
+        assert_eq!(parse(r#""same_as": -1"#).same_as, None);
+        assert_eq!(parse(r#""same_as": "none""#).same_as, None);
+        assert_eq!(parse(r#""same_as": "[2]""#).same_as, None);
+        assert_eq!(parse(r#""same_as": 2.5"#).same_as, None);
+        assert_eq!(parse(r#""same_as": {"n": 1}"#).same_as, None);
+        assert_eq!(parse(r#""context": 7, "same_as": null"#).context, None);
+        assert_eq!(parse(r#""context": ["a"]"#).context, None);
+        assert_eq!(
+            parse(r#""context": "said so""#).context.as_deref(),
+            Some("said so")
         );
+    }
+
+    #[test]
+    fn missing_new_keys_default_none() {
+        let parsed: Vec<ActionItemCandidate> = serde_json::from_str(
+            r#"[{"description": "Book the room", "assignee": "me", "due": null}]"#,
+        )
+        .unwrap();
+        assert_eq!((parsed[0].context.clone(), parsed[0].same_as), (None, None));
+    }
+
+    #[test]
+    fn system_prompt_documents_context_and_same_as() {
+        let prompt = build_system_prompt(&[], &no_owner());
+        assert!(prompt.contains("- context: one sentence on what was said about this task in this meeting, and by whom."));
+        assert!(prompt.contains("\"context\": string or null, \"same_as\": integer or null"));
     }
 
     // =====================================================================
@@ -961,13 +991,16 @@ mod tests {
         .await
     }
 
-    /// The ALREADY TRACKED list reaches the wire: it rides in the user prompt of the
+    /// The TRACKED TASKS list reaches the wire: it rides in the user prompt of the
     /// real call — and survives intact on the parse-failure retry (the retry re-sends
     /// the same sources + dedup list, only appending the JSON reminder).
     #[tokio::test]
     async fn already_tracked_rides_in_the_sent_prompt_and_its_retry() {
         let fake = FakeLlm::new(vec![Ok("not json"), Ok("[]")]);
-        let tracked = ["Set up the room", "Order pizza for the meeting"];
+        let tracked = [
+            tracked_item("a", "m-1", "Set up the room"),
+            tracked_item("b", "m-2", "Order pizza for the meeting"),
+        ];
         extract_with_llm(
             |system, user| {
                 let result = fake.call(system, user);
@@ -985,14 +1018,14 @@ mod tests {
         let prompts = fake.prompts.lock().unwrap();
         for (n, (_, user)) in prompts.iter().enumerate() {
             assert!(
-                user.contains("ALREADY TRACKED:"),
+                user.contains("TRACKED TASKS:"),
                 "call {n} carries the dedup section"
             );
             assert!(
-                user.contains("\n- Set up the room"),
+                user.contains("\n[1] Set up the room"),
                 "call {n} lists the tracked items"
             );
-            assert!(user.contains("\n- Order pizza for the meeting"));
+            assert!(user.contains("\n[2] Order pizza for the meeting"));
         }
     }
 
@@ -1140,7 +1173,12 @@ mod tests {
             .1
             .contains("deck goes out BEFORE"));
 
-        let resolved = resolve_candidates(candidates, &roster, &no_owner());
+        let resolved = resolve_candidates(
+            candidates,
+            &roster,
+            &no_owner(),
+            chrono::NaiveDate::from_ymd_opt(2026, 11, 12).unwrap(),
+        );
         assert_eq!(resolved.len(), 4);
         // Roster display name → person FK; verbatim due hint.
         assert_eq!(resolved[0].assignee_person_id.as_deref(), Some("p-alice"));
