@@ -19,7 +19,9 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 ## [Unreleased]
 
-_(nothing yet)_
+### Internal
+
+- One screenshot set per release: `scripts/shots-set.sh` parks a `pnpm shots:real` capture on `shots/vX.Y.Z`; a normal release and `release.sh promote` refuse without it (`--no-shots` overrides), take nixonapp.com's images from it, and merge it into main. Replaces the screenshot freshness nudge. `publish-site.sh` gains `--shots-dir`.
 
 ## [0.18.0] - 2026-11-13
 

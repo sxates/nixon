@@ -29,8 +29,8 @@
 # stripped. Usually that is just this version's section (specs/0086 DECIDED-2).
 #
 # Usage:
-#   ./release.sh <major|minor|patch|X.Y.Z> [--early] [--skip-build] [--no-release] [--no-github] [--yes] [--dry-run] [--allow-degraded]
-#   ./release.sh promote X.Y.Z [--no-github] [--yes] [--dry-run]
+#   ./release.sh <major|minor|patch|X.Y.Z> [--early] [--skip-build] [--no-release] [--no-github] [--no-shots] [--yes] [--dry-run] [--allow-degraded]
+#   ./release.sh promote X.Y.Z [--no-github] [--no-shots] [--yes] [--dry-run]
 #
 #   --early           specs/0086: the full release above, but advertised ONLY on
 #                     updates/early.json (installs with Settings > Updates >
@@ -44,10 +44,16 @@
 #                     signature matches the app's key (and the GitHub
 #                     pre-release's), then writes updates/current.json, then
 #                     updates/latest.json LAST, pushes release.json, and turns the
-#                     GitHub pre-release into the latest full release.
+#                     GitHub pre-release into the latest full release. Then it
+#                     merges the version's screenshot set into main and pushes it.
 #   --skip-build      bump + changelog + merge/push, but don't build the DMG
 #   --no-release      do everything except publish (R2 and GitHub)
 #   --no-github       publish to R2 but skip the GitHub release
+#   --no-shots        release without the version's screenshot set. Every release
+#                     gets one (pnpm shots:real, then scripts/shots-set.sh park X.Y.Z);
+#                     a normal release and promote refuse without it, merge it into
+#                     main, and put its images on nixonapp.com. With --no-shots, main
+#                     and the site keep the screenshots they have.
 #   --yes             don't prompt before the remote steps
 #   --dry-run         print what would happen; make no changes. The read-only
 #                     checks (live feeds, R2 HEADs, gh release view) still run.
@@ -70,6 +76,7 @@ DRY_RUN=0
 SKIP_BUILD=0
 NO_RELEASE=0
 ALSO_GITHUB=1
+NO_SHOTS=0
 ASSUME_YES=0
 ALLOW_DEGRADED=0
 EARLY=0
@@ -82,6 +89,7 @@ for arg in "$@"; do
     --skip-build) SKIP_BUILD=1 ;;
     --no-release) NO_RELEASE=1 ;;
     --no-github) ALSO_GITHUB=0 ;;
+    --no-shots) NO_SHOTS=1 ;;
     --yes|-y) ASSUME_YES=1 ;;
     --allow-degraded) ALLOW_DEGRADED=1 ;;
     --early) EARLY=1 ;;
@@ -288,26 +296,17 @@ verify_live() {
 # ---- nixonapp.com: release.json + screenshots + deploy (warn, never fail) ----
 # scripts/publish-site.sh does the work so it can also be re-run by hand (a second
 # promote refuses once latest.json moved). It needs the site repo on NIXON_SITE_BRANCH.
-publish_release_json() { # version dmg-bytes
-  "$REPO_ROOT/scripts/publish-site.sh" "$1" --size "$2"
+publish_release_json() { # version dmg-bytes [publish-site.sh flags...]
+  "$REPO_ROOT/scripts/publish-site.sh" "$1" --size "$2" "${@:3}"
 }
 RELEASE_JSON_WARN="⚠️  nixonapp.com was not updated (see the error above). Fix it, then run: scripts/publish-site.sh <version>"
 
-# ---- screenshot_reminder <since-tag> (specs/0060) ---------------------------
-# Non-blocking nudge to refresh docs/screenshots/real when they are missing or older than
-# <since-tag>. Every substitution falls back with `|| true`/`:-0` so this can never trip
-# `set -euo pipefail` on a fresh repo with no prior tag or no screenshots yet.
-screenshot_reminder() {
-  local since="$1" newest_raw newest_ts since_ts
-  [ -n "$since" ] || return 0
-  git rev-parse -q --verify "refs/tags/$since" >/dev/null 2>&1 || return 0
-  newest_raw="$(find "$REPO_ROOT/docs/screenshots/real" -name '*.png' -exec stat -f %m {} \; 2>/dev/null | sort -rn | head -1 || true)"
-  newest_ts="${newest_raw:-0}"
-  since_ts="$(git log -1 --format=%ct "$since" 2>/dev/null || true)"
-  since_ts="${since_ts:-0}"
-  if [ -z "$newest_raw" ] || [ "$newest_ts" -le "$since_ts" ]; then
-    c_yellow "ℹ️  docs/screenshots/real is missing or older than ${since} — run pnpm shots:real to refresh the README images before this version reaches everyone."
-  fi
+# ---- screenshot sets (scripts/shots-set.sh) ----------------------------------
+# One docs/screenshots/real set per release, held on shots/vX.Y.Z until that version
+# reaches everyone (owner rule, 2026-11-15; replaces the specs/0060 freshness nudge).
+SHOTS_SET="$REPO_ROOT/scripts/shots-set.sh"
+shots_missing_msg() { # version
+  echo "No screenshot set for v$1. Capture it on the build being released (pnpm shots:real), then: scripts/shots-set.sh park $1   (or pass --no-shots to keep main's and the site's screenshots as they are)."
 }
 
 # ---- promote X.Y.Z (specs/0086) -------------------------------------------
@@ -422,6 +421,14 @@ if git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null; then
 fi
 DMG="target/release/bundle/dmg/Nixon_${NEW}_aarch64.dmg"
 
+if [ "$EARLY" -eq 0 ] && [ "$NO_SHOTS" -eq 0 ] && ! "$SHOTS_SET" has "$NEW"; then
+  if [ "$DRY_RUN" -eq 1 ]; then
+    c_yellow "   ⚠️  $(shots_missing_msg "$NEW") [dry-run] a real run would stop here."
+  else
+    die "$(shots_missing_msg "$NEW")"
+  fi
+fi
+
 TODAY="$(date +%F)"
 if [ "$EARLY" -eq 1 ]; then
   c_blue "📦 Releasing ${CUR} → ${NEW} EARLY  (branch: ${BRANCH}, tag: ${TAG}, date: ${TODAY}; advertised on updates/early.json only)"
@@ -520,14 +527,12 @@ c_blue "💾 Committing release bump…"
 run "git add '$PKG_JSON' '$TAURI_CONF' '$CARGO_TOML' '$CARGO_LOCK' '$CHANGELOG'"
 run "git commit -m 'release: v${NEW}'"
 
-# ---- screenshot freshness reminder (specs/0060) ---------------------------
-# Only when a version reaches everyone: a normal release here, and promote (which calls
-# screenshot_reminder itself). Early releases never nudge — README images track the
-# everyone track. It runs BEFORE the new tag is created below: comparing against a tag
-# this same run just cut always looks "stale" (it's seconds old), so compare against the
-# tag this release supersedes instead.
-if [ "$EARLY" -eq 0 ]; then
-  screenshot_reminder "$(git describe --tags --abbrev=0 HEAD 2>/dev/null || true)"
+# ---- the version's screenshot set rides along with a release to everyone ----------
+# It merges into the release branch here, so the merge to main below carries it and the
+# site sync reads it from the working tree. Early releases leave their set parked.
+if [ "$EARLY" -eq 0 ] && [ "$NO_SHOTS" -eq 0 ] && "$SHOTS_SET" has "$NEW"; then
+  c_blue "🖼️  Merging the v${NEW} screenshot set…"
+  run "git merge -q --no-ff -m 'docs(screenshots): v${NEW} set' 'shots/v${NEW}'"
 fi
 
 # ---- build the production DMG ----------------------------------------------
@@ -754,10 +759,14 @@ else
     # ---- site release.json (the download page shows the everyone version) ----------
     if [ "$EARLY" -eq 1 ]; then
       c_yellow "   --early: public/release.json not touched (the download page keeps the everyone version)."
-    elif [ "$DRY_RUN" -eq 1 ]; then
-      "$REPO_ROOT/scripts/publish-site.sh" "$NEW" --size 1 --dry-run || c_yellow "$RELEASE_JSON_WARN"
     else
-      { dmg_size="$(stat -f%z "$DMG")" && publish_release_json "$NEW" "$dmg_size"; } || c_yellow "$RELEASE_JSON_WARN"
+      site_flags=()
+      [ "$NO_SHOTS" -eq 1 ] && site_flags+=( --no-screenshots )
+      if [ "$DRY_RUN" -eq 1 ]; then
+        "$REPO_ROOT/scripts/publish-site.sh" "$NEW" --size 1 --dry-run ${site_flags[@]+"${site_flags[@]}"} || c_yellow "$RELEASE_JSON_WARN"
+      else
+        { dmg_size="$(stat -f%z "$DMG")" && publish_release_json "$NEW" "$dmg_size" ${site_flags[@]+"${site_flags[@]}"}; } || c_yellow "$RELEASE_JSON_WARN"
+      fi
     fi
   else
     c_yellow "   (--skip-build: no build artefacts — nothing uploaded to R2; installed apps will NOT see this release)"
@@ -823,6 +832,8 @@ if [ "$NO_RELEASE" -eq 0 ] && [ "$DRY_RUN" -eq 0 ]; then
   if [ "$EARLY" -eq 1 ]; then
     echo "   Installs with Early access updates on will pick this up on their own; everyone else stays on ${LIVE_LATEST:-their version}."
     echo "   Install on another Mac by hand: the DMG on the GitHub pre-release ${TAG}."
+    "$SHOTS_SET" has "$NEW" \
+      || echo "   Screenshots: capture this build (pnpm shots:real), then scripts/shots-set.sh park ${NEW}. Promote needs the set."
   else
     echo "   Installed apps will pick this update up on their own (in-app updater, specs/0058)."
     echo "   Download page / install on another Mac: ${SITE_BASE}/download/"

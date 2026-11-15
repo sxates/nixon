@@ -97,6 +97,11 @@ publishes the GitHub release with the DMG attached. `tauri.conf.json`'s
 `signingIdentity: "-"` (ad-hoc) is the deliberate fallback — don't hardcode an identity there.
 To test on your own Macs first: `./release.sh <bump> --early`, then `./release.sh promote X.Y.Z`
 (specs/0086) — both always through `release.sh`, never by hand-editing the R2 feeds.
+**Screenshots: one set per release, on main only once it's everyone's.** After cutting a
+release (early or not), capture it with `pnpm shots:real` and park it with
+`scripts/shots-set.sh park X.Y.Z` (local branch `shots/vX.Y.Z`; the folder resets to HEAD).
+A normal release and `promote` refuse without the set (`--no-shots` overrides), merge it
+into main, and put its images on nixonapp.com — never commit `docs/screenshots/real` by hand.
 
 **Dev vs production are separate apps with separate data (ADR-0004).** The production app is the
 bundled **`Nixon.app`** (identifier `ai.vinyl.app`) — the user's real meetings. The **dev** build

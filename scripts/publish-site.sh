@@ -7,15 +7,17 @@
 #   1. checks out nothing: the repo must already be on $NIXON_SITE_BRANCH (default main)
 #      with a clean tree, then pulls --ff-only;
 #   2. writes public/release.json (version, DMG size, date) — the download page reads it;
-#   3. syncs the site screenshots from docs/screenshots/real (resized to 1600 px wide;
-#      deck = dark, faceplate = light) and bumps their ?v= cache-busters when they change;
+#   3. syncs the site screenshots from docs/screenshots/real, or from --shots-dir (release.sh
+#      passes the version's shots/vX.Y.Z set, scripts/shots-set.sh), resized to 1600 px wide
+#      (deck = dark, faceplate = light), and bumps their ?v= cache-busters when they change;
 #   4. commits whatever changed, pushes the branch;
 #   5. deploys production (nixonapp.com) and staging (staging.nixonapp.com). Pushing alone
 #      deploys nothing.
 # Re-running with the same inputs commits nothing and just redeploys.
 #
-# Usage: scripts/publish-site.sh X.Y.Z [--size BYTES] [--no-screenshots] [--no-deploy] [--dry-run]
-#   --size   DMG size in bytes; default: HEAD of nixonapp.com/releases/X.Y.Z/<dmg>.
+# Usage: scripts/publish-site.sh X.Y.Z [--size BYTES] [--shots-dir DIR] [--no-screenshots] [--no-deploy] [--dry-run]
+#   --size       DMG size in bytes; default: HEAD of nixonapp.com/releases/X.Y.Z/<dmg>.
+#   --shots-dir  folder holding the captures; default docs/screenshots/real.
 #
 # Env (from .env.signing when run by hand): NIXON_SITE_DIR, NIXON_SITE_BRANCH,
 # CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID.
@@ -26,19 +28,21 @@ SITE_BASE="https://nixonapp.com"
 die() { printf '\033[0;31m❌ %s\033[0m\n' "$*" >&2; exit 1; }
 say() { printf '\033[0;34m%s\033[0m\n' "$*"; }
 
-VER="" SIZE="" SHOTS=1 DEPLOY=1 DRY=0
+VER="" SIZE="" SHOTS=1 SHOTS_DIR="$REPO_ROOT/docs/screenshots/real" DEPLOY=1 DRY=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --size) SIZE="${2:-}"; shift ;;
+    --shots-dir) SHOTS_DIR="${2:-}"; shift ;;
     --no-screenshots) SHOTS=0 ;;
     --no-deploy) DEPLOY=0 ;;
     --dry-run) DRY=1 ;;
-    -h|--help) sed -n '2,24p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,23p' "$0"; exit 0 ;;
     *) [ -z "$VER" ] || die "unexpected argument: $1"; VER="$1" ;;
   esac
   shift
 done
-[[ "$VER" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || die "usage: scripts/publish-site.sh X.Y.Z [--size BYTES] [--no-screenshots] [--no-deploy] [--dry-run]"
+[[ "$VER" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || die "usage: scripts/publish-site.sh X.Y.Z [--size BYTES] [--shots-dir DIR] [--no-screenshots] [--no-deploy] [--dry-run]"
+[ "$SHOTS" -eq 0 ] || [ -d "$SHOTS_DIR" ] || die "--shots-dir $SHOTS_DIR is not a folder"
 
 if [ -z "${NIXON_SITE_DIR:-}" ] && [ -f "$REPO_ROOT/.env.signing" ]; then
   set -a; # shellcheck disable=SC1091
@@ -78,7 +82,7 @@ if [ "$SHOTS" -eq 1 ]; then
   for pair in "${SHOT_MAP[@]}"; do
     stem="${pair%%|*}" src="${pair##*|}"
     for v in "deck|" "faceplate|-light"; do
-      from="$REPO_ROOT/docs/screenshots/real/${src}.${v%%|*}.png" to="$SITE/public/assets/${stem}${v##*|}.png"
+      from="$SHOTS_DIR/${src}.${v%%|*}.png" to="$SITE/public/assets/${stem}${v##*|}.png"
       [ -f "$from" ] || { echo "  (no $from; keeping the site's ${stem}${v##*|}.png)"; continue; }
       if [ "$DRY" -eq 1 ]; then echo "  [dry-run] $from -> $to (1600 px)"; continue; fi
       sips -Z 1600 "$from" --out "$to" >/dev/null || die "sips failed on $from"

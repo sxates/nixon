@@ -8,8 +8,10 @@
 # NIXON_SITE_DIR) and helpers (feed, read_live, r2_upload_plan,
 # verify_live, publish_release_json, c_*, die).
 #
-# It promotes the exact signed build that went out with --early: nothing is rebuilt,
-# re-signed or committed, and CHANGELOG.md is read at the tag, never edited.
+# It promotes the exact signed build that went out with --early: nothing is rebuilt or
+# re-signed, and CHANGELOG.md is read at the tag, never edited. The one commit it makes is
+# merging the version's screenshot set (shots/vX.Y.Z, scripts/shots-set.sh) into main, last,
+# once everyone's feed serves the version; the site's images come from that same set.
 #
 # Every preflight check is read-only and runs in --dry-run too. Refusals are collected
 # and reported together. A read that fails (offline) stops a real run; a dry run warns
@@ -183,6 +185,15 @@ else
   c_yellow "   minisign not on PATH (or an earlier check failed): skipped the full cryptographic check. The key-id check and the GitHub byte comparison still apply, and installed apps verify every payload themselves."
 fi
 
+# ---- 6. the version's screenshot set exists ------------------------------------
+if [ "$NO_SHOTS" -eq 1 ]; then
+  c_yellow "   --no-shots: main and nixonapp.com keep the screenshots they have."
+elif "$SHOTS_SET" has "$P"; then
+  c_green "   Screenshot set shots/v${P} is ready."
+else
+  refuse "$(shots_missing_msg "$P")"
+fi
+
 if [ ${#REFUSALS[@]} -gt 0 ]; then
   msg="Refusing to promote ${PTAG}. Nothing has been changed:"
   for r in "${REFUSALS[@]}"; do msg="${msg}
@@ -247,10 +258,6 @@ R2_FAIL_NEXT="the site release.json and the GitHub steps"
 R2_FAIL_TAIL="     scripts/publish-site.sh ${P}
 ${GH_STEPS}"
 
-# README images track the everyone track (specs/0060): nudge against the version everyone
-# has now, since early releases deliberately never did.
-screenshot_reminder "v${LIVE_LATEST}"   # no-op when that tag is unknown
-
 if [ "$ASSUME_YES" -eq 0 ] && [ "$DRY_RUN" -eq 0 ]; then
   printf '\nAbout to advertise %s to EVERYONE (updates/latest.json) and make it the latest GitHub release. Continue? [y/N] ' "$PTAG"
   read -r ans || true
@@ -271,11 +278,16 @@ ${GH_STEPS}"
   verify_live "updates/latest.json" "$P" "$PDMG" "$DMG_BYTES" "$TGZ_BYTES"
 fi
 
-# ---- publish 4: site release.json (warn, never fail) ---------------------------
+# ---- publish 4: site release.json + the version's screenshots (warn, never fail) ----
+# The images come from shots/vP, never the working tree, which may hold a newer capture.
+site_flags=( --no-screenshots )
+if [ "$NO_SHOTS" -eq 0 ] && "$SHOTS_SET" has "$P"; then
+  "$SHOTS_SET" export "$P" "${PWORK}/shots" && site_flags=( --shots-dir "${PWORK}/shots/docs/screenshots/real" )
+fi
 if [ "$DRY_RUN" -eq 1 ]; then
-  "$REPO_ROOT/scripts/publish-site.sh" "$P" --size "${DMG_BYTES:-1}" --dry-run || c_yellow "$RELEASE_JSON_WARN"
+  "$REPO_ROOT/scripts/publish-site.sh" "$P" --size "${DMG_BYTES:-1}" --dry-run "${site_flags[@]}" || c_yellow "$RELEASE_JSON_WARN"
 else
-  publish_release_json "$P" "$DMG_BYTES" || c_yellow "$RELEASE_JSON_WARN"
+  publish_release_json "$P" "$DMG_BYTES" "${site_flags[@]}" || c_yellow "$RELEASE_JSON_WARN"
 fi
 
 # ---- publish 5: GitHub — legacy manifest first, then the pre-release flip ------
@@ -295,6 +307,16 @@ ${GH_STEPS}"
   fi
 else
   c_yellow "⏭️  --no-github: the GitHub release stays a pre-release. Installs still on the GitHub endpoint will not see ${P}."
+fi
+
+# ---- publish 6: the screenshot set joins main (warn, never fail) ----------------
+# Everyone's feed already serves P, so a failure here only leaves the set parked.
+if [ "$NO_SHOTS" -eq 0 ] && "$SHOTS_SET" has "$P"; then
+  c_blue "🖼️  Merging the v${P} screenshot set into main…"
+  shots_args=( --push )
+  [ "$DRY_RUN" -eq 1 ] && shots_args+=( --dry-run )
+  "$SHOTS_SET" merge "$P" "${shots_args[@]}" \
+    || c_yellow "⚠️  The screenshot set was not merged (see above). Finish with: scripts/shots-set.sh merge ${P} --push"
 fi
 
 if [ "$DRY_RUN" -eq 1 ]; then

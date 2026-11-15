@@ -132,6 +132,8 @@ jobs:
           python3 scripts/release_feed.py --self-test
           bash -n release.sh
           bash -n scripts/release-promote.sh
+          bash -n scripts/publish-site.sh
+          scripts/shots-set.sh --self-test
 
   rust:
     name: Rust clippy + lifecycle tests (macOS/Metal)
