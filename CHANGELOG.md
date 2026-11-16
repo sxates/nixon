@@ -19,6 +19,10 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 ## [Unreleased]
 
+_(nothing yet)_
+
+## [0.18.1] - 2026-11-16
+
 ### Added
 
 - Arrange your Topics in the order you like by dragging them on the Topics page, and star the ones you want in the sidebar. The sidebar now lists your starred Topics, in your order. Topics that were in your sidebar before are starred for you.
