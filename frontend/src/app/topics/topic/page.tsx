@@ -7,7 +7,7 @@ import { EmptyState, PageLoading } from '@/components/ui/empty-state';
 
 function TopicPageContent() {
   const id = useSearchParams().get('id');
-  if (!id) return <EmptyState title="This topic no longer exists" />;
+  if (!id) return <EmptyState title="This Topic no longer exists" />;
   return <TopicView key={id} id={id} />;
 }
 

@@ -118,6 +118,9 @@ mod tests {
             created_at: String::new(),
             updated_at: String::new(),
             closed_at: None,
+            sort_order: None,
+            starred: false,
+            hide_from_todo: false,
         };
         let (a, b) = (mk("topic-a", "Atlas"), mk("topic-b", "Beta"));
         let f1 = fingerprint("s", &[a.clone(), b.clone()]);

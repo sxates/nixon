@@ -134,7 +134,7 @@ export function MeetingRow({
   // 0.1.0 owner feedback: plain text, not the rail's counter — easier to read in a list,
   // and the counter is the live recording's instrument, not a duration.
   const duration = formatDuration(meeting.durationSeconds);
-  const title = meeting.title?.trim() || 'Untitled meeting';
+  const title = meeting.title?.trim() || 'Untitled Meeting';
   const reelTag = formatReelTag(meeting.reelNumber);
   // Bounded attendee preview (WS8.a) with owner excluded display-only (WS8.b).
   const attendees = meeting.attendees ?? [];
@@ -182,7 +182,7 @@ export function MeetingRow({
               variant="destructive"
               onSelect={() => onRequestDelete(meeting)}
             >
-              Delete meeting
+              Delete Meeting
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

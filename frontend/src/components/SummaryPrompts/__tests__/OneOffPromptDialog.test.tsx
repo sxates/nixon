@@ -19,7 +19,7 @@ function setup(onSubmit: (body: string, extract: boolean) => Promise<void> = vi.
   return { onSubmit, onOpenChange };
 }
 
-const submit = () => screen.getByRole('button', { name: 'Use for this meeting' });
+const submit = () => screen.getByRole('button', { name: 'Use for this Meeting' });
 
 describe('OneOffPromptDialog (specs/0079 W4)', () => {
   it('tells the user they can refer to "my notes" and ties the hint to the textarea', () => {

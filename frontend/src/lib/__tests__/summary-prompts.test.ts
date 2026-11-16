@@ -30,10 +30,10 @@ describe('isPersistableMeetingId', () => {
 
 describe('promptSourceLabel', () => {
   it.each([
-    [state({ source: 'custom' }), 'Custom (this meeting)'],
+    [state({ source: 'custom' }), 'Custom (this Meeting)'],
     [state({ source: 'meeting' }), 'Weekly'],
     [state({ source: 'meeting', prompt_name: null }), 'Prompt'],
-    [state({ source: 'series' }), 'Weekly (series)'],
+    [state({ source: 'series' }), 'Weekly (Series)'],
     [state({ source: 'default' }), 'Weekly'],
     [state({ source: 'default', prompt_name: null }), 'Default'],
     [state({ source: 'fallback', prompt_name: null }), 'Default'],

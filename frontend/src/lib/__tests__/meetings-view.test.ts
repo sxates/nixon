@@ -28,12 +28,12 @@ describe('readStoredView: one key, migrated once from the two old pages', () => 
     expect(readStoredView()).toBe('week');
   });
 
-  it("migrates All meetings' Month / List", () => {
+  it("migrates All Meetings' Month / List", () => {
     window.localStorage.setItem(LEGACY_MEETINGS_VIEW_KEY, 'month');
     expect(readStoredView()).toBe('month');
   });
 
-  it("lets Today's retired day list defer to All meetings' choice", () => {
+  it("lets Today's retired day list defer to All Meetings' choice", () => {
     window.localStorage.setItem(LEGACY_TODAY_VIEW_KEY, 'list');
     window.localStorage.setItem(LEGACY_MEETINGS_VIEW_KEY, 'month');
     expect(readStoredView()).toBe('month');

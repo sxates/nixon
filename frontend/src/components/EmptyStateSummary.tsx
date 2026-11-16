@@ -28,7 +28,7 @@ export function EmptyStateSummary({ onGenerate, hasModel, isGenerating = false }
       titleAs="h3"
       className="h-full animate-fade-in p-8"
       title="No summary generated yet"
-      body="Generate an AI-powered summary of your meeting transcript to get key points, action items, and decisions."
+      body="Generate an AI-powered summary of your Meeting transcript to get key points, action items, and decisions."
       action={
         <div className="flex flex-col items-center gap-3">
           <TooltipProvider>

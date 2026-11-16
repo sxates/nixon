@@ -69,9 +69,9 @@ export function OneOffPromptDialog({
     <Dialog open={open} onOpenChange={(next) => (isSubmitting ? undefined : onOpenChange(next))}>
       <DialogContent className="max-w-xl">
         <DialogHeader>
-          <DialogTitle>Custom prompt for this meeting</DialogTitle>
+          <DialogTitle>Custom prompt for this Meeting</DialogTitle>
           <DialogDescription>
-            Tell the model how you want these notes shaped. It applies to this meeting only
+            Tell the model how you want these notes shaped. It applies to this Meeting only
             unless you choose to keep it afterwards.
           </DialogDescription>
         </DialogHeader>
@@ -109,7 +109,7 @@ export function OneOffPromptDialog({
           </Button>
           <Button variant="brand" onClick={handleSubmit} disabled={!canSubmit}>
             {isSubmitting && <Spinner />}
-            Use for this meeting
+            Use for this Meeting
           </Button>
         </DialogFooter>
       </DialogContent>

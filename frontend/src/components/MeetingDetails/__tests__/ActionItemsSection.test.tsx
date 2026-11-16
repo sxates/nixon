@@ -175,7 +175,7 @@ describe('ActionItemsSection (specs/0034)', () => {
     );
   });
 
-  it('adds a manual item on this meeting → api_create_action_item, clearing the draft', async () => {
+  it('adds a manual item on this Meeting → api_create_action_item, clearing the draft', async () => {
     stubInvoke({
       api_get_action_items: () => [makeItem()],
       api_create_action_item: () =>
@@ -297,7 +297,7 @@ describe('ActionItemsSection (specs/0034)', () => {
     await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith('No new action items'));
   });
 
-  it('refreshes when the action-items-updated event fires for this meeting', async () => {
+  it('refreshes when the action-items-updated event fires for this Meeting', async () => {
     stubInvoke({ api_get_action_items: () => [] });
     const captured = captureUpdatedHandler();
     render(<ActionItemsSection meetingId="m1" hasSummary />);

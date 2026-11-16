@@ -75,7 +75,7 @@ export default function VoiceprintRetractionListener() {
     // available (retryable) for them. State is cleared only AFTER the calls settle.
     const restoreAll = async (personId: string) => {
       const entry = pendingRef.current.get(personId);
-      const name = entry?.name ?? 'this person';
+      const name = entry?.name ?? 'this Person';
       const toRestore = Array.from(entry?.ids ?? []);
       if (toRestore.length === 0) return;
 
@@ -126,7 +126,7 @@ export default function VoiceprintRetractionListener() {
       if (!payload?.personId || newIds.length === 0) return;
 
       const { personId } = payload;
-      const name = payload.personName?.trim() || 'this person';
+      const name = payload.personName?.trim() || 'this Person';
 
       // Merge into any still-showing toast for this person.
       const existing = pendingRef.current.get(personId);

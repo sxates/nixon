@@ -37,13 +37,13 @@ describe('SuggestionStrip', () => {
     expect(screen.getByText('Support wants a read-only view during the pilot.')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '3:40' }));
     expect(openMeetingMoment).toHaveBeenCalledWith(expect.anything(), 'm-2', 220);
-    expect(screen.getByRole('button', { name: 'Add to topic' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add to Topic' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Dismiss' })).toBeInTheDocument();
   });
 
-  it('Add to topic accepts the suggestion; Dismiss rejects it', async () => {
+  it('Add to Topic accepts the suggestion; Dismiss rejects it', async () => {
     render(<SuggestionStrip suggestions={[noteSuggestion()]} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Add to topic' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add to Topic' }));
     await waitFor(() => expect(resolveTopicSuggestion).toHaveBeenCalledWith('ts-1', true));
     fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
     await waitFor(() => expect(resolveTopicSuggestion).toHaveBeenCalledWith('ts-1', false));

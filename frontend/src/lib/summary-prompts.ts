@@ -47,11 +47,11 @@ export function promptSourceLabel(state: MeetingPromptState | null): string {
   if (!state) return 'Default';
   switch (state.source) {
     case 'custom':
-      return 'Custom (this meeting)';
+      return 'Custom (this Meeting)';
     case 'meeting':
       return state.prompt_name ?? 'Prompt';
     case 'series':
-      return `${state.prompt_name} (series)`;
+      return `${state.prompt_name} (Series)`;
     case 'default':
       return `${state.prompt_name ?? 'Default'}`;
     default:

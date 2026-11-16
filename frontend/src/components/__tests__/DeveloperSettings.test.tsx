@@ -63,7 +63,7 @@ describe('DeveloperSettings', () => {
     // (its description), not from anything rendered in the DOM.
     await waitFor(() => expect(toastSuccessMock).toHaveBeenCalledWith(
       'Demo data loaded',
-      expect.objectContaining({ description: expect.stringContaining('5 meetings') }),
+      expect.objectContaining({ description: expect.stringContaining('5 Meetings') }),
     ));
     await waitFor(() => expect(reloadMock).toHaveBeenCalledTimes(1));
   });

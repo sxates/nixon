@@ -234,7 +234,7 @@ describe('meeting-details header stays pinned while the document scrolls', () =>
     expect(scrollColumn.className).toContain('overflow-y-auto');
 
     // Owner feedback: deep in a transcript, "back" must not have scrolled away with it.
-    const back = screen.getByRole('button', { name: 'Back to meetings' });
+    const back = screen.getByRole('button', { name: 'Back' });
     const title = screen.getByRole('heading', { name: 'Standup' });
     expect(scrollColumn.contains(back)).toBe(false);
     expect(scrollColumn.contains(title)).toBe(false);

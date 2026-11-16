@@ -221,6 +221,6 @@ describe('openZoomMeeting — deep-link fallback (WS1.1)', () => {
     await openZoomMeeting(EVENT.zoomUrl);
 
     expect(openCalls()).toHaveLength(2);
-    expect(toastError).toHaveBeenCalledWith('Could not open the meeting link', expect.anything());
+    expect(toastError).toHaveBeenCalledWith('Could not open the Meeting link', expect.anything());
   });
 });

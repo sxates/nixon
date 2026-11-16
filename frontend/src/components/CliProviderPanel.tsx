@@ -346,7 +346,7 @@ function ClaudeCodePanel({ onSave }: { onSave: () => void }) {
       <ConfirmDialog
         open={confirmOpen}
         onOpenChange={setConfirmOpen}
-        title="Use Claude Code for your meetings?"
+        title="Use Claude Code for your Meetings?"
         body={PRIVACY}
         tone="brand"
         confirmLabel="Use Claude Code"

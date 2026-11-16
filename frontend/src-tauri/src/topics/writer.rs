@@ -110,6 +110,9 @@ mod tests {
             created_at: String::new(),
             updated_at: String::new(),
             closed_at: None,
+            sort_order: None,
+            starred: false,
+            hide_from_todo: false,
         }
     }
 

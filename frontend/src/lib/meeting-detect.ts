@@ -33,7 +33,7 @@ export function detectedTitle(platform?: string | null): string {
   return name ? `${name} call detected` : 'Call detected';
 }
 
-export const DETECTED_BODY = 'Record this meeting?';
+export const DETECTED_BODY = 'Record this Meeting?';
 
 /** Added to the prompt when the OS banner could not be sent (permission off, delivery error). */
 export const NOTIFICATIONS_OFF_COPY = 'macOS notifications are off for Nixon.';

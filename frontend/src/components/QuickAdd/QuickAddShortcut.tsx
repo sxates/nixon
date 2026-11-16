@@ -16,7 +16,7 @@ import { useTranscripts } from '@/contexts/TranscriptContext';
 import { QuickAddDialog } from './QuickAddDialog';
 
 export const FOCUS_QUICK_ADD_EVENT = 'nixon:focus-quick-add';
-export const QUICK_ADD_LABEL = 'New to-do';
+export const QUICK_ADD_LABEL = 'New To-Do';
 
 export function QuickAddShortcut() {
   const router = useRouter();
@@ -29,7 +29,7 @@ export function QuickAddShortcut() {
     isRecording && activeRecordingMeetingId
       ? {
           id: activeRecordingMeetingId,
-          title: meetingTitle && meetingTitle !== '+ New Call' ? meetingTitle : 'this meeting',
+          title: meetingTitle && meetingTitle !== '+ New Call' ? meetingTitle : 'this Meeting',
         }
       : null;
 

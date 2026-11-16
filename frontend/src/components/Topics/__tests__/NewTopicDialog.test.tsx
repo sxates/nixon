@@ -35,7 +35,7 @@ describe('NewTopicDialog', () => {
     expect(create).toBeEnabled();
   });
 
-  it('creates without a link and routes to the topic page', async () => {
+  it('creates without a link and routes to the Topic page', async () => {
     const onOpenChange = vi.fn();
     render(<NewTopicDialog open onOpenChange={onOpenChange} />);
     type('Name', ' Atlas ');
@@ -55,10 +55,10 @@ describe('NewTopicDialog', () => {
   it('with a meetingId offers the scope choice and passes linkSeries and backfill', async () => {
     render(<NewTopicDialog open onOpenChange={() => {}} meetingId="m-1" />);
     type('Name', 'Weekly');
-    expect(screen.getByRole('button', { name: 'This meeting' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'This Meeting' })).toBeInTheDocument();
     // Series is the default, with the backfill box on.
     const backfill = screen.getByRole('checkbox', {
-      name: "Also add this series' meetings from the last 90 days",
+      name: "Also add this Series' Meetings from the last 90 days",
     });
     expect(backfill).toHaveAttribute('aria-checked', 'true');
     fireEvent.click(screen.getByRole('button', { name: 'Create' }));
@@ -69,10 +69,10 @@ describe('NewTopicDialog', () => {
     );
   });
 
-  it('This meeting hides backfill and links only that meeting', async () => {
+  it('This Meeting hides backfill and links only that meeting', async () => {
     render(<NewTopicDialog open onOpenChange={() => {}} meetingId="m-1" />);
     type('Name', 'One-off');
-    fireEvent.click(screen.getByRole('button', { name: 'This meeting' }));
+    fireEvent.click(screen.getByRole('button', { name: 'This Meeting' }));
     expect(screen.queryByRole('checkbox')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Create' }));
     await waitFor(() =>
@@ -82,10 +82,10 @@ describe('NewTopicDialog', () => {
     );
   });
 
-  it('a meeting with no series key and no title defaults to This meeting and never sends series', async () => {
+  it('a meeting with no series key and no title defaults to This Meeting and never sends series', async () => {
     render(<NewTopicDialog open onOpenChange={() => {}} meetingId="m-1" seriesAvailable={false} />);
     type('Name', 'One-off');
-    expect(screen.getByRole('button', { name: 'Every meeting in this series' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Every Meeting in this Series' })).toBeDisabled();
     expect(screen.queryByRole('checkbox')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Create' }));
     await waitFor(() =>
@@ -95,13 +95,13 @@ describe('NewTopicDialog', () => {
     );
   });
 
-  it("Add to topic…'s New topic passes seriesAvailable through", async () => {
+  it("Add to Topic…'s New Topic passes seriesAvailable through", async () => {
     render(
       <AddToTopicDialog open onOpenChange={() => {}} meetingId="m-1" linkedIds={[]} seriesAvailable={false} />,
     );
-    fireEvent.click(screen.getByRole('button', { name: 'New topic' }));
+    fireEvent.click(screen.getByRole('button', { name: 'New Topic' }));
     type('Name', 'One-off');
-    expect(screen.getByRole('button', { name: 'Every meeting in this series' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Every Meeting in this Series' })).toBeDisabled();
     fireEvent.click(screen.getByRole('button', { name: 'Create' }));
     await waitFor(() =>
       expect(createTopic).toHaveBeenCalledWith(expect.objectContaining({ linkSeries: false })),

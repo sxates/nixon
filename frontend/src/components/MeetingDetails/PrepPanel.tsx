@@ -130,7 +130,7 @@ export function PrepPanel({
       setLoadError(null);
     } catch (err) {
       console.error('Failed to load prep view:', err);
-      setLoadError('We could not load the agenda for this meeting. Please try again.');
+      setLoadError('We could not load the agenda for this Meeting. Please try again.');
     }
   }, [meetingId, applyView]);
 
@@ -288,7 +288,7 @@ export function PrepPanel({
         await loadPrep();
       } catch (err) {
         console.error('Failed to unlink meeting from series:', err);
-        toast.error('We could not unlink that meeting. Please try again.');
+        toast.error('We could not unlink that Meeting. Please try again.');
       } finally {
         setUnlinkingId(null);
       }
@@ -333,12 +333,12 @@ export function PrepPanel({
             it has the Agenda panel's rhythm. specs/0063 W4 — the actions are icon-only; the
             full text lives in the tooltip and the accessible name. */}
         <PanelHeader
-          title="Before this meeting"
+          title="Before this Meeting"
           action={
             <>
               {briefStatus !== 'none' && (
                 <IconButton
-                  label="Link previous meeting…"
+                  label="Link previous Meeting…"
                   icon={<DeckIcon icon={Link2} />}
                   onClick={() => setLinkPickerOpen(true)}
                 />
@@ -360,11 +360,11 @@ export function PrepPanel({
           <EmptyState
             variant="panel"
             titleAs="h3"
-            title="No previous meetings found for this series"
-            body="If an earlier meeting belongs here — recorded ad-hoc or under a different name — link it and a brief will be generated from it."
+            title="No previous Meetings found for this Series"
+            body="If an earlier Meeting belongs here — recorded ad-hoc or under a different name — link it and a brief will be generated from it."
             action={
               <Button type="button" variant="outline" size="sm" onClick={() => setLinkPickerOpen(true)}>
-                Link previous meeting…
+                Link previous Meeting…
               </Button>
             }
           />
@@ -392,10 +392,10 @@ export function PrepPanel({
                     <button // ui-gate: allow inline citation link inside the "From …" sentence; Button's fixed-height box would break the baseline
                       type="button"
                       onClick={() => openMeeting(s.meetingId)}
-                      title="Open this meeting"
+                      title="Open this Meeting"
                       className="inline-flex items-baseline gap-1 rounded-md font-semibold text-muted-foreground transition-colors hover:text-brand focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
-                      {s.title?.trim() || 'Untitled meeting'}
+                      {s.title?.trim() || 'Untitled Meeting'}
                       {formatMeetingDate(s.createdAt) && (
                         <span className="font-normal">{formatMeetingDate(s.createdAt)}</span>
                       )}
@@ -413,14 +413,14 @@ export function PrepPanel({
         {/* Manually linked meetings (specs/0041 WS4), with an unlink affordance. */}
         {(view.linkedMeetings ?? []).length > 0 && (
           <div className="mt-3">
-            <h3 className="u-section-label">Linked meetings</h3>
+            <h3 className="u-section-label">Linked Meetings</h3>
             <ul className="mt-1 flex flex-col gap-0.5">
               {(view.linkedMeetings ?? []).map((m) => (
                 <li key={m.id}>
                   <ListRow
                     onClick={() => openMeeting(m.id)}
-                    hint="Open this meeting"
-                    title={m.title?.trim() || 'Untitled meeting'}
+                    hint="Open this Meeting"
+                    title={m.title?.trim() || 'Untitled Meeting'}
                     meta={formatMeetingDate(m.startedAt) || undefined}
                     trailing={
                       <Button
@@ -429,8 +429,8 @@ export function PrepPanel({
                         size="xs"
                         onClick={() => void unlinkMeeting(m.id)}
                         disabled={unlinkingId !== null}
-                        title="Unlink this meeting from the series"
-                        aria-label={`Unlink ${m.title?.trim() || 'Untitled meeting'}`}
+                        title="Unlink this Meeting from the Series"
+                        aria-label={`Unlink ${m.title?.trim() || 'Untitled Meeting'}`}
                         className="gap-1 text-muted-foreground hover:text-destructive"
                       >
                         {unlinkingId === m.id && <Spinner />}
@@ -539,10 +539,10 @@ function SourceMeetingChip({
       variant="ghost"
       size="xs"
       onClick={() => onOpenMeeting(item.meetingId!)}
-      title="Open the meeting this came from"
+      title="Open the Meeting this came from"
       className="gap-0.5 px-1.5 text-muted-foreground hover:text-brand"
     >
-      From this meeting
+      From this Meeting
       <DeckIcon icon={ChevronRight} size={12} />
     </Button>
   );

@@ -1,9 +1,10 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 
 const push = vi.fn();
-vi.mock('next/navigation', () => ({ useRouter: () => ({ push }) }));
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push, back: vi.fn() }) }));
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn().mockResolvedValue([]) }));
 const updateTopic = vi.fn();
@@ -16,8 +17,16 @@ vi.mock('@/lib/topics', async (orig) => ({
   unlinkTopic: (...a: unknown[]) => unlinkTopic(...a),
 }));
 
-import { TopicHeader } from '@/components/Topics/TopicHeader';
+import { TopicHeader, TopicMeta } from '@/components/Topics/TopicHeader';
+import type { TopicDetail } from '@/types';
 import { detail, entry } from './fixtures';
+
+const Both = ({ d }: { d: TopicDetail }) => (
+  <>
+    <TopicHeader detail={d} />
+    <TopicMeta detail={d} />
+  </>
+);
 
 const linked = () =>
   detail({
@@ -32,33 +41,69 @@ describe('TopicHeader', () => {
     unlinkTopic.mockReset().mockResolvedValue(undefined);
   });
 
-  it('shows the name, status toggle, link chip, Link a series…, and the meeting count', () => {
-    render(<TopicHeader detail={linked()} />);
+  it('shows the name, link chip, Link a Series…, and the Meeting count; no status toggle', () => {
+    render(<Both d={linked()} />);
     expect(screen.getByRole('button', { name: /Atlas CRM rebuild/ })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Open', pressed: true })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Open' })).toBeNull();
+    expect(screen.queryByText('Archived')).toBeNull();
     expect(screen.getByText('Product sync')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Link a series…' })).toBeInTheDocument();
-    expect(screen.getByText('2 meetings')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Link a Series…' })).toBeInTheDocument();
+    expect(screen.getByText('2 Meetings')).toBeInTheDocument();
   });
 
-  it('closing the topic calls updateTopic', async () => {
+  it('Archive Topic in the menu stores the closed status', async () => {
     render(<TopicHeader detail={linked()} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Closed', pressed: false }));
+    await userEvent.click(screen.getByRole('button', { name: 'Topic options' }));
+    expect(screen.queryByRole('menuitem', { name: 'Unarchive Topic' })).toBeNull();
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Archive Topic' }));
     await waitFor(() => expect(updateTopic).toHaveBeenCalledWith('topic-1', { status: 'closed' }));
   });
 
-  it('unlinks a chip only after confirming', async () => {
+  it('an archived topic says so and offers Unarchive Topic', async () => {
+    const d = linked();
+    render(<TopicHeader detail={{ ...d, topic: { ...d.topic, status: 'closed' } }} />);
+    expect(screen.getByText('Archived')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Topic options' }));
+    expect(screen.queryByRole('menuitem', { name: 'Archive Topic' })).toBeNull();
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Unarchive Topic' }));
+    await waitFor(() => expect(updateTopic).toHaveBeenCalledWith('topic-1', { status: 'open' }));
+  });
+
+  it('the star toggles starred, optimistically (specs/0090)', async () => {
     render(<TopicHeader detail={linked()} />);
+    const star = screen.getByRole('button', { name: 'Star Topic' });
+    expect(star).toHaveAttribute('aria-pressed', 'false');
+    fireEvent.click(star);
+    expect(screen.getByRole('button', { name: 'Unstar Topic' })).toHaveAttribute('aria-pressed', 'true');
+    await waitFor(() => expect(updateTopic).toHaveBeenCalledWith('topic-1', { starred: true }));
+  });
+
+  it('a failed star reverts', async () => {
+    updateTopic.mockRejectedValueOnce(new Error('nope'));
+    render(<TopicHeader detail={linked()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Star Topic' }));
+    expect(await screen.findByRole('button', { name: 'Star Topic' })).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  it('the menu no longer carries the To-Do switch (it lives on the action items card)', async () => {
+    render(<TopicHeader detail={linked()} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Topic options' }));
+    expect(screen.queryByRole('menuitemcheckbox')).toBeNull();
+    expect(screen.queryByText(/To-Do list|To-Do/)).toBeNull();
+  });
+
+  it('unlinks a chip only after confirming', async () => {
+    render(<Both d={linked()} />);
     fireEvent.click(screen.getByRole('button', { name: 'Unlink Product sync' }));
     expect(unlinkTopic).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Unlink' }));
     await waitFor(() => expect(unlinkTopic).toHaveBeenCalledWith('topic-1', 'series', 's-1'));
   });
 
-  it('Draft from meetings fills the description and saves only on blur', async () => {
-    render(<TopicHeader detail={linked()} />);
+  it('Draft from Meetings fills the description and saves only on blur', async () => {
+    render(<Both d={linked()} />);
     fireEvent.click(screen.getByRole('button', { name: 'Edit description' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Draft from meetings' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Draft from Meetings' }));
     const box = await screen.findByDisplayValue('A drafted description.');
     expect(updateTopic).not.toHaveBeenCalled();
     fireEvent.blur(box);

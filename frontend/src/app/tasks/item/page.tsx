@@ -7,7 +7,7 @@ import { EmptyState, PageLoading } from '@/components/ui/empty-state';
 
 function TaskItemContent() {
   const id = useSearchParams().get('id');
-  if (!id) return <EmptyState title="This to-do no longer exists" />;
+  if (!id) return <EmptyState title="This To-Do no longer exists" />;
   return <ItemDetail key={id} id={id} />;
 }
 

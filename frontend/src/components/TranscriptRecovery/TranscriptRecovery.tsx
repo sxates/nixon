@@ -88,7 +88,7 @@ export function TranscriptRecovery({
       onClose();
     } catch (error) {
       console.error('Recovery failed:', error);
-      toast.error('Failed to recover meeting', {
+      toast.error('Failed to recover Meeting', {
         description: 'Please try again.',
       });
     } finally {
@@ -99,7 +99,7 @@ export function TranscriptRecovery({
   const handleDelete = async () => {
     if (!selectedMeetingId) return;
 
-    if (!confirm('Are you sure you want to delete this meeting? This cannot be undone.')) {
+    if (!confirm('Are you sure you want to delete this Meeting? This cannot be undone.')) {
       return;
     }
 
@@ -110,7 +110,7 @@ export function TranscriptRecovery({
       setPreviewTranscripts([]);
     } catch (error) {
       console.error('Delete failed:', error);
-      toast.error('Failed to delete meeting', {
+      toast.error('Failed to delete Meeting', {
         description: 'Please try again.',
       });
     } finally {
@@ -126,7 +126,7 @@ export function TranscriptRecovery({
         <DialogHeader className="px-6 pt-6">
           <DialogTitle className="text-2xl">Recover Interrupted Meetings</DialogTitle>
           <DialogDescription>
-            We found {recoverableMeetings.length} meeting{recoverableMeetings.length !== 1 ? 's' : ''} that {recoverableMeetings.length !== 1 ? 'were' : 'was'} interrupted. Select a meeting to preview and recover it.
+            We found {recoverableMeetings.length} Meeting{recoverableMeetings.length !== 1 ? 's' : ''} that {recoverableMeetings.length !== 1 ? 'were' : 'was'} interrupted. Select a Meeting to preview and recover it.
           </DialogDescription>
         </DialogHeader>
 
@@ -246,7 +246,7 @@ export function TranscriptRecovery({
                 </>
               ) : (
                 <div className="flex items-center justify-center h-full text-muted-foreground">
-                  Select a meeting to preview
+                  Select a Meeting to preview
                 </div>
               )}
             </div>

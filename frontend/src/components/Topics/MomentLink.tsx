@@ -31,7 +31,7 @@ export function MomentLink({ meetingId, t, className }: MomentLinkProps) {
     <Button
       type="button"
       variant="link"
-      title="Open the meeting here"
+      title="Open the Meeting here"
       onClick={() => void openMeetingMoment(router, meetingId, t)}
       className={cn(
         'h-auto p-0 align-baseline font-mono text-caption font-normal text-muted-foreground hover:text-brand',

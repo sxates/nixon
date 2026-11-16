@@ -9,7 +9,7 @@ use super::evidence::{blocks, for_entry, load_segments, topic_terms};
 use super::limits::{DESCRIBE_MEETINGS_CAP, OPEN_DECISIONS_CAP};
 use super::links::{self, LinkKind, TopicLink};
 use super::model::{EntryBody, Topic, TopicEntry, TopicSuggestion, TopicSummary};
-use super::repo::{emit_updated, TopicsRepository as Topics};
+use super::repo::{emit_updated, TopicPatch, TopicsRepository as Topics};
 use super::{describe, jobs, ledger, writer};
 use crate::action_items::commands::load_extraction_inputs;
 use crate::action_items::ACTION_ITEMS_UPDATED_EVENT;
@@ -44,7 +44,7 @@ pub struct TopicDetail {
 async fn require_topic(pool: &SqlitePool, id: &str) -> Result<Topic, String> {
     Topics::get(pool, id)
         .await
-        .map_err(db("Couldn't load the topic"))?
+        .map_err(db("Couldn't load the Topic"))?
         .ok_or_else(|| TOPIC_GONE.to_string())
 }
 
@@ -65,7 +65,7 @@ pub async fn api_list_topics<R: Runtime>(
 ) -> Result<Vec<TopicSummary>, String> {
     Topics::list(&pool_of(&app), status.as_deref())
         .await
-        .map_err(db("Couldn't load topics"))
+        .map_err(db("Couldn't load Topics"))
 }
 
 #[tauri::command]
@@ -75,7 +75,7 @@ pub async fn api_get_topic<R: Runtime>(
 ) -> Result<TopicDetail, String> {
     let pool = pool_of(&app);
     let topic = require_topic(&pool, &id).await?;
-    let load = db("Couldn't load the topic");
+    let load = db("Couldn't load the Topic");
     Ok(TopicDetail {
         links: links::links_for_topic(&pool, &id).await.map_err(&load)?,
         entries: ledger::entries_for_topic(&pool, &id).await.map_err(&load)?,
@@ -84,7 +84,7 @@ pub async fn api_get_topic<R: Runtime>(
             .map_err(&load)?,
         todos: Todo::list_for_topic(&pool, &id)
             .await
-            .map_err(|e| format!("Couldn't load the topic's to-dos: {e}"))?,
+            .map_err(|e| format!("Couldn't load the Topic's To-Dos: {e}"))?,
         topic,
     })
 }
@@ -151,19 +151,43 @@ pub async fn api_update_topic<R: Runtime>(
     name: Option<String>,
     description: Option<String>,
     status: Option<String>,
+    starred: Option<bool>,
+    hide_from_todo: Option<bool>,
 ) -> Result<Topic, String> {
-    let topic = Topics::update(
-        &pool_of(&app),
-        &id,
-        name.as_deref(),
-        description.as_deref(),
-        status.as_deref(),
-    )
-    .await
-    .map_err(|e| format!("{e:#}"))?
-    .ok_or_else(|| TOPIC_GONE.to_string())?;
+    let patch = TopicPatch {
+        name: name.as_deref(),
+        description: description.as_deref(),
+        status: status.as_deref(),
+        starred,
+        hide_from_todo,
+    };
+    let topic = Topics::patch(&pool_of(&app), &id, &patch)
+        .await
+        .map_err(|e| format!("{e:#}"))?
+        .ok_or_else(|| TOPIC_GONE.to_string())?;
     emit_updated(&app, Some(&id));
+    if hide_from_todo.is_some() {
+        // The topic's items join or leave `/tasks`'s List (specs/0090).
+        let _ = app.emit(
+            ACTION_ITEMS_UPDATED_EVENT,
+            serde_json::json!({ "meeting_id": "" }),
+        );
+    }
     Ok(topic)
+}
+
+/// Persist the Topics page's drag order (specs/0090): `sort_order = 0..n` over the full
+/// list. Returns the number of topics written.
+#[tauri::command]
+pub async fn api_reorder_topics<R: Runtime>(
+    app: AppHandle<R>,
+    ordered_ids: Vec<String>,
+) -> Result<u64, String> {
+    let n = Topics::reorder(&pool_of(&app), &ordered_ids)
+        .await
+        .map_err(db("Couldn't save the Topic order"))?;
+    emit_updated(&app, None);
+    Ok(n)
 }
 
 #[tauri::command]
@@ -187,7 +211,7 @@ pub async fn api_set_topic_notes<R: Runtime>(
 pub async fn api_delete_topic<R: Runtime>(app: AppHandle<R>, id: String) -> Result<(), String> {
     let gone = Topics::delete(&pool_of(&app), &id)
         .await
-        .map_err(db("Couldn't delete the topic"))?;
+        .map_err(db("Couldn't delete the Topic"))?;
     if !gone {
         return Err(TOPIC_GONE.to_string());
     }
@@ -235,7 +259,7 @@ pub async fn api_topics_for_meeting<R: Runtime>(
 ) -> Result<Vec<Topic>, String> {
     links::topics_for_meeting(&pool_of(&app), &meeting_id, false)
         .await
-        .map_err(db("Couldn't load this meeting's topics"))
+        .map_err(db("Couldn't load this Meeting's Topics"))
 }
 
 /// Interactive; returns the draft and never saves it.
@@ -371,7 +395,7 @@ pub async fn api_rewrite_topic_entry<R: Runtime>(
     // Other entries' decisions only: this entry's own are about to be replaced.
     let mut decisions = ledger::open_decisions(&pool, &topic_id, OPEN_DECISIONS_CAP + 30)
         .await
-        .map_err(db("Couldn't load the topic's decisions"))?;
+        .map_err(db("Couldn't load the Topic's decisions"))?;
     decisions.retain(|d| d.entry_id != entry_id);
     decisions.truncate(OPEN_DECISIONS_CAP);
     let dir = app.path().app_data_dir().ok();
@@ -474,7 +498,7 @@ pub async fn api_clear_topic_todos<R: Runtime>(
 ) -> Result<u64, String> {
     let n = Todo::clear_done_for_topic(&pool_of(&app), &topic_id, &ids)
         .await
-        .map_err(|e| format!("Couldn't dismiss those to-dos: {e}"))?;
+        .map_err(|e| format!("Couldn't dismiss those To-Dos: {e}"))?;
     emit_updated(&app, Some(&topic_id));
     Ok(n)
 }

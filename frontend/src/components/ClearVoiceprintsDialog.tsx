@@ -55,7 +55,7 @@ export function ClearVoiceprintsDialog({
       body={
         <>
           Delete every stored voice sample, for everyone? This resets cross-meeting voice
-          recognition — the people in your directory and their names stay, but Nixon will have to
+          recognition — the People in your directory and their names stay, but Nixon will have to
           re-learn voices from scratch. This can&apos;t be undone.
         </>
       }

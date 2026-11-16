@@ -180,7 +180,7 @@ pub async fn retry_task<R: Runtime>(app: &AppHandle<R>, task_id: u64) -> Result<
             if crate::diarization::launch::diarize_meeting(app.clone(), meeting_id) {
                 Ok(())
             } else {
-                Err("Speaker identification is already running for this meeting.".to_string())
+                Err("Speaker identification is already running for this Meeting.".to_string())
             }
         }
         TaskKind::AskAI | TaskKind::Rollup | TaskKind::NoteEnhancement => {

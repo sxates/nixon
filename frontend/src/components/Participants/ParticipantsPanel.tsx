@@ -287,7 +287,7 @@ export function ParticipantsPanel({
   const handleClaimAsMe = useCallback(
     async (participant: MeetingParticipant) => {
       if (!meetingId) return;
-      const label = participant.email?.trim() || participant.displayName?.trim() || 'this person';
+      const label = participant.email?.trim() || participant.displayName?.trim() || 'this Person';
       const snapshot = participants;
       setParticipants((prev) => prev.filter((p) => p.personId !== participant.personId));
       try {
@@ -379,7 +379,7 @@ export function ParticipantsPanel({
           ? 'Could not load participants.'
           : isLoading
             ? 'Loading…'
-            : 'No participants yet. Add the people in this meeting.'}
+            : 'No participants yet. Add the People in this Meeting.'}
       </p>
     ) : (
       <div
@@ -453,6 +453,7 @@ export function ParticipantsPanel({
                 </div>
               </div>
               <Button type="button" variant="dashed" size="xs" onClick={() => setAddOpen(true)}>
+                <Plus />
                 Add members
               </Button>
             </div>
@@ -598,7 +599,8 @@ function AddParticipantPopover({
                 type="email"
                 className="h-8 text-sm"
               />
-              <Button type="submit" size="sm" className="px-2.5">
+              <Button type="submit" variant="dashed" size="sm" className="gap-1 px-2.5">
+                <Plus />
                 Add
               </Button>
             </div>
@@ -611,7 +613,7 @@ function AddParticipantPopover({
               <div className="u-section-label px-1">People</div>
               {filteredPeople.length === 0 ? (
                 <div className="px-2 py-1 text-caption text-muted-foreground">
-                  No people match “{name.trim()}”. Add a new one above.
+                  No People match “{name.trim()}”. Add a new one above.
                 </div>
               ) : (
               <div className="max-h-48 space-y-0.5 overflow-y-auto">

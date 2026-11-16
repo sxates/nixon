@@ -21,7 +21,18 @@ pub fn emit_updated<R: Runtime>(app: &AppHandle<R>, topic_id: Option<&str>) {
 }
 
 const SELECT_TOPIC: &str = "SELECT id, name, description, status, notes_markdown, notes_json, \
-                            created_at, updated_at, closed_at FROM topics";
+                            created_at, updated_at, closed_at, sort_order, starred, \
+                            hide_from_todo FROM topics";
+
+/// A partial topic update: `None` leaves a field as it is.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct TopicPatch<'a> {
+    pub name: Option<&'a str>,
+    pub description: Option<&'a str>,
+    pub status: Option<&'a str>,
+    pub starred: Option<bool>,
+    pub hide_from_todo: Option<bool>,
+}
 
 pub struct TopicsRepository;
 
@@ -29,13 +40,16 @@ impl TopicsRepository {
     pub async fn create(pool: &SqlitePool, name: &str, description: &str) -> Result<Topic> {
         let name = name.trim();
         if name.is_empty() {
-            return Err(anyhow!("Give the topic a name."));
+            return Err(anyhow!("Give the Topic a name."));
         }
         let id = format!("topic-{}", uuid::Uuid::new_v4());
         let now = Utc::now().to_rfc3339();
+        // New topics go to the end of the manual order (specs/0090).
         sqlx::query(
-            "INSERT INTO topics (id, name, description, status, created_at, updated_at)
-             VALUES (?, ?, ?, 'open', ?, ?)",
+            "INSERT INTO topics (id, name, description, status, created_at, updated_at,
+                                 sort_order, starred)
+             VALUES (?, ?, ?, 'open', ?, ?,
+                     (SELECT COALESCE(MAX(sort_order), -1) + 1 FROM topics), 0)",
         )
         .bind(&id)
         .bind(name)
@@ -58,7 +72,8 @@ impl TopicsRepository {
         )
     }
 
-    /// Open topics first, then by name. `status` filters when given.
+    /// In the manual order (specs/0090; unordered rows last, by name). `status` filters
+    /// when given.
     pub async fn list(pool: &SqlitePool, status: Option<&str>) -> Result<Vec<TopicSummary>> {
         Ok(sqlx::query_as::<_, TopicSummary>(
             "SELECT t.id, t.name, t.description, t.status,
@@ -67,10 +82,11 @@ impl TopicsRepository {
                     (SELECT COUNT(*) FROM topic_suggestions s
                       WHERE s.topic_id = t.id AND s.status = 'pending') AS pending_count,
                     (SELECT COUNT(DISTINCT e.meeting_id) FROM topic_entries e
-                      WHERE e.topic_id = t.id AND e.meeting_id IS NOT NULL) AS meeting_count
+                      WHERE e.topic_id = t.id AND e.meeting_id IS NOT NULL) AS meeting_count,
+                    t.sort_order, t.starred, t.hide_from_todo
              FROM topics t
              WHERE (?1 IS NULL OR t.status = ?1)
-             ORDER BY CASE t.status WHEN 'open' THEN 0 ELSE 1 END, t.name COLLATE NOCASE, t.id",
+             ORDER BY t.sort_order IS NULL, t.sort_order, t.name COLLATE NOCASE, t.id",
         )
         .bind(status)
         .fetch_all(pool)
@@ -84,14 +100,36 @@ impl TopicsRepository {
         description: Option<&str>,
         status: Option<&str>,
     ) -> Result<Option<Topic>> {
+        let patch = TopicPatch {
+            name,
+            description,
+            status,
+            ..TopicPatch::default()
+        };
+        Self::patch(pool, id, &patch).await
+    }
+
+    /// Apply a [`TopicPatch`]. `Ok(None)` = no such topic.
+    pub async fn patch(
+        pool: &SqlitePool,
+        id: &str,
+        patch: &TopicPatch<'_>,
+    ) -> Result<Option<Topic>> {
+        let TopicPatch {
+            name,
+            description,
+            status,
+            starred,
+            hide_from_todo,
+        } = *patch;
         if let Some(n) = name {
             if n.trim().is_empty() {
-                return Err(anyhow!("Give the topic a name."));
+                return Err(anyhow!("Give the Topic a name."));
             }
         }
         if let Some(s) = status {
             if s != "open" && s != "closed" {
-                return Err(anyhow!("A topic is either open or closed."));
+                return Err(anyhow!("A Topic is either open or closed."));
             }
         }
         let now = Utc::now().to_rfc3339();
@@ -102,6 +140,8 @@ impl TopicsRepository {
                  status = COALESCE(?4, status),
                  closed_at = CASE WHEN ?4 = 'closed' THEN ?5
                                   WHEN ?4 = 'open' THEN NULL ELSE closed_at END,
+                 starred = COALESCE(?6, starred),
+                 hide_from_todo = COALESCE(?7, hide_from_todo),
                  updated_at = ?5
              WHERE id = ?1",
         )
@@ -110,12 +150,31 @@ impl TopicsRepository {
         .bind(description.map(str::trim))
         .bind(status)
         .bind(&now)
+        .bind(starred)
+        .bind(hide_from_todo)
         .execute(pool)
         .await?;
         if res.rows_affected() == 0 {
             return Ok(None);
         }
         Self::get(pool, id).await
+    }
+
+    /// Write `sort_order = 0..n` in `ordered_ids` order, in one transaction (specs/0090).
+    /// The caller sends the full list. Unknown ids are skipped; returns rows written.
+    pub async fn reorder(pool: &SqlitePool, ordered_ids: &[String]) -> Result<u64> {
+        let mut tx = pool.begin().await?;
+        let mut written = 0;
+        for (idx, id) in ordered_ids.iter().enumerate() {
+            written += sqlx::query("UPDATE topics SET sort_order = ? WHERE id = ?")
+                .bind(idx as i64)
+                .bind(id)
+                .execute(&mut *tx)
+                .await?
+                .rows_affected();
+        }
+        tx.commit().await?;
+        Ok(written)
     }
 
     /// The only writer of `notes_markdown` / `notes_json` ("My notes").

@@ -107,7 +107,7 @@ export interface PersonPickerProps {
 export function PersonPicker({
   query,
   onQueryChange,
-  placeholder = 'Search people…',
+  placeholder = 'Search People…',
   searchLabel,
   onSubmit,
   inputAction,

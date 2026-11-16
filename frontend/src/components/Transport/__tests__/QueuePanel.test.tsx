@@ -210,7 +210,7 @@ describe('QueuePanel — a refused retry says so (specs/0066 W2)', () => {
 
     await waitFor(() =>
       expect(toastMock.error).toHaveBeenCalledWith('Could not retry', {
-        description: "This meeting's recording folder is missing, so there is nothing to process.",
+        description: "This Meeting's recording folder is missing, so there is nothing to process.",
       }),
     );
   });

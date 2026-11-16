@@ -16,7 +16,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 //     failed fetch retries instead of latching an empty list);
 // (g) specs/0035: the always-visible Ask-AI row sits in its own LAST group — the
 //     top search hit keeps cmdk's first-item auto-selection (type-then-Enter
-//     opens the result) — and the empty state is scoped ("No matching meetings")
+//     opens the result) — and the empty state is scoped ("No matching Meetings")
 //     so it never contradicts the visible Ask row.
 // The deep-link lifecycle itself (?segment= consume-then-clear, pagination pump)
 // is covered in useSegmentDeepLink.test.ts + VirtualizedTranscriptView.deeplink.test.tsx.
@@ -87,7 +87,7 @@ function searchCalls() {
 }
 
 function typeQuery(value: string) {
-  const input = screen.getByPlaceholderText('Search meetings or run a command...');
+  const input = screen.getByPlaceholderText('Search Meetings or run a command...');
   fireEvent.change(input, { target: { value } });
 }
 
@@ -187,8 +187,8 @@ describe('CommandPalette — empty query (existing behavior unchanged)', () => {
       'Settings',
       'Design syncJun 24',
       'Kickoff planningJun 25',
-      'Ask AI about your meetings…',
-      'New to-do…',
+      'Ask AI about your Meetings…',
+      'New To-Do…',
     ]);
   });
 
@@ -396,7 +396,7 @@ describe('CommandPalette — Ask AI action (specs/0035)', () => {
     typeQuery('what did we decide about pricing');
     await waitFor(() => expect(searchCalls().length).toBeGreaterThan(0));
 
-    expect(screen.getByText('Ask AI about your meetings…')).toBeInTheDocument();
+    expect(screen.getByText('Ask AI about your Meetings…')).toBeInTheDocument();
   });
 
   it('routes to /ask carrying the typed query, URL-encoded', async () => {
@@ -405,7 +405,7 @@ describe('CommandPalette — Ask AI action (specs/0035)', () => {
     typeQuery('what did we decide about pricing');
     await waitFor(() => expect(searchCalls().length).toBeGreaterThan(0));
 
-    fireEvent.click(screen.getByText('Ask AI about your meetings…').closest('[cmdk-item]')!);
+    fireEvent.click(screen.getByText('Ask AI about your Meetings…').closest('[cmdk-item]')!);
     expect(pushMock).toHaveBeenCalledWith('/ask?q=what%20did%20we%20decide%20about%20pricing');
   });
 
@@ -413,7 +413,7 @@ describe('CommandPalette — Ask AI action (specs/0035)', () => {
     setupInvoke();
     await openPalette();
 
-    fireEvent.click(screen.getByText('Ask AI about your meetings…').closest('[cmdk-item]')!);
+    fireEvent.click(screen.getByText('Ask AI about your Meetings…').closest('[cmdk-item]')!);
     expect(pushMock).toHaveBeenCalledWith('/ask');
   });
 
@@ -431,8 +431,8 @@ describe('CommandPalette — Ask AI action (specs/0035)', () => {
     expect(items[0]).toBe('Kickoff planningJun 25');
     // Ask-AI and the New-to-do action ride along at the END (their own group), so cmdk's
     // first-DOM-item auto-selection stays on the top search result.
-    expect(items).toContain('Ask AI about your meetings…');
-    expect(items[items.length - 1]).toBe('New to-do: “kickoff”');
+    expect(items).toContain('Ask AI about your Meetings…');
+    expect(items[items.length - 1]).toBe('New To-Do: “kickoff”');
 
     await waitFor(() => {
       const selected = document.querySelector('[cmdk-item][aria-selected="true"]');
@@ -452,11 +452,11 @@ describe('CommandPalette — Ask AI action (specs/0035)', () => {
     await waitFor(() => expect(searchCalls()).toHaveLength(1));
 
     // The always-visible Ask row is the only actionable item left…
-    expect(screen.getByText('Ask AI about your meetings…')).toBeInTheDocument();
+    expect(screen.getByText('Ask AI about your Meetings…')).toBeInTheDocument();
     // …and the empty state is coherent: the scoped message, never cmdk's
     // store-count-based "No results found." next to a visible row.
     expect(screen.queryByText('No results found.')).toBeNull();
-    expect(screen.getByText('No matching meetings')).toBeInTheDocument();
+    expect(screen.getByText('No matching Meetings')).toBeInTheDocument();
   });
 });
 
@@ -475,14 +475,14 @@ describe('CommandPalette — topics (specs/0089)', () => {
   const headings = () =>
     Array.from(document.querySelectorAll('[cmdk-group-heading]')).map((el) => el.textContent);
 
-  it('a typed query puts matching topics first, open before closed, and selects the top one', async () => {
+  it('a typed query puts matching topics first, open before archived, and selects the top one', async () => {
     withTopics();
     await openPalette();
     typeQuery('kickoff');
     await screen.findByText('Kickoff launch');
     expect(headings()[0]).toBe('Topics');
     const items = Array.from(document.querySelectorAll('[cmdk-item]')).map((el) => el.textContent);
-    expect(items.slice(0, 2)).toEqual(['Kickoff launch', 'Kickoff retroClosed']);
+    expect(items.slice(0, 2)).toEqual(['Kickoff launch', 'Kickoff retroArchived']);
     await waitFor(() =>
       expect(document.querySelector('[cmdk-item][aria-selected="true"]')?.textContent).toBe(
         'Kickoff launch',

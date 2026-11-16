@@ -74,15 +74,15 @@ export function TopicLinks({ topicId, links, meetingCount, onChanged }: TopicLin
           setPicking(true);
         }}
       >
-        Link a series…
+        Link a Series…
       </Button>
-      <span className="u-row-meta">{`${meetingCount} ${meetingCount === 1 ? 'meeting' : 'meetings'}`}</span>
+      <span className="u-row-meta">{`${meetingCount} ${meetingCount === 1 ? 'Meeting' : 'Meetings'}`}</span>
 
       <ConfirmDialog
         open={unlinking !== null}
         onOpenChange={(open) => !open && setUnlinking(null)}
         title={unlinking ? `Unlink ${unlinking.label}?` : ''}
-        body="Its meetings stop adding to this topic. Entries already on the timeline stay."
+        body="Its Meetings stop adding to this Topic. Entries already on the timeline stay."
         confirmLabel="Unlink"
         busy={busy}
         onConfirm={confirmUnlink}
@@ -91,11 +91,11 @@ export function TopicLinks({ topicId, links, meetingCount, onChanged }: TopicLin
       <LinkMeetingPicker
         open={picking}
         onOpenChange={setPicking}
-        title="Link series"
-        description="Pick a meeting from each series. Every meeting in those series feeds this topic."
+        title="Link Series"
+        description="Pick a Meeting from each Series. Every Meeting in those Series feeds this Topic."
         excludeIds={[]}
         multiple
-        confirmLabel={(n) => (n === 1 ? 'Link 1 series' : `Link ${n} series`)}
+        confirmLabel={(n) => (n === 1 ? 'Link 1 Series' : `Link ${n} Series`)}
         onPick={async (meetingId) => {
           await linkTopic(topicId, meetingId, 'series', backfill);
         }}
@@ -104,7 +104,7 @@ export function TopicLinks({ topicId, links, meetingCount, onChanged }: TopicLin
         <Checkbox
           checked={backfill}
           onCheckedChange={setBackfill}
-          label="Also add their meetings from the last 90 days"
+          label="Also add their Meetings from the last 90 days"
         />
       </LinkMeetingPicker>
     </div>

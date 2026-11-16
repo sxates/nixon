@@ -166,7 +166,7 @@ export function scopeLabel(scope: AggregationScope): string {
   }
   if (from) return `Since ${day(from)}`;
   if (last) return `Through ${day(last)}`;
-  return 'All meetings';
+  return 'All Meetings';
 }
 
 // ---------------------------------------------------------------------------
@@ -192,9 +192,9 @@ export function enterTriggersRun(opts: {
 export function stageLabel(progress: Pick<AskAiProgressPayload, 'stage' | 'current' | 'total'>): string {
   switch (progress.stage) {
     case 'gathering':
-      return 'Searching meetings…';
+      return 'Searching Meetings…';
     case 'mapping':
-      return `Reading meeting ${progress.current} of ${progress.total}…`;
+      return `Reading Meeting ${progress.current} of ${progress.total}…`;
     case 'reducing':
       return 'Writing answer…';
   }

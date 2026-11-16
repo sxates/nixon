@@ -77,7 +77,7 @@ export function TranscriptPanel({
       await invoke('api_apply_live_transcription_now', { enable: true });
     } catch (error) {
       console.error('Failed to switch this meeting to live transcription:', error);
-      toast.error('Failed to turn on live transcription for this meeting');
+      toast.error('Failed to turn on live transcription for this Meeting');
     } finally {
       setEnablingLive(false);
     }
@@ -189,11 +189,11 @@ export function TranscriptPanel({
             </p>
             <p className="text-xs text-muted-foreground">
               Transcription resumes when you&apos;re plugged in, or turn it on for this
-              meeting.
+              Meeting.
             </p>
             {activeRecordingMeetingId && (
               <Button variant="outline" size="sm" onClick={handleTranscribeLiveNow} disabled={enablingLive}>
-                {enablingLive ? 'Starting…' : 'Transcribe this meeting live'}
+                {enablingLive ? 'Starting…' : 'Transcribe this Meeting live'}
               </Button>
             )}
           </div>
@@ -212,12 +212,12 @@ export function TranscriptPanel({
             </p>
             <p className="text-xs text-muted-foreground">
               {isRecording
-                ? 'Transcription is deferred for this meeting — turn it on below or it will be processed after the meeting.'
+                ? 'Transcription is deferred for this Meeting — turn it on below or it will be processed after the Meeting.'
                 : 'Recordings are saved without a live transcript and transcribed later. You can turn live transcription back on in Settings → Recording.'}
             </p>
             {isRecording && activeRecordingMeetingId && (
               <Button variant="outline" size="sm" onClick={handleTranscribeLiveNow} disabled={enablingLive}>
-                {enablingLive ? 'Starting…' : 'Transcribe this meeting live'}
+                {enablingLive ? 'Starting…' : 'Transcribe this Meeting live'}
               </Button>
             )}
           </div>

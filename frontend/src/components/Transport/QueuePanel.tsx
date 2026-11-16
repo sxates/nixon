@@ -118,8 +118,8 @@ function messageOf(error: unknown): string {
 /** Why a backlog hand-off was refused, in the user's terms (`HandoffOutcome.reason`). */
 function describeHandoff(reason: 'no-folder-path' | 'threw'): string {
   return reason === 'no-folder-path'
-    ? "This meeting's recording folder is missing, so there is nothing to process."
-    : 'The meeting could not be queued for processing.';
+    ? "This Meeting's recording folder is missing, so there is nothing to process."
+    : 'The Meeting could not be queued for processing.';
 }
 
 /**

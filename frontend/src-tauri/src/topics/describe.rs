@@ -88,6 +88,9 @@ mod tests {
             created_at: String::new(),
             updated_at: String::new(),
             closed_at: None,
+            sort_order: None,
+            starred: false,
+            hide_from_todo: false,
         };
         let many: Vec<(String, String)> = (0..DESCRIBE_MEETINGS_CAP + 3)
             .map(|i| (format!("M{i}"), "s".to_string()))

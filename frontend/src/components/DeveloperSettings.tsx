@@ -20,7 +20,7 @@ export function formatFlags(f: DevFlags): string {
 }
 
 function formatReport(r: SeedReport): string {
-  const base = `${r.meetings} meetings, ${r.people} people, ${r.segments} segments`
+  const base = `${r.meetings} Meetings, ${r.people} People, ${r.segments} segments`
   return r.failed > 0 ? `${base}, ${r.failed} failed` : base
 }
 
@@ -67,7 +67,7 @@ export function DeveloperSettings() {
       // No zoomUrl, so nothing is launched — only the recording half runs.
       onJoinAndRecord: () =>
         void joinAndRecord(
-          { id: `dev-probe-${Date.now()}`, title: "Dev probe meeting", zoomUrl: null, startsAt: new Date().toISOString() },
+          { id: `dev-probe-${Date.now()}`, title: "Dev probe Meeting", zoomUrl: null, startsAt: new Date().toISOString() },
           isRecording,
           handleRecordingToggle,
         ),
@@ -86,7 +86,7 @@ export function DeveloperSettings() {
         <SettingsRow label="Active dev flags" description={formatFlags(flags)} />
         <SettingsRow
           label="Load demo data"
-          description="Replaces every meeting in the debug profile with the fictional dataset, then reloads."
+          description="Replaces every Meeting in the debug profile with the fictional dataset, then reloads."
           control={
             <div className="flex items-center gap-3">
               <label className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -97,7 +97,7 @@ export function DeveloperSettings() {
           }
         />
         <SettingsRow
-          label="Test the meeting alerts"
+          label="Test the Meeting alerts"
           description="Fires the real banners. Put another window in front first. Prep and the body tap toast here; Starting now runs the REAL Join & Record path (no Zoom link, so only the recording half) — it will start an actual recording in this debug profile."
           control={
             <div className="flex items-center gap-2">

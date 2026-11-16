@@ -54,7 +54,7 @@ const NAV_ITEMS: NavItem[] = [
   },
   {
     // The hand-ordered to-do list + suggestion inbox (specs/0088, was the specs/0034 hub).
-    label: 'To-do',
+    label: 'To-Do',
     path: '/tasks',
     icon: CheckSquare,
     slot: 'tasks',

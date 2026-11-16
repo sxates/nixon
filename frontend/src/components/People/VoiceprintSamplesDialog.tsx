@@ -35,7 +35,7 @@ export function VoiceprintSamplesDialog({
   personId,
   personName,
 }: VoiceprintSamplesDialogProps) {
-  const label = personName?.trim() || 'this person';
+  const label = personName?.trim() || 'this Person';
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

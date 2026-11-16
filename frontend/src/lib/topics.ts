@@ -42,15 +42,32 @@ export interface UpdateTopicInput {
   name?: string;
   description?: string;
   status?: TopicStatus;
+  starred?: boolean;
+  /** Keeps its open to-dos off the To-Do list; the inverse of "Show in To-Do" (specs/0090). */
+  hideFromTodo?: boolean;
 }
 
+/** Every field is sent; `null` = leave it as it is. */
 export const updateTopic = (id: string, patch: UpdateTopicInput) =>
   invoke<Topic>('api_update_topic', {
     id,
     name: patch.name ?? null,
     description: patch.description ?? null,
     status: patch.status ?? null,
+    starred: patch.starred ?? null,
+    hideFromTodo: patch.hideFromTodo ?? null,
   });
+
+/** Save the Topics page order (specs/0090): every topic id, open and archived, in order. */
+export const reorderTopics = (orderedIds: string[]) =>
+  invoke<void>('api_reorder_topics', { orderedIds });
+
+/**
+ * Reorder a subset of to-dos (a topic's card, a group on To-do; specs/0090). The backend
+ * hands the subset the global positions it already holds, so other items never move.
+ */
+export const reorderActionItemsWithin = (orderedIds: string[]) =>
+  invoke<void>('api_reorder_action_items_within', { orderedIds });
 
 export const setTopicNotes = (id: string, notesMarkdown: string, notesJson?: string | null) =>
   invoke<void>('api_set_topic_notes', { id, notesMarkdown, notesJson: notesJson ?? null });

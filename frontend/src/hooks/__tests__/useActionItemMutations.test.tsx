@@ -196,7 +196,7 @@ describe('useActionItemMutations (specs/0034)', () => {
     expect(onAdded).toHaveBeenCalledWith(created);
   });
 
-  // specs/0038 WS1.d — Home "Add to-do" creates a STANDALONE item (no meetingId).
+  // specs/0038 WS1.d — Home "Add To-Do" creates a STANDALONE item (no meetingId).
   it('add with meetingId null creates a standalone to-do', async () => {
     const created = makeItem({ id: 'todo', meetingId: null, source: 'manual' });
     invokeMock.mockResolvedValue(created);

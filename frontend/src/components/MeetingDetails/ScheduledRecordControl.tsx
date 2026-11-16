@@ -216,10 +216,10 @@ export function ScheduledRecordControl({
   const buttonTitle = isRecording
     ? 'A recording is already in progress'
     : isContinue
-      ? 'Resume recording into this meeting — new audio adds to the existing transcript, no duplicate meeting'
+      ? 'Resume recording into this Meeting — new audio adds to the existing transcript, no duplicate Meeting'
       : joinUrl
-        ? 'Open the call and start recording — this meeting keeps its calendar attendees'
-        : 'Start recording — this meeting keeps its calendar attendees';
+        ? 'Open the call and start recording — this Meeting keeps its calendar attendees'
+        : 'Start recording — this Meeting keeps its calendar attendees';
 
   return (
     <div className="mt-1 flex flex-shrink-0 items-center gap-2">

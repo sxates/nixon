@@ -63,7 +63,7 @@ export function MoveRecordingsDialog({
   };
 
   const where = tildePath(plan.target);
-  const what = `${plural(plan.meetings, 'meeting')}, ${formatBytes(plan.bytes)}`;
+  const what = `${plural(plan.meetings, 'Meeting')}, ${formatBytes(plan.bytes)}`;
   const needed = plan.crossVolumeBytes + SPACE_MARGIN_BYTES;
 
   return (
@@ -102,7 +102,7 @@ export function MoveRecordingsDialog({
         )}
         {plan.missing > 0 && (
           <p className="text-muted-foreground">
-            {plural(plan.missing, 'meeting')} {plan.missing === 1 ? 'has' : 'have'} no
+            {plural(plan.missing, 'Meeting')} {plan.missing === 1 ? 'has' : 'have'} no
             recording on disk and will stay as {plan.missing === 1 ? 'it is' : 'they are'}.
           </p>
         )}

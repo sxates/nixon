@@ -72,7 +72,7 @@ export function MeetingsHeader({
           {calendarConnected && (
             <Button variant="brand" onClick={onAddMeeting}>
               <Plus aria-hidden="true" />
-              Add meeting
+              Add Meeting
             </Button>
           )}
         </>

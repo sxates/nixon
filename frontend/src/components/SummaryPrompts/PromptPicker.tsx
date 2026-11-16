@@ -63,7 +63,7 @@ export function PromptPicker({
           </DropdownMenuItem>
         ))}
         {prompts.length > 0 && <DropdownMenuSeparator />}
-        <DropdownMenuItem onSelect={onCustomPrompt}>Custom for this meeting…</DropdownMenuItem>
+        <DropdownMenuItem onSelect={onCustomPrompt}>Custom for this Meeting…</DropdownMenuItem>
         {promptState?.source === 'custom' && (
           <DropdownMenuItem onSelect={onClearCustomPrompt}>Remove custom prompt</DropdownMenuItem>
         )}

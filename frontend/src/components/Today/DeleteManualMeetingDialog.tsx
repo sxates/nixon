@@ -59,7 +59,7 @@ export function DeleteManualMeetingDialog({
       await onDeleted();
     } catch (error) {
       console.error('Failed to delete manual meeting:', error);
-      toast.error('Could not delete this meeting', {
+      toast.error('Could not delete this Meeting', {
         description: error instanceof Error ? error.message : String(error),
       });
     } finally {
@@ -71,9 +71,9 @@ export function DeleteManualMeetingDialog({
     <Dialog open={open} onOpenChange={(next) => (isDeleting ? undefined : onOpenChange(next))}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Delete meeting</DialogTitle>
+          <DialogTitle>Delete Meeting</DialogTitle>
           <DialogDescription>
-            Delete {label ? `"${label}"` : 'this meeting'}? This can&apos;t be undone.
+            Delete {label ? `"${label}"` : 'this Meeting'}? This can&apos;t be undone.
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>

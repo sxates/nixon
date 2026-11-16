@@ -89,7 +89,7 @@ describe('SummaryToolbar (specs/0064 W3, specs/0079)', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Summary prompt: Default notes' }));
     expect(screen.getByRole('menuitem', { name: /Default notes/ })).toBeInTheDocument();
     expect(screen.getByRole('menuitem', { name: 'Standup' })).toBeInTheDocument();
-    expect(screen.getByRole('menuitem', { name: /custom for this meeting/i })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: /custom for this Meeting/i })).toBeInTheDocument();
     expect(screen.queryByRole('menuitem', { name: /remove custom prompt/i })).not.toBeInTheDocument();
   });
 
@@ -113,9 +113,9 @@ describe('SummaryToolbar (specs/0064 W3, specs/0079)', () => {
       />,
     );
     await userEvent.click(
-      screen.getByRole('button', { name: 'Summary prompt: Custom (this meeting)' }),
+      screen.getByRole('button', { name: 'Summary prompt: Custom (this Meeting)' }),
     );
-    await userEvent.click(screen.getByRole('menuitem', { name: /custom for this meeting/i }));
+    await userEvent.click(screen.getByRole('menuitem', { name: /custom for this Meeting/i }));
     expect(onCustomPrompt).toHaveBeenCalled();
     await userEvent.click(screen.getByRole('button', { name: /summary prompt/i }));
     await userEvent.click(screen.getByRole('menuitem', { name: /remove custom prompt/i }));

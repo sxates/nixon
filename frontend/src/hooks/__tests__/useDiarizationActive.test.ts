@@ -27,7 +27,7 @@ describe('useDiarizationActive', () => {
     invokeMock.mockResolvedValue(null);
   });
 
-  it('is active from this meeting’s progress until it completes', () => {
+  it('is active from this Meeting’s progress until it completes', () => {
     const { result } = renderHook(() => useDiarizationActive('m1'));
     expect(result.current).toBe(false);
 

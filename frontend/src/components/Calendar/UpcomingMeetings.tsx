@@ -41,7 +41,7 @@ const REFRESH_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 function MeetingRow({ meeting }: { meeting: UpcomingMeeting }) {
   const start = new Date(meeting.startsAt);
   const validStart = !Number.isNaN(start.getTime());
-  const title = meeting.title?.trim() || 'Untitled meeting';
+  const title = meeting.title?.trim() || 'Untitled Meeting';
 
   const { isRecording } = useRecordingState();
   const { handleRecordingToggle } = useSidebar();
@@ -168,7 +168,7 @@ export default function UpcomingMeetings() {
 
   return (
     <ConnectCalendarCard
-      title="Connect your calendar to see upcoming meetings"
+      title="Connect your calendar to see upcoming Meetings"
       onDismiss={handleDismiss}
     />
   );

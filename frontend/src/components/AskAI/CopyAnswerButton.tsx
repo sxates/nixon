@@ -46,7 +46,7 @@ export function CopyAnswerButton({
       variant="outline"
       size="xs"
       onClick={() => void onCopy()}
-      title="Copy the answer without its meeting references"
+      title="Copy the answer without its Meeting references"
       aria-label="Copy answer"
       className={className}
     >

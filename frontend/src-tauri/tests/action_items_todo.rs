@@ -736,7 +736,7 @@ async fn set_action_item_topic_refuses_closed() {
         .await
         .unwrap();
     let err = Todo::set_topic(pool, &item, Some(&t)).await.unwrap_err();
-    assert_eq!(err.to_string(), "That topic is closed.");
+    assert_eq!(err.to_string(), "That Topic is closed.");
     let err = Todo::set_topic(pool, &item, Some("topic-nope"))
         .await
         .unwrap_err();

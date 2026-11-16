@@ -113,9 +113,9 @@ describe('Ask AI — scope defaults and labels', () => {
   it('says the person filter selects meetings, not lines', async () => {
     render(<AskPage />);
     const trigger = await screen.findByRole('button', {
-      name: /Filter by the meetings someone was in/i,
+      name: /Filter by the Meetings someone was in/i,
     });
-    expect(trigger.textContent).toContain('Any meeting');
+    expect(trigger.textContent).toContain('Any Meeting');
     // The old label was the bare word "Anyone", which read as "any speaker".
     expect(trigger.textContent).not.toContain('Anyone');
     expect(trigger.getAttribute('title')).toMatch(/does not narrow the answer to their lines/i);
@@ -123,7 +123,7 @@ describe('Ask AI — scope defaults and labels', () => {
     await userEvent.click(trigger);
     await userEvent.click(await screen.findByRole('menuitem', { name: 'Meetings with Maya Okafor' }));
     expect(
-      screen.getByRole('button', { name: /Filter by the meetings someone was in/i }).textContent,
+      screen.getByRole('button', { name: /Filter by the Meetings someone was in/i }).textContent,
     ).toContain('Meetings with Maya Okafor');
   });
 });

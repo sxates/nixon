@@ -13,7 +13,15 @@ vi.mock('@/lib/safe-listen', () => ({
   },
 }));
 
-import { formatDecisionDate, getTopic, unlinkTopic, setActionItemTopic } from '../topics';
+import {
+  formatDecisionDate,
+  getTopic,
+  unlinkTopic,
+  setActionItemTopic,
+  updateTopic,
+  reorderTopics,
+  reorderActionItemsWithin,
+} from '../topics';
 import { useTopic, useTopics } from '@/hooks/useTopics';
 
 beforeEach(() => {
@@ -39,6 +47,37 @@ describe('wrappers', () => {
     expect(h.invokeMock).toHaveBeenLastCalledWith('api_unlink_topic', { topicId: 't1', kind: 'series', ref: 'k' });
     await setActionItemTopic('a1', null);
     expect(h.invokeMock).toHaveBeenLastCalledWith('api_set_action_item_topic', { id: 'a1', topicId: null });
+  });
+});
+
+// specs/0090 wire contract. Exact objects (toHaveBeenLastCalledWith fails on an extra or
+// missing key), checked against the Rust command signatures, not against this file: 0089
+// shipped a `topicId` shape bug because the test mirrored the caller.
+describe('0090 wire shape', () => {
+  it('api_update_topic sends every field, null when untouched, camelCase hideFromTodo', async () => {
+    h.invokeMock.mockResolvedValue({});
+    await updateTopic('t1', { starred: true });
+    expect(h.invokeMock).toHaveBeenLastCalledWith('api_update_topic', {
+      id: 't1', name: null, description: null, status: null, starred: true, hideFromTodo: null,
+    });
+    await updateTopic('t1', { hideFromTodo: false });
+    expect(h.invokeMock).toHaveBeenLastCalledWith('api_update_topic', {
+      id: 't1', name: null, description: null, status: null, starred: null, hideFromTodo: false,
+    });
+  });
+
+  it('api_reorder_topics takes the full id list as orderedIds', async () => {
+    h.invokeMock.mockResolvedValue(undefined);
+    await reorderTopics(['b', 'a', 'c']);
+    expect(h.invokeMock).toHaveBeenLastCalledWith('api_reorder_topics', { orderedIds: ['b', 'a', 'c'] });
+  });
+
+  it('api_reorder_action_items_within takes the subset as orderedIds', async () => {
+    h.invokeMock.mockResolvedValue(undefined);
+    await reorderActionItemsWithin(['t3', 't1']);
+    expect(h.invokeMock).toHaveBeenLastCalledWith('api_reorder_action_items_within', {
+      orderedIds: ['t3', 't1'],
+    });
   });
 });
 

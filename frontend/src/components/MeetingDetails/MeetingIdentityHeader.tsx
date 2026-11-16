@@ -178,7 +178,7 @@ export function MeetingIdentityHeader({
   const titleField = (
     <MeetingTitleField
       title={realTitle}
-      placeholder="Untitled meeting"
+      placeholder="Untitled Meeting"
       isEditing={isEditing}
       draft={realTitle}
       onDraftChange={onTitleChange}
@@ -218,7 +218,7 @@ export function MeetingIdentityHeader({
     <PageHeader
       width={width}
       className={className}
-      back={onBack ? { label: 'Back to meetings', onClick: onBack } : undefined}
+      back={onBack ? { label: 'Back', onClick: onBack } : undefined}
       title={titleField}
       subtitle={identityLine}
       actions={actions}

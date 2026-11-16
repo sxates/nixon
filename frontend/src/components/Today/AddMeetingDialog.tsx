@@ -161,7 +161,7 @@ export function AddMeetingDialog({
       }
     } catch (error) {
       console.error('Failed to save manual meeting:', error);
-      toast.error(isEdit ? 'Could not save the meeting' : 'Could not add the meeting', {
+      toast.error(isEdit ? 'Could not save the Meeting' : 'Could not add the Meeting', {
         description: error instanceof Error ? error.message : String(error),
       });
     } finally {
@@ -174,9 +174,9 @@ export function AddMeetingDialog({
       <DialogContent className="max-w-md">
         <form onSubmit={handleSubmit}>
           <DialogHeader>
-            <DialogTitle>{isEdit ? 'Edit meeting' : 'Add meeting'}</DialogTitle>
+            <DialogTitle>{isEdit ? 'Edit Meeting' : 'Add Meeting'}</DialogTitle>
             <DialogDescription>
-              Put a call on your day. It shows up on the timeline like any other meeting, ready
+              Put a call on your day. It shows up on the timeline like any other Meeting, ready
               to join and record.
             </DialogDescription>
           </DialogHeader>
@@ -255,7 +255,7 @@ export function AddMeetingDialog({
             </Button>
             <Button type="submit" variant="brand" disabled={isSaving}>
               {isSaving && <Spinner size="sm" />}
-              {isEdit ? 'Save' : 'Add meeting'}
+              {isEdit ? 'Save' : 'Add Meeting'}
             </Button>
           </DialogFooter>
         </form>

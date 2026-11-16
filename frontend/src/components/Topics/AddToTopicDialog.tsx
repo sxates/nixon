@@ -54,7 +54,7 @@ export function AddToTopicDialog({
     let live = true;
     listTopics('open')
       .then((t) => live && setTopics(t))
-      .catch(() => live && toast.error('Could not load topics'));
+      .catch(() => live && toast.error('Could not load Topics'));
     return () => {
       live = false;
     };
@@ -71,7 +71,7 @@ export function AddToTopicDialog({
       onOpenChange(false);
     } catch (err) {
       setBusy(false);
-      toast.error('Could not add to the topic', {
+      toast.error('Could not add to the Topic', {
         description: err instanceof Error ? err.message : String(err),
       });
     }
@@ -82,7 +82,7 @@ export function AddToTopicDialog({
       <Dialog open={open && !creating} onOpenChange={onOpenChange}>
         <DialogContent className="sm:max-w-[480px]">
           <DialogHeader>
-            <DialogTitle>Add to topic…</DialogTitle>
+            <DialogTitle>Add to Topic…</DialogTitle>
           </DialogHeader>
           <div className="flex max-h-64 flex-col overflow-y-auto">
             {choices.map((t) => (
@@ -103,7 +103,7 @@ export function AddToTopicDialog({
           />
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setCreating(true)}>
-              New topic
+              New Topic
             </Button>
             <Button type="button" disabled={!picked || busy} onClick={() => void submit()}>
               Add

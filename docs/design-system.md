@@ -152,6 +152,12 @@ Continuous animations respect calm motion (specs/0077).
 Every interactive element shows `focus-visible:ring-2 ring-ring`. Never `focus:outline-none`
 without a visible ring.
 
+### Copy
+
+Product object names are capitalized in UI copy, mid-sentence too: Meeting, Person / People,
+Series, Inbox, Topic, To-Do ("Add to Topic", "Open this Meeting"). Generic nouns (recording,
+summary, transcript, notes, speaker, calendar) stay lowercase.
+
 ## 2. Component catalog (`frontend/src/components/ui/`)
 
 | Need | Use | Notes |
@@ -161,7 +167,7 @@ without a visible ring.
 | Joined toolbar keys | `ButtonGroup` | `orientation` horizontal (default) / vertical; joins its children's edges and radii. Every segment is `Button variant="outline"` (`size="xs"` in the document toolbars) and an icon segment is `IconButton` / `MenuButton variant="outline"`, so the group has one face. `ButtonGroupSeparator`, `ButtonGroupText` for a divider or a static label |
 | Overflow `…` | `MenuButton` | an `IconButton` preset: 14px horizontal glyph, opens a `DropdownMenu` |
 | Menu items | `DropdownMenuItem` | `icon` prop; `destructive` variant |
-| Page title row | `PageHeader` | `back`, editable `title`, `subtitle` node (not inside the h1), `actions`, `width` `page` / `doc` / `none` (default; aligns the row to the content column) |
+| Page title row | `PageHeader` | `back` (`{ label: 'Back', onClick: useBack(fallbackHref) }`: the previous in-app page, else the fallback; never a hard-coded route), editable `title`, `subtitle` node (not inside the h1), `actions`, `width` `page` / `doc` / `none` (default; aligns the row to the content column) |
 | Inline editable text | `EditableText` | the click-to-edit title or field, with the hover pencil |
 | View switch | `Tabs` | underline tabs: a hairline rule with a 2px brand underline on the active tab; optional `badge` slot; roving focus built in. Use it whenever the control changes **which view** is on screen (meeting tabs, Settings tabs, Meetings Agenda / Week / Month / List), with or without `TabsContent` (drop `aria-controls` when the panels live elsewhere) |
 | Filter | `SegmentedControl` | a boxed key group: recessed `bg-muted` track, the active option a raised `bg-card` cell, `rounded-md`; `size` default (28px) / `compact` (24px) / `lg` (32px, in a row of default-height buttons); one Tab stop (with no active option, the first holds it). Use it when the control **narrows what a view shows** (Action items status / whose, Ask's date scope) |

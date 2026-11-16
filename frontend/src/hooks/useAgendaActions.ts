@@ -101,7 +101,7 @@ export function useAgendaActions({
           '[meetings] manual item missing calendarEventId; refusing to record to avoid a duplicate meeting',
           item,
         );
-        toast.error('Could not start recording for this meeting');
+        toast.error('Could not start recording for this Meeting');
         return;
       }
       const startsAt = resolveRecordingStartsAt(item.startTime, now);
@@ -159,7 +159,7 @@ export function useAgendaActions({
             );
           } catch (err) {
             console.error('Failed to open prep:', err);
-            toast.error('Could not open prep for this meeting', {
+            toast.error('Could not open prep for this Meeting', {
               description: err instanceof Error ? err.message : String(err),
             });
           }

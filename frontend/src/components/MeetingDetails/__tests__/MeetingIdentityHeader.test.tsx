@@ -64,7 +64,7 @@ describe('MeetingIdentityHeader', () => {
   // (owner feedback 2026-09-19). It is inline again, inside that padding.
   it('keeps the back button inline, not pulled out of the page padding', () => {
     render(<MeetingIdentityHeader {...base} onBack={() => {}} />);
-    const back = screen.getByRole('button', { name: 'Back to meetings' });
+    const back = screen.getByRole('button', { name: 'Back' });
     expect(back.className).not.toContain('lg:absolute');
     expect(back.className).not.toContain('lg:-left-9');
     // -ml-1 is optical alignment of the glyph, not a pull out of the container.

@@ -23,6 +23,7 @@ const mk = (n: number) =>
     id: `t${i}`, name: `Topic ${i}`, description: '', status: 'open',
     lastActivity: `2026-11-${String(i + 1).padStart(2, '0')}T10:00:00Z`,
     pendingCount: i === 0 ? 3 : 0, meetingCount: 0,
+    sortOrder: i, starred: true, hideFromTodo: false,
   }));
 
 describe('TopicsNavList', () => {
@@ -37,21 +38,36 @@ describe('TopicsNavList', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it('caps at 6, most recent first, with a +N more row to /topics', () => {
-    rows = mk(9);
-    render(<TopicsNavList collapsed={false} topics={rows as TopicSummary[]} />);
+  it('lists only starred open topics, in manual order, with no cap or +N more (specs/0090)', () => {
+    const all = mk(9).map((t, i) => ({
+      ...t,
+      pendingCount: 0,
+      // Manual order runs against the recency the old list sorted by.
+      sortOrder: 9 - i,
+      starred: i !== 2,
+      status: i === 4 ? 'closed' : 'open',
+    }));
+    render(<TopicsNavList collapsed={false} topics={all as TopicSummary[]} />);
     const names = screen.getAllByRole('button').map((b) => b.getAttribute('aria-label'));
-    expect(names.slice(0, 6)).toEqual([8, 7, 6, 5, 4, 3].map((i) => `Topic ${i}`));
-    // No count: the name alone.
-    fireEvent.click(screen.getByRole('button', { name: '+3 more' }));
-    expect(push).toHaveBeenCalledWith('/topics');
+    expect(names).toEqual([8, 7, 6, 5, 3, 1, 0].map((i) => `Topic ${i}`));
+    expect(screen.queryByRole('button', { name: /more/ })).toBeNull();
   });
 
-  it('shows a pending badge and opens the topic', () => {
+  it('renders nothing when no topic is starred', () => {
+    const { container } = render(
+      <TopicsNavList
+        collapsed={false}
+        topics={mk(3).map((t) => ({ ...t, starred: false })) as TopicSummary[]}
+      />,
+    );
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it('shows a pending badge and opens the Topic', () => {
     rows = mk(1);
     render(<TopicsNavList collapsed={false} topics={rows as TopicSummary[]} />);
     expect(screen.getByText('3')).toHaveAttribute('aria-label', '3 suggestions waiting');
-    // The row's accessible name carries the count, not just the topic name.
+    // The row's accessible name carries the count, not just the Topic name.
     fireEvent.click(screen.getByRole('button', { name: 'Topic 0, 3 suggestions waiting' }));
     expect(push).toHaveBeenCalledWith('/topics/topic?id=t0');
     expect(screen.queryByRole('button', { name: /more/ })).toBeNull();

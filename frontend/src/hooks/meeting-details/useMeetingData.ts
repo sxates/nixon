@@ -67,7 +67,7 @@ export function useMeetingData({ meeting, summaryData, onMeetingUpdated: _onMeet
       if (error instanceof Error) {
         setError(error.message);
       } else {
-        setError('Failed to save meeting title: Unknown error');
+        setError('Failed to save Meeting title: Unknown error');
       }
       return false;
     }
@@ -111,7 +111,7 @@ export function useMeetingData({ meeting, summaryData, onMeetingUpdated: _onMeet
       if (error instanceof Error) {
         setError(error.message);
       } else {
-        setError('Failed to save meeting summary: Unknown error');
+        setError('Failed to save Meeting summary: Unknown error');
       }
     }
   }, [meeting.id, meetingTitle]);

@@ -28,14 +28,14 @@ describe('QuickAddShortcut', () => {
     recording = false;
   });
 
-  it('⌘T opens the To-do page with the add field requested from another page', () => {
+  it('⌘T opens the To-Do page with the add field requested from another page', () => {
     pathname = '/meetings';
     render(<QuickAddShortcut />);
     fireEvent.keyDown(window, { key: 't', metaKey: true });
     expect(pushMock).toHaveBeenCalledWith('/tasks?tab=todo&add=1');
   });
 
-  it('⌘T on the To-do page asks the page to focus the field instead of navigating', () => {
+  it('⌘T on the To-Do page asks the page to focus the field instead of navigating', () => {
     pathname = '/tasks';
     const onFocus = vi.fn();
     window.addEventListener(FOCUS_QUICK_ADD_EVENT, onFocus);
@@ -51,7 +51,7 @@ describe('QuickAddShortcut', () => {
     recording = true;
     render(<QuickAddShortcut />);
     fireEvent.keyDown(window, { key: 'T', metaKey: true, shiftKey: true });
-    expect(await screen.findByLabelText('Quick add to-do')).toBeInTheDocument();
+    expect(await screen.findByLabelText('Quick add To-Do')).toBeInTheDocument();
     expect(screen.getByRole('checkbox', { name: /Add to “Weekly sync” and its notes/ })).toBeChecked();
     expect(pushMock).not.toHaveBeenCalled();
   });
@@ -59,9 +59,9 @@ describe('QuickAddShortcut', () => {
   it('⌘⇧T with no recording has no meeting option; plain t does nothing', async () => {
     render(<QuickAddShortcut />);
     fireEvent.keyDown(window, { key: 't' });
-    expect(screen.queryByLabelText('Quick add to-do')).toBeNull();
+    expect(screen.queryByLabelText('Quick add To-Do')).toBeNull();
     fireEvent.keyDown(window, { key: 'T', metaKey: true, shiftKey: true });
-    expect(await screen.findByLabelText('Quick add to-do')).toBeInTheDocument();
+    expect(await screen.findByLabelText('Quick add To-Do')).toBeInTheDocument();
     expect(screen.queryByRole('checkbox')).toBeNull();
   });
 });

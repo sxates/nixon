@@ -49,7 +49,7 @@ export function LinkMeetingPicker({
   excludeIds,
   onLink,
   onPick,
-  title = 'Link previous meeting',
+  title = 'Link previous Meeting',
   description,
   children,
   multiple = false,
@@ -95,7 +95,7 @@ export function LinkMeetingPicker({
         setLoadError(null);
       } catch (err) {
         console.error('Failed to load meetings for the link picker:', err);
-        setLoadError('We could not load your meetings. Please try again.');
+        setLoadError('We could not load your Meetings. Please try again.');
       }
     })();
   }, [open]);
@@ -126,7 +126,7 @@ export function LinkMeetingPicker({
       onLink();
     } catch (err) {
       console.error('Failed to link meeting to series:', err);
-      setLinkError('We could not link that meeting. Please try again.');
+      setLinkError('We could not link that Meeting. Please try again.');
     } finally {
       setLinkingId(null);
     }
@@ -172,8 +172,8 @@ export function LinkMeetingPicker({
           <DialogDescription>
             {description ?? (
               <>
-                Pick a past meeting to treat as a previous occurrence of this one. Its summary
-                feeds this meeting&apos;s prep brief.
+                Pick a past Meeting to treat as a previous occurrence of this one. Its summary
+                feeds this Meeting&apos;s prep brief.
               </>
             )}
           </DialogDescription>
@@ -184,7 +184,7 @@ export function LinkMeetingPicker({
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
           placeholder="Filter by title…"
-          aria-label="Filter meetings by title"
+          aria-label="Filter Meetings by title"
           autoFocus
         />
 
@@ -198,11 +198,11 @@ export function LinkMeetingPicker({
           ) : meetings === null ? (
             <div className="flex items-center gap-2 px-1 py-4 text-sm text-muted-foreground">
               <Spinner />
-              Loading meetings…
+              Loading Meetings…
             </div>
           ) : listed.length === 0 ? (
             <p className="px-1 py-4 text-sm text-muted-foreground">
-              {filter.trim() ? 'No meetings match that title.' : 'No past meetings to link yet.'}
+              {filter.trim() ? 'No Meetings match that title.' : 'No past Meetings to link yet.'}
             </p>
           ) : (
             <ul className="flex flex-col gap-0.5">
@@ -219,7 +219,7 @@ export function LinkMeetingPicker({
                       label={
                         <span className="flex min-w-0 items-baseline justify-between gap-3">
                           <span className="u-row-title truncate">
-                            {m.title?.trim() || 'Untitled meeting'}
+                            {m.title?.trim() || 'Untitled Meeting'}
                           </span>
                           {formatMeetingDate(m.createdAt) && (
                             <span className="u-row-meta shrink-0">
@@ -237,7 +237,7 @@ export function LinkMeetingPicker({
                       if (linkingId === null) void link(m.id);
                     }}
                     lead={linkingId === m.id ? <Spinner className="text-brand" /> : undefined}
-                    title={m.title?.trim() || 'Untitled meeting'}
+                    title={m.title?.trim() || 'Untitled Meeting'}
                     trailing={
                       formatMeetingDate(m.createdAt) ? (
                         <span className="u-row-meta">{formatMeetingDate(m.createdAt)}</span>

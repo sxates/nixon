@@ -68,12 +68,12 @@ function useLoaded<T>(
 /** Topic index rows; `status` filters to open or closed (omit for all). */
 export function useTopics(status?: TopicStatus): UseAsync<TopicSummary[]> {
   const fetcher = useCallback(() => listTopics(status), [status]);
-  return useLoaded(fetcher, () => true, 'Could not load topics.');
+  return useLoaded(fetcher, () => true, 'Could not load Topics.');
 }
 
 /** One topic's detail; ignores events for other topics. */
 export function useTopic(id: string): UseAsync<TopicDetail> {
   const fetcher = useCallback(() => getTopic(id), [id]);
   const matches = useCallback((t: string | null) => t === null || t === id, [id]);
-  return useLoaded(fetcher, matches, 'Could not load this topic.');
+  return useLoaded(fetcher, matches, 'Could not load this Topic.');
 }

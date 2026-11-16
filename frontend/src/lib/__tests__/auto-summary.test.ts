@@ -104,7 +104,7 @@ describe('autoSummarySkipReason (WS7.3)', () => {
   // spec 0051 final review, Finding 1: the SUCCESS path of a 'process-now' stop marks
   // the meeting 'defer' and hands it to the backlog, which clears the marker only at the
   // END of a multi-minute pipeline. The post-stop visit lands ~2s later, so 'defer' alone
-  // would toast "this meeting still needs processing" WHILE the backlog pill shows it
+  // would toast "this Meeting still needs processing" WHILE the backlog pill shows it
   // processing. In-flight in the backlog ⇒ silent 'deferred-processing'.
   it('skips SILENTLY when the backlog already has this defer-marked meeting in flight', () => {
     const reason = autoSummarySkipReason({
@@ -211,7 +211,7 @@ describe('autoSummarySkipToast (WS7.3)', () => {
   it('tells the user where the toggle lives when auto-summary is off', () => {
     const copy = autoSummarySkipToast('disabled');
     expect(copy?.title).toBe('Auto-summary is off');
-    expect(copy?.description).toContain('Summarize automatically when a meeting ends');
+    expect(copy?.description).toContain('Summarize automatically when a Meeting ends');
   });
 
   it('has user-facing copy for every non-silent reason', () => {

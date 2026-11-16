@@ -3,10 +3,10 @@ import { render, screen, fireEvent, waitFor, within } from '@testing-library/rea
 import TasksPage from '@/app/tasks/page';
 import type { Person, TodoRow, TodoView } from '@/types';
 
-// specs/0088 — the To-do / Inbox / Done page. Locks: (a) three tabs with the inbox count
-// and the ?tab= sync, (b) Add to my list moves a suggestion from Inbox to the To-do list,
+// specs/0088 — the To-Do / Inbox / Done page. Locks: (a) three tabs with the inbox count
+// and the ?tab= sync, (b) Add to my list moves a suggestion from Inbox to the To-Do list,
 // (c) quick-add splits a trailing due phrase, (d) dismiss-older-than shows an Undo toast
-// carrying the count, (e) Done groups by Monday-start week, (f) the To-do tab is one flat
+// carrying the count, (e) Done groups by Monday-start week, (f) the To-Do tab is one flat
 // list with no meeting grouping, (g) Show dismissed + Restore, (h) a failed load shows a
 // callout.
 
@@ -164,8 +164,8 @@ afterEach(() => {
 const inboxRow = (id: string, description: string, over: Partial<TodoRow> = {}) =>
   todoRow({ id, description, triage: 'suggested', ...over });
 
-describe('TasksPage (specs/0088 To-do / Inbox / Done)', () => {
-  it('shows "adopted from" and no assignee chip for an adopted item on the To-do tab', async () => {
+describe('TasksPage (specs/0088 To-Do / Inbox / Done)', () => {
+  it('shows "adopted from" and no assignee chip for an adopted item on the To-Do tab', async () => {
     stubInvoke({
       rows: [todoRow({ id: 'ad', description: 'Send the deck', assigneePersonId: 'p1' })],
     });
@@ -179,7 +179,7 @@ describe('TasksPage (specs/0088 To-do / Inbox / Done)', () => {
     stubInvoke({ rows: [inboxRow('a', 'Draft the plan'), inboxRow('b', 'Book the room')] });
     render(<TasksPage />);
 
-    const todo = await screen.findByRole('tab', { name: /^To-do/ });
+    const todo = await screen.findByRole('tab', { name: /^To-Do/ });
     const inbox = screen.getByRole('tab', { name: /^Inbox/ });
     const done = screen.getByRole('tab', { name: /^Done/ });
     expect([todo, inbox, done]).toHaveLength(3);
@@ -208,7 +208,7 @@ describe('TasksPage (specs/0088 To-do / Inbox / Done)', () => {
     );
     expect(await screen.findByText('Nothing waiting')).toBeInTheDocument();
 
-    pickTab('To-do');
+    pickTab('To-Do');
     expect(await screen.findByText('Draft the plan')).toBeInTheDocument();
   });
 
@@ -217,7 +217,7 @@ describe('TasksPage (specs/0088 To-do / Inbox / Done)', () => {
     stubInvoke({ rows: [] });
     render(<TasksPage />);
 
-    const input = await screen.findByLabelText('New to-do');
+    const input = await screen.findByLabelText('New To-Do');
     fireEvent.change(input, { target: { value: 'Send the deck (Nov 20)' } });
     fireEvent.submit(input);
 
@@ -294,7 +294,7 @@ describe('TasksPage (specs/0088 To-do / Inbox / Done)', () => {
       todoRow({ id: 'b', description: 'Renew the domain', topicId: 'topic-1', topicName: 'Atlas CRM rebuild' }),
     ];
     render(<TasksPage />);
-    expect(await screen.findByRole('button', { name: 'Open topic Atlas CRM rebuild' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Open Topic Atlas CRM rebuild' })).toBeInTheDocument();
     expect(screen.getByText('Topic')).toBeInTheDocument();
     const tagged = screen.getByText('Send the deck').closest('[role="option"]') as HTMLElement;
     expect(tagged.className).toMatch(/8rem/);
@@ -381,10 +381,10 @@ describe('TasksPage (specs/0088 To-do / Inbox / Done)', () => {
     const title = await screen.findByRole('button', { name: 'Send the deck' });
     fireEvent.click(title);
     expect(screen.getByRole('option')).toHaveAttribute('aria-selected', 'true');
-    expect(screen.queryByLabelText('Edit to-do')).toBeNull();
+    expect(screen.queryByLabelText('Edit To-Do')).toBeNull();
 
     fireEvent.click(title);
-    const field = await screen.findByLabelText('Edit to-do');
+    const field = await screen.findByLabelText('Edit To-Do');
     fireEvent.change(field, { target: { value: 'Send the final deck' } });
     fireEvent.keyDown(field, { key: 'Enter' });
 
@@ -394,7 +394,7 @@ describe('TasksPage (specs/0088 To-do / Inbox / Done)', () => {
         description: 'Send the final deck',
       }),
     );
-    expect(screen.queryByLabelText('Edit to-do')).toBeNull();
+    expect(screen.queryByLabelText('Edit To-Do')).toBeNull();
     expect(screen.getByRole('option')).toHaveAttribute('aria-selected', 'true');
   });
 
@@ -420,7 +420,7 @@ describe('TasksPage (specs/0088 To-do / Inbox / Done)', () => {
 
     // Ticking selected the row; ⌘D on it toggles it back to open.
     expect(screen.getAllByRole('option')[0]).toHaveAttribute('aria-selected', 'true');
-    fireEvent.keyDown(screen.getByRole('listbox', { name: 'To-do list' }), { key: 'd', metaKey: true });
+    fireEvent.keyDown(screen.getByRole('listbox', { name: 'To-Do list' }), { key: 'd', metaKey: true });
     await waitFor(() =>
       expect(callsTo('api_set_action_item_status').at(-1)![1]).toMatchObject({ id: 'a', status: 'open' }),
     );
@@ -446,7 +446,7 @@ describe('TasksPage (specs/0088 To-do / Inbox / Done)', () => {
     });
     render(<TasksPage />);
     await screen.findByText('First item');
-    const list = screen.getByRole('listbox', { name: 'To-do list' });
+    const list = screen.getByRole('listbox', { name: 'To-Do list' });
     const selected = () =>
       screen.getAllByRole('option').find((o) => o.getAttribute('aria-selected') === 'true')
         ?.textContent;
@@ -471,7 +471,7 @@ describe('TasksPage (specs/0088 To-do / Inbox / Done)', () => {
     );
 
     fireEvent.keyDown(list, { key: ' ' });
-    expect(await screen.findByLabelText('Edit to-do')).toBeInTheDocument();
+    expect(await screen.findByLabelText('Edit To-Do')).toBeInTheDocument();
   });
 
   it('assigning an inbox suggestion to someone else updates it and the row leaves', async () => {
@@ -522,7 +522,58 @@ describe('TasksPage (specs/0088 To-do / Inbox / Done)', () => {
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     stubInvoke({ rows: [] }, { api_list_todo_view: () => { throw new Error('boom'); } });
     render(<TasksPage />);
-    expect(await screen.findByText('Could not load your to-do list.')).toBeInTheDocument();
+    expect(await screen.findByText('Could not load your To-Do list.')).toBeInTheDocument();
     errSpy.mockRestore();
+  });
+
+  describe('Group by Topic (specs/0090)', () => {
+    const topics = [
+      { id: 'atlas', name: 'Atlas', description: '', status: 'open', lastActivity: null, pendingCount: 0,
+        meetingCount: 0, sortOrder: 1, starred: false, hideFromTodo: false },
+      { id: 'beta', name: 'Beta', description: '', status: 'open', lastActivity: null, pendingCount: 0,
+        meetingCount: 0, sortOrder: 0, starred: false, hideFromTodo: true },
+    ];
+    afterEach(() => window.localStorage.removeItem('nixon.todo.groupByTopic'));
+
+    it('the switch splits the list into topic sections, remembers it, and reorders within', async () => {
+      stubInvoke(
+        {
+          rows: [
+            todoRow({ id: 'x1', description: 'Loose end', sortOrder: 0 }),
+            todoRow({ id: 't1', description: 'Atlas one', topicId: 'atlas', sortOrder: 1 }),
+            todoRow({ id: 't2', description: 'Atlas two', topicId: 'atlas', sortOrder: 2 }),
+          ],
+        },
+        { api_list_topics: () => topics, api_reorder_action_items_within: () => null },
+      );
+      render(<TasksPage />);
+      await screen.findByText('Atlas one');
+      expect(screen.getAllByRole('listbox').map((l) => l.getAttribute('aria-label'))).toEqual(['To-Do list']);
+
+      fireEvent.click(screen.getByRole('switch', { name: 'Group by Topic' }));
+      expect(window.localStorage.getItem('nixon.todo.groupByTopic')).toBe('1');
+      expect(screen.getAllByRole('listbox').map((l) => l.getAttribute('aria-label'))).toEqual([
+        'To-Do list: Atlas',
+        'To-Do list: No Topic',
+      ]);
+
+      const atlas = screen.getByRole('listbox', { name: 'To-Do list: Atlas' });
+      fireEvent.keyDown(within(atlas).getAllByRole('button', { name: 'Drag to reorder' })[1], { key: 'ArrowUp' });
+      await waitFor(() =>
+        expect(callsTo('api_reorder_action_items_within').at(-1)![1]).toEqual({ orderedIds: ['t2', 't1'] }),
+      );
+      expect(callsTo('api_reorder_action_items')).toHaveLength(0);
+    });
+
+    it('starts grouped when the preference is stored', async () => {
+      window.localStorage.setItem('nixon.todo.groupByTopic', '1');
+      stubInvoke(
+        { rows: [todoRow({ id: 't1', description: 'Atlas one', topicId: 'atlas' })] },
+        { api_list_topics: () => topics },
+      );
+      render(<TasksPage />);
+      expect(await screen.findByRole('listbox', { name: 'To-Do list: Atlas' })).toBeInTheDocument();
+      expect(screen.getByRole('switch', { name: 'Group by Topic' })).toHaveAttribute('aria-checked', 'true');
+    });
   });
 });

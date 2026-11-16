@@ -47,9 +47,9 @@ describe('PersonActionsMenu', () => {
       />,
     );
     await userEvent.click(screen.getByRole('button', { name: 'Person options' }));
-    await userEvent.click(screen.getByRole('menuitem', { name: /Don.t store this person.s voice/ }));
+    await userEvent.click(screen.getByRole('menuitem', { name: /Don.t store this Person.s voice/ }));
     expect(onToggle).toHaveBeenCalledOnce();
-    const forget = screen.getByRole('menuitem', { name: 'Forget this person' });
+    const forget = screen.getByRole('menuitem', { name: 'Forget this Person' });
     expect(forget.getAttribute('data-variant')).toBe('destructive');
     await userEvent.click(forget);
     expect(onForget).toHaveBeenCalledOnce();

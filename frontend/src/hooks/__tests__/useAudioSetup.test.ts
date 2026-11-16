@@ -44,7 +44,7 @@ describe('useAudioSetup (specs/0078)', () => {
     expect(safeListenMock).not.toHaveBeenCalled();
   });
 
-  it('takes `resolved` from a completion payload for this meeting, without a re-fetch', async () => {
+  it('takes `resolved` from a completion payload for this Meeting, without a re-fetch', async () => {
     const { result } = renderHook(() => useAudioSetup('m1'));
     await waitFor(() => expect(result.current.setup).not.toBeNull());
     const before = getCalls();

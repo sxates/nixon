@@ -424,9 +424,9 @@ export function useDeferredBacklog(): UseDeferredBacklogReturn {
     }
     if (failedTitles.length > 0) {
       const who =
-        failedTitles.length === 1 ? `'${failedTitles[0]}'` : `${failedTitles.length} meetings`;
+        failedTitles.length === 1 ? `'${failedTitles[0]}'` : `${failedTitles.length} Meetings`;
       toast.warning(`Processing incomplete for ${who}`, {
-        description: 'Open the meeting to retry, or it will retry on the next power connection.',
+        description: 'Open the Meeting to retry, or it will retry on the next power connection.',
       });
     }
   }, [processMeeting]);
@@ -531,7 +531,7 @@ export function useDeferredBacklog(): UseDeferredBacklogReturn {
       }
       const m: DeferredMeeting = {
         id: meetingId,
-        title: meeting?.title ?? 'meeting',
+        title: meeting?.title ?? 'Meeting',
         folderPath,
         transcriptCount,
       };

@@ -40,7 +40,7 @@ describe('MeetingTopicsRow', () => {
     linkTopic.mockResolvedValue({});
   });
 
-  it('renders a chip per topic that routes to the topic page', async () => {
+  it('renders a chip per topic that routes to the Topic page', async () => {
     render(<MeetingTopicsRow meetingId="m-1" title="Weekly" seriesKey={null} />);
     expect(screen.getByText('Topics')).toBeInTheDocument();
     fireEvent.click(await screen.findByRole('button', { name: 'Atlas CRM rebuild' }));
@@ -57,19 +57,19 @@ describe('MeetingTopicsRow', () => {
 
   it('dialog passes scope and backfill to linkTopic', async () => {
     render(<MeetingTopicsRow meetingId="m-1" title="Weekly" seriesKey="ser-1" />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Add to topic…' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Add to Topic…' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Pricing review' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Every meeting in this series' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Every Meeting in this Series' }));
     fireEvent.click(
-      screen.getByRole('checkbox', { name: "Also add this series' meetings from the last 90 days" }),
+      screen.getByRole('checkbox', { name: "Also add this Series' Meetings from the last 90 days" }),
     );
     fireEvent.click(screen.getByRole('button', { name: 'Add' }));
     await waitFor(() => expect(linkTopic).toHaveBeenCalledWith('t2', 'm-1', 'series', true));
   });
 
-  it('hides backfill for This meeting and links with scope meeting', async () => {
+  it('hides backfill for This Meeting and links with scope meeting', async () => {
     render(<MeetingTopicsRow meetingId="m-1" title="Weekly" seriesKey="ser-1" />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Add to topic…' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Add to Topic…' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Pricing review' }));
     expect(screen.queryByRole('checkbox')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Add' }));
@@ -78,17 +78,17 @@ describe('MeetingTopicsRow', () => {
 
   it('disables the series option with neither a series key nor a title', async () => {
     render(<MeetingTopicsRow meetingId="m-1" title="  " seriesKey={null} />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Add to topic…' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Add to Topic…' }));
     await screen.findByRole('button', { name: 'Pricing review' });
-    expect(screen.getByRole('button', { name: 'Every meeting in this series' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Every Meeting in this Series' })).toBeDisabled();
   });
 
   it('toasts a link failure', async () => {
     linkTopic.mockRejectedValue("This meeting isn't part of a series.");
     render(<MeetingTopicsRow meetingId="m-1" title="Weekly" seriesKey={null} />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Add to topic…' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Add to Topic…' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Pricing review' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Every meeting in this series' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Every Meeting in this Series' }));
     fireEvent.click(screen.getByRole('button', { name: 'Add' }));
     await waitFor(() => expect(toastError).toHaveBeenCalled());
   });

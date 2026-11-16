@@ -53,7 +53,7 @@ describe('openMeetingMoment', () => {
     h.invokeMock.mockResolvedValue({ exists: false, segmentId: null });
     await openMeetingMoment(router, 'abc', 1);
     expect(router.push).not.toHaveBeenCalled();
-    expect(h.toastError).toHaveBeenCalledWith("That meeting isn't in Nixon anymore.");
+    expect(h.toastError).toHaveBeenCalledWith("That Meeting isn't in Nixon anymore.");
   });
 
   it('toasts when resolving fails', async () => {

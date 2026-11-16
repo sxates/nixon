@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { MiniCalendar } from '@/components/ui/mini-calendar';
@@ -44,6 +44,8 @@ export function DueDateControl({
   quietWhenEmpty = false,
   size = 'caption',
   className,
+  open: openProp,
+  onOpenChange,
 }: {
   item: ActionItem;
   onSetDueDate: (item: ActionItem, dueDate: string | null) => void | Promise<void>;
@@ -52,9 +54,21 @@ export function DueDateControl({
   /** `body` on the detail page, where it sits under a title-size heading. */
   size?: 'caption' | 'body';
   className?: string;
+  /** Controlled open state, for opening the picker from elsewhere (a row's "Set due date…"). */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
-  const [open, setOpen] = useState(false);
+  const [openState, setOpenState] = useState(false);
+  const open = openProp ?? openState;
+  const setOpen = (next: boolean) => {
+    setOpenState(next);
+    onOpenChange?.(next);
+  };
   const [text, setText] = useState('');
+  // Opened from outside: start with an empty field, as a click on the trigger does.
+  useEffect(() => {
+    if (openProp) setText('');
+  }, [openProp]);
   const today = new Date();
   const { label, title, urgent } = dueDisplay(item, today);
 

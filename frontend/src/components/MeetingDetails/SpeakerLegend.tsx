@@ -491,8 +491,8 @@ function SpeakerChip({
               <PersonPicker
                 query={pickQuery}
                 onQueryChange={setPickQuery}
-                placeholder="Search people…"
-                searchLabel="Search people to assign"
+                placeholder="Search People…"
+                searchLabel="Search People to assign"
                 autoFocus={false}
                 groups={[
                   ...(attendees.length > 0

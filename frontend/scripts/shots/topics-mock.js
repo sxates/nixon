@@ -11,7 +11,16 @@ globalThis.__nixonTopicsMock = function ({ MEETINGS, todoStore }) {
   };
   const titleOf = (id) => (MEETINGS.find((m) => m.id === id) || {}).title || null;
   const ATLAS = 'topic-atlas';
+  const LAB = 'topic-lab';
   const CLOSED = 'topic-vendor-eval';
+  // specs/0090: `?todoGroup=1` opens the To-do list grouped by topic. Written on every load
+  // (headless Chrome keeps localStorage across routes), so other shots stay flat.
+  try {
+    const grouped = new URLSearchParams(location.search).get('todoGroup') === '1';
+    localStorage.setItem('nixon.todo.groupByTopic', grouped ? '1' : '0');
+  } catch {
+    // no storage: the page falls back to the flat list
+  }
 
   let STORE = null;
   function store() {
@@ -30,11 +39,19 @@ globalThis.__nixonTopicsMock = function ({ MEETINGS, todoStore }) {
           description: 'Replacing the legacy CRM with Atlas: data migration, rollout order, and the cutover date.',
           notesMarkdown: 'Check the export limits with the vendor before wave two.', notesJson: null,
           createdAt: daysAgo(20), updatedAt: daysAgo(1), closedAt: null,
+          sortOrder: 1, starred: true, hideFromTodo: false,
+        },
+        {
+          id: LAB, name: 'Lab equipment', status: 'open',
+          description: 'Calibration, servicing and replacement of the shared lab equipment.',
+          notesMarkdown: null, notesJson: null, createdAt: daysAgo(15), updatedAt: daysAgo(2), closedAt: null,
+          sortOrder: 0, starred: true, hideFromTodo: false,
         },
         {
           id: CLOSED, name: 'Vendor evaluation', status: 'closed',
           description: 'Shortlist and pick the enclosure supplier.',
           notesMarkdown: null, notesJson: null, createdAt: daysAgo(60), updatedAt: daysAgo(30), closedAt: daysAgo(30),
+          sortOrder: 2, starred: false, hideFromTodo: false,
         },
       ],
       links: [
@@ -89,16 +106,22 @@ globalThis.__nixonTopicsMock = function ({ MEETINGS, todoStore }) {
       lastActivity: es.length ? es[0].occurredAt : null,
       pendingCount: s.suggestions.filter((x) => x.topicId === t.id && x.status === 'pending').length,
       meetingCount: new Set(es.map((e) => e.meetingId).filter(Boolean)).size,
+      sortOrder: t.sortOrder ?? null, starred: !!t.starred, hideFromTodo: !!t.hideFromTodo,
     };
   };
-  // One to-do carries a topic so the To-do shot shows the chip.
+  const byOrder = (a, b) => (a.sortOrder ?? Infinity) - (b.sortOrder ?? Infinity) || a.name.localeCompare(b.name);
+  // One to-do carries a topic so the To-do shot shows the chip; specs/0090 adds one listed
+  // item each on Atlas and Lab equipment so the grouped To-do shot has two topic sections.
+  const tag = (r, id, name) => { if (r && r.topicId === undefined) { r.topicId = id; r.topicName = name; } };
   const tagOne = () => {
-    const r = todoStore().find((x) => x.meetingId === 'demo-01' && x.status === 'open');
-    if (r && r.topicId === undefined) { r.topicId = ATLAS; r.topicName = 'Atlas CRM rebuild'; }
+    const rows = todoStore();
+    tag(rows.find((x) => x.meetingId === 'demo-01' && x.status === 'open'), ATLAS, 'Atlas CRM rebuild');
+    tag(rows.find((x) => x.meetingId && x.triage === 'listed' && x.status === 'open' && x.topicId === undefined), ATLAS, 'Atlas CRM rebuild');
+    tag(rows.find((x) => x.id === 'ai-standalone-1'), LAB, 'Lab equipment');
   };
 
   return {
-    api_list_topics: ({ status }) => { tagOne(); if (new URLSearchParams(location.search).get('topics') === 'empty') return []; return store().topics.filter((t) => !status || t.status === status).map(summary); },
+    api_list_topics: ({ status }) => { tagOne(); if (new URLSearchParams(location.search).get('topics') === 'empty') return []; return store().topics.filter((t) => !status || t.status === status).sort(byOrder).map(summary); },
     api_get_topic: ({ id }) => {
       tagOne();
       const t = topicOf(id);
@@ -110,16 +133,29 @@ globalThis.__nixonTopicsMock = function ({ MEETINGS, todoStore }) {
       };
     },
     api_create_topic: ({ name, description }) => {
-      const t = { id: 'topic-' + Date.now(), name, description: description || '', status: 'open', notesMarkdown: null, notesJson: null, createdAt: daysAgo(0), updatedAt: daysAgo(0), closedAt: null };
-      store().topics.unshift(t);
+      const sortOrder = Math.max(-1, ...store().topics.map((x) => x.sortOrder ?? -1)) + 1;
+      const t = { id: 'topic-' + Date.now(), name, description: description || '', status: 'open', notesMarkdown: null, notesJson: null, createdAt: daysAgo(0), updatedAt: daysAgo(0), closedAt: null, sortOrder, starred: false, hideFromTodo: false };
+      store().topics.push(t);
       return t;
     },
-    api_update_topic: ({ id, name, description, status }) => {
+    api_update_topic: ({ id, name, description, status, starred, hideFromTodo }) => {
       const t = topicOf(id);
       if (name != null) t.name = name;
       if (description != null) t.description = description;
       if (status != null) { t.status = status; t.closedAt = status === 'closed' ? daysAgo(0) : null; }
+      if (starred != null) t.starred = starred;
+      if (hideFromTodo != null) t.hideFromTodo = hideFromTodo;
       return t;
+    },
+    // specs/0090: the full order; and a to-do subset swapped among the slots it holds.
+    api_reorder_topics: ({ orderedIds }) => {
+      orderedIds.forEach((id, i) => { const t = topicOf(id); if (t) t.sortOrder = i; });
+    },
+    api_reorder_action_items_within: ({ orderedIds }) => {
+      const rows = orderedIds.map((id) => todoStore().find((r) => r.id === id)).filter(Boolean);
+      let max = Math.max(-1, ...todoStore().map((r) => r.sortOrder ?? -1));
+      const slots = rows.map((r) => r.sortOrder ?? ++max).sort((a, b) => a - b);
+      rows.forEach((r, i) => { r.sortOrder = slots[i]; });
     },
     api_set_topic_notes: ({ id, notesMarkdown, notesJson }) => { const t = topicOf(id); t.notesMarkdown = notesMarkdown; t.notesJson = notesJson; },
     api_delete_topic: ({ id }) => { const s = store(); s.topics = s.topics.filter((t) => t.id !== id); },

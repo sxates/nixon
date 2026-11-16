@@ -15,7 +15,7 @@
  */
 
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { invoke } from '@tauri-apps/api/core';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -44,6 +44,7 @@ import { formatMeetingDate } from '@/lib/format-date';
 import { safeListen } from '@/lib/safe-listen';
 import { PageHeader } from '@/components/ui/page-header';
 import { PAGE_CONTENT_WIDTH, PAGE_GUTTER } from '@/lib/page-width';
+import { useBack } from '@/hooks/useBack';
 
 type Phase = 'idle' | 'running' | 'error';
 
@@ -58,7 +59,6 @@ type BufferedEvent =
   | { kind: 'error'; payload: AskAiErrorPayload };
 
 function SavedQuestionContent() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const id = searchParams.get('id');
 
@@ -231,13 +231,7 @@ function SavedQuestionContent() {
     }
   }, [cancelling]);
 
-  const onBack = useCallback(() => {
-    if (window.history.length <= 1) {
-      router.push('/ask');
-    } else {
-      router.back();
-    }
-  }, [router]);
+  const onBack = useBack('/ask');
 
   const running = phase === 'running';
 
@@ -251,9 +245,9 @@ function SavedQuestionContent() {
         <EmptyState
           title="That saved question no longer exists."
           action={
-            <Button variant="outline" onClick={() => router.push('/ask')}>
+            <Button variant="outline" onClick={onBack}>
               <DeckIcon icon={ArrowLeft} size={14} />
-              Back to Ask AI
+              Back
             </Button>
           }
         />
@@ -267,7 +261,7 @@ function SavedQuestionContent() {
     <div className="flex h-page flex-col bg-background animate-fade-in">
       <PageHeader
         width="page"
-        back={{ label: 'Ask AI', onClick: onBack }}
+        back={{ label: 'Back', onClick: onBack }}
         title={<span className="block min-w-0 truncate">{saved.label?.trim() || saved.question}</span>}
         subtitle="Saved question — shows the last answer; Rerun to refresh it."
         actions={
@@ -275,7 +269,7 @@ function SavedQuestionContent() {
             variant="brand"
             onClick={() => void rerun()}
             disabled={running}
-            title="Answer this again against your latest meetings"
+            title="Answer this again against your latest Meetings"
           >
             <DeckIcon icon={RefreshCw} size={14} />
             Rerun
@@ -307,7 +301,7 @@ function SavedQuestionContent() {
             <Panel size="document">
               {answeredLabel && (
                 <p className="u-meta mb-3 border-b border-border pb-3">
-                  Last answered {answeredLabel} — Rerun to refresh against your latest meetings
+                  Last answered {answeredLabel} — Rerun to refresh against your latest Meetings
                 </p>
               )}
               <AnswerMarkdown markdown={answer.markdown} sources={answer.sources} />
@@ -318,7 +312,7 @@ function SavedQuestionContent() {
               <EmptyState
                 variant="panel"
                 title="Not run yet"
-                body="Press Rerun to answer this against your latest meetings. The answer is saved here so opening this page again won't re-run the model."
+                body="Press Rerun to answer this against your latest Meetings. The answer is saved here so opening this page again won't re-run the model."
               />
             )
           )}

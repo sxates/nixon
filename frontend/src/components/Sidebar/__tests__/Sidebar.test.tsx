@@ -25,7 +25,7 @@ vi.mock('next/navigation', () => ({
   useSearchParams: () => new URLSearchParams(search),
 }));
 
-// The To-do row's inbox badge reads `api_inbox_count`; every other command answers null.
+// The To-Do row's inbox badge reads `api_inbox_count`; every other command answers null.
 const inboxCountState = { value: 0 };
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(async (cmd: string) => (cmd === 'api_inbox_count' ? inboxCountState.value : null)),
@@ -76,7 +76,7 @@ vi.mock('@/contexts/UpdateStatusContext', () => ({
 import Sidebar from '@/components/Sidebar';
 
 // Today and All meetings merged into one Meetings page.
-const NAV_NAMES = ['Meetings', 'To-do', 'People', 'Ask AI', 'Topics'];
+const NAV_NAMES = ['Meetings', 'To-Do', 'People', 'Ask AI', 'Topics'];
 
 describe('Sidebar (specs/0057 Plan 3 Task 3)', () => {
   beforeEach(() => {
@@ -107,13 +107,13 @@ describe('Sidebar (specs/0057 Plan 3 Task 3)', () => {
       'aria-current',
       'page',
     );
-    expect(screen.getByRole('button', { name: 'To-do' })).not.toHaveAttribute('aria-current');
+    expect(screen.getByRole('button', { name: 'To-Do' })).not.toHaveAttribute('aria-current');
   });
 
-  it('offers no separate Today or All meetings item any more', () => {
+  it('offers no separate Today or All Meetings item any more', () => {
     render(<Sidebar />);
     expect(screen.queryByRole('button', { name: 'Today' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'All meetings' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'All Meetings' })).toBeNull();
   });
 
   it.each(['/', '/meetings', '/meetings?view=month', '/meeting-details'])(
@@ -156,13 +156,13 @@ describe('Sidebar (specs/0057 Plan 3 Task 3)', () => {
     sidebarState.isCollapsed = true;
     pathname = '/tasks';
     render(<Sidebar />);
-    expect(screen.getByRole('button', { name: 'To-do' })).toHaveAttribute(
+    expect(screen.getByRole('button', { name: 'To-Do' })).toHaveAttribute(
       'aria-current',
       'page',
     );
   });
 
-  it('shows the inbox count on the To-do row, and nothing at zero', async () => {
+  it('shows the inbox count on the To-Do row, and nothing at zero', async () => {
     inboxCountState.value = 4;
     const { unmount } = render(<Sidebar />);
     expect(await screen.findByText('4')).toBeInTheDocument();

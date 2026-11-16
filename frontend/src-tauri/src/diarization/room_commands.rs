@@ -154,7 +154,7 @@ pub(crate) async fn set_audio_setup(
     })?;
     let updated = MeetingAudioSetupRepository::set_override(pool, meeting_id, parsed)
         .await
-        .context("Couldn't save this meeting's audio setup")?;
+        .context("Couldn't save this Meeting's audio setup")?;
     if !updated {
         return Err(anyhow!("That meeting no longer exists"));
     }
@@ -219,7 +219,7 @@ pub(crate) async fn mark_speaker_as_me(
     )
     .await
     .context("Couldn't mark that speaker as you")?
-    .ok_or_else(|| anyhow!("That speaker is no longer in this meeting"))?;
+    .ok_or_else(|| anyhow!("That speaker is no longer in this Meeting"))?;
 
     let enrolled =
         match enroll_marked_owner(pool, meeting_id, confirmed_voice, store_voiceprints).await {

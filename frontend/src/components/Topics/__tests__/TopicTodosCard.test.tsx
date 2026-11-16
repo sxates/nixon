@@ -11,11 +11,12 @@ vi.mock('sonner', () => ({ toast: Object.assign(vi.fn(), { success: vi.fn(), err
 
 import { TopicTodosCard } from '../TopicTodosCard';
 
-const row = (id: string, description: string, status = 'open'): TodoRow =>
+const row = (id: string, description: string, status = 'open', sortOrder: number | null = null): TodoRow =>
   ({
     id,
     description,
     status,
+    sortOrder,
     source: 'manual',
     triage: 'listed',
     topicId: 'topic-1',
@@ -32,13 +33,70 @@ describe('TopicTodosCard', () => {
     });
   });
 
+  it('names the person an adopted to-do came from (not "Unknown")', async () => {
+    invokeMock.mockImplementation(async (cmd: string) => {
+      if (cmd === 'api_list_people') return [{ id: 'p1', displayName: 'Rafael Duarte' }];
+      return [];
+    });
+    const adopted = { ...row('a1', 'Finalize the enclosure'), assigneePersonId: 'p1', assigneeIsSelf: false } as TodoRow;
+    render(<TopicTodosCard topicId="topic-1" todos={[adopted]} onChanged={vi.fn()} />);
+    expect(await screen.findByText(/adopted from Rafael Duarte/)).toBeInTheDocument();
+    expect(screen.queryByText(/Unknown/)).toBeNull();
+  });
+
+  it('"Show in To-Do" is on by default and writes hideFromTodo as its inverse (specs/0090)', async () => {
+    const onChanged = vi.fn();
+    render(<TopicTodosCard topicId="topic-1" todos={[row('a1', 'Send the deck')]} onChanged={onChanged} />);
+    const toggle = screen.getByRole('switch', { name: 'Show in To-Do' });
+    expect(toggle).toHaveAttribute('aria-checked', 'true');
+    expect(screen.queryByText('Not on your To-Do list')).toBeNull();
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute('aria-checked', 'false');
+    await waitFor(() =>
+      expect(invokeMock).toHaveBeenCalledWith('api_update_topic', {
+        id: 'topic-1', name: null, description: null, status: null, starred: null, hideFromTodo: true,
+      }),
+    );
+    await waitFor(() => expect(onChanged).toHaveBeenCalled());
+  });
+
+  it('a topic kept off the list shows the switch off; a failed change reverts it', async () => {
+    invokeMock.mockImplementation(async (cmd: string) => {
+      if (cmd === 'api_update_topic') throw new Error('nope');
+      return [];
+    });
+    render(<TopicTodosCard topicId="topic-1" todos={[]} onChanged={vi.fn()} hideFromTodo />);
+    const toggle = screen.getByRole('switch', { name: 'Show in To-Do' });
+    expect(toggle).toHaveAttribute('aria-checked', 'false');
+    fireEvent.click(toggle);
+    await waitFor(() => expect(toggle).toHaveAttribute('aria-checked', 'false'));
+    expect(invokeMock).toHaveBeenCalledWith('api_update_topic', expect.objectContaining({ hideFromTodo: false }));
+  });
+
+  it('reorders within its own places on the To-Do list (specs/0090)', async () => {
+    const todos = [row('t1', 'First', 'open', 1), row('t2', 'Second', 'open', 3), row('t3', 'Third', 'open', 4)];
+    render(<TopicTodosCard topicId="topic-1" todos={todos} onChanged={vi.fn()} />);
+    expect(screen.getByText(/⌘↑↓ move/)).toBeTruthy();
+    // Keyboard on a grip moves its row one place (the same path a drag drop takes).
+    const grips = screen.getAllByRole('button', { name: 'Drag to reorder' });
+    fireEvent.keyDown(grips[2], { key: 'ArrowUp' });
+    await waitFor(() =>
+      expect(invokeMock).toHaveBeenCalledWith('api_reorder_action_items_within', {
+        orderedIds: ['t1', 't3', 't2'],
+      }),
+    );
+    // Optimistic: Third now sits at Second's old place.
+    const texts = screen.getAllByText(/^(First|Second|Third)$/).map((n) => n.textContent);
+    expect(texts).toEqual(['First', 'Third', 'Second']);
+  });
+
   it('titles the card and lists the items', () => {
     render(<TopicTodosCard topicId="topic-1" todos={[row('a1', 'Send the deck')]} onChanged={vi.fn()} />);
     expect(screen.getByText('My action items')).toBeTruthy();
     expect(screen.getByText('Send the deck')).toBeTruthy();
   });
 
-  it('checking an item calls the same completion command as the To-do list', async () => {
+  it('checking an item calls the same completion command as the To-Do list', async () => {
     const onChanged = vi.fn();
     render(<TopicTodosCard topicId="topic-1" todos={[row('a1', 'Send the deck')]} onChanged={onChanged} />);
     fireEvent.click(screen.getByRole('checkbox', { name: 'Mark "Send the deck" as completed' }));
@@ -51,9 +109,9 @@ describe('TopicTodosCard', () => {
     await waitFor(() => expect(onChanged).toHaveBeenCalled());
   });
 
-  it('quick add creates the item, then tags it to this topic', async () => {
+  it('quick add creates the item, then tags it to this Topic', async () => {
     render(<TopicTodosCard topicId="topic-1" todos={[]} onChanged={vi.fn()} />);
-    const field = screen.getByLabelText('Add an action item to this topic');
+    const field = screen.getByLabelText('Add an action item to this Topic');
     fireEvent.change(field, { target: { value: 'Book the kickoff' } });
     fireEvent.keyDown(field, { key: 'Enter' });
     await waitFor(() =>
@@ -78,11 +136,11 @@ describe('TopicTodosCard', () => {
     });
     const onChanged = vi.fn();
     render(<TopicTodosCard topicId="topic-1" todos={[]} onChanged={onChanged} />);
-    const field = screen.getByLabelText('Add an action item to this topic') as HTMLInputElement;
+    const field = screen.getByLabelText('Add an action item to this Topic') as HTMLInputElement;
     fireEvent.change(field, { target: { value: 'Book the kickoff' } });
     fireEvent.keyDown(field, { key: 'Enter' });
     await waitFor(() =>
-      expect(toast.error).toHaveBeenCalledWith('Added, but not to the topic', expect.anything()),
+      expect(toast.error).toHaveBeenCalledWith('Added, but not to the Topic', expect.anything()),
     );
     expect(toast.error).not.toHaveBeenCalledWith('Could not add the item', expect.anything());
     await waitFor(() => expect(field.value).toBe(''));
@@ -106,10 +164,10 @@ describe('TopicTodosCard', () => {
     fireEvent.click(screen.getByRole('checkbox', { name: 'Mark "Send the deck" as completed' }));
     const title = await screen.findByRole('button', { name: 'Send the deck' });
     expect(title.className).toContain('line-through');
-    expect(screen.getByRole('button', { name: 'Dismiss "Send the deck" from this topic' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Dismiss "Send the deck" from this Topic' })).toBeTruthy();
   });
 
-  it('dismiss takes one done item off the topic; Dismiss done takes them all', async () => {
+  it('dismiss takes one done item off the Topic; Dismiss done takes them all', async () => {
     const onChanged = vi.fn();
     const todos = [
       row('a1', 'Send the deck', 'completed'),
@@ -117,7 +175,7 @@ describe('TopicTodosCard', () => {
       row('a3', 'Still open'),
     ];
     const { rerender } = render(<TopicTodosCard topicId="topic-1" todos={todos} onChanged={onChanged} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Dismiss "Send the deck" from this topic' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss "Send the deck" from this Topic' }));
     await waitFor(() =>
       expect(invokeMock).toHaveBeenCalledWith('api_clear_topic_todos', { topicId: 'topic-1', ids: ['a1'] }),
     );
@@ -132,7 +190,7 @@ describe('TopicTodosCard', () => {
     expect(screen.queryByRole('button', { name: 'Dismiss done' })).toBeNull();
   });
 
-  it('works from the keyboard like the To-do list: arrow to select, Cmd-D to tick off', async () => {
+  it('works from the keyboard like the To-Do list: arrow to select, Cmd-D to tick off', async () => {
     render(
       <TopicTodosCard
         topicId="topic-1"
@@ -140,7 +198,7 @@ describe('TopicTodosCard', () => {
         onChanged={vi.fn()}
       />,
     );
-    const list = screen.getByRole('listbox', { name: "This topic's action items" });
+    const list = screen.getByRole('listbox', { name: "This Topic's action items" });
     list.focus();
     fireEvent.keyDown(list, { key: 'ArrowDown' });
     fireEvent.keyDown(list, { key: 'ArrowDown' });

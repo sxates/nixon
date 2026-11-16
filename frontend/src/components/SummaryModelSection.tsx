@@ -141,8 +141,8 @@ export function SummaryModelSection({ refetchTrigger }: SummaryModelSectionProps
         title="Summary model"
         description={
           isCliProvider(modelConfig.provider)
-            ? 'The AI model that writes your meeting summaries. Claude Code sends meeting text to Anthropic under your Claude plan.'
-            : 'The AI model that writes your meeting summaries. A local model keeps everything on this Mac.'
+            ? 'The AI model that writes your Meeting summaries. Claude Code sends Meeting text to Anthropic under your Claude plan.'
+            : 'The AI model that writes your Meeting summaries. A local model keeps everything on this Mac.'
         }
       >
         {/* specs/0085: a subscription CLI is a choice the user made, never Nixon's pick, so

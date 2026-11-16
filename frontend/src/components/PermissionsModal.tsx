@@ -158,7 +158,7 @@ export default function PermissionsModal() {
     {
       key: 'cal' as const,
       label: 'Calendar',
-      sub: 'Pull meeting titles & participants',
+      sub: 'Pull Meeting titles & participants',
       state: calendar,
       onAllow: handleCalendar,
     },
@@ -188,7 +188,7 @@ export default function PermissionsModal() {
         <DialogHeader>
           <DialogTitle>Enable recording</DialogTitle>
           <DialogDescription>
-            Nixon needs a few permissions to record &amp; transcribe this meeting. Everything is
+            Nixon needs a few permissions to record &amp; transcribe this Meeting. Everything is
             processed locally on your Mac.
           </DialogDescription>
         </DialogHeader>

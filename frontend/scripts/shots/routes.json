@@ -468,6 +468,19 @@
     ]
   },
   {
+    "name": "tasks-grouped",
+    "route": "/tasks?todoGroup=1",
+    "ignore": [
+      {
+        "x": 338,
+        "y": 816,
+        "w": 106,
+        "h": 22,
+        "why": "footer TapeCounter roller digits (specs/0060 Task 3)."
+      }
+    ]
+  },
+  {
     "name": "ask",
     "route": "/ask?historyId=latest",
     "ignore": [

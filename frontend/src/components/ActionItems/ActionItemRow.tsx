@@ -202,7 +202,7 @@ export function ActionItemRow({
             )
           )}
           {sourceCount !== undefined && sourceCount > 1 && (
-            <span className="text-caption text-muted-foreground">from {sourceCount} meetings</span>
+            <span className="text-caption text-muted-foreground">from {sourceCount} Meetings</span>
           )}
           {adoptedFrom && (
             <span className="text-caption text-muted-foreground">adopted from {adoptedFrom}</span>

@@ -137,7 +137,7 @@ export function useWrapUpEffects(): void {
 
       if (state.stage === 'failed') {
         deps.current.setActiveRecordingMeetingId(null);
-        toast.error('Couldn’t finish saving the meeting', {
+        toast.error('Couldn’t finish saving the Meeting', {
           description: state.message ?? 'Your recording is still on disk. Please try again.',
           duration: 10000,
         });

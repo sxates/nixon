@@ -92,14 +92,14 @@ describe('AudioRetentionRow — confirm before deleting (specs/0072 task 23)', (
     fireEvent.change(select(), { target: { value: '7' } });
 
     expect(
-      await screen.findByText('Delete audio from 23 meetings (4.1 GB) now?'),
+      await screen.findByText('Delete audio from 23 Meetings (4.1 GB) now?'),
     ).toBeInTheDocument();
     expect(invokeMock).toHaveBeenCalledWith('api_preview_audio_retention', {
       policy: { mode: 'days', days: 7 },
     });
     expect(screen.getByText(/older than 7 days will be deleted/)).toBeInTheDocument();
     expect(
-      screen.getByText('3 meetings still being processed keep their audio until they finish.'),
+      screen.getByText('3 Meetings still being processed keep their audio until they finish.'),
     ).toBeInTheDocument();
     // Asked, not done: nothing saved, nothing deleted.
     expect(called('set_recording_preferences')).toBe(false);
@@ -109,12 +109,12 @@ describe('AudioRetentionRow — confirm before deleting (specs/0072 task 23)', (
   it('Cancel reverts the select and saves nothing', async () => {
     render(<Harness />);
     fireEvent.change(select(), { target: { value: '7' } });
-    await screen.findByText('Delete audio from 23 meetings (4.1 GB) now?');
+    await screen.findByText('Delete audio from 23 Meetings (4.1 GB) now?');
 
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
 
     await waitFor(() =>
-      expect(screen.queryByText('Delete audio from 23 meetings (4.1 GB) now?')).toBeNull(),
+      expect(screen.queryByText('Delete audio from 23 Meetings (4.1 GB) now?')).toBeNull(),
     );
     expect(select().value).toBe('30');
     expect(called('set_recording_preferences')).toBe(false);
@@ -125,12 +125,12 @@ describe('AudioRetentionRow — confirm before deleting (specs/0072 task 23)', (
     report = { meetingsPurged: 21, bytesFreed: 3.8e9, skippedBusy: 2 };
     render(<Harness />);
     fireEvent.change(select(), { target: { value: '7' } });
-    await screen.findByText('Delete audio from 23 meetings (4.1 GB) now?');
+    await screen.findByText('Delete audio from 23 Meetings (4.1 GB) now?');
 
     fireEvent.click(screen.getByRole('button', { name: 'Delete audio' }));
 
     await waitFor(() =>
-      expect(toast.success).toHaveBeenCalledWith('Deleted audio from 21 meetings, 3.8 GB freed', {
+      expect(toast.success).toHaveBeenCalledWith('Deleted audio from 21 Meetings, 3.8 GB freed', {
         description: '2 were busy and will be deleted shortly.',
       }),
     );
@@ -158,7 +158,7 @@ describe('AudioRetentionRow — confirm before deleting (specs/0072 task 23)', (
     expect(called('api_apply_audio_retention_now')).toBe(false);
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(toast.success).toHaveBeenCalledWith('Preference saved', {
-      description: 'Audio from meetings older than 90 days will be deleted.',
+      description: 'Audio from Meetings older than 90 days will be deleted.',
     });
   });
 
@@ -172,7 +172,7 @@ describe('AudioRetentionRow — confirm before deleting (specs/0072 task 23)', (
     expect(called('api_apply_audio_retention_now')).toBe(false);
     expect(toast.success).toHaveBeenCalledWith('Preference saved', {
       description:
-        'Audio will be deleted once each meeting is transcribed and its speakers are identified.',
+        'Audio will be deleted once each Meeting is transcribed and its speakers are identified.',
     });
   });
 

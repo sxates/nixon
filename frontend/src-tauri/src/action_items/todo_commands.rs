@@ -28,7 +28,7 @@ pub async fn api_list_todo_view<R: Runtime>(
     let state = app.state::<AppState>();
     Todo::list_view(state.db_manager.pool(), view)
         .await
-        .map_err(|e| format!("Failed to load your to-dos: {e}"))
+        .map_err(|e| format!("Failed to load your To-Dos: {e}"))
 }
 
 #[tauri::command]

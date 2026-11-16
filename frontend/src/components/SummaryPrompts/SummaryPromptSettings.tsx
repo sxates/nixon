@@ -65,7 +65,7 @@ export function SummaryPromptSettings() {
     <div className="space-y-8">
       <SettingsSection
         title="Summary prompts"
-        description="A prompt tells the model how you want your meeting notes shaped. The default is used for new meetings; you can pick a different one per meeting."
+        description="A prompt tells the model how you want your Meeting notes shaped. The default is used for new Meetings; you can pick a different one per Meeting."
         action={
           <Button variant="outline" size="sm" onClick={() => setEditorTarget(null)}>
             New prompt
@@ -126,7 +126,7 @@ export function SummaryPromptSettings() {
           ))}
           {!loading && !loadError && prompts.length === 0 && (
             <div className="py-3 u-meta">
-              No prompts yet. Create one to shape how your meeting notes are written.
+              No prompts yet. Create one to shape how your Meeting notes are written.
             </div>
           )}
         </SettingsGroup>

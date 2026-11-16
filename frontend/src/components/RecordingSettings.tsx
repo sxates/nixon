@@ -168,7 +168,7 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
         'live-transcription',
         enabled
           ? 'Meetings will be transcribed live while you record.'
-          : 'Recording only — meetings are transcribed later (automatically before a summary, or with “Transcribe now”).',
+          : 'Recording only — Meetings are transcribed later (automatically before a summary, or with “Transcribe now”).',
       );
     } catch (error) {
       console.error('Failed to save live transcription preference:', error);
@@ -193,7 +193,7 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
       toastSaved(
         'low-power-on-battery',
         enabled
-          ? "On battery power, meetings are recorded only — transcription and summaries wait until you're plugged in."
+          ? "On battery power, Meetings are recorded only — transcription and summaries wait until you're plugged in."
           : 'Meetings are transcribed live even on battery.',
       );
     } catch (error) {
@@ -226,7 +226,7 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
 
       <SettingsSection
         title="Recording"
-        description="What Nixon does while a meeting is being recorded, and right after it ends."
+        description="What Nixon does while a Meeting is being recorded, and right after it ends."
       >
         <SettingsGroup>
           {/* Live transcription toggle (specs/0029 WS7.2). Off = record-only mode:
@@ -237,9 +237,9 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
             description={
               <>
                 Show a live transcript while you record. Turning this off saves CPU and
-                battery — audio is still recorded, and the meeting is transcribed later
+                battery — audio is still recorded, and the Meeting is transcribed later
                 (automatically before a summary, or with &quot;Transcribe now&quot; on the
-                meeting page).
+                Meeting page).
               </>
             }
             control={
@@ -262,7 +262,7 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
               <>
                 When on battery, record audio but defer transcription and summaries until
                 you&apos;re back on power, and keep the animations still. You can override
-                per meeting while recording.
+                per Meeting while recording.
               </>
             }
             control={
@@ -290,13 +290,13 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
           {/* specs/0074 W5: named for what it does, not one app. The stored key and the
               `api_*_zoom_auto_detect` commands keep their names (on-disk compatibility). */}
           <SettingsRow
-            label="Detect meetings"
+            label="Detect Meetings"
             description="When a Zoom, Teams or Google Meet call starts, offer to record it."
             control={
               <Switch
                 checked={zoomAutoDetect}
                 onCheckedChange={handleZoomAutoDetectToggle}
-                aria-label="Detect meetings"
+                aria-label="Detect Meetings"
               />
             }
           />
@@ -333,7 +333,7 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
           Transcripts, notes, summaries and speaker names are never deleted. Speaker
           voiceprints are numeric voice signatures that contain no audio: they can&apos;t be
           played back or turned back into speech, and this setting doesn&apos;t affect them.
-          Once a meeting&apos;s audio is gone you can still rename and reassign its speakers,
+          Once a Meeting&apos;s audio is gone you can still rename and reassign its speakers,
           but you can&apos;t re-transcribe it or identify its speakers again.
         </SettingsNote>
       </SettingsSection>

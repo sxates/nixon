@@ -121,7 +121,7 @@ export function autoSummarySkipToast(
       return {
         title: 'Processing deferred',
         description:
-          'This meeting still needs processing. Use "Process now" on the transcript panel, or it will run automatically when back on power.',
+          'This Meeting still needs processing. Use "Process now" on the transcript panel, or it will run automatically when back on power.',
       };
     case 'deferred-processing':
       // The immediate go-live pipeline is already running (its banner shows
@@ -131,12 +131,12 @@ export function autoSummarySkipToast(
       return {
         title: 'Auto-summary is off',
         description:
-          'Turn on "Summarize automatically when a meeting ends" in Settings → Recording.',
+          'Turn on "Summarize automatically when a Meeting ends" in Settings → Recording.',
       };
     case 'empty-transcript':
       return {
         title: 'Auto-summary skipped: transcript is empty',
-        description: 'Nothing was transcribed for this meeting.',
+        description: 'Nothing was transcribed for this Meeting.',
       };
     case 'no-model':
       return {

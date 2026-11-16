@@ -112,7 +112,7 @@ export function MonthCalendar({
         if (!cancelled) setMeetings(Array.isArray(rows) ? rows : []);
       } catch (err) {
         console.error('Failed to load meetings for the month:', err);
-        if (!cancelled) setError('Could not load this month’s meetings.');
+        if (!cancelled) setError('Could not load this month’s Meetings.');
       } finally {
         if (!cancelled) setIsLoading(false);
       }
@@ -136,7 +136,7 @@ export function MonthCalendar({
         (item): DayEntry => ({
           kind: 'event',
           id: `${item.id}|${item.startTime}`,
-          title: item.title?.trim() || 'Untitled meeting',
+          title: item.title?.trim() || 'Untitled Meeting',
           start: item.startTime,
           item,
         }),
@@ -307,7 +307,7 @@ export function MonthCalendar({
           </h3>
           {selected.length === 0 ? (
             <p className="u-meta px-1 py-2">
-              {events ? 'No meetings this day.' : 'No meetings recorded this day.'}
+              {events ? 'No Meetings this day.' : 'No Meetings recorded this day.'}
             </p>
           ) : (
             <div className="flex flex-col gap-0.5">
@@ -338,7 +338,7 @@ export function MonthCalendar({
 
       {!isLoading && !error && !selected && byDay.size === 0 && (
         <p className="flex-shrink-0 py-4 text-center text-sm text-muted-foreground">
-          {events ? 'No meetings' : 'No recordings'} in {monthLabel(year, monthIndex)}.
+          {events ? 'No Meetings' : 'No recordings'} in {monthLabel(year, monthIndex)}.
         </p>
       )}
     </div>

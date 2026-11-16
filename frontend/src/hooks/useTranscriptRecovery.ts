@@ -145,7 +145,7 @@ export function useTranscriptRecovery(): UseTranscriptRecoveryReturn {
       // 2. Load all transcripts
       const transcripts = await loadMeetingTranscripts(meetingId);
       if (transcripts.length === 0) {
-        throw new Error('No transcripts found for this meeting');
+        throw new Error('No transcripts found for this Meeting');
       }
 
       // 3. Check for folder path
@@ -215,7 +215,7 @@ export function useTranscriptRecovery(): UseTranscriptRecoveryReturn {
       } catch (error) {
         console.warn('Failed to apply pinned summary language to recovered meeting:', error);
         toast.warning('Could not apply default summary language', {
-          description: 'The recovered meeting was saved, but the default summary language was not applied.',
+          description: 'The recovered Meeting was saved, but the default summary language was not applied.',
         });
       }
 

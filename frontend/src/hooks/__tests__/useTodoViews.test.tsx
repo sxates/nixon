@@ -3,7 +3,7 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { useTodoViews } from '@/hooks/useTodoViews';
 import type { TodoRow, TodoView } from '@/types';
 
-// specs/0088 — the To-do / Inbox / Done loader. Locks: the `action-items-updated`
+// specs/0088 — the To-Do / Inbox / Done loader. Locks: the `action-items-updated`
 // refetch, that only the latest request writes state (stale-overlap guard), the
 // includeDismissed toggle, and that a failed load is surfaced rather than swallowed.
 
@@ -126,7 +126,7 @@ describe('useTodoViews', () => {
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     const { result } = renderHook(() => useTodoViews());
     await waitFor(() => expect(result.current.loaded).toBe(true));
-    expect(result.current.error).toBe('Could not load your to-do list.');
+    expect(result.current.error).toBe('Could not load your To-Do list.');
 
     fail = false;
     await act(async () => result.current.reload());

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render } from '@testing-library/react';
 
-// `/meetings` (the old All meetings page) now redirects to the Meetings page at `/`,
+// `/meetings` (the old All Meetings page) now redirects to the Meetings page at `/`,
 // keeping its query and defaulting to the List view it used to open on.
 
 const { replace } = vi.hoisted(() => ({ replace: vi.fn() }));

@@ -82,7 +82,7 @@ export function NavRow({
         <Badge
           tone="brand"
           data-sidebar-badge
-          title={`${badge} in your inbox`}
+          title={`${badge} in your Inbox`}
           className={collapsed ? 'absolute right-2.5 top-1 px-1 py-0' : 'mr-3.5'}
         >
           {badge}

@@ -224,7 +224,7 @@ pub async fn add_manual_entry(
         .fetch_optional(pool)
         .await?;
     if exists.is_none() {
-        return Err(anyhow!("That topic no longer exists."));
+        return Err(anyhow!("That Topic no longer exists."));
     }
     let id = new_id("te");
     let json = to_json(&mint_all(body))?;

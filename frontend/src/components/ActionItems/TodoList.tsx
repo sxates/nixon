@@ -12,15 +12,13 @@
  */
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { DeckIcon } from '@/components/ui/deck-icon';
-import { IconButton } from '@/components/ui/icon-button';
-import { GripVertical } from '@/components/ui/icons';
 import { REORDER_ATTR, useDragReorder } from '@/hooks/useDragReorder';
 import { moveToIndex, useTodoListKeys, type Highlight } from '@/hooks/useTodoListKeys';
 import { adoptedFromName } from '@/lib/action-items';
 import { cn } from '@/lib/utils';
 import type { ActionItem, ActionItemStatus, TodoRow } from '@/types';
 import type { MentionTopic } from './MentionInput';
+import { ReorderGrip } from './ReorderGrip';
 import { TodoListRow, todoGrid, todoRowDomId } from './TodoListRow';
 
 export interface TodoListProps {
@@ -47,6 +45,15 @@ export interface TodoListProps {
   reorder?: (ids: string[]) => void;
   /** A ticked-off row's dismiss action (a topic's "Dismiss from this topic"). */
   onDismissDone?: (item: ActionItem) => void;
+  /** Two-line rows with no column header, for a half-width card (see `TodoListRow`). */
+  compact?: boolean;
+  /**
+   * A drag released outside this list's rows (another To-do section, specs/0090). Return
+   * true when handled. Needs `reorder` (the grip only shows with it).
+   */
+  onDropOutside?: (draggedId: string, target: HTMLElement | null) => boolean;
+  /** The Item / Due column header (default on; grouped sections show it once, specs/0090). */
+  columnHeader?: boolean;
   /** Extra classes on the listbox. */
   className?: string;
 }
@@ -66,6 +73,9 @@ export function TodoList({
   nameById,
   topics,
   showTopic: showTopicProp,
+  compact = false,
+  columnHeader = true,
+  onDropOutside,
   onSetStatus,
   onCommitEdit,
   onSetDueDate,
@@ -78,7 +88,7 @@ export function TodoList({
   className,
 }: TodoListProps) {
   const ids = rows.map((r) => r.id);
-  const { draggingId, overId, gripProps } = useDragReorder(ids, reorder ?? NO_REORDER);
+  const { draggingId, overId, gripProps } = useDragReorder(ids, reorder ?? NO_REORDER, { onDropOutside });
 
   const listRef = useRef<HTMLDivElement>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -139,20 +149,7 @@ export function TodoList({
   });
 
   const grip = (id: string): ReactNode =>
-    reorder ? (
-      <IconButton
-        variant="ghost"
-        label="Drag to reorder"
-        {...gripProps(id)}
-        icon={<DeckIcon icon={GripVertical} size={14} />}
-        // A narrow grip in the row's gutter, not a 28px key: it shows on row hover and
-        // reads as a handle, not a button.
-        className={cn(
-          'h-[18px] w-4 cursor-grab touch-none text-muted-foreground/40 opacity-0 transition-opacity hover:bg-transparent hover:text-muted-foreground focus-visible:opacity-100 group-hover:opacity-100 active:cursor-grabbing',
-          draggingId === id && 'opacity-100',
-        )}
-      />
-    ) : undefined;
+    reorder ? <ReorderGrip {...gripProps(id)} dragging={draggingId === id} /> : undefined;
 
   return (
     <div
@@ -164,12 +161,14 @@ export function TodoList({
       aria-activedescendant={selectedId ? todoRowDomId(selectedId) : undefined}
       onKeyDown={onKeyDown}
     >
-      <div className={cn(todoGrid(showTopic), 'px-2 pb-1')} aria-hidden>
-        <span />
-        <span className="u-section-label-sm">Item</span>
-        {showTopic ? <span className="u-section-label-sm">Topic</span> : null}
-        <span className="u-section-label-sm">Due</span>
-      </div>
+      {!compact && columnHeader && (
+        <div className={cn(todoGrid(showTopic), 'px-2 pb-1')} aria-hidden>
+          <span />
+          <span className="u-section-label-sm">Item</span>
+          {showTopic ? <span className="u-section-label-sm">Topic</span> : null}
+          <span className="u-section-label-sm">Due</span>
+        </div>
+      )}
       {rows.map((item) => (
         <div
           key={item.id}
@@ -200,6 +199,7 @@ export function TodoList({
             }}
             topics={topics}
             showTopic={showTopic}
+            compact={compact}
             onOpenTopic={onOpenTopic}
             onCancelEdit={endEdit}
             onToggleHighlight={(row, color) => onToggleHighlight(row.id, color)}

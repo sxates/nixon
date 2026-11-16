@@ -125,7 +125,7 @@ describe('SaveLocationRow — Change… moves the recordings (specs/0073)', () =
 
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByText('Move your recordings?')).toBeInTheDocument();
-    expect(dialog).toHaveTextContent('40 meetings, 12.3 GB, will move to ~/Recordings.');
+    expect(dialog).toHaveTextContent('40 Meetings, 12.3 GB, will move to ~/Recordings.');
     expect(dialog).not.toHaveTextContent(/only new/i);
     const buttons = within(dialog)
       .getAllByRole('button')

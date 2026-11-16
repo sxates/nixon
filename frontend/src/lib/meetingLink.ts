@@ -57,7 +57,7 @@ export async function openMeetingMoment(
   try {
     const target = await invoke<LinkTarget>('api_resolve_meeting_link', { meetingId, t });
     if (!target.exists) {
-      toast.error("That meeting isn't in Nixon anymore.");
+      toast.error("That Meeting isn't in Nixon anymore.");
       return;
     }
     const id = encodeURIComponent(meetingId);

@@ -20,6 +20,7 @@ import { ConfigProvider } from '@/contexts/ConfigContext'
 import { OnboardingProvider } from '@/contexts/OnboardingContext'
 import { WrapUpEffects } from '@/hooks/useWrapUpEffects'
 import { DeepLinkListener } from '@/components/DeepLinkListener'
+import { NavHistoryTracker } from '@/components/NavHistoryTracker'
 import { ImportAudioDialog, ImportDropOverlay } from '@/components/ImportAudio'
 import { DeferredBacklogProvider } from '@/contexts/DeferredBacklogProvider'
 import { QueueOpenProvider } from '@/contexts/QueueOpenContext'
@@ -307,6 +308,8 @@ export default function RootLayout({
                             <WrapUpEffects />
                             {/* specs/0087: nixon://meeting links open that meeting. Navigation only. */}
                             <DeepLinkListener />
+                            {/* In-app history for every Back button (hooks/useBack). */}
+                            <NavHistoryTracker />
                               <PermissionsModalProvider>
                               <ImportDialogProvider onOpen={handleOpenImportDialog}>
                                 {/* specs/0061 W1 Task 2 — AppShell owns the showOnboarding ternary

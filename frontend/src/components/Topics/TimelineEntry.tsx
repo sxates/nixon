@@ -72,9 +72,9 @@ export function TimelineEntry({ entry, onChanged }: TimelineEntryProps) {
   };
 
   const source = entry.sourceDeletedAt ? (
-    <span className="text-meta text-muted-foreground">Source meeting deleted</span>
+    <span className="text-meta text-muted-foreground">Source Meeting deleted</span>
   ) : meetingId ? (
-    <MeetingLink meetingId={meetingId} title={entry.meetingTitle?.trim() || 'Untitled meeting'} />
+    <MeetingLink meetingId={meetingId} title={entry.meetingTitle?.trim() || 'Untitled Meeting'} />
   ) : null;
 
   const menu = (
@@ -95,7 +95,7 @@ export function TimelineEntry({ entry, onChanged }: TimelineEntryProps) {
       open={confirmDelete}
       onOpenChange={setConfirmDelete}
       title="Delete this entry?"
-      body="It comes off the timeline. The meeting itself isn't touched."
+      body="It comes off the timeline. The Meeting itself isn't touched."
       confirmLabel="Delete entry"
       busy={busy === 'delete'}
       onConfirm={() => run('delete', () => deleteTopicEntry(entry.id), 'Could not delete the entry')}
@@ -122,7 +122,7 @@ export function TimelineEntry({ entry, onChanged }: TimelineEntryProps) {
           }
         >
           {busy === 'rewrite' ? <Spinner /> : <DeckIcon icon={Sparkles} size={14} />}
-          Rewrite from meeting
+          Rewrite from Meeting
         </Button>
       ) : null}
       {menu}
@@ -135,7 +135,7 @@ export function TimelineEntry({ entry, onChanged }: TimelineEntryProps) {
         {date}
         {source}
         <span className="min-w-0 flex-1 truncate text-meta text-muted-foreground">
-          No discussion of this topic
+          No discussion of this Topic
         </span>
         <div className="flex items-center gap-1">{actions}</div>
         {deleteDialog}

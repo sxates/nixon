@@ -387,6 +387,55 @@ impl ActionItemsRepository {
         Ok(written)
     }
 
+    /// Reorder a SUBSET (a topic's card, a `/tasks` group; specs/0090) by swapping the
+    /// `sort_order` slots it already holds: read the ids' values, sort them ascending, write
+    /// the i-th to the i-th id, so items outside the subset never move. A NULL slot first
+    /// gets `MAX + 1, MAX + 2, …` in the given order. Unknown or repeated ids are an error
+    /// and nothing is written. Like [`reorder`](Self::reorder), view-only: no `user_edited`.
+    pub async fn reorder_within(pool: &SqlitePool, ordered_ids: &[String]) -> anyhow::Result<u64> {
+        let mut tx = pool.begin().await?;
+        let mut slots = Vec::with_capacity(ordered_ids.len());
+        for (i, id) in ordered_ids.iter().enumerate() {
+            if ordered_ids[..i].contains(id) {
+                anyhow::bail!("That To-Do was listed twice in the new order.");
+            }
+            let row: Option<Option<i64>> =
+                sqlx::query_scalar("SELECT sort_order FROM action_items WHERE id = ?")
+                    .bind(id)
+                    .fetch_optional(&mut *tx)
+                    .await?;
+            let Some(slot) = row else {
+                anyhow::bail!("A To-Do in that list no longer exists. Refresh and try again.");
+            };
+            slots.push(slot);
+        }
+        let mut next: i64 =
+            sqlx::query_scalar("SELECT COALESCE(MAX(sort_order), -1) + 1 FROM action_items")
+                .fetch_one(&mut *tx)
+                .await?;
+        let mut values: Vec<i64> = slots
+            .into_iter()
+            .map(|s| {
+                s.unwrap_or_else(|| {
+                    next += 1;
+                    next - 1
+                })
+            })
+            .collect();
+        values.sort_unstable();
+        let mut written = 0;
+        for (id, value) in ordered_ids.iter().zip(values) {
+            written += sqlx::query("UPDATE action_items SET sort_order = ? WHERE id = ?")
+                .bind(value)
+                .bind(id)
+                .execute(&mut *tx)
+                .await?
+                .rows_affected();
+        }
+        tx.commit().await?;
+        Ok(written)
+    }
+
     /// Bulk status change over a [`BulkStatusFilter`] set in ONE transaction (specs/0038
     /// WS1.e). Primary use: `status = 'dismissed'` to clear items owned by other people.
     /// Returns the affected row count (for an Undo toast).

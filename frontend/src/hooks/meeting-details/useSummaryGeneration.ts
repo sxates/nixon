@@ -433,9 +433,9 @@ export function useSummaryGeneration({
   const transcribeMeetingAudio = useCallback(
     async (meetingId: string, folderPath: string): Promise<boolean> => {
       const toastId = `deferred-transcription-${meetingId}`;
-      toast.loading('Transcribing meeting audio…', {
+      toast.loading('Transcribing Meeting audio…', {
         id: toastId,
-        description: 'This meeting was recorded without live transcription.',
+        description: 'This Meeting was recorded without live transcription.',
       });
 
       let resolveCompletion: (ok: boolean) => void = () => {};
@@ -452,7 +452,7 @@ export function useSummaryGeneration({
             (event) => {
               if (event.payload.meeting_id !== meetingId) return;
               toast.loading(
-                `Transcribing meeting audio… ${Math.round(event.payload.progress_percentage)}%`,
+                `Transcribing Meeting audio… ${Math.round(event.payload.progress_percentage)}%`,
                 { id: toastId, description: event.payload.message },
               );
             },
@@ -466,7 +466,7 @@ export function useSummaryGeneration({
         unlisteners.push(
           await listen<{ meeting_id: string; error: string }>('retranscription-error', (event) => {
             if (event.payload.meeting_id !== meetingId) return;
-            toast.error('Could not transcribe the meeting audio', {
+            toast.error('Could not transcribe the Meeting audio', {
               description: event.payload.error,
             });
             resolveCompletion(false);
@@ -484,7 +484,7 @@ export function useSummaryGeneration({
         return await completion;
       } catch (error) {
         console.error('Failed to start deferred transcription:', error);
-        toast.error('Could not transcribe the meeting audio', {
+        toast.error('Could not transcribe the Meeting audio', {
           description: error instanceof Error ? error.message : String(error),
         });
         return false;

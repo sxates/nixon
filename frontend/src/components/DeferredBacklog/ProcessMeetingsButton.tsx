@@ -27,7 +27,7 @@ export function ProcessMeetingsButton() {
   ) : (
     <Button variant="outline" onClick={startNow}>
       <StatusDot size={6} tone="brand" />
-      Process {view.pendingCount} meeting{view.pendingCount === 1 ? '' : 's'}
+      Process {view.pendingCount} Meeting{view.pendingCount === 1 ? '' : 's'}
     </Button>
   );
 }

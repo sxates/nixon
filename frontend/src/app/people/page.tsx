@@ -51,7 +51,7 @@ function PersonRow({
 }) {
   const [saving, setSaving] = useState(false);
   const [starSaving, setStarSaving] = useState(false);
-  const name = person.displayName?.trim() || 'Unnamed person';
+  const name = person.displayName?.trim() || 'Unnamed Person';
   // Role + email rendered as a single muted subline ("Role · email").
   const subParts = [person.role?.trim(), person.email?.trim()].filter(
     (s): s is string => !!s,
@@ -124,7 +124,7 @@ function PersonRow({
         // Starred rows keep the filled star visible; unstarred reveal it on hover.
         <IconButton
           variant="ghost"
-          label={person.starred ? 'Unstar person' : 'Star person'}
+          label={person.starred ? 'Unstar Person' : 'Star Person'}
           aria-pressed={person.starred}
           onClick={() => void handleToggleStar()}
           disabled={starSaving}
@@ -183,7 +183,7 @@ export default function PeoplePage() {
       setError(null);
     } catch (err) {
       console.error('Failed to load people:', err);
-      setError('Could not load your people.');
+      setError('Could not load your People.');
     } finally {
       setIsLoading(false);
     }
@@ -237,13 +237,13 @@ export default function PeoplePage() {
         title="People"
         subtitle={
           hasPeople
-            ? `${people.length} ${people.length === 1 ? 'person' : 'people'}`
-            : 'Remember the people you meet with, across meetings'
+            ? `${people.length} ${people.length === 1 ? 'Person' : 'People'}`
+            : 'Remember the people you meet with, across Meetings'
         }
         actions={
           hasPeople ? (
             <Button variant="brand" onClick={handleAdd} className="flex-shrink-0">
-              Add person
+              Add Person
             </Button>
           ) : undefined
         }
@@ -260,9 +260,9 @@ export default function PeoplePage() {
             <Input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search people by name, role, or email…"
+              placeholder="Search People by name, role, or email…"
               className="pl-9"
-              aria-label="Search people"
+              aria-label="Search People"
             />
           </div>
         </div>
@@ -270,7 +270,7 @@ export default function PeoplePage() {
 
       <div className={cn('flex-1 overflow-y-auto pb-12', PAGE_GUTTER)}>
         {isLoading ? (
-          <PageLoading fill="pane" label="Loading people…" />
+          <PageLoading fill="pane" label="Loading People…" />
         ) : error ? (
           <div className={cn('mx-auto', PAGE_CONTENT_WIDTH)}>
             <Callout tone="error">{error}</Callout>
@@ -281,7 +281,7 @@ export default function PeoplePage() {
               noMatches ? (
                 <div className="flex h-40 flex-col items-center justify-center text-center">
                   <p className="text-sm text-muted-foreground">
-                    No people match “{query.trim()}”.
+                    No People match “{query.trim()}”.
                   </p>
                 </div>
               ) : (
@@ -304,11 +304,11 @@ export default function PeoplePage() {
             ) : (
               <EmptyState
                 className="h-[40vh]"
-                title="No people yet"
+                title="No People yet"
                 body="Add the people you meet with, then attach them to speakers in your transcripts."
                 action={
                   <Button variant="brand" onClick={handleAdd}>
-                    Add a person
+                    Add a Person
                   </Button>
                 }
               />

@@ -36,12 +36,12 @@ describe('TodoList inline edit', () => {
     const title = screen.getByRole('button', { name: 'Send the deck to Maya' });
     fireEvent.click(title); // select
     fireEvent.click(screen.getByRole('button', { name: 'Send the deck to Maya' })); // edit
-    const field = screen.getByLabelText('Edit to-do');
+    const field = screen.getByLabelText('Edit To-Do');
     field.focus();
     fireEvent.mouseDown(field);
     fireEvent.click(field);
-    expect(screen.getByLabelText('Edit to-do')).toBeInTheDocument();
-    expect(document.activeElement).toBe(screen.getByLabelText('Edit to-do'));
+    expect(screen.getByLabelText('Edit To-Do')).toBeInTheDocument();
+    expect(document.activeElement).toBe(screen.getByLabelText('Edit To-Do'));
     expect(onCommitEdit).not.toHaveBeenCalled();
   });
 });

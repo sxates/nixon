@@ -84,7 +84,7 @@ async fn insert_link(
         .fetch_optional(pool)
         .await?;
     if exists.is_none() {
-        return Err(anyhow!("That topic no longer exists."));
+        return Err(anyhow!("That Topic no longer exists."));
     }
     sqlx::query(
         "INSERT OR IGNORE INTO topic_links (topic_id, kind, ref, title, created_at)
@@ -167,7 +167,7 @@ pub async fn link_series_of(
             Some(title.clone()).filter(|t| !t.is_empty()),
         ),
         None if !title.is_empty() => (LinkKind::Title, title, None),
-        None => return Err(anyhow!("This meeting isn't part of a series.")),
+        None => return Err(anyhow!("This Meeting isn't part of a Series.")),
     };
     insert_link(pool, topic_id, kind, &ref_, stored.as_deref()).await?;
     build(pool, topic_id, kind, &ref_, stored).await
@@ -207,7 +207,8 @@ pub async fn topics_for_meeting(
 ) -> Result<Vec<Topic>> {
     Ok(sqlx::query_as::<_, Topic>(&format!(
         "SELECT DISTINCT t.id, t.name, t.description, t.status, t.notes_markdown, t.notes_json,
-                t.created_at, t.updated_at, t.closed_at
+                t.created_at, t.updated_at, t.closed_at, t.sort_order, t.starred,
+                t.hide_from_todo
          FROM topics t
          JOIN topic_links tl ON tl.topic_id = t.id
          JOIN meetings m ON m.id = ?1

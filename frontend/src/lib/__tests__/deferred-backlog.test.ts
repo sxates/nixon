@@ -164,7 +164,7 @@ describe('enqueue is never a silent no-op (spec 0045 symptom 7)', () => {
   });
 });
 
-// spec 0051 final review, Finding 1: "does the backlog already own this meeting?" is
+// spec 0051 final review, Finding 1: "does the backlog already own this Meeting?" is
 // asked by the meeting-details auto-summary gate AND TranscriptButtonGroup. One shared
 // predicate so a 'defer' marker is never read as "waiting" while a pipeline is running.
 describe('isMeetingInFlight', () => {

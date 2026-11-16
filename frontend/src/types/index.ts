@@ -430,6 +430,12 @@ export interface Topic {
   createdAt: string;
   updatedAt: string;
   closedAt: string | null;
+  /** Manual order on the Topics page (specs/0090); null sorts last. Open and archived share it. */
+  sortOrder: number | null;
+  /** Listed in the sidebar while open (specs/0090). */
+  starred: boolean;
+  /** "Keep off the To-do list": its open to-dos show on the topic page only (specs/0090). */
+  hideFromTodo: boolean;
 }
 
 /** Index row (`api_list_topics`). */
@@ -441,6 +447,9 @@ export interface TopicSummary {
   lastActivity: string | null;
   pendingCount: number;
   meetingCount: number;
+  sortOrder: number | null;
+  starred: boolean;
+  hideFromTodo: boolean;
 }
 
 export interface TopicLink {

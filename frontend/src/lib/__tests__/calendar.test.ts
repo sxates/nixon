@@ -125,7 +125,7 @@ describe('findAgendaItemForOccurrence', () => {
     seriesKey: 'series-1',
   };
 
-  it('prefers the item already linked to this meeting row (recorded occurrence)', () => {
+  it('prefers the item already linked to this Meeting row (recorded occurrence)', () => {
     const linked = item({ id: 'meeting-1', meetingId: 'meeting-1', zoomUrl: 'https://zoom.us/j/999' });
     const other = item({ id: 'evt-1' });
     expect(findAgendaItemForOccurrence([other, linked], ref)?.zoomUrl).toBe(

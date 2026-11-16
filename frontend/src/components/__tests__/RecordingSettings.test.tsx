@@ -155,7 +155,7 @@ describe('RecordingSettings — start-time-only setting notices (spec 0051 WS3)'
     await waitFor(() => expect(toastSuccess).toHaveBeenCalledTimes(1));
     expect(toastSuccess).toHaveBeenNthCalledWith(1, 'Preference saved', {
       description:
-        'Recording only — meetings are transcribed later (automatically before a summary, or with “Transcribe now”).',
+        'Recording only — Meetings are transcribed later (automatically before a summary, or with “Transcribe now”).',
     });
 
     // Click again to turn it back ON.
@@ -184,7 +184,7 @@ describe('RecordingSettings — start-time-only setting notices (spec 0051 WS3)'
     await waitFor(() => expect(toastSuccess).toHaveBeenCalledTimes(2));
     expect(toastSuccess).toHaveBeenNthCalledWith(2, 'Preference saved', {
       description:
-        "On battery power, meetings are recorded only — transcription and summaries wait until you're plugged in.",
+        "On battery power, Meetings are recorded only — transcription and summaries wait until you're plugged in.",
     });
 
     expect(toastInfo).not.toHaveBeenCalled();
@@ -207,7 +207,7 @@ describe('RecordingSettings — settings hygiene (specs/0061 W6)', () => {
   // one control for that setting exists app-wide, and it is not here.
   it('has no second auto-summary switch, and no signpost to one', async () => {
     await renderSettings();
-    expect(screen.queryByLabelText('Summarize automatically when a meeting ends')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Summarize automatically when a Meeting ends')).not.toBeInTheDocument();
     expect(screen.queryByText(/configured under Summary/i)).not.toBeInTheDocument();
   });
 
@@ -363,7 +363,7 @@ describe('RecordingSettings — audio storage copy (specs/0072 W3)', () => {
   it('says audio goes only after processing, never at stop, and explains voiceprints', async () => {
     await renderSettings();
     expect(
-      screen.getByText(/kept until Nixon has transcribed the meeting and identified the speakers/),
+      screen.getByText(/kept until Nixon has transcribed the Meeting and identified the speakers/),
     ).toBeInTheDocument();
     expect(screen.queryByText(/as soon as a recording stops/i)).toBeNull();
     expect(screen.getByText(/numeric voice signatures that contain no audio/)).toBeInTheDocument();
@@ -377,14 +377,14 @@ describe('RecordingSettings — meeting detection (specs/0074 W5)', () => {
   });
 
   // Named for what it does rather than one app; the stored key keeps its old name.
-  it('is called "Detect meetings" and still saves to the same key', async () => {
+  it('is called "Detect Meetings" and still saves to the same key', async () => {
     await renderSettings();
     expect(screen.queryByText(/Auto-detect Zoom/)).not.toBeInTheDocument();
     // specs/0074 W6: Teams and Google Meet are detected too, and the copy says so.
     expect(
       screen.getByText('When a Zoom, Teams or Google Meet call starts, offer to record it.'),
     ).toBeInTheDocument();
-    fireEvent.click(switchForLabel('Detect meetings'));
+    fireEvent.click(switchForLabel('Detect Meetings'));
     await waitFor(() =>
       expect(invokeMock).toHaveBeenCalledWith('api_set_zoom_auto_detect', { enabled: false }),
     );

@@ -132,7 +132,7 @@ export function InlineSpeakerAssign({
             'u-speaker group -ml-1 flex items-center gap-0.5 whitespace-nowrap rounded-md px-1 py-0 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
             speakerColorClass(speakerKey),
           )}
-          title="Assign this speaker to a person"
+          title="Assign this speaker to a Person"
         >
           {speakerName}
           <DeckIcon
@@ -155,8 +155,8 @@ export function InlineSpeakerAssign({
             <PersonPicker
               query={query}
               onQueryChange={setQuery}
-              placeholder="Assign to a person…"
-              searchLabel="Search people to assign"
+              placeholder="Assign to a Person…"
+              searchLabel="Search People to assign"
               groups={[
                 ...(attendees.length > 0
                   ? [

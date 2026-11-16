@@ -3,7 +3,7 @@ import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import TaskItemPage from '@/app/tasks/item/page';
 import type { ActionItem, ActionItemDetail } from '@/types';
 
-// specs/0088 — the to-do detail page. Locks: sources listed oldest first with their context
+// specs/0088 — the To-Do detail page. Locks: sources listed oldest first with their context
 // line and a meeting link, Notes autosave (600 ms debounce, on blur, flush on unmount), the
 // "no longer exists" empty state, and the state-appropriate triage actions.
 
@@ -161,7 +161,7 @@ describe('to-do detail page', () => {
   it('unknown id shows empty state', async () => {
     stub(new Error('That action item no longer exists'));
     render(<TaskItemPage />);
-    expect(await screen.findByText('This to-do no longer exists')).toBeTruthy();
+    expect(await screen.findByText('This To-Do no longer exists')).toBeTruthy();
   });
 
   it('offers actions that match the item state', async () => {
@@ -217,7 +217,7 @@ describe('to-do detail page', () => {
   it('title editing picks a person and saves the token', async () => {
     stub(detail());
     render(<TaskItemPage />);
-    const title = (await screen.findByLabelText('To-do title')) as HTMLTextAreaElement;
+    const title = (await screen.findByLabelText('To-Do title')) as HTMLTextAreaElement;
     expect(title.value).toBe('Send the deck');
     fireEvent.change(title, { target: { value: 'Send the deck to @sa' } });
     fireEvent.click(await screen.findByText('Sam Rivera'));
@@ -272,13 +272,13 @@ describe('to-do detail page', () => {
     await act(async () => { listener!(); });
     await waitFor(() => expect(vi.mocked(toast.error)).toHaveBeenCalled());
     expect(screen.getByLabelText('Notes')).toBeTruthy();
-    expect(screen.queryByText('Could not load this to-do')).toBeNull();
+    expect(screen.queryByText('Could not load this To-Do')).toBeNull();
   });
 
   it('a due-date-only title shows the cleaned title after save', async () => {
     stub(detail(), { api_set_action_item_due_date: () => item({ dueDate: '2026-11-20' }) });
     render(<TaskItemPage />);
-    const title = (await screen.findByLabelText('To-do title')) as HTMLTextAreaElement;
+    const title = (await screen.findByLabelText('To-Do title')) as HTMLTextAreaElement;
     fireEvent.change(title, { target: { value: 'Send the deck (Nov 20)' } });
     fireEvent.keyDown(title, { key: 'Enter' });
     await waitFor(() => expect(title.value).toBe('Send the deck'));
@@ -287,7 +287,7 @@ describe('to-do detail page', () => {
   it('an emptied title reverts; Esc reverts an edit; Shift+Enter adds no newline', async () => {
     stub(detail());
     render(<TaskItemPage />);
-    const title = (await screen.findByLabelText('To-do title')) as HTMLTextAreaElement;
+    const title = (await screen.findByLabelText('To-Do title')) as HTMLTextAreaElement;
     fireEvent.change(title, { target: { value: '  ' } });
     fireEvent.keyDown(title, { key: 'Enter' });
     await waitFor(() => expect(title.value).toBe('Send the deck'));
@@ -304,7 +304,7 @@ describe('to-do detail page', () => {
   it('Enter then blur saves the title once', async () => {
     stub(detail());
     render(<TaskItemPage />);
-    const title = (await screen.findByLabelText('To-do title')) as HTMLTextAreaElement;
+    const title = (await screen.findByLabelText('To-Do title')) as HTMLTextAreaElement;
     fireEvent.change(title, { target: { value: 'Renamed' } });
     fireEvent.keyDown(title, { key: 'Enter' });
     fireEvent.blur(title);

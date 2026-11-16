@@ -216,7 +216,7 @@ export async function openMeetingUrl(url: string): Promise<void> {
     await invoke('open_external_url', { url });
   } catch (err) {
     console.error('[calendar] openMeetingUrl failed:', err);
-    toast.error('Could not open the meeting link', {
+    toast.error('Could not open the Meeting link', {
       description: 'Try joining from your calendar app instead.',
     });
   }
@@ -536,7 +536,7 @@ export async function joinAndRecord(
     return;
   }
 
-  const title = event.title?.trim() || 'Untitled meeting';
+  const title = event.title?.trim() || 'Untitled Meeting';
 
   // Stash FIRST (specs/0029 WS2.1) — id null until the create below resolves.
   stashPendingJoinMeeting({

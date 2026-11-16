@@ -66,21 +66,21 @@ describe('TimelineEntry', () => {
     await waitFor(() => expect(revertTopicEntry).toHaveBeenCalledWith('te-1'));
   });
 
-  it('offers Rewrite from meeting only on an unedited entry with a meeting', async () => {
+  it('offers Rewrite from Meeting only on an unedited entry with a meeting', async () => {
     const { rerender } = render(<TimelineEntry entry={entry()} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Rewrite from meeting' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Rewrite from Meeting' }));
     await waitFor(() => expect(rewriteTopicEntry).toHaveBeenCalledWith('te-1'));
     rerender(<TimelineEntry entry={entry({ editedAt: '2026-11-04T12:00:00Z' })} />);
-    expect(screen.queryByRole('button', { name: 'Rewrite from meeting' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Rewrite from Meeting' })).toBeNull();
     rerender(<TimelineEntry entry={entry({ kind: 'manual', meetingId: null, meetingTitle: null, aiBody: null })} />);
-    expect(screen.queryByRole('button', { name: 'Rewrite from meeting' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Rewrite from Meeting' })).toBeNull();
     expect(screen.getByRole('button', { name: 'Edit' })).toBeInTheDocument();
   });
 
   it('never offers Rewrite on a Mention entry: it holds a note the owner accepted', () => {
     // An accepted note has a meeting and an AI body, but rewriting it would replace the note.
     render(<TimelineEntry entry={entry({ kind: 'mention' })} />);
-    expect(screen.queryByRole('button', { name: 'Rewrite from meeting' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Rewrite from Meeting' })).toBeNull();
     expect(screen.getByRole('button', { name: 'Edit' })).toBeInTheDocument();
   });
 
@@ -93,9 +93,9 @@ describe('TimelineEntry', () => {
     expect(screen.getByText('Yours')).toHaveAttribute('data-tone', 'outline');
   });
 
-  it('shows Source meeting deleted in place of the link', () => {
+  it('shows Source Meeting deleted in place of the link', () => {
     render(<TimelineEntry entry={entry({ meetingId: null, sourceDeletedAt: '2026-11-05T12:00:00Z' })} />);
-    expect(screen.getByText('Source meeting deleted')).toBeInTheDocument();
+    expect(screen.getByText('Source Meeting deleted')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Product sync' })).toBeNull();
     expect(screen.queryByRole('button', { name: '1:15' })).toBeNull();
   });
@@ -103,18 +103,18 @@ describe('TimelineEntry', () => {
   it('renders an entry with no bullets and no decisions as one muted line', () => {
     const empty = { bullets: [], decisions: [] };
     render(<TimelineEntry entry={entry({ body: empty, aiBody: empty })} />);
-    const line = screen.getByText('No discussion of this topic');
+    const line = screen.getByText('No discussion of this Topic');
     expect(line.className).toMatch(/text-muted-foreground/);
   });
 
-  it('a No discussion row still has Edit, and Rewrite from meeting when it is a series entry', async () => {
+  it('a No discussion row still has Edit, and Rewrite from Meeting when it is a series entry', async () => {
     const empty = { bullets: [], decisions: [] };
     render(<TimelineEntry entry={entry({ body: empty, aiBody: empty })} />);
-    expect(screen.getByText('No discussion of this topic')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Rewrite from meeting' }));
+    expect(screen.getByText('No discussion of this Topic')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Rewrite from Meeting' }));
     await waitFor(() => expect(rewriteTopicEntry).toHaveBeenCalledWith('te-1'));
     fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
-    expect(screen.queryByText('No discussion of this topic')).toBeNull();
+    expect(screen.queryByText('No discussion of this Topic')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Edit' })).toBeNull();
   });
 

@@ -19,8 +19,32 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 ## [Unreleased]
 
+### Added
+
+- Arrange your Topics in the order you like by dragging them on the Topics page, and star the ones you want in the sidebar. The sidebar now lists your starred Topics, in your order. Topics that were in your sidebar before are starred for you.
+- Turn on **Group by Topic** on the To-Do page to see your list in sections, one per Topic, in your Topic order. Drag a section to reorder your Topics, drag a To-Do within a section to reorder it, or drag it onto another section to move it to that Topic.
+- Drag To-Dos into the order you want on a Topic page. Their places on your To-Do list follow, and nothing else on the list moves.
+- **Show in To-Do** on a Topic's action items lets you keep that Topic's To-Dos on its page only, off your To-Do list.
+- Pick a Topic when you add a To-Do, from the new Topic control beside Add (or in ⌘⇧T quick add).
+- **Set due date…** in a To-Do's menu opens the date picker, so you can date an item that has none.
+
+### Changed
+
+- Action items on a Topic page sit beside your notes in a narrower layout. The text uses the full width, and the due date shows underneath only when there is one.
+- The Topic header stays in place as you scroll, and archiving a Topic is now in its **…** menu.
+- Back buttons take you to the page you came from. Open a To-Do from a Topic and Back returns you to the Topic.
+- Unticked checkboxes have a stronger outline, so they're easier to see.
+- **+ Add** buttons share one dashed style throughout.
+- Meeting, Person, Series, Inbox, Topic and To-Do are now capitalized throughout the app.
+
+### Fixed
+
+- **Done** on a Topic's description now saves it, including text from **Draft from Meetings**.
+- To-Dos on a Topic page now show the name of the Person they came from instead of "Unknown".
+
 ### Internal
 
+- Spec 0090: `topics.sort_order` / `starred` / `hide_from_todo` (migration `20261116000000`), `api_reorder_topics`, and `api_reorder_action_items_within`, which reorders a subset among the global positions it already holds. Shared `useBack` history tracking, the compact `TodoList` row, and the copy rule in `docs/design-system.md`.
 - One screenshot set per release: `scripts/shots-set.sh` parks a `pnpm shots:real` capture on `shots/vX.Y.Z`; a normal release and `release.sh promote` refuse without it (`--no-shots` overrides), take nixonapp.com's images from it, and merge it into main. Replaces the screenshot freshness nudge. `publish-site.sh` gains `--shots-dir`.
 
 ## [0.18.0] - 2026-11-13

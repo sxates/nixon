@@ -87,7 +87,7 @@ export function PersonFormDialog({ open, onOpenChange, person, onSaved }: Person
       await onSaved();
     } catch (error) {
       console.error('Failed to save person:', error);
-      toast.error(isEdit ? 'Could not save this person.' : 'Could not add this person.', {
+      toast.error(isEdit ? 'Could not save this Person.' : 'Could not add this Person.', {
         description: error instanceof Error ? error.message : String(error),
       });
     } finally {
@@ -100,9 +100,9 @@ export function PersonFormDialog({ open, onOpenChange, person, onSaved }: Person
       <DialogContent className="max-w-md">
         <form onSubmit={handleSubmit}>
           <DialogHeader>
-            <DialogTitle>{isEdit ? 'Edit person' : 'Add a person'}</DialogTitle>
+            <DialogTitle>{isEdit ? 'Edit Person' : 'Add a Person'}</DialogTitle>
             <DialogDescription>
-              People are remembered across meetings, so you can attach a name to a detected speaker
+              People are remembered across Meetings, so you can attach a name to a detected speaker
               once and reuse it.
             </DialogDescription>
           </DialogHeader>
@@ -149,7 +149,7 @@ export function PersonFormDialog({ open, onOpenChange, person, onSaved }: Person
                 id="person-notes"
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                placeholder="Anything worth remembering about this person"
+                placeholder="Anything worth remembering about this Person"
                 className="min-h-[72px] resize-none"
               />
             </div>
@@ -166,7 +166,7 @@ export function PersonFormDialog({ open, onOpenChange, person, onSaved }: Person
             </Button>
             <Button type="submit" variant="brand" disabled={isSaving}>
               {isSaving && <Spinner />}
-              {isEdit ? 'Save' : 'Add person'}
+              {isEdit ? 'Save' : 'Add Person'}
             </Button>
           </DialogFooter>
         </form>

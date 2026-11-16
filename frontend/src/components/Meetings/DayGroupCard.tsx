@@ -20,7 +20,7 @@ import { cn } from '@/lib/utils';
 /** "Free", "1 meeting", "3 meetings" — the one count wording for a day. */
 export function dayCountLabel(count: number): string {
   if (count === 0) return 'Free';
-  return `${count} meeting${count === 1 ? '' : 's'}`;
+  return `${count} Meeting${count === 1 ? '' : 's'}`;
 }
 
 export function DayGroupCard({

@@ -83,7 +83,7 @@ pub fn skip_toast(reason: SkipReason) -> Option<Toast> {
         ),
         SkipReason::EmptyTranscript => (
             "Auto-summary skipped: transcript is empty",
-            "Nothing was transcribed for this meeting.",
+            "Nothing was transcribed for this Meeting.",
         ),
         SkipReason::NoModel => (
             "Auto-summary skipped: no AI model configured",

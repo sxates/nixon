@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { DeckIcon } from '@/components/ui/deck-icon';
 import { IconButton } from '@/components/ui/icon-button';
-import { X } from '@/components/ui/icons';
+import { Plus, X } from '@/components/ui/icons';
 import { Input } from '@/components/ui/input';
 import { SettingsGroup, SettingsRow, SettingsSection } from '@/components/ui/settings';
 
@@ -146,15 +146,16 @@ export function OwnerEmailSettings() {
             />
             <Button
               type="submit"
-              variant="outline"
+              variant="dashed"
               size="sm"
               disabled={addingOwnerEmail || !ownerEmailInput.trim()}
             >
+              <Plus />
               Add
             </Button>
           </form>
           <p className="mt-2 text-sm text-muted-foreground">
-            Removing an address stops future auto-matching; it won&apos;t undo people
+            Removing an address stops future auto-matching; it won&apos;t undo People
             already merged into you.
           </p>
         </SettingsRow>

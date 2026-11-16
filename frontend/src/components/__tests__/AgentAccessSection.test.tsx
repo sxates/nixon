@@ -52,11 +52,11 @@ describe('AgentAccessSection', () => {
   it('renders_off_by_default', async () => {
     render(<AgentAccessSection />);
     expect(screen.getByText('Agent access')).toBeInTheDocument();
-    const sw = await screen.findByRole('switch', { name: 'Let Claude read your meetings' });
+    const sw = await screen.findByRole('switch', { name: 'Let Claude read your Meetings' });
     await waitFor(() => expect(sw).not.toBeDisabled());
     expect(sw).not.toBeChecked();
     expect(screen.getByText(/sent to Anthropic/)).toBeInTheDocument();
-    expect(screen.getByText('Nothing has read your meetings yet.')).toBeInTheDocument();
+    expect(screen.getByText('Nothing has read your Meetings yet.')).toBeInTheDocument();
   });
 
   it('toggle_on_calls_set_enabled_and_shows_registered', async () => {
@@ -105,7 +105,7 @@ describe('AgentAccessSection', () => {
       'href',
       '/meeting-details?id=m1',
     );
-    const deleted = screen.getByText('Deleted meeting');
+    const deleted = screen.getByText('Deleted Meeting');
     expect(deleted.closest('a')).toBeNull();
   });
 
@@ -150,7 +150,7 @@ describe('AgentAccessSection', () => {
     log = [entry({})];
     render(<AgentAccessSection />);
     fireEvent.click(await screen.findByRole('button', { name: 'Clear log' }));
-    expect(await screen.findByText('Nothing has read your meetings yet.')).toBeInTheDocument();
+    expect(await screen.findByText('Nothing has read your Meetings yet.')).toBeInTheDocument();
     expect(invoke).toHaveBeenCalledWith('api_agent_access_clear_log');
   });
 
@@ -164,7 +164,7 @@ describe('AgentAccessSection', () => {
 
   it('no_full_log_link_when_the_log_is_empty', async () => {
     render(<AgentAccessSection />);
-    await screen.findByText('Nothing has read your meetings yet.');
+    await screen.findByText('Nothing has read your Meetings yet.');
     expect(screen.queryByRole('button', { name: 'Open full log' })).not.toBeInTheDocument();
   });
 

@@ -103,7 +103,7 @@ export function RestartConfirmProvider({ children }: { children: React.ReactNode
                 : staged
                   ? `Nixon ${staged.version}. `
                   : ''}
-              Nixon will close and reopen; your meetings, notes and settings stay as they are.
+              Nixon will close and reopen; your Meetings, notes and settings stay as they are.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

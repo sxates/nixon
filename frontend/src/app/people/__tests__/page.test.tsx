@@ -64,7 +64,7 @@ describe('PeoplePage (specs/0038 dogfood feedback #3)', () => {
     render(<PeoplePage />);
 
     await screen.findByText('Alice Chen');
-    const star = screen.getByRole('button', { name: /Star person/i });
+    const star = screen.getByRole('button', { name: /Star Person/i });
     fireEvent.click(star);
 
     // The star fires its own IPC and must NOT trigger navigation.

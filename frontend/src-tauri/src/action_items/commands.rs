@@ -435,6 +435,22 @@ pub async fn api_reorder_action_items<R: Runtime>(
     Ok(written)
 }
 
+/// Reorder a subset (a topic's card, a `/tasks` group; specs/0090) within the `sort_order`
+/// slots it already holds, so other items keep their places. Unknown ids are an error and
+/// nothing is written. Returns the number of rows written.
+#[tauri::command]
+pub async fn api_reorder_action_items_within<R: Runtime>(
+    app: AppHandle<R>,
+    ordered_ids: Vec<String>,
+) -> Result<u64, String> {
+    let state = app.state::<AppState>();
+    let written = ActionItemsRepository::reorder_within(state.db_manager.pool(), &ordered_ids)
+        .await
+        .map_err(|e| format!("Couldn't reorder those To-Dos: {e:#}"))?;
+    emit_updated(&app, "");
+    Ok(written)
+}
+
 /// How `api_bulk_set_action_item_status` selects its target rows (specs/0038 WS1.e). A
 /// single tagged object over IPC:
 /// - `{ "mode": "person", "personId": "person-…" }` — every OPEN item assigned to that

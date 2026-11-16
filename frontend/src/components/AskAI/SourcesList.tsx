@@ -17,10 +17,10 @@ function SourceRow({ source, muted }: { source: SourceMeeting; muted: boolean })
   const router = useRouter();
   return (
     <LinkRow
-      title={source.title?.trim() || 'Untitled meeting'}
+      title={source.title?.trim() || 'Untitled Meeting'}
       meta={formatMeetingDate(source.createdAt) || undefined}
       muted={muted}
-      hint="Open this meeting"
+      hint="Open this Meeting"
       onClick={() => router.push(`/meeting-details?id=${source.meetingId}`)}
     />
   );

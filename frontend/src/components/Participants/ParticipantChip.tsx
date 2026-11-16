@@ -77,7 +77,7 @@ export function ParticipantChip({
               )}
             </button>
           </TooltipTrigger>
-          <TooltipContent side="bottom">Edit this person</TooltipContent>
+          <TooltipContent side="bottom">Edit this Person</TooltipContent>
         </Tooltip>
 
         {/* Secondary actions: "This is me" lives in an overflow menu so the primary
@@ -101,7 +101,7 @@ export function ParticipantChip({
         <IconButton
           variant="ghost"
           side="bottom"
-          label="Remove from this meeting (stays in People)"
+          label="Remove from this Meeting (stays in People)"
           aria-label={`Remove ${name}`}
           onClick={onRemove}
           icon={<DeckIcon icon={X} size={12} />}

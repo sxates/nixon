@@ -83,7 +83,7 @@ function SuggestionRow({
   return (
     <>
       <div className="flex min-w-0 items-baseline gap-2">
-        <MeetingLink meetingId={s.meetingId} title={s.meetingTitle?.trim() || 'Untitled meeting'} />
+        <MeetingLink meetingId={s.meetingId} title={s.meetingTitle?.trim() || 'Untitled Meeting'} />
         {s.tStart != null ? <MomentLink meetingId={s.meetingId} t={s.tStart} /> : null}
       </div>
       {revision ? (
@@ -94,7 +94,7 @@ function SuggestionRow({
       <p className={revision ? 'text-sm text-muted-foreground' : 'text-sm text-foreground'}>{s.text}</p>
       <div className="flex items-center gap-2 pt-0.5">
         <Button size="xs" variant="outline" disabled={busy} onClick={onAccept}>
-          {revision ? 'Attach note' : 'Add to topic'}
+          {revision ? 'Attach note' : 'Add to Topic'}
         </Button>
         <Button size="xs" variant="ghost" disabled={busy} onClick={onDismiss}>
           Dismiss

@@ -20,7 +20,7 @@ export function SearchMeetingsButton({ className }: { className?: string }) {
   return (
     <IconButton
       size="md"
-      label="Search meetings (⌘K)"
+      label="Search Meetings (⌘K)"
       aria-keyshortcuts="Meta+K"
       onClick={openCommandPalette}
       icon={<DeckIcon icon={Search} size={14} />}

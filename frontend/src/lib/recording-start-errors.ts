@@ -73,7 +73,7 @@ export function surfaceRecordingStartFailure(
   // specs/0083: Rust refuses a start while the last meeting is still being saved. That is a
   // moment's wait, not a device problem, so it gets a light toast instead of the modal.
   if (isStillSavingLastMeeting(error)) {
-    toast.info('Still saving your last meeting', {
+    toast.info('Still saving your last Meeting', {
       description: 'Nixon needs a moment to finish it. Try again in a few seconds.',
     });
     return;

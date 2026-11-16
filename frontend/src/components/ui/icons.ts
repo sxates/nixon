@@ -35,6 +35,8 @@ export { ChevronsUpDown, Eye, Lock, Unlock } from 'lucide-react';
 
 // Dropdown-menu leading icons (`DropdownMenuItem icon={…}`) in use today.
 export { Circle, EyeOff, MicOff, Radio, RotateCcw, UserCheck, UserPlus, Waves } from 'lucide-react';
+// The topic menu's Archive topic / Unarchive topic.
+export { Archive, ArchiveRestore } from 'lucide-react';
 
 // Icon-only controls whose glyph IS the label (the tooltip carries the words): search,
 // import audio, the agenda's jump-to-date picker, the manual-sort drag handle, and the

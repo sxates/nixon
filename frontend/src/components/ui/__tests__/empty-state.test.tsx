@@ -9,7 +9,7 @@ describe('EmptyState', () => {
     const { container } = render(
       <EmptyState
         title="No recordings yet"
-        body="Start recording and your meetings will show up here."
+        body="Start recording and your Meetings will show up here."
         action={<button type="button">Open the recorder</button>}
       />,
     );
@@ -35,10 +35,10 @@ describe('EmptyState', () => {
 
 describe('PageLoading', () => {
   it('fills the page under the rail with a labelled status', () => {
-    render(<PageLoading label="Loading meetings…" />);
-    const status = screen.getByRole('status', { name: 'Loading meetings…' });
+    render(<PageLoading label="Loading Meetings…" />);
+    const status = screen.getByRole('status', { name: 'Loading Meetings…' });
     expect(status).toHaveClass('h-page', 'items-center', 'justify-center');
-    expect(status).toHaveTextContent('Loading meetings…');
+    expect(status).toHaveTextContent('Loading Meetings…');
     expect(status.querySelector('svg.animate-spin')).not.toBeNull();
   });
 

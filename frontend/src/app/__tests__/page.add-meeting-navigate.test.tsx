@@ -133,7 +133,7 @@ describe('creating a manual meeting from Today navigates to it (specs/0069b foll
     fireEvent.change(within(dialog).getByLabelText('Title'), {
       target: { value: 'Brand new call' },
     });
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Add meeting' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Add Meeting' }));
 
     await waitFor(() =>
       expect(router.push).toHaveBeenCalledWith('/meeting-details?id=new-meeting-1&tab=prep'),

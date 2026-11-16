@@ -393,7 +393,7 @@ export function useSpeakers({
         toast.success(`Named as ${person.displayName}`);
       } catch (error) {
         console.error('Failed to assign person:', error);
-        toast.error('Could not assign person', {
+        toast.error('Could not assign Person', {
           description: error instanceof Error ? error.message : String(error),
         });
       }

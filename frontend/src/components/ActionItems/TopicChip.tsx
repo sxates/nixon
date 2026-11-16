@@ -23,7 +23,7 @@ export function TopicChip({ name, onClick, label, className }: TopicChipProps) {
       type="button"
       variant="ghost"
       size="xs"
-      aria-label={label ?? `Open topic ${name}`}
+      aria-label={label ?? `Open Topic ${name}`}
       title={name}
       onClick={(e) => {
         e.stopPropagation();

@@ -66,19 +66,19 @@ describe('PersonDetailsPage (specs/0038 dogfood feedback #3)', () => {
     expect(await screen.findByText('Summarize recent activity')).toBeInTheDocument();
   });
 
-  it('switches tabs — Recent meetings then Voice samples mount their content', async () => {
+  it('switches tabs — Recent Meetings then Voice samples mount their content', async () => {
     routeInvoke();
     const user = userEvent.setup();
     render(<PersonDetailsPage />);
     await screen.findByLabelText('Person name');
 
-    await user.click(screen.getByRole('tab', { name: 'Recent meetings' }));
+    await user.click(screen.getByRole('tab', { name: 'Recent Meetings' }));
     await waitFor(() =>
       expect(invokeMock).toHaveBeenCalledWith('api_recent_meetings_with_person', {
         personId: 'p1',
       }),
     );
-    expect(await screen.findByText(/No meetings with Alice Chen yet/)).toBeInTheDocument();
+    expect(await screen.findByText(/No Meetings with Alice Chen yet/)).toBeInTheDocument();
 
     await user.click(screen.getByRole('tab', { name: 'Voice samples' }));
     await waitFor(() =>
@@ -114,6 +114,6 @@ describe('PersonDetailsPage (specs/0038 dogfood feedback #3)', () => {
   it('shows a friendly not-found state when the person is gone', async () => {
     routeInvoke(null);
     render(<PersonDetailsPage />);
-    expect(await screen.findByText('That person no longer exists.')).toBeInTheDocument();
+    expect(await screen.findByText('That Person no longer exists.')).toBeInTheDocument();
   });
 });

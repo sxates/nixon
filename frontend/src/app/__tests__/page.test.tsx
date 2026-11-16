@@ -165,8 +165,8 @@ describe('edit → close → add (specs/0069 W3, fix round 1 Finding 2)', () => 
     fireEvent.click(await screen.findByText('Edit'));
 
     // The dialog seeded from the manual entry — title field carries its title, and
-    // "Save" (not "Add meeting") is the submit label in edit mode. Scope to the dialog:
-    // the header's own "Add meeting" button is a separate, always-present element.
+    // "Save" (not "Add Meeting") is the submit label in edit mode. Scope to the dialog:
+    // the header's own "Add Meeting" button is a separate, always-present element.
     let dialog = await screen.findByRole('dialog');
     const titleInput = within(dialog).getByLabelText('Title') as HTMLInputElement;
     expect(titleInput.value).toBe('Call with Sam');
@@ -176,17 +176,17 @@ describe('edit → close → add (specs/0069 W3, fix round 1 Finding 2)', () => 
     fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
 
-    // Reopen via the header's "Add meeting" — a STALE `editing` prop would silently
+    // Reopen via the header's "Add Meeting" — a STALE `editing` prop would silently
     // reseed the previous entry's fields and turn this create into an update.
     fireEvent.click(screen.getByRole('button', { name: /add meeting/i }));
 
     dialog = await screen.findByRole('dialog');
     const reopenedTitle = within(dialog).getByLabelText('Title') as HTMLInputElement;
     expect(reopenedTitle.value).toBe('');
-    expect(within(dialog).getByRole('button', { name: 'Add meeting' })).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: 'Add Meeting' })).toBeInTheDocument();
 
     fireEvent.change(reopenedTitle, { target: { value: 'Brand new call' } });
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Add meeting' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Add Meeting' }));
 
     await waitFor(() =>
       expect(invokeMock).toHaveBeenCalledWith(

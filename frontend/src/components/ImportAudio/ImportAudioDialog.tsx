@@ -245,7 +245,7 @@ export function ImportAudioDialog({
               ? progress?.message || 'Processing audio...'
               : error
               ? 'An error occurred during import'
-              : 'Import an audio file to create a new meeting with transcripts'}
+              : 'Import an audio file to create a new Meeting with transcripts'}
           </DialogDescription>
         </DialogHeader>
 
@@ -276,7 +276,7 @@ export function ImportAudioDialog({
                         setTitle(e.target.value);
                         setTitleModifiedByUser(true);
                       }}
-                      placeholder="Enter meeting title"
+                      placeholder="Enter Meeting title"
                     />
                   </div>
 

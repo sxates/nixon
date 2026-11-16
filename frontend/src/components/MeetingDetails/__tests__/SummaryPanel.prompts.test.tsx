@@ -75,7 +75,7 @@ function setup(opts: { hasSummary?: boolean } = {}) {
 
 async function openCustomDialog() {
   await userEvent.click(screen.getByRole('button', { name: /summary prompt/i }));
-  await userEvent.click(screen.getByRole('menuitem', { name: /custom for this meeting/i }));
+  await userEvent.click(screen.getByRole('menuitem', { name: /custom for this Meeting/i }));
 }
 
 describe('SummaryPanel prompt flows (specs/0079 W4)', () => {
@@ -119,13 +119,13 @@ describe('SummaryPanel prompt flows (specs/0079 W4)', () => {
     const { api, onRegenerateSummary } = setup();
     await openCustomDialog();
     await userEvent.type(await screen.findByLabelText('Prompt'), 'Be brief');
-    await userEvent.click(screen.getByRole('button', { name: 'Use for this meeting' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Use for this Meeting' }));
 
-    expect(await screen.findByLabelText('Use for future meetings in this series')).toBeInTheDocument();
+    expect(await screen.findByLabelText('Use for future Meetings in this Series')).toBeInTheDocument();
     expect(api.saveOneOff).toHaveBeenCalledWith('Be brief', true);
     expect(onRegenerateSummary).not.toHaveBeenCalled();
 
-    await userEvent.click(screen.getByLabelText('Use for future meetings in this series'));
+    await userEvent.click(screen.getByLabelText('Use for future Meetings in this Series'));
     await userEvent.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() =>
       expect(api.saveFollowup).toHaveBeenCalledWith({
@@ -141,7 +141,7 @@ describe('SummaryPanel prompt flows (specs/0079 W4)', () => {
     const { api, onRegenerateSummary } = setup();
     await openCustomDialog();
     await userEvent.type(await screen.findByLabelText('Prompt'), 'Be brief');
-    await userEvent.click(screen.getByRole('button', { name: 'Use for this meeting' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Use for this Meeting' }));
     await userEvent.click(await screen.findByRole('button', { name: 'Not now' }));
     await waitFor(() => expect(onRegenerateSummary).toHaveBeenCalledTimes(1));
     expect(api.saveFollowup).not.toHaveBeenCalled();
@@ -151,7 +151,7 @@ describe('SummaryPanel prompt flows (specs/0079 W4)', () => {
     const { onRegenerateSummary } = setup({ hasSummary: false });
     await openCustomDialog();
     await userEvent.type(await screen.findByLabelText('Prompt'), 'Be brief');
-    await userEvent.click(screen.getByRole('button', { name: 'Use for this meeting' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Use for this Meeting' }));
     await userEvent.click(await screen.findByRole('button', { name: 'Not now' }));
     await waitFor(() => expect(screen.queryByRole('button', { name: 'Not now' })).toBeNull());
     expect(onRegenerateSummary).not.toHaveBeenCalled();
@@ -162,7 +162,7 @@ describe('SummaryPanel prompt flows (specs/0079 W4)', () => {
     api.saveOneOff.mockRejectedValueOnce(new Error('boom'));
     await openCustomDialog();
     await userEvent.type(await screen.findByLabelText('Prompt'), 'Be brief');
-    await userEvent.click(screen.getByRole('button', { name: 'Use for this meeting' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Use for this Meeting' }));
     await waitFor(() => expect(api.saveOneOff).toHaveBeenCalled());
     expect(screen.getByLabelText('Prompt')).toHaveValue('Be brief');
     expect(onRegenerateSummary).not.toHaveBeenCalled();

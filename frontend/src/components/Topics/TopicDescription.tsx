@@ -2,9 +2,9 @@
 
 /**
  * The topic's Description (specs/0089 §UI): shown in full under the header (it's how a topic
- * is recognised), with Edit opening a textarea that saves on blur. Draft from meetings fills
- * the textarea with an LLM draft but saves nothing until the owner blurs the field or
- * presses Save.
+ * is recognised), with Edit opening a textarea that saves on blur. Done saves, then closes:
+ * Draft from meetings fills the textarea with an LLM draft without focusing it, so a blur
+ * save alone would drop that draft when Done is clicked straight away.
  */
 
 import { useEffect, useRef, useState } from 'react';
@@ -29,6 +29,9 @@ export function TopicDescription({ topicId, description, onChanged }: TopicDescr
   const [draft, setDraft] = useState(description);
   const [drafting, setDrafting] = useState(false);
   const saved = useRef(description);
+  // The save in flight, so Done (which follows the textarea's blur save) waits for it
+  // instead of writing the same text twice.
+  const inflight = useRef<Promise<boolean> | null>(null);
 
   // Take a newer saved description unless the owner has unsaved text in the field. Compare
   // against the previous saved text, captured before it is overwritten (the updater can run
@@ -39,18 +42,34 @@ export function TopicDescription({ topicId, description, onChanged }: TopicDescr
     setDraft((cur) => (cur === prev ? description : cur));
   }, [description]);
 
-  const save = async () => {
+  /** Saves the field if it differs from the saved text. Resolves false only on failure. */
+  const save = async (): Promise<boolean> => {
+    if (inflight.current) await inflight.current;
     const text = draft.trim();
-    if (text === saved.current.trim()) return;
+    if (text === saved.current.trim()) return true;
+    const run = (async () => {
+      try {
+        await updateTopic(topicId, { description: text });
+        saved.current = text;
+        setDraft(text);
+        onChanged?.();
+        return true;
+      } catch (e) {
+        console.error('Failed to save the description:', e);
+        toast.error('Could not save the description', { description: errorText(e) });
+        return false;
+      }
+    })();
+    inflight.current = run;
     try {
-      await updateTopic(topicId, { description: text });
-      saved.current = text;
-      setDraft(text);
-      onChanged?.();
-    } catch (e) {
-      console.error('Failed to save the description:', e);
-      toast.error('Could not save the description', { description: errorText(e) });
+      return await run;
+    } finally {
+      if (inflight.current === run) inflight.current = null;
     }
+  };
+
+  const done = async () => {
+    if (await save()) setOpen(false);
   };
 
   const draftFromMeetings = async () => {
@@ -73,7 +92,8 @@ export function TopicDescription({ topicId, description, onChanged }: TopicDescr
           size="xs"
           variant="ghost"
           aria-label={open ? 'Done editing the description' : 'Edit description'}
-          onClick={() => setOpen((v) => !v)}
+          disabled={open && drafting}
+          onClick={() => (open ? void done() : setOpen(true))}
         >
           {open ? 'Done' : 'Edit'}
         </Button>
@@ -86,20 +106,12 @@ export function TopicDescription({ topicId, description, onChanged }: TopicDescr
             rows={3}
             onChange={(e) => setDraft(e.target.value)}
             onBlur={() => void save()}
-            placeholder="What this topic covers"
+            placeholder="What this Topic covers"
           />
           <div className="flex items-center gap-2">
             <Button size="xs" variant="outline" disabled={drafting} onClick={() => void draftFromMeetings()}>
               {drafting ? <Spinner /> : <DeckIcon icon={Sparkles} size={14} />}
-              Draft from meetings
-            </Button>
-            <Button
-              size="xs"
-              variant="ghost"
-              disabled={draft.trim() === saved.current.trim()}
-              onClick={() => void save()}
-            >
-              Save
+              Draft from Meetings
             </Button>
           </div>
         </>

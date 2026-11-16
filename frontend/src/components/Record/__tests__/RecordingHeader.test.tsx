@@ -151,8 +151,8 @@ describe('RecordingHeader', () => {
     expect(selectPrompt).toHaveBeenCalledWith('p2');
 
     await userEvent.click(screen.getByRole('button', { name: /summary prompt/i }));
-    await userEvent.click(screen.getByRole('menuitem', { name: /custom for this meeting/i }));
-    expect(await screen.findByRole('dialog', { name: /custom prompt for this meeting/i })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('menuitem', { name: /custom for this Meeting/i }));
+    expect(await screen.findByRole('dialog', { name: /custom prompt for this Meeting/i })).toBeInTheDocument();
   });
 
   it('each meter carries its channel label inside its own svg', () => {
@@ -167,7 +167,7 @@ describe('RecordingHeader', () => {
 
   it('back control is the unboxed chevron shared with meeting details', () => {
     renderHeader(false);
-    const back = screen.getByRole('button', { name: 'Back to home' });
+    const back = screen.getByRole('button', { name: 'Back' });
     expect(back.className).not.toMatch(/border-border|bg-card/);
   });
 });

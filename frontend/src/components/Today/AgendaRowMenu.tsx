@@ -111,7 +111,7 @@ export function AgendaRowMenu({
           )}
           {canDelete && (
             <DropdownMenuItem icon={Trash2} variant="destructive" onSelect={() => actions.onDelete(item)}>
-              Delete meeting
+              Delete Meeting
             </DropdownMenuItem>
           )}
           {canHide && (

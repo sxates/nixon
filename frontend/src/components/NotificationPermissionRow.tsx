@@ -82,7 +82,7 @@ export function NotificationPermissionRow() {
     try {
       const sent = await notify({
         title: 'Nixon',
-        body: 'Notifications are working. This is what a meeting alert will look like.',
+        body: 'Notifications are working. This is what a Meeting alert will look like.',
         category: CATEGORY_PLAIN,
         id: 'nixon-test',
       });
@@ -100,7 +100,7 @@ export function NotificationPermissionRow() {
     <>
     <SettingsRow
       label="Notifications"
-      description="Alerts about meetings about to start, and calls Nixon spots, shown by macOS even when Nixon is behind another window."
+      description="Alerts about Meetings about to start, and calls Nixon spots, shown by macOS even when Nixon is behind another window."
       control={
         <div className="flex w-64 items-center justify-end gap-2" data-testid="notification-permission">
           {status === null ? (
@@ -140,7 +140,7 @@ export function NotificationPermissionRow() {
         cannot happen yet. */}
     {allowed && capability?.supported && (
       <SettingsNote tone="info">
-        For the &quot;meeting is starting&quot; alert to wait for you, set Nixon to{' '}
+        For the &quot;Meeting is starting&quot; alert to wait for you, set Nixon to{' '}
         <strong className="font-semibold">Alerts</strong> in System Settings → Notifications.
         Nixon clears the rest by itself after a few seconds.{' '}
         <Button

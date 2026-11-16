@@ -595,7 +595,7 @@ export const AISummary = ({ summary, status, error, onSummaryChange, onRegenerat
           <p className="text-brand/80 text-sm">
             {status === 'processing' 
               ? 'Analyzing your transcript...' 
-              : 'Creating a detailed summary of your meeting...'}
+              : 'Creating a detailed summary of your Meeting...'}
           </p>
         </div>
       </div>

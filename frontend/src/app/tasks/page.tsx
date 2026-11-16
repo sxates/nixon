@@ -7,8 +7,10 @@
  * address each one.
  *
  *   - **To-do**: quick-add on top (a trailing `(Friday)` becomes the due date), then the
- *     drag-ordered list (persisted via `api_reorder_action_items`). No grouping, sorting
- *     or person filter — the order is yours.
+ *     drag-ordered list (persisted via `api_reorder_action_items`). No sorting or person
+ *     filter — the order is yours. "Group by Topic" (specs/0090) splits it into sections
+ *     in topic order, each reordered within its own places (`GroupedTodoList`). Items of a
+ *     topic kept off the To-do list aren't here; adding or moving one there says so.
  *   - **Inbox**: items the extractor suggested. Add to my list / Dismiss / Assign…; the
  *     header menu dismisses old suggestions in bulk (with an Undo toast) and toggles the
  *     dismissed list, where each row can be restored.
@@ -23,6 +25,8 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { invoke } from '@tauri-apps/api/core';
 import { toast } from 'sonner';
 import { Callout } from '@/components/ui/callout';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { EmptyState, PageLoading } from '@/components/ui/empty-state';
 import { MenuButton } from '@/components/ui/menu-button';
 import { PageHeader } from '@/components/ui/page-header';
@@ -37,6 +41,8 @@ import {
 import { AddActionItemRow } from '@/components/ActionItems/AddActionItemRow';
 import type { AssigneeCandidate } from '@/components/ActionItems/AssigneePicker';
 import { DoneList } from '@/components/ActionItems/DoneList';
+import { GroupedTodoList } from '@/components/ActionItems/GroupedTodoList';
+import { keptOffTopic, toastKeptOff } from '@/components/ActionItems/keptOffToast';
 import { InboxRow } from '@/components/ActionItems/InboxRow';
 import { TodoList, todoKeysHint } from '@/components/ActionItems/TodoList';
 import { useTodoHighlight } from '@/hooks/useTodoHighlight';
@@ -47,7 +53,9 @@ import {
 } from '@/components/QuickAdd/QuickAddShortcut';
 import { useActionItemMutations } from '@/hooks/useActionItemMutations';
 import { useTopics } from '@/hooks/useTopics';
+import { useTodoGroupActions } from '@/hooks/useTodoGroupActions';
 import { setActionItemTopic } from '@/lib/topics';
+import { readGroupByTopic, writeGroupByTopic } from '@/lib/todo-groups';
 import type { MentionTopic } from '@/components/ActionItems/MentionInput';
 import { useTodoViews } from '@/hooks/useTodoViews';
 import {
@@ -84,11 +92,25 @@ function TasksPageContent() {
   const views = useTodoViews({ includeDismissed: showDismissed });
   const { reload } = views;
 
-  const { data: openTopics } = useTopics('open');
+  // Every topic: open ones feed the `@` picker; all of them order the grouped sections.
+  const { data: topicData } = useTopics();
+  const allTopics = useMemo(() => (Array.isArray(topicData) ? topicData : []), [topicData]);
   const topicOptions = useMemo<MentionTopic[]>(
-    () => (openTopics ?? []).map((t) => ({ id: t.id, name: t.name })),
-    [openTopics],
+    () => allTopics.filter((t) => t.status === 'open').map((t) => ({ id: t.id, name: t.name })),
+    [allTopics],
   );
+  const openTopic = useCallback(
+    (topicId: string) => router.push(`/topics/topic?id=${encodeURIComponent(topicId)}`),
+    [router],
+  );
+
+  // "Group by Topic", remembered per viewer. Read after mount (no storage on the server).
+  const [grouped, setGrouped] = useState(false);
+  useEffect(() => setGrouped(readGroupByTopic()), []);
+  const changeGrouped = (on: boolean) => {
+    setGrouped(on);
+    writeGroupByTopic(on);
+  };
   const [people, setPeople] = useState<Person[]>([]);
   useEffect(() => {
     void (async () => {
@@ -117,6 +139,7 @@ function TasksPageContent() {
     deleteItem,
     add,
     reorder,
+    reorderWithin,
     bulkSetStatus,
     triage,
     dismissOlderThan,
@@ -135,10 +158,14 @@ function TasksPageContent() {
     // The legacy commands emit no event: re-read so the lists and badge stay correct.
     onStatusChanged: () => void reload(),
     onAssigned: () => reload(),
-    onAdded: (_created, tagFailed) => {
-      if (!tagFailed) toast.success('To-do added');
+    onAdded: (created, tagFailed) => {
+      const keptOff = tagFailed ? null : keptOffTopic(allTopics, created.topicId);
+      if (keptOff) toastKeptOff('added', keptOff, openTopic);
+      else if (!tagFailed) toast.success('To-Do added');
       void reload();
     },
+    // An item tagged to a topic kept off this list never joins it.
+    appendCreated: (created) => !keptOffTopic(allTopics, created.topicId),
   });
 
   const handleDelete = async (item: ActionItem) => {
@@ -189,6 +216,8 @@ function TasksPageContent() {
     (next: string[]) => void reorder(next.filter((id) => !lingering.has(id))),
     [reorder, lingering],
   );
+  const lingeringIds = useMemo(() => new Set(lingering.keys()), [lingering]);
+  const groupActions = useTodoGroupActions({ setItems, allTopics, reorderWithin });
 
   const toggleHighlight = useTodoHighlight(items, setItems);
 
@@ -203,9 +232,11 @@ function TasksPageContent() {
     if (topic && topic.id !== item.topicId) {
       try {
         await setActionItemTopic(item.id, topic.id);
+        const keptOff = keptOffTopic(allTopics, topic.id);
+        if (keptOff) toastKeptOff('moved', keptOff, openTopic);
         void reload();
       } catch (err) {
-        toast.error('Could not tag the topic', { description: errorText(err) });
+        toast.error('Could not tag the Topic', { description: errorText(err) });
       }
     }
   };
@@ -288,7 +319,7 @@ function TasksPageContent() {
         ? showDismissed
           ? `${noun(inboxRows.length, 'dismissed suggestion', 'dismissed suggestions')}`
           : `${noun(inboxRows.length, 'suggestion', 'suggestions')} to review`
-        : 'Suggestions from your meetings'
+        : 'Suggestions from your Meetings'
       : tab === 'done'
         ? doneRows.length > 0
           ? `${doneRows.length} completed`
@@ -302,11 +333,19 @@ function TasksPageContent() {
     <div className="flex h-page animate-fade-in flex-col bg-background">
       <PageHeader
         width="page"
-        title="To-do"
+        title="To-Do"
         subtitle={subtitle}
         actions={
           // The slot exists on every tab so the header doesn't jump when the menu appears.
-          <div className="size-7">
+          <div className="flex h-7 min-w-7 items-center">
+            {tab === 'todo' && (
+              <div className="flex items-center gap-2">
+                <Switch id="todo-group-by-topic" checked={grouped} onCheckedChange={changeGrouped} />
+                <Label htmlFor="todo-group-by-topic" className="text-xs font-normal text-muted-foreground">
+                  Group by Topic
+                </Label>
+              </div>
+            )}
             {tab === 'inbox' && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -332,7 +371,7 @@ function TasksPageContent() {
       <Tabs value={tab} onValueChange={changeTab} className="flex min-h-0 flex-1 flex-col">
         <div className={cn('flex-shrink-0', PAGE_GUTTER)}>
           <TabsList className={cn('mx-auto w-full', PAGE_CONTENT_WIDTH)}>
-            <TabsTrigger value="todo">To-do</TabsTrigger>
+            <TabsTrigger value="todo">To-Do</TabsTrigger>
             <TabsTrigger value="inbox" badge={views.inboxCount > 0 ? views.inboxCount : undefined}>
               Inbox
             </TabsTrigger>
@@ -348,39 +387,61 @@ function TasksPageContent() {
               </Callout>
             )}
             {!views.loaded ? (
-              <PageLoading fill="pane" label="Loading your to-do list…" />
+              <PageLoading fill="pane" label="Loading your To-Do list…" />
             ) : (
               <>
                 <TabsContent value="todo" className="mt-4">
                   <AddActionItemRow
-                    placeholder="New item — add a to-do…  (⌘⇧T from anywhere)"
+                    placeholder="New item — add a To-Do…  (⌘⇧T from anywhere)"
                     ariaLabel={QUICK_ADD_LABEL}
                     onAdd={add}
                     topics={topicOptions}
+                    topicPicker
                   />
                   {listRows.length === 0 ? (
                     <EmptyState
                       className="h-[40vh]"
                       title="Nothing on your list"
-                      body="Add a to-do above, or move suggestions over from your Inbox."
+                      body="Add a To-Do above, or move suggestions over from your Inbox."
                     />
                   ) : (
                     <>
-                      <TodoList
-                        className="mt-3"
-                        rows={listRows}
-                        ariaLabel="To-do list"
-                        nameById={nameById}
-                        topics={topicOptions}
-                        onSetStatus={setListStatus}
-                        onCommitEdit={commitEdit}
-                        onSetDueDate={setDueDate}
-                        onDelete={handleDelete}
-                        onOpen={openItem}
-                        onOpenTopic={(topicId) => router.push(`/topics/topic?id=${encodeURIComponent(topicId)}`)}
-                        onToggleHighlight={(id, color) => void toggleHighlight(id, color)}
-                        reorder={applyOrder}
-                      />
+                      {grouped ? (
+                        <GroupedTodoList
+                          className="mt-3"
+                          rows={listRows}
+                          allTopics={groupActions.topics}
+                          excludeFromOrder={lingeringIds}
+                          reorderWithin={(ids) => void reorderWithin(ids)}
+                          onMoveToTopic={(id, topicId, ids) => void groupActions.moveToTopic(id, topicId, ids)}
+                          onReorderTopics={groupActions.reorderTopics}
+                          nameById={nameById}
+                          topics={topicOptions}
+                          onSetStatus={setListStatus}
+                          onCommitEdit={commitEdit}
+                          onSetDueDate={setDueDate}
+                          onDelete={handleDelete}
+                          onOpen={openItem}
+                          onOpenTopic={openTopic}
+                          onToggleHighlight={(id, color) => void toggleHighlight(id, color)}
+                        />
+                      ) : (
+                        <TodoList
+                          className="mt-3"
+                          rows={listRows}
+                          ariaLabel="To-Do list"
+                          nameById={nameById}
+                          topics={topicOptions}
+                          onSetStatus={setListStatus}
+                          onCommitEdit={commitEdit}
+                          onSetDueDate={setDueDate}
+                          onDelete={handleDelete}
+                          onOpen={openItem}
+                          onOpenTopic={openTopic}
+                          onToggleHighlight={(id, color) => void toggleHighlight(id, color)}
+                          reorder={applyOrder}
+                        />
+                      )}
                       <p className="mt-4 px-3 text-caption text-muted-foreground">{todoKeysHint(true)}</p>
                     </>
                   )}
@@ -394,7 +455,7 @@ function TasksPageContent() {
                       body={
                         showDismissed
                           ? 'Suggestions you dismiss show up here, so you can bring them back.'
-                          : 'New suggestions from your meetings land here for you to triage.'
+                          : 'New suggestions from your Meetings land here for you to triage.'
                       }
                     />
                   ) : (
