@@ -201,7 +201,7 @@ describe('TranscriptButtonGroup audio-availability gating (WS7.1)', () => {
     render(<TranscriptButtonGroup {...baseProps} />);
     const identify = await screen.findByRole('button', { name: /identify speakers/i });
     await waitFor(() => expect(identify).toBeDisabled());
-    expect(identify).toHaveAttribute('title', 'No audio recording is available for this meeting.');
+    expect(identify).toHaveAttribute('title', 'No audio recording is available for this Meeting.');
   });
 
   it('gates each action on the audio it needs: no system channel disables only Identify speakers', async () => {

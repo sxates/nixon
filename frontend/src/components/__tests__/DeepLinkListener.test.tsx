@@ -67,7 +67,7 @@ describe('DeepLinkListener', () => {
     render(<DeepLinkListener />);
     await waitFor(() => expect(h.openUrlHandler).not.toBeNull());
     await act(async () => h.openUrlHandler!(['nixon://meeting/abc']));
-    await waitFor(() => expect(h.toastError).toHaveBeenCalledWith("That meeting isn't in Nixon anymore."));
+    await waitFor(() => expect(h.toastError).toHaveBeenCalledWith("That Meeting isn't in Nixon anymore."));
     expect(h.pushMock).not.toHaveBeenCalled();
   });
 

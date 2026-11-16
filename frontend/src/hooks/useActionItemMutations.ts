@@ -27,7 +27,8 @@ import {
   type AssigneeSelection,
   type BulkFilter,
 } from '@/lib/action-items';
-import { setActionItemTopic } from '@/lib/topics';
+import { slotSortOrders } from '@/lib/topic-order';
+import { reorderActionItemsWithin, setActionItemTopic } from '@/lib/topics';
 import type { ActionItem, ActionItemStatus } from '@/types';
 
 export type TriageAction = 'add_to_list' | 'adopt' | 'dismiss' | 'restore';
@@ -66,6 +67,12 @@ export interface ActionItemMutations {
    * writes it via `api_reorder_action_items`; reverts the whole list on failure.
    */
   reorder: (orderedIds: string[]) => Promise<void>;
+  /**
+   * Reorder a subset (a topic's to-dos, one To-do section; specs/0090) within the global
+   * positions it already holds: optimistic `sortOrder` swap, then
+   * `api_reorder_action_items_within`; reverts the whole list on failure.
+   */
+  reorderWithin: (orderedIds: string[]) => Promise<void>;
   /**
    * Bulk status change (WS1.e). Thin IPC wrapper returning the affected count — the
    * caller owns the optimistic list change, id snapshot, and Undo toast (only it knows
@@ -194,6 +201,22 @@ export function useActionItemMutations<T extends ActionItem>({
     }
   };
 
+  const reorderWithin = async (orderedIds: string[]) => {
+    let snapshot: T[] = [];
+    setItems((prev) => {
+      snapshot = prev;
+      const slots = slotSortOrders(prev, orderedIds);
+      return prev.map((i) => (slots.has(i.id) ? { ...i, sortOrder: slots.get(i.id)! } : i));
+    });
+    try {
+      await reorderActionItemsWithin(orderedIds);
+    } catch (err) {
+      console.error('Failed to reorder action items:', err);
+      setItems(() => snapshot);
+      toast.error('Could not save the new order', { description: errorDescription(err) });
+    }
+  };
+
   const bulkSetStatus = async (
     filter: BulkFilter,
     status: ActionItemStatus,
@@ -229,7 +252,7 @@ export function useActionItemMutations<T extends ActionItem>({
           created = { ...created, topicId };
         } catch (err) {
           tagFailed = true;
-          toast.error('Added, but not to the topic', { description: errorDescription(err) });
+          toast.error('Added, but not to the Topic', { description: errorDescription(err) });
         }
       }
       if (!appendCreated || appendCreated(created)) {
@@ -254,6 +277,7 @@ export function useActionItemMutations<T extends ActionItem>({
     add,
     setDueDate,
     reorder,
+    reorderWithin,
     bulkSetStatus,
     triage,
     setNotes,

@@ -54,7 +54,7 @@ export function agendaSummary(input: AgendaLabelInput): string {
     const range = weekDays.includes(localDateKey(now))
       ? `Week of ${parseLocalDateKey(weekDays[0]).toLocaleDateString([], { month: 'long', day: 'numeric' })}`
       : weekRangeLabel(weekDays);
-    return total > 0 ? `${range} · ${total} meeting${total === 1 ? '' : 's'}` : range;
+    return total > 0 ? `${range} · ${total} Meeting${total === 1 ? '' : 's'}` : range;
   }
   const parts = [
     parseLocalDateKey(viewDate).toLocaleDateString([], {
@@ -65,7 +65,7 @@ export function agendaSummary(input: AgendaLabelInput): string {
   ];
   // Counted off the chips' own state, so a Processing row isn't also called "recorded".
   const { total, recorded, processing } = dayCounts(visibleItems, ctx);
-  if (total > 0) parts.push(`${total} meeting${total === 1 ? '' : 's'}`);
+  if (total > 0) parts.push(`${total} Meeting${total === 1 ? '' : 's'}`);
   if (recorded > 0) parts.push(`${recorded} recorded`);
   if (processing > 0) parts.push(`${processing} processing`);
   return parts.join(' · ');

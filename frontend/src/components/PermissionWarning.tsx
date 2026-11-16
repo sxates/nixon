@@ -82,7 +82,7 @@ export function PermissionWarning({
               description={
                 hasMicrophone
                   ? undefined
-                  : 'Nixon needs access to your microphone to record meetings. No microphone devices were detected.'
+                  : 'Nixon needs access to your microphone to record Meetings. No microphone devices were detected.'
               }
               action={
                 isMacOS && !hasMicrophone ? (

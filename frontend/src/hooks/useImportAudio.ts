@@ -109,7 +109,7 @@ export function useImportAudio({
           } catch (error) {
             console.warn('Failed to apply pinned summary language to imported meeting:', error);
             toast.warning('Could not apply default summary language', {
-              description: 'The imported meeting was saved, but the default summary language was not applied.',
+              description: 'The imported Meeting was saved, but the default summary language was not applied.',
             });
           }
           onCompleteRef.current?.(event.payload);

@@ -35,12 +35,12 @@ describe('ListRow', () => {
     render(
       <ListRow
         title="Q3 planning"
-        hint="Open this meeting"
+        hint="Open this Meeting"
         onClick={() => {}}
         trailing={<button type="button">Unlink</button>}
       />,
     );
-    expect(screen.getByRole('button', { name: /Q3 planning/ }).getAttribute('title')).toBe('Open this meeting');
+    expect(screen.getByRole('button', { name: /Q3 planning/ }).getAttribute('title')).toBe('Open this Meeting');
     expect(screen.getByRole('button', { name: 'Unlink' }).getAttribute('title')).toBeNull();
   });
 
@@ -62,9 +62,9 @@ describe('ListRow', () => {
 describe('LinkRow', () => {
   it('is a button with a chevron that lights to brand on hover', () => {
     const onClick = vi.fn();
-    render(<LinkRow title="Product sync" meta="Nov 3" onClick={onClick} hint="Open this meeting" />);
+    render(<LinkRow title="Product sync" meta="Nov 3" onClick={onClick} hint="Open this Meeting" />);
     const row = screen.getByRole('button', { name: /Product sync/ });
-    expect(row).toHaveAttribute('title', 'Open this meeting');
+    expect(row).toHaveAttribute('title', 'Open this Meeting');
     expect(row).toHaveClass('focus-visible:ring-2');
     expect(screen.getByText('Product sync')).toHaveClass('u-row-title', 'group-hover/link:text-brand');
     expect(screen.getByText('Nov 3')).toHaveClass('u-row-meta');

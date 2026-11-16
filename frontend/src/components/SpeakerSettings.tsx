@@ -57,7 +57,7 @@ export function SpeakerSettings() {
     // the "applies to your next recording" notice is only true when switching them on.
     if (!enabled && isRecordingActive) {
       toast.success('Live speaker labels are off', {
-        description: 'Stopped for this meeting too. Speakers are still labelled after it ends.',
+        description: 'Stopped for this Meeting too. Speakers are still labelled after it ends.',
       });
       return;
     }
@@ -176,13 +176,13 @@ export function SpeakerSettings() {
 
       <SettingsSection
         title="Speaker labels"
-        description="Who said what. Diarization runs on-device after the meeting; voiceprints never leave this Mac."
+        description="Who said what. Diarization runs on-device after the Meeting; voiceprints never leave this Mac."
       >
         <SettingsGroup>
           {/* Speaker diarization (specs/0010) — opt-in, default off. */}
           <SettingsRow
             label="Speaker diarization"
-            description="Label who spoke in the transcript. Runs on-device after the meeting and downloads a small model (~108 MB) the first time."
+            description="Label who spoke in the transcript. Runs on-device after the Meeting and downloads a small model (~108 MB) the first time."
             control={
               <Switch
                 checked={diarizationEnabled}
@@ -216,10 +216,10 @@ export function SpeakerSettings() {
               label="Store voiceprints"
               description={
                 <>
-                  Off by default. Covers your own voice and other people&apos;s. Voiceprints
+                  Off by default. Covers your own voice and other People&apos;s. Voiceprints
                   are biometric data, so storing them is opt-in. When on, Nixon remembers
                   voices to label &quot;You&quot; and suggest names automatically in future
-                  meetings. When off, names still suggest within a single meeting, but no
+                  Meetings. When off, names still suggest within a single Meeting, but no
                   cross-meeting voice memory is kept. Voiceprints stay on this Mac either way.
                 </>
               }

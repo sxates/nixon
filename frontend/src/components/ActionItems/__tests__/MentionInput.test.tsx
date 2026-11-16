@@ -189,7 +189,7 @@ describe('MentionInput topics (specs/0089)', () => {
     expect(screen.queryByText('Pricing review')).toBeNull();
   });
 
-  it('picking a topic removes the @query text and reports the topic', async () => {
+  it('picking a topic removes the @query text and reports the Topic', async () => {
     const onTopicChange = vi.fn();
     const { input, onSubmit } = await setup({ topics, onTopicChange });
     type(input, 'Draft sync doc @Atl');

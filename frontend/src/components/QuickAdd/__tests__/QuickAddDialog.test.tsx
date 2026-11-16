@@ -30,7 +30,7 @@ describe('QuickAddDialog', () => {
   });
 
   const enter = (value: string) => {
-    const field = screen.getByLabelText('Quick add to-do');
+    const field = screen.getByLabelText('Quick add To-Do');
     fireEvent.change(field, { target: { value } });
     fireEvent.keyDown(field, { key: 'Enter', target: { value } });
   };

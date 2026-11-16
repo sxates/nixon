@@ -216,8 +216,8 @@ describe('customRangeProblem — Custom never silently widens to all meetings', 
 
 describe('scopeLabel — the range an answer was produced under', () => {
   it('names an empty scope as all meetings', () => {
-    expect(scopeLabel({})).toBe('All meetings');
-    expect(scopeLabel({ dateFrom: null, dateTo: null } as never)).toBe('All meetings');
+    expect(scopeLabel({})).toBe('All Meetings');
+    expect(scopeLabel({ dateFrom: null, dateTo: null } as never)).toBe('All Meetings');
   });
 
   it('shows a one-day range as that single day (the upper bound is exclusive)', () => {

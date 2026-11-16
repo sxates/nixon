@@ -138,11 +138,11 @@ describe('detail Topic field', () => {
 describe('detail title topic pick', () => {
   it('Esc discards a pending @topic so the next save does not tag it', async () => {
     render(<TaskItemPage />);
-    const title = (await screen.findByLabelText('To-do title')) as HTMLTextAreaElement;
+    const title = (await screen.findByLabelText('To-Do title')) as HTMLTextAreaElement;
     await waitFor(() => expect(invokeMock).toHaveBeenCalledWith('api_list_people_ranked'));
     await Promise.resolve();
     fireEvent.change(title, { target: { value: 'Send the deck @Atl' } });
-    fireEvent.keyDown(title, { key: 'Enter' }); // picks the topic
+    fireEvent.keyDown(title, { key: 'Enter' }); // picks the Topic
     expect(title.value).toBe('Send the deck ');
     fireEvent.keyDown(title, { key: 'Escape' }); // cancels the edit
     fireEvent.change(title, { target: { value: 'Send the deck now' } });
@@ -156,7 +156,7 @@ describe('detail title topic pick', () => {
     render(<TaskItemPage />);
     const select = await topicSelect();
     await waitFor(() => expect(select.value).toBe('topic-1'));
-    const title = (await screen.findByLabelText('To-do title')) as HTMLTextAreaElement;
+    const title = (await screen.findByLabelText('To-Do title')) as HTMLTextAreaElement;
     await waitFor(() => expect(invokeMock).toHaveBeenCalledWith('api_list_people_ranked'));
     await Promise.resolve();
     fireEvent.change(title, { target: { value: 'Send the deck now @Atl' } });

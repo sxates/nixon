@@ -93,7 +93,7 @@ describe('WeekView row actions', () => {
 
   // Owner feedback 2026-09-23: recorded meetings get All Meetings' Delete meeting — and
   // still no Hide, which for a recording would be deleting it.
-  it('offers Delete meeting, not Hide, for a recorded meeting', async () => {
+  it('offers Delete Meeting, not Hide, for a recorded meeting', async () => {
     renderWeek([
       event('Product sync', {
         meetingId: 'meeting-2',
@@ -101,7 +101,7 @@ describe('WeekView row actions', () => {
       }),
     ]);
     openRowMenu();
-    expect(await screen.findByText('Delete meeting')).toBeInTheDocument();
+    expect(await screen.findByText('Delete Meeting')).toBeInTheDocument();
     expect(screen.queryByText('Hide from timeline')).not.toBeInTheDocument();
   });
 
@@ -171,7 +171,7 @@ describe('WeekView row parity with All Meetings', () => {
     expect(screen.queryByText('Lunch')).not.toBeInTheDocument();
     expect(screen.getByText('Standup')).toBeInTheDocument();
     // The day header's count follows the filtered rows, not the raw list.
-    expect(screen.getByText('1 meeting')).toBeInTheDocument();
+    expect(screen.getByText('1 Meeting')).toBeInTheDocument();
   });
 });
 

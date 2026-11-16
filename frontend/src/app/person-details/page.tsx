@@ -51,6 +51,7 @@ import { cn } from '@/lib/utils';
 import { avatarColorClass } from '@/lib/avatar-colors';
 import type { Person } from '@/types';
 import { PageHeader } from '@/components/ui/page-header';
+import { useBack } from '@/hooks/useBack';
 
 type TabId = 'summary' | 'meetings' | 'voice';
 
@@ -87,7 +88,7 @@ function PersonDetailsContent() {
         if (alive) setPerson(p);
       } catch (err) {
         console.error('Failed to load person:', err);
-        if (alive) toast.error('Could not load this person.');
+        if (alive) toast.error('Could not load this Person.');
       } finally {
         if (alive) setLoading(false);
       }
@@ -109,7 +110,7 @@ function PersonDetailsContent() {
         if (!cancelled) setMeetings(Array.isArray(rows) ? rows : []);
       } catch (err) {
         console.error('Failed to load recent meetings with person:', err);
-        if (!cancelled) setMeetingsError('Could not load recent meetings.');
+        if (!cancelled) setMeetingsError('Could not load recent Meetings.');
       }
     })();
     return () => {
@@ -143,10 +144,7 @@ function PersonDetailsContent() {
     [router],
   );
 
-  const onBack = useCallback(() => {
-    if (window.history.length > 1) router.back();
-    else router.push('/people');
-  }, [router]);
+  const onBack = useBack('/people');
 
   // Persist a field edit (name/role) via api_update_person; optimistic with revert.
   const savePersonField = useCallback(
@@ -202,11 +200,11 @@ function PersonDetailsContent() {
     return (
       <div className="flex h-page items-center justify-center bg-background px-8">
         <EmptyState
-          title="That person no longer exists."
+          title="That Person no longer exists."
           action={
-            <Button variant="outline" onClick={() => router.push('/people')}>
+            <Button variant="outline" onClick={onBack}>
               <DeckIcon icon={ArrowLeft} size={14} />
-              Back to People
+              Back
             </Button>
           }
         />
@@ -214,7 +212,7 @@ function PersonDetailsContent() {
     );
   }
 
-  const name = person.displayName?.trim() || 'Unnamed person';
+  const name = person.displayName?.trim() || 'Unnamed Person';
   const citedSources = rollup?.sources.filter((s) => s.cited) ?? [];
 
   return (
@@ -225,7 +223,7 @@ function PersonDetailsContent() {
           subtitle (which is indented past it) instead of pushing the subtitle below it. */}
       <PageHeader
         width="page"
-        back={{ label: 'People', onClick: onBack }}
+        back={{ label: 'Back', onClick: onBack }}
         title={
           <span className="flex min-w-0 items-start gap-4">
             {/* Decorative inside the h1 — the avatar renders the person's initials,
@@ -241,7 +239,7 @@ function PersonDetailsContent() {
             <span className="min-w-0 flex-1 pt-1">
               <InlineEditable
                 value={person.displayName}
-                placeholder="Unnamed person"
+                placeholder="Unnamed Person"
                 ariaLabel="Person name"
                 allowEmpty={false}
                 truncate={false}
@@ -283,7 +281,7 @@ function PersonDetailsContent() {
             <h2 className="u-section-label mb-1">Notes</h2>
             <InlineEditable
               value={person.notes ?? ''}
-              placeholder="Add notes about this person — their role, how you know them…"
+              placeholder="Add notes about this Person — their role, how you know them…"
               ariaLabel="Person notes"
               allowEmpty
               multiline
@@ -297,7 +295,7 @@ function PersonDetailsContent() {
           <Tabs value={tab} onValueChange={(v) => setTab(v as TabId)}>
             <TabsList>
               <TabsTrigger value="summary">Summary</TabsTrigger>
-              <TabsTrigger value="meetings">Recent meetings</TabsTrigger>
+              <TabsTrigger value="meetings">Recent Meetings</TabsTrigger>
               <TabsTrigger value="voice">Voice samples</TabsTrigger>
             </TabsList>
 
@@ -323,7 +321,7 @@ function PersonDetailsContent() {
                     <AnswerMarkdown markdown={rollup.markdown} sources={rollup.sources} />
                   ) : (
                     <p className="text-sm text-muted-foreground">
-                      Nothing notable to summarize from recent meetings with {name}.
+                      Nothing notable to summarize from recent Meetings with {name}.
                     </p>
                   )}
                   {citedSources.length > 0 && (
@@ -333,10 +331,10 @@ function PersonDetailsContent() {
                         {citedSources.map((s) => (
                           <LinkRow
                             key={s.meetingId}
-                            title={s.title?.trim() || 'Untitled meeting'}
+                            title={s.title?.trim() || 'Untitled Meeting'}
                             meta={formatMeetingDate(s.createdAt) || undefined}
                             onClick={() => openMeeting(s.meetingId)}
-                            hint="Open this meeting"
+                            hint="Open this Meeting"
                           />
                         ))}
                       </div>
@@ -348,7 +346,7 @@ function PersonDetailsContent() {
                   variant="panel"
                   titleAs="h3"
                   title="Summarize recent activity"
-                  body={`Reads your last few meetings with ${name}. May take a moment on local models.`}
+                  body={`Reads your last few Meetings with ${name}. May take a moment on local models.`}
                   action={
                     <Button variant="brand" onClick={() => void runRollup()}>
                       <DeckIcon icon={Sparkles} size={14} />
@@ -366,19 +364,19 @@ function PersonDetailsContent() {
               ) : meetings === null ? (
                 <p className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Spinner />
-                  <span>Loading meetings…</span>
+                  <span>Loading Meetings…</span>
                 </p>
               ) : meetings.length === 0 ? (
-                <EmptyState variant="panel" titleAs="h3" title={`No meetings with ${name} yet.`} />
+                <EmptyState variant="panel" titleAs="h3" title={`No Meetings with ${name} yet.`} />
               ) : (
                 <div className="flex flex-col gap-0.5">
                   {meetings.map((m) => (
                     <LinkRow
                       key={m.id}
-                      title={m.title?.trim() || 'Untitled meeting'}
+                      title={m.title?.trim() || 'Untitled Meeting'}
                       meta={formatMeetingDate(m.startedAt) || undefined}
                       onClick={() => openMeeting(m.id)}
-                      hint="Open this meeting"
+                      hint="Open this Meeting"
                     />
                   ))}
                 </div>

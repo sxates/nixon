@@ -2,8 +2,8 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 
 // The Agenda / Week toolbar on the Meetings page. The view switch moved up into the
-// Meetings header (one switch for all four views); the "All meetings" link went with the
-// page it pointed at, and "Add to-do" left the page at the owner's request (Action items
+// Meetings header (one switch for all four views); the "All Meetings" link went with the
+// page it pointed at, and "Add To-Do" left the page at the owner's request (Action items
 // keeps its sidebar entry). This pins all three out of the toolbar.
 
 import { TodayToolbar } from '@/components/Today/TodayToolbar';
@@ -23,7 +23,7 @@ function renderToolbar(viewMode: 'day' | 'week' = 'day') {
 }
 
 describe('TodayToolbar', () => {
-  it('has no view switch, All meetings link or Add to-do of its own', () => {
+  it('has no view switch, All Meetings link or Add To-Do of its own', () => {
     renderToolbar('day');
     expect(screen.queryByRole('group', { name: 'Agenda view' })).toBeNull();
     expect(screen.queryByRole('button', { name: /all meetings/i })).toBeNull();

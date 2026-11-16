@@ -137,18 +137,18 @@ describe('copy', () => {
       expect(retentionChoiceDescription(choice)).not.toMatch(/as soon as|recording stops/i);
     }
     expect(retentionChoiceDescription('once-processed')).toMatch(
-      /transcribed the meeting and identified the speakers, then deleted/,
+      /transcribed the Meeting and identified the speakers, then deleted/,
     );
-    expect(retentionChoiceDescription(30)).toMatch(/never while a meeting is still being transcribed/);
+    expect(retentionChoiceDescription(30)).toMatch(/never while a Meeting is still being transcribed/);
   });
 
   it('the report toast uses the reported numbers and mentions busy meetings', () => {
     expect(retentionReportToast({ meetingsPurged: 23, bytesFreed: 4.1e9, skippedBusy: 2 })).toEqual({
-      title: 'Deleted audio from 23 meetings, 4.1 GB freed',
+      title: 'Deleted audio from 23 Meetings, 4.1 GB freed',
       description: '2 were busy and will be deleted shortly.',
     });
     expect(retentionReportToast({ meetingsPurged: 1, bytesFreed: 5e6, skippedBusy: 0 })).toEqual({
-      title: 'Deleted audio from 1 meeting, 5 MB freed',
+      title: 'Deleted audio from 1 Meeting, 5 MB freed',
       description: undefined,
     });
   });
@@ -157,7 +157,7 @@ describe('copy', () => {
     const base = { meetings: 4, bytes: 1, busy: 0 };
     expect(keptForNowSentence({ ...base, keptPending: 0, keptFailed: 0 })).toBeNull();
     expect(keptForNowSentence({ ...base, keptPending: 3, keptFailed: 0 })).toBe(
-      '3 meetings still being processed keep their audio until they finish.',
+      '3 Meetings still being processed keep their audio until they finish.',
     );
   });
 });

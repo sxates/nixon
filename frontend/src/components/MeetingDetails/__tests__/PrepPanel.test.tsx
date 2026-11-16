@@ -134,7 +134,7 @@ describe('PrepPanel (specs/0036)', () => {
 
     // specs/0041 WS4: say WHY prep is empty + offer manual association, instead of silence.
     expect(
-      await screen.findByText(/No previous meetings found for this series/i),
+      await screen.findByText(/No previous Meetings found for this Series/i),
     ).toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: /link previous meeting/i }),
@@ -327,12 +327,12 @@ describe('PrepPanel (specs/0036)', () => {
     });
     render(<PrepPanel meetingId="m1" />);
 
-    expect(await screen.findByText('Linked meetings')).toBeInTheDocument();
+    expect(await screen.findByText('Linked Meetings')).toBeInTheDocument();
     expect(screen.getByText('Old design chat')).toBeInTheDocument();
-    // The row's open button keeps its "Open this meeting" tooltip (lost in wave A).
+    // The row's open button keeps its "Open this Meeting" tooltip (lost in wave A).
     expect(screen.getByText('Old design chat').closest('button')).toHaveAttribute(
       'title',
-      'Open this meeting',
+      'Open this Meeting',
     );
 
     fireEvent.click(screen.getByRole('button', { name: /unlink old design chat/i }));
@@ -385,7 +385,7 @@ describe('PrepPanel (specs/0036)', () => {
       });
       render(<PrepPanel meetingId="m1" />);
 
-      const link = await screen.findByRole('button', { name: 'Link previous meeting…' });
+      const link = await screen.findByRole('button', { name: 'Link previous Meeting…' });
       const regen = screen.getByRole('button', { name: 'Regenerate the brief' });
       // Icon-only: no visible text of its own.
       expect(link.textContent).toBe('');

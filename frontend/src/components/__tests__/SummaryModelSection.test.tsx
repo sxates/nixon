@@ -116,7 +116,7 @@ describe('Summary model — resolved, and last on the tab (specs/0067)', () => {
     arrange({ provider: 'claude-code', model: 'sonnet' });
     const { container } = render(<SummaryModelSection />);
 
-    await waitFor(() => expect(container.textContent).toMatch(/Claude Code sends meeting text/));
+    await waitFor(() => expect(container.textContent).toMatch(/Claude Code sends Meeting text/));
     expect(screen.getByTestId('model-picker')).toBeInTheDocument();
     expect(screen.queryByTestId('resolved-value')).toBeNull();
     expect(container.textContent).not.toMatch(/your Claude subscription/);
@@ -127,9 +127,9 @@ describe('Summary model — resolved, and last on the tab (specs/0067)', () => {
     arrange({ provider: 'claude-code', model: 'sonnet' });
     const { container } = render(<SummaryModelSection />);
 
-    await waitFor(() => expect(container.textContent).toMatch(/Claude Code sends meeting text/));
+    await waitFor(() => expect(container.textContent).toMatch(/Claude Code sends Meeting text/));
     expect(container.textContent).toContain(
-      'The AI model that writes your meeting summaries. Claude Code sends meeting text to Anthropic under your Claude plan.',
+      'The AI model that writes your Meeting summaries. Claude Code sends Meeting text to Anthropic under your Claude plan.',
     );
     expect(container.textContent).not.toMatch(/keeps everything on this Mac/);
   });

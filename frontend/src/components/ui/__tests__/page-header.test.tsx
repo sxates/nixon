@@ -8,8 +8,8 @@ import { PageHeader } from '@/components/ui/page-header';
 // subtitle, and an optional actions cluster on the right.
 describe('PageHeader', () => {
   it('renders the title as the page h1', () => {
-    render(<PageHeader title="All meetings" />);
-    const heading = screen.getByRole('heading', { level: 1, name: 'All meetings' });
+    render(<PageHeader title="All Meetings" />);
+    const heading = screen.getByRole('heading', { level: 1, name: 'All Meetings' });
     expect(heading).toBeTruthy();
     expect(heading.className).toContain('u-page-title');
   });
@@ -21,10 +21,10 @@ describe('PageHeader', () => {
   });
 
   it('renders the subtitle in a .u-meta paragraph', () => {
-    const { container } = render(<PageHeader title="People" subtitle="3 people" />);
+    const { container } = render(<PageHeader title="People" subtitle="3 People" />);
     const meta = container.querySelector('p.u-meta');
     expect(meta).toBeTruthy();
-    expect(meta!.textContent).toBe('3 people');
+    expect(meta!.textContent).toBe('3 People');
   });
 
   it('omits the subtitle paragraph when none is given', () => {
@@ -34,9 +34,9 @@ describe('PageHeader', () => {
 
   it('renders actions in a right-hand cluster', () => {
     const { container } = render(
-      <PageHeader title="People" actions={<button type="button">Add person</button>} />
+      <PageHeader title="People" actions={<button type="button">Add Person</button>} />
     );
-    expect(screen.getByRole('button', { name: 'Add person' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Add Person' })).toBeTruthy();
     const cluster = container.querySelector('header > div:last-child');
     expect(cluster!.className).toContain('items-center');
   });

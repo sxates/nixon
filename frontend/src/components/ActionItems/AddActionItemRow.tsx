@@ -10,6 +10,8 @@
  * `parseTodoText` (specs/0088) and handed over as `dueDate`, an ISO local date. `@Name`
  * opens a People picker; picked names go out as `@[Name](person:<id>)` tokens. With `topics`
  * (specs/0089) the picker also offers open topics; a pick is handed over as `topicId`.
+ * `topicPicker` (specs/0090) adds an explicit Topic control left of Add, in place of the
+ * chip; `@` picks and menu picks share one state, and it resets to No Topic after an add.
  */
 
 import { useState } from 'react';
@@ -19,6 +21,7 @@ import { cn } from '@/lib/utils';
 import { parseTodoText } from '@/lib/todo-parse';
 import { MentionInput, type MentionTopic } from './MentionInput';
 import { TopicChip } from './TopicChip';
+import { TopicPicker } from './TopicPicker';
 
 interface AddActionItemRowProps {
   placeholder?: string;
@@ -33,6 +36,8 @@ interface AddActionItemRowProps {
   className?: string;
   /** Accessible name for the field (⌘T focuses the To-do page's by this label). */
   ariaLabel?: string;
+  /** Show the Topic control (needs `topics`). */
+  topicPicker?: boolean;
 }
 
 export function AddActionItemRow({
@@ -41,7 +46,9 @@ export function AddActionItemRow({
   className,
   ariaLabel,
   topics,
+  topicPicker = false,
 }: AddActionItemRowProps) {
+  const showPicker = topicPicker && !!topics;
   const [draft, setDraft] = useState('');
   const [topic, setTopic] = useState<MentionTopic | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -85,13 +92,15 @@ export function AddActionItemRow({
         topicId={topic?.id ?? null}
         onTopicChange={setTopic}
       />
-      {topic && (
-        <TopicChip name={topic.name} label={`Remove topic ${topic.name}`} onClick={() => setTopic(null)} className="flex-shrink-0" />
+      {showPicker ? (
+        <TopicPicker topics={topics ?? []} value={topic} onChange={setTopic} />
+      ) : topic && (
+        <TopicChip name={topic.name} label={`Remove Topic ${topic.name}`} onClick={() => setTopic(null)} className="flex-shrink-0" />
       )}
       <Button
         type="submit"
         size="sm"
-        variant="outline"
+        variant="dashed"
         className="h-8 flex-shrink-0 gap-1 px-2.5"
         disabled={!draft.trim() || isSubmitting}
       >

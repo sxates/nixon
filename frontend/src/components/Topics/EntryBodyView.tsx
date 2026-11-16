@@ -80,7 +80,7 @@ function RevisionLine({ r }: { r: TopicRevision }) {
     <p className="text-meta text-muted-foreground">
       <span className="font-semibold text-foreground">{when ? `${when}:` : 'Later:'}</span> {r.text}
       {r.sourceDeletedAt ? (
-        <span className="text-caption"> · Source meeting deleted</span>
+        <span className="text-caption"> · Source Meeting deleted</span>
       ) : r.sourceMeetingId && r.tStart != null ? (
         <>
           {' '}

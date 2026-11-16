@@ -76,9 +76,9 @@ export function isBriefLoading(status: BriefStatus): boolean {
 export function prepStageLabel(stage: PrepStage): string {
   switch (stage) {
     case 'gathering':
-      return 'Gathering past meetings…';
+      return 'Gathering past Meetings…';
     case 'mapping':
-      return 'Reading each meeting…';
+      return 'Reading each Meeting…';
     case 'reducing':
       return 'Writing your brief…';
   }

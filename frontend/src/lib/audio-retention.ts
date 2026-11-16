@@ -126,13 +126,13 @@ export function retentionChoiceFromSelectValue(value: string): AudioRetentionCho
 export function retentionChoiceDescription(choice: AudioRetentionChoice): string {
   if (choice === 'once-processed') {
     return (
-      "Audio is kept until Nixon has transcribed the meeting and identified the speakers, then deleted. If you quit before that finishes, it's kept until processing completes. " +
+      "Audio is kept until Nixon has transcribed the Meeting and identified the speakers, then deleted. If you quit before that finishes, it's kept until processing completes. " +
       "If speaker identification fails, the audio is kept for 7 days so you can retry."
     );
   }
   if (choice === 'never') return 'Audio is kept, compressed, about 50 MB per hour of meeting.';
   return (
-    `Audio from meetings older than ${choice} days is deleted, never while a meeting is still being transcribed or its speakers identified. ` +
+    `Audio from Meetings older than ${choice} days is deleted, never while a Meeting is still being transcribed or its speakers identified. ` +
     "Until then it's stored compressed, about 50 MB per hour."
   );
 }
@@ -140,22 +140,22 @@ export function retentionChoiceDescription(choice: AudioRetentionChoice): string
 /** One-line statement of the rule, for the toast when nothing needs deleting now. */
 export function retentionRuleSentence(choice: AudioRetentionChoice): string {
   if (choice === 'once-processed') {
-    return 'Audio will be deleted once each meeting is transcribed and its speakers are identified.';
+    return 'Audio will be deleted once each Meeting is transcribed and its speakers are identified.';
   }
   if (choice === 'never') return 'Audio will be kept.';
-  return `Audio from meetings older than ${choice} days will be deleted.`;
+  return `Audio from Meetings older than ${choice} days will be deleted.`;
 }
 
 /** The dialog's rule line: what the confirmed choice deletes now. */
 export function retentionDeletesNowSentence(choice: AudioRetentionChoice): string {
   if (choice === 'once-processed') {
-    return 'Audio from meetings that are already transcribed and have their speakers identified will be deleted.';
+    return 'Audio from Meetings that are already transcribed and have their speakers identified will be deleted.';
   }
   if (choice === 'never') return 'No audio will be deleted.';
-  return `Audio from meetings older than ${choice} days will be deleted.`;
+  return `Audio from Meetings older than ${choice} days will be deleted.`;
 }
 
-const meetingsText = (n: number) => plural(n, 'meeting');
+const meetingsText = (n: number) => plural(n, 'Meeting');
 
 /** The dialog's muted line about meetings that keep their audio for now, or null. */
 export function keptForNowSentence(preview: RetentionPreview): string | null {

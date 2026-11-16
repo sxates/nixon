@@ -219,7 +219,7 @@ export function ActionItemsSection({ meetingId, hasSummary }: ActionItemsSection
           <div className="flex flex-col gap-2.5">
             <div className="flex items-center gap-2.5">
               <p className="text-xs text-muted-foreground">
-                None found in this meeting&apos;s summary.
+                None found in this Meeting&apos;s summary.
               </p>
               {scanButton}
             </div>

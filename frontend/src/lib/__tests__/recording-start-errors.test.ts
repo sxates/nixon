@@ -63,6 +63,6 @@ describe('surfaceRecordingStartFailure — still saving the last meeting', () =>
     const showModal = vi.fn();
     surfaceRecordingStartFailure('Nixon is still saving the last meeting. Try again in a moment.', showModal);
     expect(showModal).not.toHaveBeenCalled();
-    expect(toastInfo).toHaveBeenCalledWith('Still saving your last meeting', expect.any(Object));
+    expect(toastInfo).toHaveBeenCalledWith('Still saving your last Meeting', expect.any(Object));
   });
 });

@@ -1,4 +1,4 @@
-// Invented Topic fixtures for the topic page tests (specs/0089).
+// Invented Topic fixtures for the Topic page tests (specs/0089).
 import type { Topic, TopicDetail, TopicEntry, TopicSuggestion } from '@/types';
 
 export const topic = (over: Partial<Topic> = {}): Topic => ({
@@ -11,6 +11,9 @@ export const topic = (over: Partial<Topic> = {}): Topic => ({
   createdAt: '2026-10-01T12:00:00Z',
   updatedAt: '2026-10-01T12:00:00Z',
   closedAt: null,
+  sortOrder: 0,
+  starred: false,
+  hideFromTodo: false,
   ...over,
 });
 

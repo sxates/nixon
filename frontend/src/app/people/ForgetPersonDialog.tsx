@@ -52,7 +52,7 @@ export function ForgetPersonDialog({
       await onForgotten();
     } catch (error) {
       console.error('Failed to forget person:', error);
-      toast.error('Could not forget this person. Please try again.', {
+      toast.error('Could not forget this Person. Please try again.', {
         description: error instanceof Error ? error.message : String(error),
       });
     } finally {
@@ -64,9 +64,9 @@ export function ForgetPersonDialog({
     <Dialog open={open} onOpenChange={(next) => (isDeleting ? undefined : onOpenChange(next))}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Forget this person</DialogTitle>
+          <DialogTitle>Forget this Person</DialogTitle>
           <DialogDescription>
-            Forget{personName?.trim() ? ` ${personName.trim()}` : ' this person'}? This removes them
+            Forget{personName?.trim() ? ` ${personName.trim()}` : ' this Person'}? This removes them
             from your People directory and unlinks them from any speakers they were assigned to. Any
             stored voice samples are deleted too. This can&apos;t be undone.
           </DialogDescription>
@@ -77,7 +77,7 @@ export function ForgetPersonDialog({
           </Button>
           <Button variant="destructive" onClick={handleConfirm} disabled={isDeleting}>
             {isDeleting && <Spinner />}
-            Forget person
+            Forget Person
           </Button>
         </DialogFooter>
       </DialogContent>

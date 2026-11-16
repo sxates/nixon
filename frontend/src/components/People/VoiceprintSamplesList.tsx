@@ -76,7 +76,7 @@ export function VoiceprintSamplesList({
   // Sample id currently in the "delete forever?" confirm state (only one at a time).
   const [confirmingDelete, setConfirmingDelete] = useState<string | null>(null);
 
-  const label = personName?.trim() || 'this person';
+  const label = personName?.trim() || 'this Person';
 
   const load = useCallback(async () => {
     setError(null);
@@ -246,7 +246,7 @@ export function VoiceprintSamplesList({
             const source = sample.sourceMeetingId
               ? meetingTitle
                 ? `From “${meetingTitle}”`
-                : 'From a recorded meeting'
+                : 'From a recorded Meeting'
               : 'Earlier sample';
             const meta = [source, date, quality].filter(Boolean).join(' · ');
             const isConfirming = confirmingDelete === sample.id;

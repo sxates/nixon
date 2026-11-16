@@ -67,7 +67,7 @@ describe('SummaryPromptSettings (specs/0079 W4)', () => {
     render(<SummaryPromptSettings />);
     expect(
       await screen.findByText(
-        'No prompts yet. Create one to shape how your meeting notes are written.',
+        'No prompts yet. Create one to shape how your Meeting notes are written.',
       ),
     ).toBeInTheDocument();
   });

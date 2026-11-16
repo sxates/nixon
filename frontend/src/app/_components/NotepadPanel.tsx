@@ -179,7 +179,7 @@ export function NotepadPanel({
         console.error('Failed to load meeting notes:', error);
         if (!cancelled) {
           toast.error('Could not load saved notes', {
-            description: 'Starting with a blank notepad for this meeting.',
+            description: 'Starting with a blank notepad for this Meeting.',
             duration: 4000,
           });
           htmlRef.current = '';

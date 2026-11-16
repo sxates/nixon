@@ -289,7 +289,7 @@ export default function CalendarAlerts() {
         );
       } catch (error) {
         console.error('[CalendarAlerts] could not open prep:', error);
-        toast.error('Could not open prep for this meeting');
+        toast.error('Could not open prep for this Meeting');
       }
     };
 

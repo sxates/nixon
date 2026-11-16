@@ -74,7 +74,7 @@ describe('W3 — the meeting says when it is being processed', () => {
     backlog.items = [item('transcribing')];
     render(<TranscriptPanel {...props} />);
     const note = await screen.findByRole('status');
-    expect(note.textContent).toMatch(/Re-transcribing this meeting/);
+    expect(note.textContent).toMatch(/Re-transcribing this Meeting/);
     expect(note.textContent).toMatch(/will update when it finishes/);
   });
 
@@ -87,7 +87,7 @@ describe('W3 — the meeting says when it is being processed', () => {
   it('says it is summarizing at the summarize stage', async () => {
     backlog.items = [item('summarizing')];
     render(<TranscriptPanel {...props} />);
-    expect((await screen.findByRole('status')).textContent).toMatch(/Summarizing this meeting/);
+    expect((await screen.findByRole('status')).textContent).toMatch(/Summarizing this Meeting/);
   });
 
   it('stops saying so once the work reaches a terminal state', async () => {

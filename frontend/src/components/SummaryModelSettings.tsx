@@ -20,20 +20,20 @@ export function SummaryModelSettings() {
     <div className="space-y-8">
       <SettingsSection
         title="When to summarize"
-        description="Summaries can also be generated on demand from any meeting page."
+        description="Summaries can also be generated on demand from any Meeting page."
       >
         <SettingsGroup>
           {/* specs/0029 WS7.3. This used to be duplicated as a second switch in Recording
               settings (same ConfigContext state, two surfaces to keep in sync); that copy
               is gone now (specs/0061 W6) and Recording settings just points here. */}
           <SettingsRow
-            label="Summarize automatically when a meeting ends"
+            label="Summarize automatically when a Meeting ends"
             description="Generate an AI summary as soon as a recording stops, using your configured summary model."
             control={
               <Switch
                 checked={isAutoSummary}
                 onCheckedChange={toggleIsAutoSummary}
-                aria-label="Summarize automatically when a meeting ends"
+                aria-label="Summarize automatically when a Meeting ends"
               />
             }
           />

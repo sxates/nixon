@@ -127,7 +127,7 @@ export function TranscriptSettings({ transcriptModelConfig, setTranscriptModelCo
         <div className="space-y-8">
             <SettingsSection
                 title="Transcript model"
-                description="Which engine turns meeting audio into text. Every option runs entirely on this Mac."
+                description="Which engine turns Meeting audio into text. Every option runs entirely on this Mac."
             >
                 <ResolvedSettingRow
                     label="Engine"

@@ -45,7 +45,7 @@ export function RetentionChangeDialog({ pending, onConfirm, onCancel }: Retentio
       }}
       title={
         pending
-          ? `Delete audio from ${plural(pending.preview.meetings, 'meeting')} (${formatBytes(pending.preview.bytes)}) now?`
+          ? `Delete audio from ${plural(pending.preview.meetings, 'Meeting')} (${formatBytes(pending.preview.bytes)}) now?`
           : 'Delete audio now?'
       }
       body={

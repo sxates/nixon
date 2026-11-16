@@ -121,7 +121,7 @@ const WAITING_COPY: Record<LeaseHolder, string> = {
   compression: 'Waiting for audio compression to finish…',
   mover: 'Waiting for another move to finish…',
   folderPathWrite: 'Waiting for the transcript to save…',
-  delete: 'Waiting for a meeting to finish deleting…',
+  delete: 'Waiting for a Meeting to finish deleting…',
   discard: 'Waiting for a recording to be discarded…',
 };
 

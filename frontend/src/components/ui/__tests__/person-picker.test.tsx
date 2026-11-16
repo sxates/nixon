@@ -50,7 +50,7 @@ describe('PersonPicker', () => {
             label: 'Attendees',
             options: [<PersonOption key="p" name="Priya" email="p@x.com" onSelect={() => {}} />],
           },
-          { label: 'People', options: [], emptyMessage: 'No people match “pr”.' },
+          { label: 'People', options: [], emptyMessage: 'No People match “pr”.' },
           { label: 'Hidden', options: [] },
         ]}
         {...overrides}
@@ -73,7 +73,7 @@ describe('PersonPicker', () => {
     expect(screen.getByRole('group', { name: 'Attendees' })).toContainElement(
       screen.getByRole('button', { name: /Priya/ }),
     );
-    expect(screen.getByRole('group', { name: 'People' })).toHaveTextContent('No people match “pr”.');
+    expect(screen.getByRole('group', { name: 'People' })).toHaveTextContent('No People match “pr”.');
     expect(screen.queryByRole('group', { name: 'Hidden' })).toBeNull();
   });
 

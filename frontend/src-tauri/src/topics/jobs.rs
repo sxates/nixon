@@ -178,7 +178,7 @@ async fn unlinked_open_topics(pool: &SqlitePool, meeting_id: &str) -> Result<Vec
         .collect();
     let mut open = TopicsRepository::list(pool, Some("open")).await?;
     open.retain(|t| !linked.contains(&t.id));
-    open.sort_by(|a, b| b.last_activity.cmp(&a.last_activity)); // stable: name order within ties
+    open.sort_by(|a, b| b.last_activity.cmp(&a.last_activity)); // stable: manual order within ties
     let mut out = Vec::new();
     for s in open.into_iter().take(MENTION_TOPICS_CAP) {
         if let Some(t) = TopicsRepository::get(pool, &s.id).await? {
@@ -314,7 +314,7 @@ where
     // fingerprinted, so only the failed halves do any work.
     match failures.as_slice() {
         [] => Ok(report),
-        [one] => Err(anyhow::anyhow!("Couldn't update a topic. {one}")),
+        [one] => Err(anyhow::anyhow!("Couldn't update a Topic. {one}")),
         [first, ..] => Err(anyhow::anyhow!(
             "Couldn't update {} topic jobs. {first}",
             failures.len()
@@ -424,7 +424,7 @@ async fn start_row<R: Runtime>(
     let state = app.try_state::<LlmActivityState>()?;
     let title = match MeetingsRepository::get_meeting_metadata(pool, meeting_id).await {
         Ok(Some(meta)) => format!("Updating topics — {}", meta.title),
-        _ => "Updating topics".to_string(),
+        _ => "Updating Topics".to_string(),
     };
     Some(Arc::clone(&state.0).start_for(
         TaskKind::Topics,
@@ -579,6 +579,6 @@ pub async fn pretag_suggestions(pool: &SqlitePool, meeting_id: &str) -> Result<u
     .bind(meeting_id)
     .execute(pool)
     .await
-    .context("Couldn't tag the suggested to-dos with their topic")?;
+    .context("Couldn't tag the suggested To-Dos with their Topic")?;
     Ok(res.rows_affected() as u32)
 }

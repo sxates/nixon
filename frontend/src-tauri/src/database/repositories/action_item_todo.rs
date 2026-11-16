@@ -123,8 +123,10 @@ impl ActionItemTodoRepository {
 
     pub async fn list_view(pool: &SqlitePool, view: TodoView) -> Result<Vec<TodoRow>, SqlxError> {
         let (filter, order) = match view {
+            // specs/0090: a topic kept off the To-do list hides its items here only.
             TodoView::List => (
-                "ai.triage = 'listed' AND ai.status = 'open'",
+                "ai.triage = 'listed' AND ai.status = 'open' AND (ai.topic_id IS NULL OR \
+                 ai.topic_id NOT IN (SELECT id FROM topics WHERE hide_from_todo = 1))",
                 "ai.sort_order IS NULL, ai.sort_order ASC, ai.created_at ASC",
             ),
             TodoView::Inbox => (
@@ -229,7 +231,7 @@ impl ActionItemTodoRepository {
             match status.as_deref() {
                 None => anyhow::bail!("Topic not found."),
                 Some("open") => {}
-                Some(_) => anyhow::bail!("That topic is closed."),
+                Some(_) => anyhow::bail!("That Topic is closed."),
             }
         }
         let res = sqlx::query("UPDATE action_items SET topic_id = ?2 WHERE id = ?1")

@@ -49,7 +49,7 @@ describe('useJoinRunningSummary', () => {
     expect(poll).not.toHaveBeenCalled();
   });
 
-  it('joins when the wrap-up starts summarizing this meeting, and only this one', async () => {
+  it('joins when the wrap-up starts summarizing this Meeting, and only this one', async () => {
     const { poll } = mount('idle');
     await flush();
     act(() => h.listeners.get('meeting-wrap-up')!({ payload: { stage: 'summarizing', meetingId: 'other' } }));

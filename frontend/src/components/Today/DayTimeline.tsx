@@ -147,7 +147,7 @@ export function DayTimeline({
                 : `Nothing scheduled for ${dayLabel(viewDate, now)}`}
             </p>
             <p className="mt-1 max-w-xs text-xs text-muted-foreground">
-              Hit Record to capture a meeting, or connect your calendar to see your day.
+              Hit Record to capture a Meeting, or connect your calendar to see your day.
             </p>
           </div>
         )}

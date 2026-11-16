@@ -45,7 +45,7 @@ export function MeetingOptionsMenu({
           </DropdownMenuItem>
         )}
         <DropdownMenuItem icon={Trash2} variant="destructive" onSelect={onDelete}>
-          Delete meeting
+          Delete Meeting
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

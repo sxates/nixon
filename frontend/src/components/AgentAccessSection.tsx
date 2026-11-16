@@ -41,14 +41,14 @@ interface AccessEntry {
 
 const TOOL_LABELS: Record<string, string> = {
   search_meetings: 'Searched',
-  list_meetings: 'Listed meetings',
-  get_meeting: 'Read a meeting',
+  list_meetings: 'Listed Meetings',
+  get_meeting: 'Read a Meeting',
 };
 
 const REFUSALS: Record<string, string> = {
   off: 'Refused — access was off',
   needs_update: 'Refused — Nixon needed updating',
-  no_db: 'Refused — no meetings yet',
+  no_db: 'Refused — no Meetings yet',
   error: 'Error',
 };
 
@@ -163,14 +163,14 @@ export function AgentAccessSection() {
     <SettingsSection id="agent-access" title="Agent access">
       <SettingsGroup>
         <SettingsRow
-          label="Let Claude read your meetings"
-          description="Claude Code and the Claude desktop app can search and read all of your meetings — transcripts, summaries, notes and action items. It can't change anything. Whatever Claude reads becomes part of your Claude conversation and is sent to Anthropic, like anything else you show Claude."
+          label="Let Claude read your Meetings"
+          description="Claude Code and the Claude desktop app can search and read all of your Meetings — transcripts, summaries, notes and action items. It can't change anything. Whatever Claude reads becomes part of your Claude conversation and is sent to Anthropic, like anything else you show Claude."
           control={
             <Switch
               checked={enabled}
               disabled={busy || !status}
               onCheckedChange={onToggle}
-              aria-label="Let Claude read your meetings"
+              aria-label="Let Claude read your Meetings"
             />
           }
         >
@@ -213,7 +213,7 @@ export function AgentAccessSection() {
           </div>
           {log.length === 0 ? (
             <p className="mt-2 text-sm text-muted-foreground">
-              Nothing has read your meetings yet.
+              Nothing has read your Meetings yet.
             </p>
           ) : (
             <ul className="mt-2 divide-y divide-border">
@@ -243,7 +243,7 @@ export function AgentAccessSection() {
                             </Link>
                           ) : (
                             <span key={m.id} className="text-muted-foreground">
-                              Deleted meeting
+                              Deleted Meeting
                             </span>
                           ),
                         )}

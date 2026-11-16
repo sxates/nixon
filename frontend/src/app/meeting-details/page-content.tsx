@@ -33,6 +33,7 @@ import { useRecordingState } from '@/contexts/RecordingStateContext';
 import { armResumeRecording } from '@/lib/resume-recording';
 import { DOC_CONTENT_WIDTH, PAGE_GUTTER } from '@/lib/page-width';
 import { cn } from '@/lib/utils';
+import { useBack } from '@/hooks/useBack';
 
 /** specs/0057 — how the recording got here, for the reel label's SOURCE line.
  *  Only what the backend actually knows; an unmapped origin leaves the line blank. */
@@ -92,6 +93,7 @@ export default function PageContent({
   });
 
   const router = useRouter();
+  const goBack = useBack('/');
   const searchParams = useSearchParams();
 
   // State
@@ -329,15 +331,11 @@ export default function PageContent({
               className="pb-0 pt-6"
               onBack={() => {
                 // Return to wherever the user came from (day view, All meetings,
-                // People, sidebar) — every entry point `push`es, so history holds it
-                // (specs/0038 feedback #2). Fall back to Home when there's nothing to
-                // go back to (a cold deep-link) or when we arrived straight from a
-                // just-finished recording (back would land on the idle /record screen).
-                if (searchParams.get('source') === 'recording' || window.history.length <= 1) {
-                  router.push('/');
-                } else {
-                  router.back();
-                }
+                // People, a topic) — `useBack` falls back to Home on a cold deep link.
+                // Straight from a just-finished recording, Home too: back would land on
+                // the idle /record screen.
+                if (searchParams.get('source') === 'recording') router.push('/');
+                else goBack();
               }}
               meetingId={meeting.id}
               title={meetingData.meetingTitle}

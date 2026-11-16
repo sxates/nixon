@@ -9,6 +9,12 @@
  * Rows carry `data-reorder-id={id}`; the grip spreads `gripProps(id)`. While dragging,
  * the row under the pointer is the drop target; release moves the dragged id there.
  * Keyboard: ArrowUp / ArrowDown on a focused grip moves that row one place.
+ *
+ * Options (specs/0090): `attr` names the marker attribute, so two reorderable levels can
+ * nest (To-do sections, each holding rows) without one reading the other's targets.
+ * `onDropOutside` gets a release that lands anywhere but one of this list's own rows,
+ * with the element under the pointer (or the last row hovered), so a caller can move the
+ * item to another list. Without it such a drop changes nothing.
  */
 
 import { useCallback, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
@@ -16,13 +22,32 @@ import { reorderIds } from '@/lib/action-items';
 
 export const REORDER_ATTR = 'data-reorder-id';
 
-function rowIdAt(x: number, y: number): string | null {
+function elementAt(x: number, y: number): HTMLElement | null {
   if (typeof document === 'undefined' || !document.elementFromPoint) return null;
-  const el = document.elementFromPoint(x, y) as HTMLElement | null;
-  return el?.closest<HTMLElement>(`[${REORDER_ATTR}]`)?.getAttribute(REORDER_ATTR) ?? null;
+  return (document.elementFromPoint(x, y) as HTMLElement | null) ?? null;
 }
 
-export function useDragReorder(ids: readonly string[], onReorder: (next: string[]) => void) {
+const cssEscape = (v: string) =>
+  typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(v) : v.replace(/["\\]/g, '\\$&');
+
+const idIn = (el: Element | null, attr: string) =>
+  el?.closest<HTMLElement>(`[${attr}]`)?.getAttribute(attr) ?? null;
+
+export interface DragReorderOptions {
+  /** The marker attribute on reorderable items. Default `data-reorder-id`. */
+  attr?: string;
+  /**
+   * A drop that isn't on one of this list's own items. Return true when handled; false
+   * falls back to the last own item hovered (or nothing).
+   */
+  onDropOutside?: (draggedId: string, target: HTMLElement | null) => boolean;
+}
+
+export function useDragReorder(
+  ids: readonly string[],
+  onReorder: (next: string[]) => void,
+  { attr = REORDER_ATTR, onDropOutside }: DragReorderOptions = {},
+) {
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [overId, setOverId] = useState<string | null>(null);
   const overRef = useRef<string | null>(null);
@@ -52,7 +77,7 @@ export function useDragReorder(ids: readonly string[], onReorder: (next: string[
     },
     onPointerMove: (e: PointerEvent<HTMLElement>) => {
       if (draggingId !== id) return;
-      const over = rowIdAt(e.clientX, e.clientY);
+      const over = idIn(elementAt(e.clientX, e.clientY), attr);
       if (over && over !== overRef.current) {
         overRef.current = over;
         setOverId(over);
@@ -61,7 +86,18 @@ export function useDragReorder(ids: readonly string[], onReorder: (next: string[
     onPointerUp: (e: PointerEvent<HTMLElement>) => {
       if (draggingId !== id) return;
       e.currentTarget.releasePointerCapture?.(e.pointerId);
-      moveTo(id, rowIdAt(e.clientX, e.clientY) ?? overRef.current);
+      const el = elementAt(e.clientX, e.clientY);
+      const rowId = idIn(el, attr);
+      const lastId = rowId ?? overRef.current;
+      const fallback = lastId
+        ? document.querySelector<HTMLElement>(`[${attr}="${cssEscape(lastId)}"]`)
+        : null;
+      if (rowId && ids.includes(rowId)) moveTo(id, rowId);
+      else if (onDropOutside?.(id, el ?? fallback)) {
+        // handled by the caller (moved to another list)
+      } else if (!rowId && overRef.current && ids.includes(overRef.current)) {
+        moveTo(id, overRef.current);
+      }
       reset();
     },
     onPointerCancel: reset,

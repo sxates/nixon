@@ -211,7 +211,7 @@ export function useDayAgenda(viewMode: AgendaMode | null = 'day') {
         // Write only the preferred (sync-stable) key; reads accept old + new.
         await dismissCalendarEvent(dismissKeysFor(item)[0]);
         toast('Event hidden', {
-          description: item.title?.trim() || 'Untitled meeting',
+          description: item.title?.trim() || 'Untitled Meeting',
           action: { label: 'Undo', onClick: () => void handleUnhide(item) },
         });
         void refresh();

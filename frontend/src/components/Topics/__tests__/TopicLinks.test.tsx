@@ -21,7 +21,7 @@ import { TopicLinks } from '@/components/Topics/TopicLinks';
 const open = async () => {
   const onChanged = vi.fn();
   render(<TopicLinks topicId="topic-1" links={[]} meetingCount={0} onChanged={onChanged} />);
-  fireEvent.click(screen.getByRole('button', { name: 'Link a series…' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Link a Series…' }));
   await screen.findByRole('checkbox', { name: /Product sync/ });
   return onChanged;
 };
@@ -33,12 +33,12 @@ describe('TopicLinks — linking several series', () => {
 
   it('links every checked series in one go, with the backfill choice', async () => {
     const onChanged = await open();
-    const confirm = screen.getByRole('button', { name: 'Link 0 series' });
+    const confirm = screen.getByRole('button', { name: 'Link 0 Series' });
     expect(confirm).toBeDisabled();
 
     fireEvent.click(screen.getByRole('checkbox', { name: /Product sync/ }));
     fireEvent.click(screen.getByRole('checkbox', { name: /Hiring loop/ }));
-    fireEvent.click(screen.getByRole('button', { name: 'Link 2 series' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Link 2 Series' }));
 
     await waitFor(() => expect(onChanged).toHaveBeenCalledTimes(1));
     expect(linkTopic).toHaveBeenCalledTimes(2);
@@ -52,7 +52,7 @@ describe('TopicLinks — linking several series', () => {
     const box = screen.getByRole('checkbox', { name: /Design review/ });
     fireEvent.click(box);
     fireEvent.click(box);
-    expect(screen.getByRole('button', { name: 'Link 0 series' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Link 0 Series' })).toBeDisabled();
   });
 
   it('keeps only the failed series selected and the dialog open', async () => {
@@ -63,12 +63,12 @@ describe('TopicLinks — linking several series', () => {
     const onChanged = await open();
     fireEvent.click(screen.getByRole('checkbox', { name: /Product sync/ }));
     fireEvent.click(screen.getByRole('checkbox', { name: /Design review/ }));
-    fireEvent.click(screen.getByRole('button', { name: 'Link 2 series' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Link 2 Series' }));
 
     expect(await screen.findByText('We could not link one of them. Please try again.')).toBeInTheDocument();
     expect(onChanged).toHaveBeenCalledTimes(1);
     expect(screen.getByRole('checkbox', { name: /Design review/ })).toHaveAttribute('aria-checked', 'true');
     expect(screen.getByRole('checkbox', { name: /Product sync/ })).toHaveAttribute('aria-checked', 'false');
-    expect(screen.getByRole('button', { name: 'Link 1 series' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Link 1 Series' })).toBeEnabled();
   });
 });

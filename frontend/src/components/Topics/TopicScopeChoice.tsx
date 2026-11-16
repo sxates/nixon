@@ -29,20 +29,20 @@ export function TopicScopeChoice({
   return (
     <div className="flex flex-col gap-2">
       <SegmentedControl
-        aria-label="Which meetings"
+        aria-label="Which Meetings"
         size="lg"
         value={scope}
         onChange={(v) => onScopeChange(v as TopicScope)}
         options={[
-          { value: 'meeting', label: 'This meeting' },
-          { value: 'series', label: 'Every meeting in this series', disabled: !seriesAvailable },
+          { value: 'meeting', label: 'This Meeting' },
+          { value: 'series', label: 'Every Meeting in this Series', disabled: !seriesAvailable },
         ]}
       />
       {scope === 'series' ? (
         <Checkbox
           checked={backfill}
           onCheckedChange={onBackfillChange}
-          label="Also add this series' meetings from the last 90 days"
+          label="Also add this Series' Meetings from the last 90 days"
         />
       ) : null}
     </div>

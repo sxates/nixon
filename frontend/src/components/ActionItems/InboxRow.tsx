@@ -34,8 +34,8 @@ function sourceLine(item: TodoRow): string {
   const date = formatMeetingDate(item.latestSourceAt ?? item.meetingCreatedAt);
   const where =
     item.sourceCount > 1
-      ? `from ${item.sourceCount} meetings`
-      : item.meetingTitle?.trim() || 'Untitled meeting';
+      ? `from ${item.sourceCount} Meetings`
+      : item.meetingTitle?.trim() || 'Untitled Meeting';
   return date ? `${where} · ${date}` : where;
 }
 

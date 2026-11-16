@@ -12,10 +12,15 @@
  * row selects it, a click on the title of the selected row edits it in place (Enter
  * saves, Esc cancels, a trailing "(Friday)" becomes the due date). The chevron opens the
  * detail page. A highlight (⌘4 yellow / ⌘5 green) marks the title like a highlighter pen.
+ *
+ * `compact` (a half-width card, e.g. a topic's action items) drops the column grid for a
+ * flex row: checkbox · title · actions, the title taking all the width between them. The
+ * due date (and topic chip) sit on a line under the title only when there is one, so an
+ * undated row stays one line; "Set due date…" in its menu opens the date picker.
  */
 
-import { useEffect, useState, type ReactNode } from 'react';
-import { ChevronRight, EyeOff, Trash2, X } from '@/components/ui/icons';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { CalendarDays, ChevronRight, EyeOff, Trash2, X } from '@/components/ui/icons';
 import { Checkbox } from '@/components/ui/checkbox';
 import { DeckIcon } from '@/components/ui/deck-icon';
 import { IconButton } from '@/components/ui/icon-button';
@@ -47,6 +52,9 @@ export const todoGrid = (withTopic: boolean) =>
   withTopic
     ? 'grid grid-cols-[1rem_minmax(0,1fr)_8rem_7.5rem_3.5rem] items-start gap-x-3'
     : 'grid grid-cols-[1rem_minmax(0,1fr)_7.5rem_3.5rem] items-start gap-x-3';
+
+/** `compact` rows: plain flex (no arbitrary grid template), checkbox · title · actions. */
+const COMPACT_ROW = 'flex items-start gap-x-3';
 
 /** Highlighter-pen washes on the title text. */
 const HIGHLIGHT_CLASS: Record<Highlight, string> = {
@@ -81,7 +89,7 @@ interface TodoListRowProps {
   onSetDueDate: (item: ActionItem, dueDate: string | null) => void | Promise<void>;
   onDelete: (item: ActionItem) => void | Promise<void>;
   onToggleHighlight: (item: ActionItem, color: Highlight) => void;
-  /** Omitted where the list has no order of its own (a topic's items follow To-do's). */
+  /** Omitted where the list can't be reordered (`TodoList` without `reorder`). */
   onMoveToTop?: (item: ActionItem) => void;
   /** A ticked-off row's ✕: take it off this list (a topic's dismiss, specs/0089). */
   onDismissDone?: (item: ActionItem) => void;
@@ -90,6 +98,8 @@ interface TodoListRowProps {
   onOpenTopic?: (topicId: string) => void;
   /** Render the Topic column; the list passes whether any row in the view is tagged. */
   showTopic?: boolean;
+  /** Two-line layout for narrow containers (see the file comment). */
+  compact?: boolean;
 }
 
 export function TodoListRow({
@@ -115,11 +125,17 @@ export function TodoListRow({
   topics,
   onOpenTopic,
   showTopic = true,
+  compact = false,
 }: TodoListRowProps) {
   const [pickedTopic, setPickedTopic] = useState<MentionTopic | null | undefined>(undefined);
+  // "Set due date…" in the row menu opens the date picker; on a compact undated row this
+  // also brings up the date line so the picker has an anchor.
+  const [dueOpen, setDueOpen] = useState(false);
+  const openingDue = useRef(false);
+  const hasDue = Boolean(item.dueDate || item.dueHint?.trim());
   const completed = item.status === 'completed';
   const meta = [
-    sourceCount !== undefined && sourceCount > 1 ? `from ${sourceCount} meetings` : null,
+    sourceCount !== undefined && sourceCount > 1 ? `from ${sourceCount} Meetings` : null,
     adoptedFrom ? `adopted from ${adoptedFrom}` : null,
   ].filter(Boolean);
 
@@ -132,6 +148,113 @@ export function TodoListRow({
   }, [editing]);
   const topicId = pickedTopic === undefined ? (item.topicId ?? null) : (pickedTopic?.id ?? null);
 
+  const topicCell = showTopic ? (
+    <span className="flex h-5 min-w-0 items-center">
+      {item.topicId && item.topicName && (
+        <TopicChip name={item.topicName} onClick={() => onOpenTopic?.(item.topicId!)} className="-ml-1" />
+      )}
+    </span>
+  ) : null;
+  // Compact: the date sizes to its label (a percentage max-width under the shrink-to-fit
+  // second line collapsed it to "To…").
+  const dueCell = (
+    <span className={cn('flex h-5 items-center', !compact && 'min-w-0')}>
+      {/* -ml-1 cancels the control's hover padding so the date sits under the header. */}
+      <DueDateControl
+        item={item}
+        onSetDueDate={onSetDueDate}
+        quietWhenEmpty
+        className={cn('-ml-1', !compact && 'max-w-full')}
+        open={dueOpen}
+        onOpenChange={setDueOpen}
+      />
+    </span>
+  );
+  const actionsCell = (
+    <span className="flex h-5 items-center justify-end gap-0.5">
+      {completed && onDismissDone ? (
+        <IconButton
+          variant="ghost"
+          size="sm"
+          label={`Dismiss "${item.description}" from this Topic`}
+          icon={<DeckIcon icon={X} size={14} />}
+          onClick={(e) => {
+            e.stopPropagation();
+            onDismissDone(item);
+          }}
+        />
+      ) : (
+      <IconButton
+        variant="ghost"
+        size="sm"
+        label="Open details"
+        icon={<DeckIcon icon={ChevronRight} size={14} />}
+        onClick={(e) => {
+          e.stopPropagation();
+          onOpen(item);
+        }}
+        className={cn(
+          'opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100',
+          selected && 'opacity-100',
+        )}
+      />
+      )}
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <MenuButton
+            label={`Options for "${item.description}"`}
+            className="opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100"
+          />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent
+          align="end"
+          onClick={(e) => e.stopPropagation()}
+          // Handing focus back to the ⋯ key would count as a focus-outside and shut the
+          // date picker this menu just opened.
+          onCloseAutoFocus={(e) => {
+            if (openingDue.current) {
+              e.preventDefault();
+              openingDue.current = false;
+            }
+          }}
+        >
+          {onMoveToTop && (
+            <DropdownMenuItem onSelect={() => onMoveToTop(item)}>
+              Move to top <DropdownMenuShortcut>⌘1</DropdownMenuShortcut>
+            </DropdownMenuItem>
+          )}
+          <DropdownMenuItem
+            icon={CalendarDays}
+            onSelect={() => {
+              openingDue.current = true;
+              setDueOpen(true);
+            }}
+          >
+            {hasDue ? 'Change due date…' : 'Set due date…'}
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => onToggleHighlight(item, 'yellow')}>
+            {highlight === 'yellow' ? 'Remove highlight' : 'Highlight yellow'}
+            <DropdownMenuShortcut>⌘4</DropdownMenuShortcut>
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => onToggleHighlight(item, 'green')}>
+            {highlight === 'green' ? 'Remove highlight' : 'Highlight green'}
+            <DropdownMenuShortcut>⌘5</DropdownMenuShortcut>
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          {item.source === 'manual' ? (
+            <DropdownMenuItem icon={Trash2} variant="destructive" onSelect={() => void onDelete(item)}>
+              Delete
+            </DropdownMenuItem>
+          ) : (
+            <DropdownMenuItem icon={EyeOff} onSelect={() => void onSetStatus(item, 'dismissed')}>
+              Dismiss
+            </DropdownMenuItem>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </span>
+  );
+
   return (
     <div
       id={todoRowDomId(item.id)}
@@ -143,7 +266,7 @@ export function TodoListRow({
         if (!editing) onSelect(item);
       }}
       className={cn(
-        todoGrid(showTopic),
+        compact ? COMPACT_ROW : todoGrid(showTopic),
         'group relative rounded-lg px-2 py-1 transition-colors',
         selected
           ? 'bg-accent ring-1 ring-inset ring-rule group-focus/list:ring-brand-edge'
@@ -151,7 +274,7 @@ export function TodoListRow({
       )}
     >
       {dragHandle && <span className="absolute -left-4 top-1 flex h-5 items-center">{dragHandle}</span>}
-      <span className="flex h-5 items-center">
+      <span className="flex h-5 shrink-0 items-center">
         <Checkbox
           checked={completed}
           aria-label={
@@ -161,7 +284,7 @@ export function TodoListRow({
         />
       </span>
 
-      <div className="min-w-0 text-sm leading-5">
+      <div className={cn('min-w-0 text-sm leading-5', compact && 'flex-1')}>
         {editing ? (
           <MentionInput
             value={item.description}
@@ -174,7 +297,7 @@ export function TodoListRow({
             topics={topics}
             topicId={topicId}
             onTopicChange={setPickedTopic}
-            ariaLabel="Edit to-do"
+            ariaLabel="Edit To-Do"
             className="-mx-1 -my-0.5 leading-5"
           />
         ) : (
@@ -213,83 +336,21 @@ export function TodoListRow({
             )}
           </>
         )}
+        {compact && (hasDue || dueOpen || (showTopic && item.topicId)) ? (
+          <div className="flex min-w-0 items-center gap-2">
+            {topicCell}
+            {hasDue || dueOpen ? dueCell : null}
+          </div>
+        ) : null}
       </div>
 
-      {showTopic ? (
-        <span className="flex h-5 min-w-0 items-center">
-          {item.topicId && item.topicName && (
-            <TopicChip name={item.topicName} onClick={() => onOpenTopic?.(item.topicId!)} className="-ml-1" />
-          )}
-        </span>
-      ) : null}
-
-      <span className="flex h-5 min-w-0 items-center">
-        {/* -ml-1 cancels the control's hover padding so the date sits under the header. */}
-        <DueDateControl item={item} onSetDueDate={onSetDueDate} quietWhenEmpty className="-ml-1 max-w-full" />
-      </span>
-
-      <span className="flex h-5 items-center justify-end gap-0.5">
-        {completed && onDismissDone ? (
-          <IconButton
-            variant="ghost"
-            size="sm"
-            label={`Dismiss "${item.description}" from this topic`}
-            icon={<DeckIcon icon={X} size={14} />}
-            onClick={(e) => {
-              e.stopPropagation();
-              onDismissDone(item);
-            }}
-          />
-        ) : (
-        <IconButton
-          variant="ghost"
-          size="sm"
-          label="Open details"
-          icon={<DeckIcon icon={ChevronRight} size={14} />}
-          onClick={(e) => {
-            e.stopPropagation();
-            onOpen(item);
-          }}
-          className={cn(
-            'opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100',
-            selected && 'opacity-100',
-          )}
-        />
-        )}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <MenuButton
-              label={`Options for "${item.description}"`}
-              className="opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100"
-            />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
-            {onMoveToTop && (
-              <DropdownMenuItem onSelect={() => onMoveToTop(item)}>
-                Move to top <DropdownMenuShortcut>⌘1</DropdownMenuShortcut>
-              </DropdownMenuItem>
-            )}
-            <DropdownMenuItem onSelect={() => onToggleHighlight(item, 'yellow')}>
-              {highlight === 'yellow' ? 'Remove highlight' : 'Highlight yellow'}
-              <DropdownMenuShortcut>⌘4</DropdownMenuShortcut>
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => onToggleHighlight(item, 'green')}>
-              {highlight === 'green' ? 'Remove highlight' : 'Highlight green'}
-              <DropdownMenuShortcut>⌘5</DropdownMenuShortcut>
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            {item.source === 'manual' ? (
-              <DropdownMenuItem icon={Trash2} variant="destructive" onSelect={() => void onDelete(item)}>
-                Delete
-              </DropdownMenuItem>
-            ) : (
-              <DropdownMenuItem icon={EyeOff} onSelect={() => void onSetStatus(item, 'dismissed')}>
-                Dismiss
-              </DropdownMenuItem>
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </span>
+      {compact ? null : (
+        <>
+          {topicCell}
+          {dueCell}
+        </>
+      )}
+      {compact ? <span className="shrink-0">{actionsCell}</span> : actionsCell}
     </div>
   );
 }

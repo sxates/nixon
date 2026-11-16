@@ -286,7 +286,7 @@ export function useRecordingStart(
         } catch (error) {
           console.error('Failed to create meeting at recording start:', error);
           meetingCreatedRef.current = false; // allow a later path to retry
-          toast.error('Could not start a new meeting record', {
+          toast.error('Could not start a new Meeting record', {
             description: 'Your notes may not save until the recording is saved. Recording continues.',
             duration: 5000,
           });

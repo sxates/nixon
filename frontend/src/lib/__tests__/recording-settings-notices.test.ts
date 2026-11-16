@@ -30,13 +30,13 @@ describe('noticeForSetting', () => {
     }
   });
 
-  it('points live-transcription at the control that DOES affect this meeting', () => {
+  it('points live-transcription at the control that DOES affect this Meeting', () => {
     const notice = noticeForSetting('live-transcription', true);
     expect(notice!.description).toMatch(/Live\/Deferred/i);
   });
 
   it('reassures that live-diarization only affects labels DURING the meeting', () => {
     const notice = noticeForSetting('live-diarization', true);
-    expect(notice!.description).toMatch(/after this meeting ends/i);
+    expect(notice!.description).toMatch(/after this Meeting ends/i);
   });
 });

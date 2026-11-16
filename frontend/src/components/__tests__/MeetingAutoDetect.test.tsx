@@ -226,7 +226,7 @@ describe('a banner that could not be sent', () => {
     lastToast()[1].cancel.onClick();
     emit('meeting-detected', { timestamp_ms: 333, kind: 'detected' });
     await settle();
-    expect(descriptionText(lastToast()[1])).toBe('Record this meeting?');
+    expect(descriptionText(lastToast()[1])).toBe('Record this Meeting?');
   });
 
   it('stays quiet in a build that cannot notify at all — there is nothing to enable', async () => {
@@ -235,7 +235,7 @@ describe('a banner that could not be sent', () => {
     render(<MeetingAutoDetect />);
     emit('meeting-detected');
     await settle();
-    expect(descriptionText(lastToast()[1])).toBe('Record this meeting?');
+    expect(descriptionText(lastToast()[1])).toBe('Record this Meeting?');
   });
 
   it('does not reopen a prompt the user already answered', async () => {

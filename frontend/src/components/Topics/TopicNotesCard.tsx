@@ -75,11 +75,10 @@ export function TopicNotesCard({ topic }: { topic: Topic }) {
       initialHtml={initialHtml}
       onChange={onChange}
       ariaLabel="My notes"
-      placeholder="Anything you want to remember about this topic"
+      placeholder="Anything you want to remember about this Topic"
       bodyClassName="min-h-16 pb-2"
       frame={({ toolbar, body }) => (
         <Panel title="My notes" action={toolbar} className="flex min-h-0 flex-col">
-          <p className="u-row-meta -mt-1 pb-2">Yours. AI never rewrites this.</p>
           {body}
         </Panel>
       )}

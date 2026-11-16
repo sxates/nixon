@@ -27,6 +27,7 @@ import { ListRow } from '@/components/ui/list-row';
 import { PageHeader } from '@/components/ui/page-header';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { useBack } from '@/hooks/useBack';
 import { useTopics } from '@/hooks/useTopics';
 import { setActionItemTopic } from '@/lib/topics';
 import { useActionItemMutations } from '@/hooks/useActionItemMutations';
@@ -46,6 +47,7 @@ const errorText = (err: unknown) => (err instanceof Error ? err.message : String
 
 export function ItemDetail({ id }: { id: string }) {
   const router = useRouter();
+  const back = useBack('/tasks');
   const [item, setItem] = useState<ActionItem | null>(null);
   const [sources, setSources] = useState<ActionItemDetail['sources']>([]);
   const [status, setStatus] = useState<'loading' | 'ready' | 'missing' | 'error'>('loading');
@@ -86,7 +88,7 @@ export function ItemDetail({ id }: { id: string }) {
       if (/no longer exists/i.test(errorText(err))) {
         setStatus('missing');
       } else if (loadedOnce.current) {
-        toast.error('Could not refresh this to-do', { description: errorText(err) });
+        toast.error('Could not refresh this To-Do', { description: errorText(err) });
       } else {
         setStatus('error');
       }
@@ -138,7 +140,7 @@ export function ItemDetail({ id }: { id: string }) {
       await load();
     } catch (err) {
       console.error('Failed to update to-do:', err);
-      toast.error('Could not update the to-do', { description: errorText(err) });
+      toast.error('Could not update the To-Do', { description: errorText(err) });
     }
   };
 
@@ -156,7 +158,7 @@ export function ItemDetail({ id }: { id: string }) {
       await load();
     } catch (err) {
       console.error('Failed to set the topic:', err);
-      toast.error('Could not change the topic', { description: errorText(err) });
+      toast.error('Could not change the Topic', { description: errorText(err) });
     }
   };
   const [pickedTopic, setPickedTopic] = useState<MentionTopic | null>(null);
@@ -233,14 +235,14 @@ export function ItemDetail({ id }: { id: string }) {
       <div className="flex h-page flex-col bg-background">
         <PageHeader
           width="page"
-          title="To-do"
-          back={{ label: 'To-do', onClick: () => router.push('/tasks') }}
+          title="To-Do"
+          back={{ label: 'Back', onClick: back }}
         />
         <EmptyState
-          title="This to-do no longer exists"
+          title="This To-Do no longer exists"
           action={
-            <Button variant="outline" size="sm" onClick={() => router.push('/tasks')}>
-              Back to To-do
+            <Button variant="outline" size="sm" onClick={back}>
+              Back
             </Button>
           }
         />
@@ -250,9 +252,9 @@ export function ItemDetail({ id }: { id: string }) {
   if (status === 'error' || !item) {
     return (
       <div className="flex h-page flex-col bg-background">
-        <PageHeader width="page" title="To-do" back={{ label: 'To-do', onClick: () => router.push('/tasks') }} />
+        <PageHeader width="page" title="To-Do" back={{ label: 'Back', onClick: back }} />
         <div className={cn('mx-auto w-full', PAGE_CONTENT_WIDTH, PAGE_GUTTER)}>
-          <Callout tone="error" title="Could not load this to-do">
+          <Callout tone="error" title="Could not load this To-Do">
             Try again in a moment.
           </Callout>
         </div>
@@ -298,8 +300,8 @@ export function ItemDetail({ id }: { id: string }) {
     <div className="flex h-page animate-fade-in flex-col bg-background">
       <PageHeader
         width="page"
-        title="To-do"
-        back={{ label: 'To-do', onClick: () => router.push('/tasks') }}
+        title="To-Do"
+        back={{ label: 'Back', onClick: back }}
       />
       {/* pt-1: the scroll box clips overflow, and the title's focus ring sits outside it. */}
       <div className={cn('flex-1 overflow-y-auto pb-12 pt-1', PAGE_GUTTER)}>
@@ -327,7 +329,7 @@ export function ItemDetail({ id }: { id: string }) {
                   resetKey={titleReset}
                   submitOnBlur
                   multiline
-                  ariaLabel="To-do title"
+                  ariaLabel="To-Do title"
                   placeholder="Title"
                   variant="bare"
                   size="title"
@@ -394,7 +396,7 @@ export function ItemDetail({ id }: { id: string }) {
               Sources
             </h2>
             {sources.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Added by hand, not from a meeting.</p>
+              <p className="text-sm text-muted-foreground">Added by hand, not from a Meeting.</p>
             ) : (
               // Styled as the Meetings list: a panel of ruled rows, each with the meeting's spine.
               <Panel className="overflow-hidden p-0 [&>*:last-child]:border-b-0">
@@ -408,14 +410,14 @@ export function ItemDetail({ id }: { id: string }) {
                         aria-hidden="true"
                       />
                     }
-                    title={s.meetingTitle ?? 'Untitled meeting'}
+                    title={s.meetingTitle ?? 'Untitled Meeting'}
                     meta={s.context ?? undefined}
                     trailing={
                       <span className="u-row-meta tabular-nums">
                         {formatMeetingDate(s.meetingCreatedAt)}
                       </span>
                     }
-                    hint="Open this meeting"
+                    hint="Open this Meeting"
                     onClick={() => router.push(`/meeting-details?id=${s.meetingId}`)}
                   />
                 ))}

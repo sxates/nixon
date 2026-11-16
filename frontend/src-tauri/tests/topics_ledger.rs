@@ -37,9 +37,10 @@ async fn create_list_update_close_reopen() {
         open.iter().map(|t| t.id.as_str()).collect::<Vec<_>>(),
         [b.id.as_str()]
     );
+    // specs/0090: one manual order (creation order here) for open and closed topics.
     let all = Topics::list(p, None).await.unwrap();
-    assert_eq!(all[0].id, b.id);
-    assert_eq!(all[1].id, a.id);
+    assert_eq!(all[0].id, a.id);
+    assert_eq!(all[1].id, b.id);
     let reopened = Topics::update(p, &a.id, Some("Zeta"), None, Some("open"))
         .await
         .unwrap()
@@ -365,7 +366,7 @@ mod links_tests {
         assert_eq!(before, after);
 
         let err = links::link_series_of(p, &t.id, "n1").await.unwrap_err();
-        assert_eq!(err.to_string(), "This meeting isn't part of a series.");
+        assert_eq!(err.to_string(), "This Meeting isn't part of a Series.");
     }
 
     #[tokio::test]
@@ -907,14 +908,14 @@ async fn add_manual_entry_checks_topic_and_propagates_db_errors() {
     let err = ledger::add_manual_entry(p, "nope", body(&["x"], &[]))
         .await
         .unwrap_err();
-    assert_eq!(err.to_string(), "That topic no longer exists.");
+    assert_eq!(err.to_string(), "That Topic no longer exists.");
     let t = Topics::create(p, "Atlas", "").await.unwrap();
     let broken = p.clone();
     broken.close().await;
     let err = ledger::add_manual_entry(&broken, &t.id, body(&["x"], &[]))
         .await
         .unwrap_err();
-    assert_ne!(err.to_string(), "That topic no longer exists.");
+    assert_ne!(err.to_string(), "That Topic no longer exists.");
 }
 
 #[tokio::test]

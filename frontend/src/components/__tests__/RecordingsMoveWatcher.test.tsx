@@ -111,7 +111,7 @@ describe('RecordingsMoveWatcher — first-launch gather question', () => {
 
     const dialog = await screen.findByRole('dialog');
     expect(dialog).toHaveTextContent('Move your recordings?');
-    expect(dialog).toHaveTextContent('7 meetings, 2.5 GB, will move to ~/Movies/nixon-recordings.');
+    expect(dialog).toHaveTextContent('7 Meetings, 2.5 GB, will move to ~/Movies/nixon-recordings.');
     expect(dialog).toHaveTextContent('Includes 2 from other folders.');
     expect(calls('api_gather_recordings')).toHaveLength(0);
 

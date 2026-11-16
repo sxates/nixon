@@ -26,7 +26,7 @@ export type SpeakerIdFailure = 'interrupted' | 'crashed' | 'cancelled' | 'error'
 /** Tooltip on disabled audio actions after the retention policy deleted the audio. */
 export const AUDIO_PURGED_TITLE = 'Audio deleted by your retention setting.';
 /** Tooltip when the files are missing for some other reason (moved, deleted by hand). */
-export const AUDIO_MISSING_TITLE = 'No audio recording is available for this meeting.';
+export const AUDIO_MISSING_TITLE = 'No audio recording is available for this Meeting.';
 /** Speaker identification failed; the audio is kept for a retry. */
 export const AUDIO_FAILED_NOTE =
   "Speaker identification didn't finish. Audio is kept so you can retry.";

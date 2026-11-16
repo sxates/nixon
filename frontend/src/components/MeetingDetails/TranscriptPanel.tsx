@@ -422,8 +422,8 @@ export function TranscriptPanel({
           {backlogStage === 'waiting'
             ? 'Queued for processing — the transcript and summary will update when it runs.'
             : backlogStage === 'summarizing'
-              ? 'Summarizing this meeting…'
-              : 'Re-transcribing this meeting — the transcript below will update when it finishes.'}
+              ? 'Summarizing this Meeting…'
+              : 'Re-transcribing this Meeting — the transcript below will update when it finishes.'}
         </Callout>
       )}
 

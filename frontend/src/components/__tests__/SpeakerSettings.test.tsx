@@ -75,7 +75,7 @@ describe('SpeakerSettings — start-time-only notice (spec 0051 WS3, moved by 00
   });
 
   // specs/0076: switching them OFF mid-meeting stops them in that meeting too.
-  it('says switching live labels off stops them for this meeting too', async () => {
+  it('says switching live labels off stops them for this Meeting too', async () => {
     useSidebarMock.mockReturnValue({ activeRecordingMeetingId: 'meeting-123' });
     invokeMock.mockImplementation((cmd: string) => {
       switch (cmd) {
@@ -97,7 +97,7 @@ describe('SpeakerSettings — start-time-only notice (spec 0051 WS3, moved by 00
 
     await waitFor(() => expect(toastSuccess).toHaveBeenCalledTimes(1));
     expect(toastSuccess.mock.calls[0][0]).toBe('Live speaker labels are off');
-    expect(toastSuccess.mock.calls[0][1].description).toMatch(/this meeting too/);
+    expect(toastSuccess.mock.calls[0][1].description).toMatch(/this Meeting too/);
     expect(toastInfo).not.toHaveBeenCalled();
     expect(invokeMock).toHaveBeenCalledWith('api_set_live_diarization_enabled', { enabled: false });
   });

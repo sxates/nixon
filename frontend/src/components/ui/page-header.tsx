@@ -9,8 +9,9 @@ import { DOC_CONTENT_WIDTH, PAGE_CONTENT_WIDTH, PAGE_GUTTER } from '@/lib/page-w
 import { cn } from '@/lib/utils';
 
 export interface PageHeaderBack {
-  /** Where back goes ("People"). Becomes the button's tooltip and accessible name. */
+  /** The button's tooltip and accessible name: "Back" (it returns to the previous page). */
   label: string;
+  /** `useBack(fallbackHref)` (hooks/useBack): the previous in-app page, else the fallback. */
   onClick: () => void;
 }
 

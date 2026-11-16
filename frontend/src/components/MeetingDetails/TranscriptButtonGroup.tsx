@@ -201,7 +201,7 @@ export function TranscriptButtonGroup({
                       : 'Identifying speakers…'
                     : identifyFailed
                       ? AUDIO_FAILED_NOTE
-                      : 'Identify who spoke (runs on-device after the meeting)'
+                      : 'Identify who spoke (runs on-device after the Meeting)'
             }
           >
             {isDiarizing && <Spinner />}
@@ -241,8 +241,8 @@ export function TranscriptButtonGroup({
             disabled={isProcessingThis}
             title={
               isProcessingThis
-                ? 'Processing this meeting — see status in the indicator'
-                : "This meeting hasn't been processed yet — transcribe, identify speakers, and summarize it now"
+                ? 'Processing this Meeting — see status in the indicator'
+                : "This Meeting hasn't been processed yet — transcribe, identify speakers, and summarize it now"
             }
           >
             {isProcessingThis && <Spinner />}
@@ -266,7 +266,7 @@ export function TranscriptButtonGroup({
             onClick={() => {
               setShowRetranscribeDialog(true);
             }}
-            title="This meeting was recorded without live transcription — transcribe its audio now"
+            title="This Meeting was recorded without live transcription — transcribe its audio now"
           >
             <span>Transcribe now</span>
           </Button>

@@ -140,7 +140,7 @@ export default function ResumeRecordingPrompt() {
 
         <p className="text-sm text-muted-foreground">
           This recording was interrupted before it finished saving. Resume to keep recording
-          into the same meeting, or discard it.
+          into the same Meeting, or discard it.
         </p>
 
         <DialogFooter>

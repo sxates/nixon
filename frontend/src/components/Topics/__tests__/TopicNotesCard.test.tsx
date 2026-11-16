@@ -19,10 +19,10 @@ describe('TopicNotesCard', () => {
   });
   afterEach(() => vi.useRealTimers());
 
-  it('shows the title and hint and seeds from saved markdown', () => {
+  it('shows the title, no hint line, and seeds from saved markdown', () => {
     render(<TopicNotesCard topic={topic({ notesMarkdown: 'Check the export limits.' })} />);
     expect(screen.getByText('My notes')).toBeInTheDocument();
-    expect(screen.getByText('Yours. AI never rewrites this.')).toBeInTheDocument();
+    expect(screen.queryByText('Yours. AI never rewrites this.')).toBeNull();
     expect(screen.getByRole('textbox', { name: 'My notes' })).toHaveTextContent('Check the export limits.');
   });
 

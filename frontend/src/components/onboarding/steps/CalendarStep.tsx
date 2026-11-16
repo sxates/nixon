@@ -103,7 +103,7 @@ export function CalendarStep() {
   return (
     <OnboardingContainer
       title="Connect a calendar (optional)"
-      description="Nixon can show today's meetings and prepare briefs from your calendar."
+      description="Nixon can show today's Meetings and prepare briefs from your calendar."
       step={totalSteps}
       totalSteps={totalSteps}
     >
@@ -128,7 +128,7 @@ export function CalendarStep() {
           <div role="group" aria-label="macOS Calendar">
             <PermissionRow
               title="macOS Calendar"
-              description="Read your Mac's calendar to show today's meetings on-device."
+              description="Read your Mac's calendar to show today's Meetings on-device."
               status={mapEventKitStatus(eventKitStatus)}
               isPending={eventKitPending}
               onAction={() => {

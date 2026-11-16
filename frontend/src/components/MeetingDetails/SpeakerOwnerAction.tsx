@@ -99,7 +99,7 @@ export function SpeakerOwnerAction({
       className="w-full justify-start px-2 font-normal text-foreground"
       title={
         action === 'mark'
-          ? 'Make this speaker "You" in this meeting'
+          ? 'Make this speaker "You" in this Meeting'
           : 'This speaker becomes a numbered speaker again'
       }
     >

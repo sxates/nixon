@@ -255,13 +255,13 @@ export default function CommandPalette() {
     }
     try {
       await invoke('api_create_action_item', { meetingId: null, description });
-      toast.success('To-do added', {
+      toast.success('To-Do added', {
         description: 'Find it in Action items.',
         action: { label: 'Open', onClick: () => router.push('/tasks') },
       });
     } catch (err) {
       console.error('Failed to create to-do:', err);
-      toast.error('Could not add the to-do', {
+      toast.error('Could not add the To-Do', {
         description: err instanceof Error ? err.message : String(err),
       });
     }
@@ -324,7 +324,7 @@ export default function CommandPalette() {
             <FolderKanban />
             <span className="min-w-0 flex-1 truncate">{t.name}</span>
             {t.status === 'closed' && (
-              <span className="ml-auto flex-shrink-0 text-xs text-muted-foreground">Closed</span>
+              <span className="ml-auto flex-shrink-0 text-xs text-muted-foreground">Archived</span>
             )}
           </CommandItem>
         ))}
@@ -335,7 +335,7 @@ export default function CommandPalette() {
   const topicsFirst = trimmedQuery.length > 0;
 
   const visibleMeetings = meetings.filter((m) => {
-    const title = m.title?.trim() || 'Untitled meeting';
+    const title = m.title?.trim() || 'Untitled Meeting';
     // Same surface as the CommandItem below (value=`${title} ${id}`, keywords=[title])
     // so pasted meeting ids match here exactly like they do under cmdk filtering.
     return manualMatch(`${title} ${m.id}`, [title]);
@@ -344,7 +344,7 @@ export default function CommandPalette() {
   return (
     <CommandDialog open={open} onOpenChange={setOpen} shouldFilter={!backendSearchActive}>
       <CommandInput
-        placeholder="Search meetings or run a command..."
+        placeholder="Search Meetings or run a command..."
         value={query}
         onValueChange={setQuery}
       />
@@ -379,7 +379,7 @@ export default function CommandPalette() {
             <CommandSeparator />
             <CommandGroup heading="Meetings">
               {visibleMeetings.map((m) => {
-                const title = m.title?.trim() || 'Untitled meeting';
+                const title = m.title?.trim() || 'Untitled Meeting';
                 const date = formatMeetingDate(m.createdAt);
                 return (
                   <CommandItem
@@ -411,7 +411,7 @@ export default function CommandPalette() {
             <CommandSeparator />
             <CommandGroup heading="In transcripts, summaries & notes">
               {hits.map((h) => {
-                const title = h.title?.trim() || 'Untitled meeting';
+                const title = h.title?.trim() || 'Untitled Meeting';
                 const date = formatMeetingDate(h.createdAt);
                 const href =
                   `/meeting-details?id=${h.meetingId}` +
@@ -455,7 +455,7 @@ export default function CommandPalette() {
           visibleMeetings.length === 0 &&
           hits.length === 0 && (
             <div className="py-6 text-center text-sm text-muted-foreground">
-              No matching meetings
+              No matching Meetings
             </div>
           )}
 
@@ -477,11 +477,11 @@ export default function CommandPalette() {
             }
           >
             <Sparkles />
-            <span>Ask AI about your meetings…</span>
+            <span>Ask AI about your Meetings…</span>
           </CommandItem>
           <CommandItem forceMount onSelect={() => runCommand(() => void createTodo())}>
             <ListPlus />
-            <span>{trimmedQuery ? `New to-do: “${trimmedQuery}”` : 'New to-do…'}</span>
+            <span>{trimmedQuery ? `New To-Do: “${trimmedQuery}”` : 'New To-Do…'}</span>
           </CommandItem>
         </CommandGroup>
       </CommandList>

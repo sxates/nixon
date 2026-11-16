@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { invoke } from '@tauri-apps/api/core';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -27,6 +26,7 @@ import { rmsToVu } from '@/lib/transport/vu-ballistics';
 import type { UseRecordingTitleEditReturn } from '@/hooks/useRecordingTitleEdit';
 import { PromptPicker } from '@/components/SummaryPrompts/PromptPicker';
 import { CustomPromptFlow, type PromptsApi } from '@/components/SummaryPrompts/CustomPromptFlow';
+import { useBack } from '@/hooks/useBack';
 
 /**
  * Compact per-meeting live/defer mode chip (low-power-mode spec §5). Driven by
@@ -122,7 +122,7 @@ export function RecordingHeader({
   titleEdit,
   promptsApi,
 }: RecordingHeaderProps) {
-  const router = useRouter();
+  const back = useBack('/');
   const {
     isEditingTitle,
     titleDraft,
@@ -207,7 +207,7 @@ export function RecordingHeader({
                   onClearCustomPrompt={() => {
                     void promptsApi.clearOneOff();
                   }}
-                  title="Summary prompt — used when this meeting is summarized"
+                  title="Summary prompt — used when this Meeting is summarized"
                   className="h-8 max-w-[180px] text-muted-foreground"
                 />
                 <CustomPromptFlow
@@ -247,11 +247,11 @@ export function RecordingHeader({
       // pr-4: the meters sit 16px from the right edge, matching the 16px above and below
       // them (owner feedback 2026-09-23).
       className={cn('record-header border-b border-border bg-panel pb-4 pr-4 pt-4 min-[900px]:pr-4', FACEPLATE_BEVEL)}
-      back={{ label: 'Back to home', onClick: () => router.push('/') }}
+      back={{ label: 'Back', onClick: back }}
       title={
         <MeetingTitleField
           title={realTitle}
-          placeholder={isRecordingActive ? 'Untitled meeting' : 'New meeting'}
+          placeholder={isRecordingActive ? 'Untitled Meeting' : 'New Meeting'}
           editable={canRename}
           isEditing={isEditingTitle}
           draft={titleDraft}

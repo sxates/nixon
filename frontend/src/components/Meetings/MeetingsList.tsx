@@ -108,7 +108,7 @@ export function MeetingsList({
   }, [meetingToDelete, onDeleted, refetchMeetings]);
 
   if (isLoading) {
-    return <PageLoading fill="pane" label="Loading meetings…" />;
+    return <PageLoading fill="pane" label="Loading Meetings…" />;
   }
   if (error) {
     return (
@@ -122,7 +122,7 @@ export function MeetingsList({
       <EmptyState
         className="h-[40vh]"
         title="No recordings yet"
-        body="Start recording and your meetings will show up here."
+        body="Start recording and your Meetings will show up here."
         action={
           <Button variant="brand" onClick={() => router.push('/record')}>
             Open the recorder

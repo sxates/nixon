@@ -85,7 +85,9 @@ export const Checkbox = React.forwardRef<HTMLButtonElement, CheckboxProps>(funct
         'disabled:cursor-not-allowed disabled:opacity-50',
         checked
           ? 'border-brand bg-brand text-brand-foreground'
-          : 'border-input bg-transparent hover:border-brand-edge',
+          : // muted-foreground/80, not border-input: an empty box must clear 3:1 against the
+            // page and card in both themes (WCAG 1.4.11). border-input was ~1.3:1.
+            'border-muted-foreground/80 bg-transparent hover:border-brand-edge',
         SIZE[size],
         className,
       )}

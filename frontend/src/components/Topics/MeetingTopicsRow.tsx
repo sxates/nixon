@@ -8,6 +8,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
+import { Plus } from '@/components/ui/icons';
 import { safeListen } from '@/lib/safe-listen';
 import { topicsForMeeting } from '@/lib/topics';
 import type { Topic } from '@/types';
@@ -55,8 +56,9 @@ export function MeetingTopicsRow({ meetingId, title, seriesKey }: MeetingTopicsR
           {t.name}
         </Button>
       ))}
-      <Button variant="ghost" size="xs" onClick={() => setAdding(true)}>
-        Add to topic…
+      <Button variant="dashed" size="xs" onClick={() => setAdding(true)}>
+        <Plus />
+        Add to Topic…
       </Button>
       <AddToTopicDialog
         open={adding}

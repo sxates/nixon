@@ -73,7 +73,7 @@ export function NewTopicDialog({
       router.push(`/topics/topic?id=${encodeURIComponent(topic.id)}`);
     } catch (err) {
       setBusy(false);
-      toast.error('Could not create the topic', {
+      toast.error('Could not create the Topic', {
         description: err instanceof Error ? err.message : String(err),
       });
     }
@@ -83,7 +83,7 @@ export function NewTopicDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[480px]">
         <DialogHeader>
-          <DialogTitle>New topic</DialogTitle>
+          <DialogTitle>New Topic</DialogTitle>
         </DialogHeader>
         <form
           className="flex flex-col gap-3"

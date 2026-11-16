@@ -114,7 +114,7 @@ describe('useDiarization — WS3.1 persistent status & concurrency guard', () =>
     expect(result.current.progressPct).toBe(10);
   });
 
-  it('marks the run live when a progress event for this meeting arrives', async () => {
+  it('marks the run live when a progress event for this Meeting arrives', async () => {
     const { result } = renderHook(() => useDiarization({ meetingId: 'm1' }));
     await act(async () => {});
     expect(result.current.isRunning).toBe(false);
@@ -197,7 +197,7 @@ describe('useDiarization — progressive speaker reveal', () => {
     });
   };
 
-  it('refetches the transcript on a speakers-updated event for this meeting', async () => {
+  it('refetches the transcript on a speakers-updated event for this Meeting', async () => {
     const onComplete = vi.fn();
     renderHook(() => useDiarization({ meetingId: 'm1', onComplete }));
     await waitFor(() => expect(listeners.has('diarization-speakers-updated')).toBe(true));

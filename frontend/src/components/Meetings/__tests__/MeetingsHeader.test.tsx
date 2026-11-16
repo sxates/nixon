@@ -87,7 +87,7 @@ describe('MeetingsHeader', () => {
   });
 
   // specs/0069 W3 — one primary Add meeting; Record and New note stay gone.
-  it('has one Add meeting action with a calendar, and no Record or New note', () => {
+  it('has one Add Meeting action with a calendar, and no Record or New note', () => {
     const { onAddMeeting } = renderHeader('agenda', true);
     fireEvent.click(screen.getByRole('button', { name: /add meeting/i }));
     expect(onAddMeeting).toHaveBeenCalledTimes(1);
@@ -102,7 +102,7 @@ describe('MeetingsHeader', () => {
     ['list', true],
     ['month', false],
     ['list', false],
-  ] as const)('carries no All meetings or to-do link (%s, calendar %s)', (view, connected) => {
+  ] as const)('carries no All Meetings or to-do link (%s, calendar %s)', (view, connected) => {
     renderHeader(view, connected);
     expect(screen.queryByRole('button', { name: /all meetings/i })).toBeNull();
     expect(screen.queryByRole('button', { name: /to-do/i })).toBeNull();

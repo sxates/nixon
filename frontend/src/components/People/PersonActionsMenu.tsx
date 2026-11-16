@@ -75,12 +75,12 @@ export function PersonActionsMenu({
             onToggleVoiceOptOut();
           }}
         >
-          Don&apos;t store this person&apos;s voice
+          Don&apos;t store this Person&apos;s voice
           {voiceprintOptOut && <DeckIcon icon={Check} size={16} className="ml-auto" />}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem icon={Trash2} variant="destructive" onSelect={onForget}>
-          Forget this person
+          Forget this Person
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

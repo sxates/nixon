@@ -138,7 +138,7 @@ export function TimelineBlock({
 }: TimelineBlockProps) {
   const start = new Date(item.startTime);
   const validStart = !Number.isNaN(start.getTime());
-  const title = item.title?.trim() || 'Untitled meeting';
+  const title = item.title?.trim() || 'Untitled Meeting';
   // Percentage-based lane columns with a fixed gap carved out on the right.
   const widthPct = 100 / laneCount;
   const compact = height < 46;

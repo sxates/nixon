@@ -24,7 +24,7 @@ export async function showRecordingNotification(): Promise<void> {
         description: (
           <div className="space-y-3 min-w-[280px]">
             <p className="text-sm font-medium text-foreground">
-              Inform all participants this meeting is being recorded.
+              Inform all participants this Meeting is being recorded.
             </p>
             <Checkbox
               size="sm"

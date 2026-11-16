@@ -51,7 +51,7 @@ export function useRecordingTitleEdit(): UseRecordingTitleEditReturn {
         void refetchMeetings();
       } catch (error) {
         console.error('Failed to rename meeting:', error);
-        toast.error('Failed to rename meeting', {
+        toast.error('Failed to rename Meeting', {
           description: error instanceof Error ? error.message : String(error),
         });
       }

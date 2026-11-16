@@ -41,7 +41,7 @@ function WeekRow({
 }) {
   const start = new Date(item.startTime);
   const validStart = !Number.isNaN(start.getTime());
-  const title = item.title?.trim() || 'Untitled meeting';
+  const title = item.title?.trim() || 'Untitled Meeting';
   return (
     // `ListRow` keeps the `…` menu OUTSIDE the row's button — a button inside a button is
     // invalid HTML that browsers silently un-nest (which is how the week row lost its menu

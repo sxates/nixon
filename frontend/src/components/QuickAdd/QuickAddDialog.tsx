@@ -22,9 +22,10 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { MentionInput, type MentionTopic } from '@/components/ActionItems/MentionInput';
-import { TopicChip } from '@/components/ActionItems/TopicChip';
+import { TopicPicker } from '@/components/ActionItems/TopicPicker';
 import { useTopics } from '@/hooks/useTopics';
 import { setActionItemTopic } from '@/lib/topics';
+import { keptOffTopic, toastKeptOff } from '@/components/ActionItems/keptOffToast';
 import { friendlyDue } from '@/lib/due-label';
 import { appendLineToMeetingNotes, todoNoteLine } from '@/lib/notes-append';
 import { deserializeMentions, parseTodoText } from '@/lib/todo-parse';
@@ -81,14 +82,14 @@ export function QuickAddDialog({ open, onOpenChange, liveMeeting }: QuickAddDial
       }
     } catch (err) {
       setBusy(false);
-      toast.error('Could not add the to-do', {
+      toast.error('Could not add the To-Do', {
         description: err instanceof Error ? err.message : String(err),
       });
       return; // keep the dialog and the text for a retry
     }
     setBusy(false);
     onOpenChange(false);
-    if (tagFailed) toast.error('Added, but not to the topic', { description: tagFailed });
+    if (tagFailed) toast.error('Added, but not to the Topic', { description: tagFailed });
 
     if (meeting) {
       const plain = deserializeMentions(description).text;
@@ -97,14 +98,19 @@ export function QuickAddDialog({ open, onOpenChange, liveMeeting }: QuickAddDial
         await appendLineToMeetingNotes(meeting.id, todoNoteLine(plain, due));
       } catch (err) {
         console.error('Failed to add the to-do line to the meeting notes:', err);
-        toast.error('To-do added, but not to the meeting notes', {
+        toast.error('To-Do added, but not to the Meeting notes', {
           description: err instanceof Error ? err.message : String(err),
         });
         return;
       }
     }
     if (tagFailed) return;
-    toast.success(meeting ? `To-do added to your list and to “${meeting.title}”` : 'To-do added', {
+    const keptOff = keptOffTopic(openTopics, topic?.id);
+    if (keptOff) {
+      toastKeptOff('added', keptOff, (id) => router.push(`/topics/topic?id=${encodeURIComponent(id)}`), 'your To-Do list');
+      return;
+    }
+    toast.success(meeting ? `To-Do added to your list and to “${meeting.title}”` : 'To-Do added', {
       action: { label: 'View', onClick: () => router.push('/tasks?tab=todo') },
     });
   };
@@ -113,9 +119,9 @@ export function QuickAddDialog({ open, onOpenChange, liveMeeting }: QuickAddDial
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[520px]">
         <DialogHeader>
-          <DialogTitle>New to-do</DialogTitle>
+          <DialogTitle>New To-Do</DialogTitle>
           <DialogDescription>
-            Enter adds it to your list. @ to mention someone or tag a topic, a trailing (Friday) sets the due date.
+            Enter adds it to your list. @ to mention someone or tag a Topic, a trailing (Friday) sets the due date.
           </DialogDescription>
         </DialogHeader>
         <MentionInput
@@ -125,19 +131,13 @@ export function QuickAddDialog({ open, onOpenChange, liveMeeting }: QuickAddDial
           onSubmit={(v) => void submit(v)}
           onCancel={() => onOpenChange(false)}
           placeholder="What needs doing?"
-          ariaLabel="Quick add to-do"
+          ariaLabel="Quick add To-Do"
           autoFocus
           className="h-9 text-sm"
           topics={openTopics ?? undefined}
           topicId={topic?.id ?? null}
           onTopicChange={setTopic}
         />
-        {topic && (
-          <div className="flex items-center gap-1.5 text-caption text-muted-foreground">
-            Topic
-            <TopicChip name={topic.name} label={`Remove topic ${topic.name}`} onClick={() => setTopic(null)} />
-          </div>
-        )}
         {liveMeeting && (
           <Checkbox
             checked={linkMeeting}
@@ -146,11 +146,18 @@ export function QuickAddDialog({ open, onOpenChange, liveMeeting }: QuickAddDial
           />
         )}
         <DialogFooter>
+          {/* The Topic pick, kept in step with an `@topic` in the text (specs/0090). */}
+          <TopicPicker
+            topics={openTopics ?? []}
+            value={topic}
+            onChange={setTopic}
+            className="sm:mr-auto"
+          />
           <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
           <Button size="sm" variant="brand" disabled={!draft.trim() || busy} onClick={() => void submit()}>
-            Add to-do
+            Add To-Do
           </Button>
         </DialogFooter>
       </DialogContent>

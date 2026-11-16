@@ -51,7 +51,7 @@ export function DeleteMeetingDialog({
       await onDeleted();
     } catch (error) {
       console.error('Failed to delete meeting:', error);
-      toast.error('Could not delete this meeting. Please try again.');
+      toast.error('Could not delete this Meeting. Please try again.');
     } finally {
       setIsDeleting(false);
     }
@@ -61,9 +61,9 @@ export function DeleteMeetingDialog({
     <Dialog open={open} onOpenChange={(next) => (isDeleting ? undefined : onOpenChange(next))}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Delete meeting</DialogTitle>
+          <DialogTitle>Delete Meeting</DialogTitle>
           <DialogDescription>
-            Delete this meeting? This permanently removes the recording, transcript, summary, and
+            Delete this Meeting? This permanently removes the recording, transcript, summary, and
             notes. This can&apos;t be undone.
           </DialogDescription>
         </DialogHeader>

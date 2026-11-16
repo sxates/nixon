@@ -31,10 +31,10 @@ beforeEach(() => {
 });
 
 describe('SummaryModelSettings — single auto-summary toggle (specs/0061 W6)', () => {
-  it('renders exactly one "Summarize automatically when a meeting ends" control', () => {
+  it('renders exactly one "Summarize automatically when a Meeting ends" control', () => {
     render(<SummaryModelSettings />);
     expect(
-      screen.getAllByText('Summarize automatically when a meeting ends'),
+      screen.getAllByText('Summarize automatically when a Meeting ends'),
     ).toHaveLength(1);
   });
 

@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { DeckIcon } from '@/components/ui/deck-icon';
 import { IconButton } from '@/components/ui/icon-button';
-import { Star, X } from '@/components/ui/icons';
+import { Plus, Star, X } from '@/components/ui/icons';
 import { cn } from '@/lib/utils';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { LanguagePickerPopover } from '@/components/LanguagePickerPopover';
@@ -78,7 +78,8 @@ export function SummaryLanguageSettings() {
             <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
               <PopoverTrigger asChild>
                 <Button variant="dashed" size="xs" disabled={recents.length >= 5}>
-                  + Add language
+                  <Plus />
+                  Add language
                 </Button>
               </PopoverTrigger>
               <PopoverContent align="start" className="w-auto p-0 border-0 shadow-none bg-transparent">

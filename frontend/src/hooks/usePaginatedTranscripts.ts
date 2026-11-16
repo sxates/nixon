@@ -84,7 +84,7 @@ export function usePaginatedTranscripts({
             return data;
         } catch (err) {
             console.error('Failed to load meeting metadata:', err);
-            setError('Failed to load meeting details');
+            setError('Failed to load Meeting details');
             return null;
         }
     }, [meetingId]);

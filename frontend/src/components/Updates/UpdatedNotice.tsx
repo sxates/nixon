@@ -77,7 +77,7 @@ export function UpdatedNotice() {
           </div>
         ) : (
           <p className="text-sm text-muted-foreground">
-            Everything is where you left it — your meetings, notes and settings came along.
+            Everything is where you left it — your Meetings, notes and settings came along.
           </p>
         )}
         <div className="flex justify-end">

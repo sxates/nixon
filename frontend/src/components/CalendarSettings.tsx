@@ -66,7 +66,7 @@ const GOOGLE_PRIVACY_COPY =
 const GOOGLE_ENRICHMENT_COPY =
   'When your organization allows it, Nixon also reads group membership (to list who a ' +
   'distribution list invites) and directory profile photos — read-only, and stored only ' +
-  'on this Mac. If your organization restricts them, meetings simply show the group ' +
+  'on this Mac. If your organization restricts them, Meetings simply show the group ' +
   'address and initials, with nothing extra downloaded.';
 
 /** One "Enhanced attendee details" status line, driven by a tri-state capability flag. */

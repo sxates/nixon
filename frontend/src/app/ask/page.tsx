@@ -420,14 +420,14 @@ function AskPageContent() {
   // says so.
   const personName = personId === null ? null : people.find((p) => p.id === personId)?.displayName;
   const personLabel =
-    personId === null ? 'Any meeting' : `Meetings with ${personName ?? 'this person'}`;
+    personId === null ? 'Any Meeting' : `Meetings with ${personName ?? 'this Person'}`;
 
   return (
     <div className="flex h-page flex-col bg-background animate-fade-in">
       <PageHeader
         width="page"
         title="Ask AI"
-        subtitle="Ask a question across your meetings — answers cite their sources"
+        subtitle="Ask a question across your Meetings — answers cite their sources"
       />
 
       <div className={cn('flex-1 overflow-y-auto pb-12', PAGE_GUTTER)}>
@@ -517,8 +517,8 @@ function AskPageContent() {
                     <Button
                       variant="outline"
                       size="sm"
-                      aria-label="Filter by the meetings someone was in"
-                      title="Answer from meetings this person was in — on the invite or actually speaking. It does not narrow the answer to their lines."
+                      aria-label="Filter by the Meetings someone was in"
+                      title="Answer from Meetings this Person was in — on the invite or actually speaking. It does not narrow the answer to their lines."
                       className="max-w-[15rem] gap-1.5"
                     >
                       <span className="truncate">{personLabel}</span>
@@ -526,7 +526,7 @@ function AskPageContent() {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
-                    <DropdownMenuItem onSelect={() => setPersonId(null)}>Any meeting</DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => setPersonId(null)}>Any Meeting</DropdownMenuItem>
                     {people.length > 0 && <DropdownMenuSeparator />}
                     {people.map((p) => (
                       <DropdownMenuItem key={p.id} onSelect={() => setPersonId(p.id)}>
@@ -675,7 +675,7 @@ function AskPageContent() {
                                 size="xs"
                                 onClick={() => askAgain(entry)}
                                 disabled={phase === 'running' || !!rangeProblem}
-                                title="Ask this again against your current meetings"
+                                title="Ask this again against your current Meetings"
                               >
                                 <DeckIcon icon={Sparkles} size={12} />
                                 Ask again

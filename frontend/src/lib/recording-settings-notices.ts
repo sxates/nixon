@@ -31,7 +31,7 @@ const NOTICES: Record<StartTimeOnlySetting, SettingNotice> = {
   'live-transcription': {
     title: 'Saved — applies to your next recording',
     description:
-      'Use the Live/Deferred button on the recording to change this meeting.',
+      'Use the Live/Deferred button on the recording to change this Meeting.',
   },
   'low-power-on-battery': {
     title: 'Saved — applies to your next recording',
@@ -40,7 +40,7 @@ const NOTICES: Record<StartTimeOnlySetting, SettingNotice> = {
   'live-diarization': {
     title: 'Saved — applies to your next recording',
     description:
-      'Live speaker labels are set up when a recording starts. Speakers are still labelled after this meeting ends.',
+      'Live speaker labels are set up when a recording starts. Speakers are still labelled after this Meeting ends.',
   },
 };
 

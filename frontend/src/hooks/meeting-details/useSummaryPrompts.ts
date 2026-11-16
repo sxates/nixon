@@ -8,7 +8,7 @@ import {
   type SummaryPrompt,
 } from '@/lib/summary-prompts';
 
-const NOT_READY_MESSAGE = "Save isn't available until the meeting has started recording.";
+const NOT_READY_MESSAGE = "Save isn't available until the Meeting has started recording.";
 
 /** Backend errors reject with a user-readable string; fall back for anything else. */
 function errorMessage(error: unknown, fallback: string): string {

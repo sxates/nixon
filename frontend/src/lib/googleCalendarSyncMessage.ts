@@ -73,7 +73,7 @@ export function describeSyncOutcome(outcome: GoogleCalendarSyncOutcome): SyncMes
       return {
         tone: 'info',
         title: 'Nothing synced — demo data is loaded',
-        description: 'Google Calendar sync is paused while the demo meetings are in use.',
+        description: 'Google Calendar sync is paused while the demo Meetings are in use.',
       };
     case 'notConfigured':
       return { tone: 'info', title: "Nothing synced — Google Calendar isn't set up in this build" };

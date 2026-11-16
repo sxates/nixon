@@ -3,7 +3,7 @@ import { act, render, screen, fireEvent, within } from '@testing-library/react';
 
 // The Meetings page (Today + All meetings merged). With a calendar connected it switches
 // between Agenda / Week / Month / List and remembers the last one; without one it is the
-// old All meetings Month / List under the connect-calendar nudge. The view bodies are
+// old All Meetings Month / List under the connect-calendar nudge. The view bodies are
 // stubbed to markers — their own suites cover what's inside them.
 
 const { searchParams, calendar } = vi.hoisted(() => ({
@@ -162,7 +162,7 @@ describe('Meetings page, no calendar', () => {
     calendar.connected = false;
   });
 
-  it('is the All meetings List under the connect-calendar nudge', () => {
+  it('is the All Meetings List under the connect-calendar nudge', () => {
     render(<Home />);
     expect(pane()).toBe('list');
     expect(viewButtons()).toEqual(['Month', 'List']);

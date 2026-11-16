@@ -134,7 +134,7 @@ export function AssigneePicker({
                     )),
                     emptyMessage: (
                       <>
-                        No people match “{query.trim()}”. Press enter to assign the name as
+                        No People match “{query.trim()}”. Press enter to assign the name as
                         typed.
                       </>
                     ),

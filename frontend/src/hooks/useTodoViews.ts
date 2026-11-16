@@ -71,7 +71,7 @@ export function useTodoViews({
       setError(null);
     } catch (err) {
       console.error('Failed to load to-do views:', err);
-      if (mine === seq.current) setError('Could not load your to-do list.');
+      if (mine === seq.current) setError('Could not load your To-Do list.');
     } finally {
       if (mine === seq.current) setLoaded(true);
     }

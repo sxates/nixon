@@ -119,7 +119,7 @@ describe('CalendarStep', () => {
     ).toBeInTheDocument();
     expect(
       screen.getByText(
-        "Nixon can show today's meetings and prepare briefs from your calendar.",
+        "Nixon can show today's Meetings and prepare briefs from your calendar.",
       ),
     ).toBeInTheDocument();
   });

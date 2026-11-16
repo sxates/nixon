@@ -117,7 +117,7 @@ export function useAudioSetup(meetingId: string | undefined): UseAudioSetupRetur
 
   const setOverride = useCallback(
     async (next: AudioSetupOverride) => {
-      if (!meetingId) throw new Error('No meeting is open');
+      if (!meetingId) throw new Error('No Meeting is open');
       let result: AudioSetupStartResult;
       try {
         result = await invoke<AudioSetupStartResult>('api_set_meeting_audio_setup', {

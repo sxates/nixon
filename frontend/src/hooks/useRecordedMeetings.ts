@@ -23,7 +23,7 @@ export function useRecordedMeetings(enabled: boolean) {
         }
       } catch (err) {
         console.error('Failed to load meetings:', err);
-        if (!cancelled) setError('Could not load your meetings.');
+        if (!cancelled) setError('Could not load your Meetings.');
       } finally {
         if (!cancelled) setIsLoading(false);
       }

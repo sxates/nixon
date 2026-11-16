@@ -71,7 +71,7 @@ export function SaveOneOffDialog({
         else onSkip();
       }}
       title="Keep this prompt?"
-      body="It is set for this meeting. You can also keep it for later."
+      body="It is set for this Meeting. You can also keep it for later."
       tone="brand"
       confirmLabel="Save"
       cancelLabel="Not now"
@@ -84,7 +84,7 @@ export function SaveOneOffDialog({
         {hasSeries && (
           <Checkbox
             id="save-one-off-series"
-            label="Use for future meetings in this series"
+            label="Use for future Meetings in this Series"
             checked={toSeries}
             onCheckedChange={setToSeries}
           />

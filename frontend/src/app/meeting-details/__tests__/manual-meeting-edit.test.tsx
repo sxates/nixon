@@ -162,14 +162,14 @@ describe('meeting page Edit affordance for manual entries (specs/0069b review fi
     render(<PageContent meeting={recordedMeeting} summaryData={null} />);
     await openOptionsMenu();
     // The menu did open (Delete is always there) — Edit specifically is absent.
-    await screen.findByText('Delete meeting');
+    await screen.findByText('Delete Meeting');
     expect(screen.queryByText('Edit date & time')).toBeNull();
   });
 
   it('does not offer Edit for a calendar-backed scheduled meeting (not manual)', async () => {
     render(<PageContent meeting={calendarScheduledMeeting} summaryData={null} />);
     await openOptionsMenu();
-    await screen.findByText('Delete meeting');
+    await screen.findByText('Delete Meeting');
     expect(screen.queryByText('Edit date & time')).toBeNull();
   });
 

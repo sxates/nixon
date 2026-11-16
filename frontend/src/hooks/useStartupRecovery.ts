@@ -133,7 +133,7 @@ export function useStartupRecovery() {
         }
       }
     } catch (error) {
-      toast.error('Failed to recover meeting', {
+      toast.error('Failed to recover Meeting', {
         description: error instanceof Error ? error.message : 'Unknown error occurred',
       });
       throw error;

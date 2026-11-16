@@ -15,6 +15,11 @@ pub struct Topic {
     pub created_at: String,
     pub updated_at: String,
     pub closed_at: Option<String>,
+    /// Manual order on the Topics page (specs/0090); open and archived share one order.
+    pub sort_order: Option<i64>,
+    pub starred: bool,
+    /// "Keep off the To-do list": the topic's items leave `/tasks`'s List view only.
+    pub hide_from_todo: bool,
 }
 
 #[derive(Debug, Clone, FromRow, Serialize, Deserialize, PartialEq)]
@@ -27,6 +32,9 @@ pub struct TopicSummary {
     pub last_activity: Option<String>,
     pub pending_count: i64,
     pub meeting_count: i64,
+    pub sort_order: Option<i64>,
+    pub starred: bool,
+    pub hide_from_todo: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

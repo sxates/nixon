@@ -88,7 +88,7 @@ pub async fn delete_meeting_and_folder(
         }
         Err(e) => {
             log_error!("Error deleting meeting {meeting_id}: {e}");
-            Err(format!("Failed to delete meeting: {e}"))
+            Err(format!("Failed to delete Meeting: {e}"))
         }
     }
 }
