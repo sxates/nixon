@@ -132,7 +132,7 @@ describe('topics screenshot mock (specs/0089)', () => {
   it('seeds an open Atlas topic with 3 entries, 2 suggestions, and a closed topic', () => {
     const all = handlers.api_list_topics({});
     expect(all.filter((t: any) => t.status === 'closed')).toHaveLength(1);
-    const detail = handlers.api_get_topic({ id: 'topic-atlas' });
+    const detail = handlers.api_get_topic({ id: 'topic-q4-release' });
     expect(detail.topic.name).toBe('Atlas CRM rebuild');
     expect(detail.entries).toHaveLength(3);
     expect(detail.suggestions.map((s: any) => s.kind).sort()).toEqual(['note', 'revision']);

@@ -10,9 +10,9 @@ globalThis.__nixonTopicsMock = function ({ MEETINGS, todoStore }) {
     return d.toISOString();
   };
   const titleOf = (id) => (MEETINGS.find((m) => m.id === id) || {}).title || null;
-  const ATLAS = 'topic-atlas';
+  const ATLAS = 'topic-q4-release';
   const LAB = 'topic-lab';
-  const CLOSED = 'topic-vendor-eval';
+  const CLOSED = 'topic-solenne-drift';
   // specs/0090: `?todoGroup=1` opens the To-do list grouped by topic. Written on every load
   // (headless Chrome keeps localStorage across routes), so other shots stay flat.
   try {

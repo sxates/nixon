@@ -105,8 +105,13 @@ function TasksPageContent() {
   );
 
   // "Group by Topic", remembered per viewer. Read after mount (no storage on the server).
+  // `?todoGroup=1|0` overrides it for this visit without saving (screenshot routes).
+  const paramGroup = searchParams.get('todoGroup');
   const [grouped, setGrouped] = useState(false);
-  useEffect(() => setGrouped(readGroupByTopic()), []);
+  useEffect(
+    () => setGrouped(paramGroup === '1' || paramGroup === '0' ? paramGroup === '1' : readGroupByTopic()),
+    [paramGroup],
+  );
   const changeGrouped = (on: boolean) => {
     setGrouped(on);
     writeGroupByTopic(on);

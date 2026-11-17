@@ -456,7 +456,7 @@
   },
   {
     "name": "tasks",
-    "route": "/tasks",
+    "route": "/tasks?todoGroup=0",
     "ignore": [
       {
         "x": 338,
@@ -757,7 +757,7 @@
   },
   {
     "name": "tasks-item",
-    "route": "/tasks/item?id=ai-demo-01-1",
+    "route": "/tasks/item?id=ai-demo-01-0",
     "ignore": [
       {
         "x": 338,
@@ -796,7 +796,7 @@
   },
   {
     "name": "topic",
-    "route": "/topics/topic?id=topic-atlas",
+    "route": "/topics/topic?id=topic-q4-release",
     "ignore": [
       {
         "x": 338,
@@ -809,7 +809,7 @@
   },
   {
     "name": "topic-timeline",
-    "route": "/topics/topic?id=topic-atlas",
+    "route": "/topics/topic?id=topic-q4-release",
     "headless_only": true,
     "scroll": { "selector": "[data-testid=topic-scroll]", "top": 100000 },
     "ignore": [
@@ -824,7 +824,7 @@
   },
   {
     "name": "topic-closed",
-    "route": "/topics/topic?id=topic-vendor-eval",
+    "route": "/topics/topic?id=topic-solenne-drift",
     "ignore": [
       {
         "x": 338,

@@ -9,6 +9,7 @@ pub mod dataset;
 pub mod fake_downloads;
 pub mod folder;
 pub mod guard;
+pub mod scenario;
 pub mod seed;
 pub mod wav;
 
@@ -109,6 +110,12 @@ pub async fn run_seed(app: &AppHandle, no_audio: bool) -> Result<seed::SeedRepor
     // must not sink the rest of a demo profile the developer is waiting on.
     if let Err(e) = seed::seed_ask_ai_history_example(pool, &ds, now).await {
         log::error!("[dev] seed ask-ai history example failed (non-fatal): {e:#}");
+    }
+
+    // Topics and To-Dos on top of the Meetings (after the series are linked). Best-effort,
+    // like the Ask-AI example.
+    if let Err(e) = scenario::seed_topics_and_todos(pool, &ds, now).await {
+        log::error!("[dev] seed topics and to-dos failed (non-fatal): {e:#}");
     }
 
     // A seeded profile is post-onboarding unless --onboarding also asked for a reset.
