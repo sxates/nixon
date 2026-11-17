@@ -30,7 +30,7 @@
 #
 # Usage:
 #   ./release.sh <major|minor|patch|X.Y.Z> [--early] [--skip-build] [--no-release] [--no-github] [--no-shots] [--yes] [--dry-run] [--allow-degraded]
-#   ./release.sh promote X.Y.Z [--no-github] [--no-shots] [--yes] [--dry-run]
+#   ./release.sh promote X.Y.Z [--notes=FILE] [--no-github] [--no-shots] [--yes] [--dry-run]
 #
 #   --early           specs/0086: the full release above, but advertised ONLY on
 #                     updates/early.json (installs with Settings > Updates >
@@ -46,6 +46,11 @@
 #                     updates/latest.json LAST, pushes release.json, and turns the
 #                     GitHub pre-release into the latest full release. Then it
 #                     merges the version's screenshot set into main and pushes it.
+#   --notes=FILE      promote only: publish FILE as everyone's release notes (the
+#                     updater dialog and the GitHub release body) instead of the
+#                     changelog sections combined since the last promoted version.
+#                     Use it when several early releases add up to one story; keep
+#                     the file under docs/release-notes/vX.Y.Z.md.
 #   --skip-build      bump + changelog + merge/push, but don't build the DMG
 #   --no-release      do everything except publish (R2 and GitHub)
 #   --no-github       publish to R2 but skip the GitHub release
@@ -77,6 +82,7 @@ SKIP_BUILD=0
 NO_RELEASE=0
 ALSO_GITHUB=1
 NO_SHOTS=0
+NOTES_FILE=""
 ASSUME_YES=0
 ALLOW_DEGRADED=0
 EARLY=0
@@ -90,6 +96,7 @@ for arg in "$@"; do
     --no-release) NO_RELEASE=1 ;;
     --no-github) ALSO_GITHUB=0 ;;
     --no-shots) NO_SHOTS=1 ;;
+    --notes=*) NOTES_FILE="${arg#--notes=}" ;;
     --yes|-y) ASSUME_YES=1 ;;
     --allow-degraded) ALLOW_DEGRADED=1 ;;
     --early) EARLY=1 ;;
@@ -104,10 +111,15 @@ for arg in "$@"; do
 done
 
 PROMOTE_VER=""
+[ -z "$NOTES_FILE" ] || [ "$MODE" = "promote" ] || die "--notes=FILE applies to promote only; a release takes its notes from CHANGELOG.md."
 if [ "$MODE" = "promote" ]; then
   [[ "$BUMP" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || die "promote needs an exact version: ./release.sh promote X.Y.Z"
   PROMOTE_VER="$BUMP"; BUMP=""
   [ "$EARLY" -eq 0 ] || die "--early and promote are opposites; pick one."
+  if [ -n "$NOTES_FILE" ]; then
+    [ -s "$NOTES_FILE" ] || die "--notes=${NOTES_FILE}: no such file, or it is empty."
+    ! grep -qE '^### Internal' "$NOTES_FILE" || die "--notes=${NOTES_FILE} has a ### Internal section; those notes are published verbatim."
+  fi
   [ "$SKIP_BUILD" -eq 0 ] && [ "$NO_RELEASE" -eq 0 ] || die "promote publishes an existing build; --skip-build and --no-release do not apply."
   [ "$ALLOW_DEGRADED" -eq 0 ] || die "promote builds nothing, so --allow-degraded does not apply."
 else
