@@ -4,7 +4,7 @@
 #
 # Sourced by release.sh after its argument parsing, .env.signing load and the Cloudflare
 # credential preflight; never run directly. It relies on release.sh's variables
-# (PROMOTE_VER, DRY_RUN, ASSUME_YES, ALSO_GITHUB, SITE_BASE, R2_BUCKET, TAURI_CONF,
+# (PROMOTE_VER, NOTES_FILE, DRY_RUN, ASSUME_YES, ALSO_GITHUB, SITE_BASE, R2_BUCKET, TAURI_CONF,
 # NIXON_SITE_DIR) and helpers (feed, read_live, r2_upload_plan,
 # verify_live, publish_release_json, c_*, die).
 #
@@ -217,6 +217,12 @@ feed notes --changelog "$PCHANGELOG" --upto "$P" --after "$LIVE_LATEST" --out "$
   || die "Could not build the release notes from ${PTAG}:CHANGELOG.md."
 feed notes --changelog "$PCHANGELOG" --upto "$P" --after "$LIVE_EARLY" --out "$NOTES_EARLY" \
   || die "Could not build the release notes from ${PTAG}:CHANGELOG.md."
+if [ -n "${NOTES_FILE:-}" ]; then
+  # --notes=FILE: one summary for everyone instead of every early section combined.
+  cp "$NOTES_FILE" "$NOTES_LATEST"
+  cp "$NOTES_FILE" "$NOTES_EARLY"
+  c_blue "📝 Release notes from ${NOTES_FILE} (not ${PTAG}:CHANGELOG.md)."
+fi
 
 dry=()
 [ "$DRY_RUN" -eq 1 ] && dry=( --dry-run )
