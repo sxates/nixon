@@ -21,8 +21,9 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 ### Added
 
-- While recording, switch from **Transcript** to **My Notes** or **Agenda** to put the transcript away and give your notes or agenda the whole window. A To-Do list sits beside them: the To-Dos for this Meeting's Topic, or your To-Dos with no Topic. Add To-Dos there as the Meeting goes. Your notes stay exactly as they were when you switch back.
-- Add a Meeting to a Topic while it's still recording, and keep your To-Dos in their own tab next to My Notes and Agenda.
+- **A better way to record a Meeting.** The recording screen now has three views. **Transcript** follows the conversation live. **My Notes** and **Agenda** put the transcript away and give your notes or your agenda the whole window. Switch between them as the Meeting goes; your notes stay exactly as you left them.
+- **Your To-Dos, right beside the Meeting.** While you record, your To-Do list sits next to your notes and agenda, with its own tab in Transcript. It shows the To-Dos for this Meeting's Topic, or your To-Dos with no Topic, and you can add new ones as they come up.
+- Add a Meeting to a Topic while it's still recording.
 - Find People and To-Dos from ⌘K search.
 - Claude Code and Claude desktop chats can now read your To-Dos and Topics, alongside your Meetings, when agent access is on.
 
