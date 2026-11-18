@@ -31,7 +31,7 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 - When you add points to a Topic's timeline, Enter starts the next point and ⌘Enter saves.
 - On a Topic page, the linked Series now sit just above the timeline, and their remove button appears when you point at one.
 - Starred Topics and People show a gold star.
-- On the recording screen, Transcript, My Notes and Agenda sit under the title, and Pause transcript, Participants and the summary prompt sit together at the top of the pane you're looking at.
+- On the recording screen, Transcript, My Notes and Agenda sit under the title. A bar across the top holds the Meeting's Topics, Add Topic, Participants and the summary prompt. In Transcript, a bar along the bottom shows whether the transcript is live, takes you back to the latest line, and pauses the transcript.
 - The default summary prompt is called "Auto" everywhere.
 - Back arrows line up with page titles more consistently.
 - A To-Do added while recording no longer adds a line to your notes. It shows in your To-Do list instead, linked to the Meeting.

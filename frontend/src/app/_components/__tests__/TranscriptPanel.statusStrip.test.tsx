@@ -2,10 +2,11 @@ import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Owner feedback v0.18: Pause / Resume transcript moved from the recording header into one
-// status strip at the top of the live transcript, merged with the provisional-labels line.
-// The strip is there for the whole recording (so Pause is always reachable), says
-// "Provisional — …" only once a live speaker label exists, and keeps the gap callout.
+// Owner feedback v0.18: the transcription bar, fixed at the bottom of the live transcript for
+// the whole recording — a short status on the left ("Live", "Live · labels provisional",
+// "Paused", "Paused — on battery"; the full sentence in its tooltip), "Jump to latest" in the
+// middle only while scrolled up from the tail, Pause / Resume transcript on the right. The
+// page's meeting bar renders at the top; the gap callout sits just above the bottom bar.
 
 const state = vi.hoisted(() => ({
   transcripts: [] as Array<{ id: string; text: string; speaker_name?: string }>,
@@ -17,7 +18,21 @@ const state = vi.hoisted(() => ({
 const invokeMock = vi.fn(async (..._a: unknown[]) => ({ live_transcription_enabled: true }));
 vi.mock('@tauri-apps/api/core', () => ({ invoke: (...a: unknown[]) => invokeMock(...a) }));
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
-vi.mock('@/components/VirtualizedTranscriptView', () => ({ VirtualizedTranscriptView: () => <div /> }));
+// The view reports "Jump to latest" through onJumpToLatestChange; these keys stand in for
+// scrolling up from the tail and back down to it.
+const jumped = vi.fn();
+vi.mock('@/components/VirtualizedTranscriptView', () => ({
+  VirtualizedTranscriptView: ({ onJumpToLatestChange }: { onJumpToLatestChange?: (j: (() => void) | null) => void }) => (
+    <div>
+      <button type="button" onClick={() => onJumpToLatestChange?.(jumped)}>
+        sim scroll up
+      </button>
+      <button type="button" onClick={() => onJumpToLatestChange?.(null)}>
+        sim at tail
+      </button>
+    </div>
+  ),
+}));
 vi.mock('@/components/PermissionWarning', () => ({ PermissionWarning: () => null }));
 vi.mock('@/contexts/TranscriptContext', () => ({
   useTranscripts: () => ({ transcripts: state.transcripts, transcriptGaps: state.gaps }),
@@ -51,11 +66,15 @@ beforeEach(() => {
 
 const strip = () => screen.queryByTestId('transcript-status-strip');
 
-describe('TranscriptPanel status strip', () => {
-  it('shows Pause transcript while recording, before any speaker label', async () => {
+describe('TranscriptPanel transcription bar', () => {
+  it('sits at the bottom with a short "Live" and Pause transcript on the right', async () => {
     render(<TranscriptPanel isProcessingStop={false} isStopping={false} />);
-    expect(strip()).toHaveTextContent('Live transcript');
-    expect(strip()).not.toHaveTextContent(/Provisional/);
+    const bar = strip()!;
+    expect(bar).toHaveTextContent(/^Live/);
+    expect(bar.className).toContain('border-t');
+    expect(screen.getByText('Live')).toHaveAttribute('title', 'Live transcript');
+    // The bar is the panel's last child: fixed at the bottom of the column.
+    expect(bar.parentElement?.lastElementChild).toBe(bar);
     fireEvent.click(screen.getByRole('button', { name: 'Pause transcript' }));
     await waitFor(() =>
       expect(invokeMock).toHaveBeenCalledWith('api_set_meeting_processing_mode', { meetingId: 'm1', mode: 'defer' }),
@@ -63,21 +82,39 @@ describe('TranscriptPanel status strip', () => {
     expect(invokeMock).toHaveBeenCalledWith('api_apply_live_transcription_now', { enable: false });
   });
 
-  it('becomes the provisional-labels line once a live label exists, button still on the right', () => {
+  it('once live labels exist: "Live · labels provisional", the full sentence in its tooltip', () => {
     state.transcripts = [{ id: 't1', text: 'hi', speaker_name: 'Speaker 1' }];
     render(<TranscriptPanel isProcessingStop={false} isStopping={false} />);
-    expect(strip()).toHaveTextContent('Provisional — speaker labels are finalized when you stop recording.');
+    const status = screen.getByText('Live · labels provisional');
+    expect(status.getAttribute('title')).toMatch(/speaker labels are finalized when you stop recording/);
+    expect(strip()).not.toHaveTextContent(/finalized/);
     expect(strip()).toContainElement(screen.getByRole('button', { name: 'Pause transcript' }));
   });
 
-  it('paused: says so and offers Resume transcript', () => {
+  it('paused: "Paused" and Resume transcript; on battery, "Paused — on battery"', () => {
     state.mode = { liveTranscription: false, onBattery: false };
-    render(<TranscriptPanel isProcessingStop={false} isStopping={false} />);
-    expect(strip()).toHaveTextContent('Transcript paused');
+    const { unmount } = render(<TranscriptPanel isProcessingStop={false} isStopping={false} />);
+    expect(screen.getByText('Paused')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Resume transcript' })).toBeInTheDocument();
+    unmount();
+    state.mode = { liveTranscription: false, onBattery: true };
+    render(<TranscriptPanel isProcessingStop={false} isStopping={false} />);
+    expect(screen.getByText('Paused — on battery')).toBeInTheDocument();
   });
 
-  it('not recording: no strip, but the gap callout still shows', () => {
+  it('"Jump to latest" sits in the bar only while scrolled up from the tail', () => {
+    render(<TranscriptPanel isProcessingStop={false} isStopping={false} />);
+    expect(screen.queryByRole('button', { name: 'Jump to latest' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'sim scroll up' }));
+    const jump = screen.getByRole('button', { name: 'Jump to latest' });
+    expect(strip()).toContainElement(jump);
+    fireEvent.click(jump);
+    expect(jumped).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole('button', { name: 'sim at tail' }));
+    expect(screen.queryByRole('button', { name: 'Jump to latest' })).toBeNull();
+  });
+
+  it('not recording: no bar, but the gap callout still shows', () => {
     state.isRecording = false;
     state.gaps = { dropped: 2, skipped: 0 };
     render(<TranscriptPanel isProcessingStop={false} isStopping={false} />);
@@ -86,13 +123,13 @@ describe('TranscriptPanel status strip', () => {
     expect(screen.getByRole('status')).toHaveTextContent(/fell behind/);
   });
 
-  it('puts the page\'s keys after Pause transcript, at the far right', () => {
+  it('renders the page\'s meeting bar at the top, and the gap callout just above the bottom bar', () => {
+    state.gaps = { dropped: 2, skipped: 0 };
     render(
-      <TranscriptPanel isProcessingStop={false} isStopping={false} stripTrailing={<button type="button">Participants</button>} />,
+      <TranscriptPanel isProcessingStop={false} isStopping={false} topBar={<div data-testid="meeting-bar">bar</div>} />,
     );
-    const pause = screen.getByRole('button', { name: 'Pause transcript' });
-    const participants = screen.getByRole('button', { name: 'Participants' });
-    expect(strip()).toContainElement(participants);
-    expect(pause.compareDocumentPosition(participants) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const panel = strip()!.parentElement!;
+    expect(panel.firstElementChild).toBe(screen.getByTestId('meeting-bar'));
+    expect(strip()!.previousElementSibling).toContainElement(screen.getByRole('status'));
   });
 });

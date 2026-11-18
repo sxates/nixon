@@ -19,11 +19,11 @@
  * - The Prep tab exists whenever there is a meeting row; before that (permissions
  *   pending, recording not yet started) only Notes shows.
  *
- * `view` (owner feedback, v0.18) restyles this column. Transcript: the right-hand rail, with
- * the Topics row above My Notes / Agenda / To-Dos tabs. My Notes and Agenda (the header's
+ * `view` (owner feedback, v0.18) restyles this column. Transcript: the right-hand rail, which
+ * starts with its My Notes / Agenda / To-Dos tab strip. My Notes and Agenda (the header's
  * other two views): the full-width main column, showing that one panel with no sub-tabs (the
- * header's tabs choose it), under a strip of the same height that carries Participants and
- * the summary prompt; the Topics row and To-Dos move to the page's right-hand sidebar. Every
+ * header's tabs choose it), under the page's meeting bar (`topBar`: Topics, Participants,
+ * summary prompt); To-Dos move to the page's right-hand sidebar. Every
  * panel keeps its place in the tree in all three views, so the notepad keeps its editor, its
  * undo history and its caret, and there is only ever one PrepPanel. A rail left on To-Dos
  * shows My Notes in the other views and returns to To-Dos with Transcript.
@@ -34,7 +34,6 @@ import dynamic from 'next/dynamic';
 import { PrepPanel } from '@/components/MeetingDetails/PrepPanel';
 import { RecordAgendaPanel } from '@/components/Record/RecordAgendaPanel';
 import { RecordTodos } from '@/components/Record/RecordTodoRail';
-import { RecordTopicsStrip } from '@/components/Record/RecordTopicsStrip';
 import { usePrepAvailability } from '@/hooks/usePrepAvailability';
 import { Badge } from '@/components/ui/badge';
 import { isMainColumnView, RECORD_STRIP_HEIGHT, type RecordView } from '@/lib/record-view';
@@ -59,13 +58,11 @@ interface RecordRailProps {
   meetingId: string | null;
   /** Transcript (default): the right-hand rail. My Notes / Agenda: the full-width main column. */
   view?: RecordView;
-  /** The live title, for the Topics row's Series option. */
-  meetingTitle?: string | null;
-  /** Keys at the top strip's far right (My Notes / Agenda: Participants + summary prompt). */
-  tabsTrailing?: ReactNode;
+  /** My Notes / Agenda: the bar heading the main column (the page's meeting bar). */
+  topBar?: ReactNode;
 }
 
-export function RecordRail({ meetingId, view = 'transcript', meetingTitle = null, tabsTrailing }: RecordRailProps) {
+export function RecordRail({ meetingId, view = 'transcript', topBar }: RecordRailProps) {
   const [activeTab, setActiveTab] = useState<RecordTabKey>('notes');
   const { openItemCount, refresh: refreshPrepCount } = usePrepAvailability(meetingId);
 
@@ -130,25 +127,16 @@ export function RecordRail({ meetingId, view = 'transcript', meetingTitle = null
         mainColumn ? 'flex-1' : 'w-[40%] max-w-[440px] border-l border-border',
       )}
     >
-      {/* Transcript: the Topics row heads the rail. Elsewhere it heads the To-Do sidebar. */}
-      {view === 'transcript' && <RecordTopicsStrip meetingId={meetingId} meetingTitle={meetingTitle} />}
-      {/* The `ui/tabs` underline strip (the same one as meeting details). Only the strip is
-          Radix: the panels below keep their own lifecycle (always-mounted Notes, lazy Prep),
-          so each trigger names its panel explicitly. The arrow-key handler is ours and calls
-          `preventDefault`, which Radix's own roving focus defers to. */}
-      {/* The top strip is RECORD_STRIP_HEIGHT tall with its rule at the bottom, so it lines up
-          with the Topics strip beside it (owner feedback, v0.18). Transcript: the tab strip.
-          My Notes / Agenda: no sub-tabs, just a quiet label naming the panel (an empty band
-          before a recording read as broken) and `tabsTrailing` at the far right. px-2 + the
-          tab's px-3, or px-5, puts the first label on the panels' gutter line; pr-5 puts the
-          last key on it too. Both strips occupy the same slot, so nothing below shifts. */}
+      {/* The top strip, RECORD_STRIP_HEIGHT with its rule at the bottom, so it lines up with
+          the strip beside it (owner feedback, v0.18). Transcript: the `ui/tabs` underline strip
+          (only the strip is Radix: the panels below keep their own lifecycle, so each trigger
+          names its panel explicitly; the arrow-key handler is ours and calls `preventDefault`,
+          which Radix's own roving focus defers to). px-2 + the tab's px-3 puts the first label
+          on the panels' gutter line. My Notes / Agenda: the page's meeting bar. Both occupy the
+          same slot, so nothing below shifts. */}
       {mainColumn ? (
-        <div
-          data-testid="record-rail-strip"
-          className={cn('flex flex-shrink-0 items-center gap-3 border-b border-border bg-background pl-5 pr-5', RECORD_STRIP_HEIGHT)}
-        >
-          <h2 className="u-section-label min-w-0 flex-1 truncate">{effectiveTab === 'prep' ? 'Agenda' : 'My Notes'}</h2>
-          {tabsTrailing ? <div className="flex min-w-0 items-center">{tabsTrailing}</div> : null}
+        <div data-testid="record-rail-strip" className="flex-shrink-0">
+          {topBar}
         </div>
       ) : (
         <Tabs
@@ -188,7 +176,6 @@ export function RecordRail({ meetingId, view = 'transcript', meetingTitle = null
               </TabsTrigger>
             ))}
           </TabsList>
-          {tabsTrailing ? <div className="ml-auto flex min-w-0 items-center">{tabsTrailing}</div> : null}
         </Tabs>
       )}
 

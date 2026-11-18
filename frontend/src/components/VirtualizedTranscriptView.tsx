@@ -94,6 +94,9 @@ export interface VirtualizedTranscriptViewProps {
      * not. Those are different facts and the indicator only knew one of them.
      */
     liveTranscription?: boolean;
+    /** Draw "Jump to latest" elsewhere (the record page's bottom bar): the view reports the
+     *  jump action while it would show the pill (null otherwise) and draws no pill itself. */
+    onJumpToLatestChange?: (jump: (() => void) | null) => void;
 }
 
 // Threshold for enabling virtualization (below this, use simple rendering)
@@ -122,6 +125,7 @@ export const VirtualizedTranscriptView: React.FC<VirtualizedTranscriptViewProps>
     emptyPhase,
     onEditText,
     liveTranscription = true,
+    onJumpToLatestChange,
 }) => {
     // Create scroll ref first - shared between virtualizer and auto-scroll hook
     const scrollRef = useRef<HTMLDivElement>(null);
@@ -563,6 +567,10 @@ export const VirtualizedTranscriptView: React.FC<VirtualizedTranscriptViewProps>
         disableAutoScroll,
         segmentCount: segments.length,
     });
+    useEffect(() => {
+        onJumpToLatestChange?.(jumpToLatestVisible ? scrollToBottom : null);
+        return () => onJumpToLatestChange?.(null);
+    }, [onJumpToLatestChange, jumpToLatestVisible, scrollToBottom]);
 
     return (
         // Positioning wrapper only (non-scrolling) — anchors the "Jump to latest" pill
@@ -819,7 +827,7 @@ export const VirtualizedTranscriptView: React.FC<VirtualizedTranscriptViewProps>
 
         {/* specs/0029 WS4.1 — detached during a live recording: offer a way back to
             the tail without hijacking the user's reading position. */}
-        {jumpToLatestVisible && (
+        {jumpToLatestVisible && !onJumpToLatestChange && (
             <Button
                 type="button"
                 variant="outline"

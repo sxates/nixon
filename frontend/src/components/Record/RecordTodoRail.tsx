@@ -4,7 +4,7 @@
  * The record screen's To-Dos (owner feedback, v0.18): the live Meeting's Topic To-Dos, or,
  * when it is on no Topic, your To-Dos that have no Topic. One implementation in two places:
  * `RecordTodos` is the To-Dos tab of the Transcript view's rail, and `RecordTodoRail` is the
- * My Notes / Agenda views' right-hand sidebar (the Topics row on top, then the same `RecordTodos`).
+ * My Notes / Agenda views' right-hand sidebar (the same `RecordTodos`, with its heading row).
  *
  * - Topics come from `topicsForMeeting` (open ones only: a closed Topic refuses new tags).
  *   With several, a `TopicPicker` chooses which list shows; it defaults to the first, and its
@@ -24,7 +24,6 @@ import { TodoList } from '@/components/ActionItems/TodoList';
 import { TopicPicker } from '@/components/ActionItems/TopicPicker';
 import type { MentionTopic } from '@/components/ActionItems/MentionInput';
 import { Callout } from '@/components/ui/callout';
-import { RecordTopicsStrip } from '@/components/Record/RecordTopicsStrip';
 import { PanelHeader } from '@/components/ui/panel';
 import { useActionItemMutations } from '@/hooks/useActionItemMutations';
 import { usePersonNames } from '@/hooks/usePersonNames';
@@ -34,6 +33,7 @@ import { useTopics } from '@/hooks/useTopics';
 import { safeListen } from '@/lib/safe-listen';
 import { sameOrder } from '@/lib/topic-order';
 import { setActionItemTopic, topicsForMeeting } from '@/lib/topics';
+import { RECORD_STRIP_HEIGHT } from '@/lib/record-view';
 import { cn } from '@/lib/utils';
 import type { ActionItem, ActionItemStatus, Topic, TodoRow } from '@/types';
 
@@ -66,14 +66,8 @@ function useMeetingOpenTopics(meetingId: string | null): Topic[] | null {
 /** `undefined` = no explicit pick yet (follow the first Topic); `null` = "No Topic". */
 type Pick = string | null | undefined;
 
-interface RecordTodoRailProps {
-  meetingId: string | null;
-  /** The live title, for the Topics row's Series option. */
-  meetingTitle?: string | null;
-}
-
-/** My Notes / Agenda views: the right-hand sidebar, Topics row then To-Dos. */
-export function RecordTodoRail({ meetingId, meetingTitle = null }: RecordTodoRailProps) {
+/** My Notes / Agenda views: the right-hand sidebar, starting with its To-Dos heading row. */
+export function RecordTodoRail({ meetingId }: { meetingId: string | null }) {
   return (
     <aside
       aria-label="To-Dos"
@@ -81,22 +75,30 @@ export function RecordTodoRail({ meetingId, meetingTitle = null }: RecordTodoRai
       // size between views (owner feedback, v0.18).
       className="flex w-[40%] max-w-[440px] flex-shrink-0 flex-col overflow-hidden border-l border-border bg-background"
     >
-      <RecordTopicsStrip meetingId={meetingId} meetingTitle={meetingTitle} />
       <RecordTodos meetingId={meetingId} />
     </aside>
   );
 }
 
+/** The heading row's box: the record screen's shared strip. */
+const HEADING_STRIP = cn('flex flex-shrink-0 items-center border-b border-border px-5 py-1.5', RECORD_STRIP_HEIGHT);
+
 /**
- * The To-Do list itself. `heading` (default on) draws the "To-Dos" panel heading; the
- * Transcript rail's To-Dos tab turns it off, since the tab already names it.
+ * The To-Do list itself. `heading` (default on) draws the "To-Dos" heading row: a
+ * RECORD_STRIP_HEIGHT strip with its rule at the bottom, so it lines up with the meeting bar
+ * across the screen (owner feedback, v0.18). The Transcript rail's To-Dos tab turns it off,
+ * since the tab already names it.
  */
 export function RecordTodos({ meetingId, heading = true }: { meetingId: string | null; heading?: boolean }) {
   if (!meetingId) {
     return (
-      <div className="px-5 py-4">
-        {heading && <PanelHeader title="To-Dos" />}
-        <p className="u-meta">To-Dos for this Meeting show here once recording starts.</p>
+      <div>
+        {heading && (
+          <div className={HEADING_STRIP}>
+            <PanelHeader title="To-Dos" className="mb-0 flex-1" />
+          </div>
+        )}
+        <p className="u-meta px-5 py-4">To-Dos for this Meeting show here once recording starts.</p>
       </div>
     );
   }
@@ -174,27 +176,30 @@ function RailBody({ meetingId, heading }: { meetingId: string; heading: boolean 
   const openCount = items.filter((i) => i.status === 'open').length;
   const several = (topics?.length ?? 0) > 1;
   const listName = shown ? shown.name : 'No Topic';
+  const picker = several ? (
+    <TopicPicker
+      topics={pickerTopics}
+      value={shown ? { id: shown.id, name: shown.name } : null}
+      onChange={(t) => setPick(t ? t.id : null)}
+    />
+  ) : null;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex-shrink-0 px-5 pb-2 pt-4">
-        {(heading || several) && (
+      {heading && (
+        <div className={HEADING_STRIP}>
           <PanelHeader
-            title={heading ? 'To-Dos' : undefined}
-            count={heading && loaded ? openCount : null}
-            action={
-              several ? (
-                <TopicPicker
-                  topics={pickerTopics}
-                  value={shown ? { id: shown.id, name: shown.name } : null}
-                  onChange={(t) => setPick(t ? t.id : null)}
-                />
-              ) : null
-            }
+            title="To-Dos"
+            count={loaded ? openCount : null}
+            action={picker}
+            className="mb-0 flex-1"
           />
-        )}
+        </div>
+      )}
+      <div className="flex-shrink-0 px-5 pb-2 pt-3">
+        {!heading && several && <PanelHeader action={picker} />}
         {!several && topics !== null ? (
-          <p className={cn('u-row-meta mb-2 truncate', heading && '-mt-1')}>
+          <p className="u-row-meta mb-2 truncate">
             {shown ? `From the Topic ${shown.name}` : 'Your To-Dos with no Topic'}
           </p>
         ) : null}

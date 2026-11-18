@@ -126,12 +126,16 @@ describe('RecordTodoRail', () => {
     expect(await screen.findByText('Send notes')).toBeInTheDocument();
   });
 
-  it('My Notes / Agenda sidebar: the Topics row sits above the To-Dos', async () => {
-    render(<RecordTodoRail meetingId="m-1" meetingTitle="Weekly sync" />);
-    const topicsLabel = screen.getByText('Topics');
+  it('My Notes / Agenda sidebar: starts with its To-Dos heading row, no Topics strip', async () => {
+    render(<RecordTodoRail meetingId="m-1" />);
     const heading = screen.getByRole('heading', { name: 'To-Dos' });
-    expect(topicsLabel.compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(screen.getByRole('button', { name: /Add to Topic/ })).toBeInTheDocument();
+    const aside = screen.getByRole('complementary', { name: 'To-Dos' });
+    const row = aside.firstElementChild?.firstElementChild as HTMLElement;
+    expect(row).toContainElement(heading);
+    expect(row.className).toContain('min-h-11');
+    expect(row.className).toContain('border-b');
+    expect(screen.queryByText('Topics')).toBeNull();
+    expect(screen.queryByRole('button', { name: /Add to Topic|Add Topic/ })).toBeNull();
     await screen.findByText('Loose end');
   });
 
@@ -143,7 +147,7 @@ describe('RecordTodoRail', () => {
     expect(screen.getByLabelText('Add a To-Do to this Meeting')).toBeInTheDocument();
   });
 
-  it('is the Transcript rail\'s width, and its Topics strip shares the record strip height', async () => {
+  it('is the Transcript rail\'s width, and its heading row shares the record strip height', async () => {
     const { container } = render(<RecordTodoRail meetingId="m-1" />);
     const aside = screen.getByRole('complementary', { name: 'To-Dos' });
     expect(aside.className).toContain('w-[40%]');

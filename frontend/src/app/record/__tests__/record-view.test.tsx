@@ -67,13 +67,13 @@ vi.mock('@/components/Record/RecordingHeader', async () => {
 
 // Stateful stand-ins: a remount would reset the typed draft and bump the mount count.
 vi.mock('@/app/_components/TranscriptPanel', () => ({
-  TranscriptPanel: ({ stripTrailing }: { stripTrailing?: React.ReactNode }) => {
+  TranscriptPanel: ({ topBar }: { topBar?: React.ReactNode }) => {
     useEffect(() => {
       mounts.transcript += 1;
     }, []);
     return (
       <div data-testid="transcript">
-        transcript<div data-testid="transcript-strip">{stripTrailing}</div>
+        transcript<div data-testid="transcript-strip">{topBar}</div>
       </div>
     );
   },
@@ -82,7 +82,7 @@ vi.mock('@/components/Record/RecordMeetingControls', () => ({
   RecordMeetingControls: () => <div data-testid="meeting-controls" />,
 }));
 vi.mock('@/components/Record/RecordRail', () => ({
-  RecordRail: ({ view, tabsTrailing }: { view: string; tabsTrailing?: React.ReactNode }) => {
+  RecordRail: ({ view, topBar }: { view: string; topBar?: React.ReactNode }) => {
     const [draft, setDraft] = useState('');
     useEffect(() => {
       mounts.rail += 1;
@@ -90,7 +90,7 @@ vi.mock('@/components/Record/RecordRail', () => ({
     return (
       <div data-testid="rail" data-view={view}>
         <textarea aria-label="notes" value={draft} onChange={(e) => setDraft(e.target.value)} />
-        <div data-testid="rail-strip">{tabsTrailing}</div>
+        <div data-testid="rail-strip">{topBar}</div>
       </div>
     );
   },
@@ -126,7 +126,7 @@ describe('record screen views', () => {
     expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Transcript', 'My Notes', 'Agenda']);
   });
 
-  it('mounts one Participants + prompt group, in the strip that is on screen', () => {
+  it('mounts one meeting bar, heading whichever left column is on screen', () => {
     render(<Home />);
     expect(screen.getAllByTestId('meeting-controls')).toHaveLength(1);
     expect(screen.getByTestId('transcript-strip')).toContainElement(screen.getByTestId('meeting-controls'));

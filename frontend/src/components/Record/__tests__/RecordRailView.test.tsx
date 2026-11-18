@@ -5,9 +5,9 @@ import userEvent from '@testing-library/user-event';
 
 // The Transcript · My Notes · Agenda views (owner feedback, v0.18) restyle this column; they
 // must not remount the REAL notepad. Text typed just before a switch is still in the same
-// editor node afterwards and reaches the debounced autosave. In Transcript the rail carries
-// the Topics row and My Notes / Agenda / To-Dos tabs; My Notes and Agenda show one panel with
-// no sub-tabs, and there is only ever one PrepPanel.
+// editor node afterwards and reaches the debounced autosave. In Transcript the rail starts
+// with its My Notes / Agenda / To-Dos tabs; My Notes and Agenda show one panel with no
+// sub-tabs under the page's meeting bar, and there is only ever one PrepPanel.
 
 const saves: Array<{ meetingId: string; notesMarkdown: string | null }> = [];
 vi.mock('@tauri-apps/api/core', () => ({
@@ -33,13 +33,6 @@ vi.mock('@/components/MeetingDetails/PrepPanel', async () => {
 vi.mock('@/components/Record/RecordAgendaPanel', () => ({ RecordAgendaPanel: () => null }));
 vi.mock('@/hooks/usePrepAvailability', () => ({
   usePrepAvailability: () => ({ hasPrep: false, openItemCount: 0, refresh: vi.fn() }),
-}));
-vi.mock('@/components/Topics/MeetingTopicsRow', () => ({
-  MeetingTopicsRow: ({ meetingId, title }: { meetingId: string; title: string | null }) => (
-    <div data-testid="topics-row">
-      topics for {meetingId} ({title ?? 'untitled'})
-    </div>
-  ),
 }));
 vi.mock('@/components/Record/RecordTodoRail', () => ({
   RecordTodos: ({ meetingId, heading }: { meetingId: string; heading?: boolean }) => (
@@ -91,26 +84,25 @@ describe('RecordRail across the views', () => {
     const { rerender, container } = render(<RecordRail meetingId="m-1" view="transcript" />);
     const root = () => container.querySelector('[data-record-view]') as HTMLElement;
     expect(root().className).toContain('w-[40%]');
-    // The top strip is the record strip height in every view, so its rule meets the Topics strip's.
+    // Transcript's tab strip is the record strip height, so its rule meets the meeting bar's.
     expect(screen.getByTestId('record-rail-strip').className).toContain('min-h-11');
     for (const view of ['notes', 'agenda'] as const) {
       rerender(<RecordRail meetingId="m-1" view={view} />);
       expect(root().className).toContain('flex-1');
       expect(root().className).not.toContain('w-[40%]');
-      expect(screen.getByTestId('record-rail-strip').className).toContain('min-h-11');
     }
     await screen.findByRole('textbox', { hidden: true });
   });
 
-  it('My Notes / Agenda: no sub-tabs, a quiet label, the panel the view names', async () => {
+  it('My Notes / Agenda: no sub-tabs, no label, the panel the view names', async () => {
     const { rerender } = render(<RecordRail meetingId="m-1" view="notes" />);
     expect(screen.queryByRole('tablist')).toBeNull();
-    expect(screen.getByTestId('record-rail-strip')).toHaveTextContent('My Notes');
+    expect(screen.getByTestId('record-rail-strip')).toHaveTextContent('');
     expect(await screen.findByRole('textbox')).toBeVisible();
     expect(screen.queryByTestId('prep-panel')).toBeNull();
 
     rerender(<RecordRail meetingId="m-1" view="agenda" />);
-    expect(screen.getByTestId('record-rail-strip')).toHaveTextContent('Agenda');
+    expect(screen.getByTestId('record-rail-strip')).toBeEmptyDOMElement();
     expect(screen.getByTestId('prep-panel')).toBeInTheDocument();
     expect(screen.getByTestId('prep-panel').closest('#record-tabpanel-prep')).not.toHaveAttribute('hidden');
     expect(screen.getByRole('textbox', { hidden: true }).closest('#record-tabpanel-notes')).toHaveAttribute('hidden');
@@ -133,22 +125,19 @@ describe('RecordRail across the views', () => {
 
   it('Agenda view before a meeting row exists shows My Notes', async () => {
     render(<RecordRail meetingId={null} view="agenda" />);
-    expect(screen.getByTestId('record-rail-strip')).toHaveTextContent('My Notes');
     expect(screen.queryByTestId('prep-panel')).toBeNull();
     expect(await screen.findByRole('textbox')).toBeVisible();
   });
 
-  it('Transcript: Topics row above the tabs and a To-Dos tab; My Notes: neither', async () => {
+  it('Transcript: the rail starts with its tab strip, To-Dos included; My Notes: no To-Dos', async () => {
     const user = userEvent.setup();
-    const { rerender } = render(<RecordRail meetingId="m-1" view="transcript" meetingTitle="Weekly sync" />);
-    expect(screen.getByTestId('topics-row')).toHaveTextContent('topics for m-1 (Weekly sync)');
+    const { rerender, container } = render(<RecordRail meetingId="m-1" view="transcript" />);
     expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['My Notes', 'Agenda', 'To-Dos']);
     expect(screen.getByRole('tablist', { name: 'Recording side panel' })).toBeInTheDocument();
-    // The Topics row sits above the tab strip.
-    expect(
-      screen.getByTestId('topics-row').compareDocumentPosition(screen.getByRole('tablist')) &
-        Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
+    // No Topics strip above it any more: the tab strip is the rail's first child.
+    expect((container.querySelector('[data-record-view]') as HTMLElement).firstElementChild).toBe(
+      screen.getByTestId('record-rail-strip'),
+    );
 
     await user.click(screen.getByRole('tab', { name: 'To-Dos' }));
     expect(screen.getByTestId('record-todos')).toHaveAttribute('data-heading', 'false');
@@ -156,28 +145,28 @@ describe('RecordRail across the views', () => {
     // The notepad stays mounted behind the To-Dos tab.
     const editor = await screen.findByRole('textbox', { hidden: true });
 
-    // My Notes: no Topics row, no To-Dos (they're in the page's sidebar), the notepad shown.
-    rerender(<RecordRail meetingId="m-1" view="notes" meetingTitle="Weekly sync" />);
-    expect(screen.queryByTestId('topics-row')).toBeNull();
+    // My Notes: no To-Dos (they're in the page's sidebar), the notepad shown.
+    rerender(<RecordRail meetingId="m-1" view="notes" />);
     expect(screen.queryByTestId('record-todos')).toBeNull();
     expect(screen.getByRole('textbox')).toBe(editor);
 
     // Back to Transcript: the To-Dos tab is where it was left.
-    rerender(<RecordRail meetingId="m-1" view="transcript" meetingTitle="Weekly sync" />);
+    rerender(<RecordRail meetingId="m-1" view="transcript" />);
     expect(screen.getByRole('tab', { name: 'To-Dos' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByRole('textbox', { hidden: true })).toBe(editor);
   });
 
-  it('My Notes / Agenda: the top strip carries the given keys at its far right', async () => {
-    render(<RecordRail meetingId="m-1" view="notes" tabsTrailing={<button type="button">Participants</button>} />);
-    const strip = screen.getByTestId('record-rail-strip');
-    expect(strip).toContainElement(screen.getByRole('button', { name: 'Participants' }));
+  it('My Notes / Agenda: the page\'s meeting bar heads the main column; Transcript: never', async () => {
+    const bar = <div data-testid="meeting-bar">bar</div>;
+    const { rerender } = render(<RecordRail meetingId="m-1" view="notes" topBar={bar} />);
+    expect(screen.getByTestId('record-rail-strip')).toContainElement(screen.getByTestId('meeting-bar'));
+    rerender(<RecordRail meetingId="m-1" view="transcript" topBar={bar} />);
+    expect(screen.queryByTestId('meeting-bar')).toBeNull();
     await screen.findByRole('textbox');
   });
 
-  it('hides the Topics row before the meeting row exists', async () => {
+  it('no To-Dos tab before the meeting row exists', async () => {
     render(<RecordRail meetingId={null} view="transcript" />);
-    expect(screen.queryByTestId('topics-row')).toBeNull();
     expect(screen.queryByRole('tab', { name: 'To-Dos' })).toBeNull();
     await screen.findByRole('textbox');
   });

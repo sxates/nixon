@@ -81,12 +81,14 @@ export default function Home() {
   // Header chrome state. The elapsed clock lives on the transport rail's tape counter now.
   const isRecordingActive = recordingState.isRecording;
 
-  // Participants + summary prompt (owner feedback, v0.18): one instance, handed to the strip
-  // that is on screen — the transcript's status strip in Transcript, the notes column's tab
-  // strip in My Notes / Agenda — so there is never a second popover or a second roster fetch.
+  // The meeting bar — Topics · Participants · summary prompt (owner feedback, v0.18): one
+  // instance, heading whichever left column is on screen (the transcript in Transcript, the
+  // main column in My Notes / Agenda), so there is never a second popover or a second fetch.
+  const liveTitle = meetingTitle === TITLE_PLACEHOLDER ? null : meetingTitle;
   const meetingControls = (
     <RecordMeetingControls
       meetingId={activeRecordingMeetingId ?? null}
+      meetingTitle={liveTitle}
       isRecordingActive={isRecordingActive}
       promptsApi={promptsApi}
     />
@@ -123,9 +125,10 @@ export default function Home() {
       />
 
       <div className="relative flex flex-1 overflow-hidden">
-        {/* Transcript view: live transcript (left) + Notes / Agenda / To-Dos rail (right,
-            ~40% / max 440px; specs/0056 W4) with Topics on top. My Notes / Agenda views: that
-            panel as the full-width main column, a Topics + To-Dos sidebar on the right, and the
+        {/* Transcript view: live transcript (left, the meeting bar on top and the transcription
+            bar at the bottom) + Notes / Agenda / To-Dos rail (right, ~40% / max 440px; specs/0056
+            W4). My Notes / Agenda views: that panel as the full-width main column under the
+            meeting bar, a To-Dos sidebar on the right, and the
             transcript kept mounted but hidden: laid out behind the panes (`invisible`, so it is
             neither painted nor focusable nor read out) so its virtualized rows stay measured
             and its follow-the-tail scroll keeps up, ready the moment the view switches back.
@@ -142,20 +145,16 @@ export default function Home() {
             <TranscriptPanel
               isProcessingStop={isProcessingStop}
               isStopping={isStopping}
-              stripTrailing={focus ? undefined : meetingControls}
+              topBar={focus ? undefined : meetingControls}
             />
           </div>
           <RecordRail
             meetingId={activeRecordingMeetingId ?? null}
             view={view}
-            meetingTitle={meetingTitle === TITLE_PLACEHOLDER ? null : meetingTitle}
-            tabsTrailing={focus ? meetingControls : undefined}
+            topBar={focus ? meetingControls : undefined}
           />
           {focus && (
-            <RecordTodoRail
-              meetingId={activeRecordingMeetingId ?? null}
-              meetingTitle={meetingTitle === TITLE_PLACEHOLDER ? null : meetingTitle}
-            />
+            <RecordTodoRail meetingId={activeRecordingMeetingId ?? null} />
           )}
         </div>
 
