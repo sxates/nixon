@@ -19,7 +19,18 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 ## [Unreleased]
 
-_(nothing yet)_
+### Added
+
+- Switch the recording screen to **Focus** to put the transcript away and give your agenda and notes the whole window. A To-Do list sits beside them: the To-Dos for this Meeting's Topic, or your To-Dos with no Topic. Add To-Dos there as the Meeting goes. Your notes stay exactly as they were when you switch back.
+- Add a Meeting to a Topic while it's still recording, and add a To-Do with the new **Add To-Do** button.
+- Find People and To-Dos from ⌘K search.
+- Claude Code and Claude desktop chats can now read your To-Dos and Topics, alongside your Meetings, when agent access is on.
+
+### Changed
+
+- When you add points to a Topic's timeline, Enter starts the next point and ⌘Enter saves.
+- On a Topic page, the linked Series now sit just above the timeline, and their remove button appears when you point at one.
+- Starred Topics and People show a gold star.
 
 ## [0.18.1] - 2026-11-16
 
