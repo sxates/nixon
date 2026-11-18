@@ -104,33 +104,45 @@ describe('RecordingHeader', () => {
     expect(screen.queryByRole('button', { name: /pause|resume|stop/i })).toBeNull();
   });
 
-  // Owner feedback 2026-09-21: "A better order: Participants, then Live, then Prompt" —
-  // and the three used to be h-9 / h-9 / h-7, so the row stepped. Asserted on DOM order
-  // rather than coordinates so it survives a restyle.
-  //
-  // The middle control is found by its ACTION label since specs/0071 W1: it used to be
-  // named "Transcription mode: Live…", i.e. its own state, which is what made the owner
-  // press it expecting to go live.
-  it('per-meeting controls run Participants → transcript toggle → Prompt, same height', () => {
+  // Owner feedback v0.18: the Transcript / Focus tabs sit under the title, like every other
+  // page's tabs; Participants and the summary prompt move to the right-hand cluster, left of
+  // the meters; Pause transcript leaves the header for the transcript's status strip.
+  // Asserted on DOM order and containment rather than coordinates so it survives a restyle.
+  it('view tabs under the title; Participants → Prompt → meters on the right; no Pause', () => {
     mode.liveTranscription = true;
-    renderHeader(true, {
-      prompts: [{ id: 'p1', name: 'Standup' }],
-      state: { source: 'meeting', prompt_id: 'p1', prompt_name: 'Standup', has_series: false },
-    } as unknown as React.ComponentProps<typeof RecordingHeader>['promptsApi']);
+    const onViewChange = vi.fn();
+    render(
+      <RecordingHeader
+        meetingTitle="Q3 planning"
+        isRecordingActive
+        activeRecordingMeetingId="m1"
+        titleEdit={titleEdit}
+        promptsApi={{
+          ...promptsApi,
+          prompts: [{ id: 'p1', name: 'Standup' }],
+          state: { source: 'meeting', prompt_id: 'p1', prompt_name: 'Standup', has_series: false },
+        } as unknown as React.ComponentProps<typeof RecordingHeader>['promptsApi']}
+        view="focus"
+        onViewChange={onViewChange}
+      />,
+    );
+
+    const tabs = screen.getByRole('tablist', { name: 'Recording view' });
+    const title = screen.getByRole('heading', { level: 1 });
+    // Same title column as the h1 (PageHeader's subtitle slot), after it.
+    expect(title.parentElement?.contains(tabs)).toBe(true);
+    expect(title.compareDocumentPosition(tabs) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Focus' })).toHaveAttribute('aria-selected', 'true');
 
     const participants = screen.getByRole('button', { name: 'Participants' });
-    const live = screen.getByRole('button', { name: 'Pause transcript' });
     const template = screen.getByRole('button', { name: /Standup/ });
-
-    // compareDocumentPosition: FOLLOWING (0x04) means the argument comes after the node.
-    expect(participants.compareDocumentPosition(live) & Node.DOCUMENT_POSITION_FOLLOWING)
-      .toBeTruthy();
-    expect(live.compareDocumentPosition(template) & Node.DOCUMENT_POSITION_FOLLOWING)
-      .toBeTruthy();
-
-    expect(live.className).toMatch(/\bh-8\b/);
+    const meter = screen.getAllByRole('img', { name: /VU$/ })[0];
+    expect(title.parentElement?.contains(participants)).toBe(false);
+    expect(participants.compareDocumentPosition(template) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(template.compareDocumentPosition(meter) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(template.className).toMatch(/\bh-8\b/);
-    expect(live.className).not.toMatch(/\bh-9\b/);
+
+    expect(screen.queryByRole('button', { name: /pause transcript|resume transcript/i })).toBeNull();
   });
 
   // The channel name used to be a `u-section-label` span UNDER each meter, costing the

@@ -19,24 +19,23 @@
  * - The Prep tab exists whenever there is a meeting row; before that (permissions
  *   pending, recording not yet started) only Notes shows.
  *
- * `view` (owner feedback, v0.18) changes only this column's classes: the right-hand rail
- * in Transcript, the full-width notes column in Focus. The element tree is the same in both,
- * so the notepad keeps its editor, its undo history and its caret across a switch. Above the
- * tabs, once the meeting row exists, sits the Topics row (add this Meeting to a Topic while
- * it records) and, in Transcript, the Add To-Do key that opens ⌘⇧T quick add; in Focus the
- * To-Do rail's own add field does that job.
+ * `view` (owner feedback, v0.18) restyles this column: the right-hand rail in Transcript,
+ * the full-width notes column in Focus. The Notes panel keeps its place in the tree in both,
+ * so the notepad keeps its editor, its undo history and its caret across a switch. Transcript
+ * adds what Focus puts in its own right-hand sidebar instead: the Topics row above the tabs
+ * and a third tab, To-Dos (the same `RecordTodos` as that sidebar). In Focus the strip offers
+ * only My Notes / Agenda, so To-Dos never shows twice; a rail left on To-Dos falls back to
+ * My Notes there and returns to To-Dos with Transcript.
  */
 
 import { useEffect, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { PrepPanel } from '@/components/MeetingDetails/PrepPanel';
 import { RecordAgendaPanel } from '@/components/Record/RecordAgendaPanel';
-import { openQuickAdd } from '@/components/QuickAdd/QuickAddShortcut';
-import { MeetingTopicsRow } from '@/components/Topics/MeetingTopicsRow';
+import { RecordTodos } from '@/components/Record/RecordTodoRail';
+import { RecordTopicsStrip } from '@/components/Record/RecordTopicsStrip';
 import { usePrepAvailability } from '@/hooks/usePrepAvailability';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Plus } from '@/components/ui/icons';
 import type { RecordView } from '@/lib/record-view';
 import { cn } from '@/lib/utils';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -48,7 +47,7 @@ const NotepadPanel = dynamic(
   { ssr: false },
 );
 
-type RecordTabKey = 'notes' | 'prep';
+type RecordTabKey = 'notes' | 'prep' | 'todos';
 
 interface RecordTab {
   key: RecordTabKey;
@@ -67,12 +66,14 @@ export function RecordRail({ meetingId, view = 'transcript', meetingTitle = null
   const [activeTab, setActiveTab] = useState<RecordTabKey>('notes');
   const { openItemCount, refresh: refreshPrepCount } = usePrepAvailability(meetingId);
 
-  const tabs: RecordTab[] = meetingId
-    ? [
-        { key: 'notes', label: 'My Notes' },
-        { key: 'prep', label: 'Agenda' },
-      ]
-    : [{ key: 'notes', label: 'My Notes' }];
+  const showPrep = !!meetingId;
+  // To-Dos is a tab in Transcript only: Focus shows them in its own sidebar.
+  const showTodos = !!meetingId && view === 'transcript';
+  const tabs: RecordTab[] = [
+    { key: 'notes', label: 'My Notes' },
+    ...(showPrep ? [{ key: 'prep' as const, label: 'Agenda' }] : []),
+    ...(showTodos ? [{ key: 'todos' as const, label: 'To-Dos' }] : []),
+  ];
 
   // Lazy-mount Prep on first activation; keep it mounted afterwards so the loaded
   // brief / open items persist across switches (mirrors useMeetingTabs).
@@ -80,12 +81,15 @@ export function RecordRail({ meetingId, view = 'transcript', meetingTitle = null
   useEffect(() => {
     if (activeTab === 'prep') setHasOpenedPrep(true);
   }, [activeTab]);
+  // To-Dos likewise mount on first activation and stay (hidden) while in Transcript.
+  const [hasOpenedTodos, setHasOpenedTodos] = useState(false);
+  useEffect(() => {
+    if (activeTab === 'todos') setHasOpenedTodos(true);
+  }, [activeTab]);
 
-  // If the meeting id disappears (rail shown before a recording starts, or after
-  // stop), the Prep tab is gone — fall back to Notes so the tablist always has an
-  // active tab.
-  const showPrep = !!meetingId;
-  const effectiveTab: RecordTabKey = showPrep ? activeTab : 'notes';
+  // A tab that isn't offered right now (no meeting row yet, or To-Dos in Focus) falls back
+  // to Notes, so the tablist always has an active tab; the choice itself is kept.
+  const effectiveTab: RecordTabKey = tabs.some((t) => t.key === activeTab) ? activeTab : 'notes';
 
   // Roving tabindex (WAI-ARIA tabs pattern): arrow/Home/End move focus and activate.
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
@@ -109,24 +113,8 @@ export function RecordRail({ meetingId, view = 'transcript', meetingTitle = null
         view === 'focus' ? 'flex-1' : 'w-[40%] max-w-[440px] border-l border-border',
       )}
     >
-      {meetingId && (
-        <div className="flex-shrink-0 border-b border-border px-5 py-2">
-          <MeetingTopicsRow
-            meetingId={meetingId}
-            title={meetingTitle}
-            seriesKey={null}
-            className=""
-            trailing={
-              view === 'transcript' ? (
-                <Button variant="outline" size="xs" className="ml-auto" onClick={openQuickAdd}>
-                  <Plus />
-                  Add To-Do
-                </Button>
-              ) : null
-            }
-          />
-        </div>
-      )}
+      {/* Transcript: the Topics row heads the rail. Focus: it heads the To-Do sidebar. */}
+      {view === 'transcript' && <RecordTopicsStrip meetingId={meetingId} meetingTitle={meetingTitle} />}
       {/* The `ui/tabs` underline strip (the same one as meeting details). Only the strip is
           Radix: the panels below keep their own lifecycle (always-mounted Notes, lazy Prep),
           so each trigger names its panel explicitly. The arrow-key handler is ours and calls
@@ -199,6 +187,20 @@ export function RecordRail({ meetingId, view = 'transcript', meetingTitle = null
               onOpenItemsChanged={refreshPrepCount}
             />
           </div>
+        </div>
+      )}
+
+      {/* TO-DOS (Transcript only) — lazily mounted on first activation, then kept while in
+          Transcript. Focus unmounts it: its own sidebar shows the same list. */}
+      {showTodos && (effectiveTab === 'todos' || hasOpenedTodos) && (
+        <div
+          role="tabpanel"
+          id="record-tabpanel-todos"
+          aria-labelledby="record-tab-todos"
+          hidden={effectiveTab !== 'todos'}
+          className={effectiveTab === 'todos' ? 'min-h-0 flex flex-1 flex-col overflow-hidden' : 'hidden'}
+        >
+          <RecordTodos meetingId={meetingId} heading={false} />
         </div>
       )}
     </div>

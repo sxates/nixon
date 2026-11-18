@@ -14,6 +14,8 @@ import { useSidebar } from '@/components/Sidebar/SidebarProvider';
 import { useRecordEmptyPhase } from '@/hooks/useRecordEmptyPhase';
 import { effectiveLiveTranscription, transcriptEmptyStateVariant } from '@/lib/processing-mode';
 import { useEffect, useMemo, useState } from 'react';
+import { TranscriptModeButton } from '@/components/Record/TranscriptModeButton';
+import { cn } from '@/lib/utils';
 
 /**
  * TranscriptPanel Component
@@ -44,7 +46,7 @@ export function TranscriptPanel({
   // (record-only mode) the backend never emits transcript updates, so instead of a
   // dead empty transcript we show a quiet explanatory state. Prefer the live value
   // from useProcessingMode()'s `processing-mode-changed` event — it reflects
-  // mid-meeting overrides (e.g. the header chip, or plugging in) — and fall back to
+  // mid-meeting overrides (e.g. the status strip's Pause button, or plugging in) — and fall back to
   // the stored preference until the first event of this session arrives.
   const { liveTranscription: liveTranscriptionEvent, onBattery } = useProcessingMode();
   const [liveTranscriptionPref, setLiveTranscriptionPref] = useState(true);
@@ -67,7 +69,7 @@ export function TranscriptPanel({
 
   // Per-meeting "go live" override from the low-power empty state (low-power-mode
   // spec §5). On error, toast and revert nothing — the real state comes back via the
-  // next `processing-mode-changed` event, same as the header chip.
+  // next `processing-mode-changed` event, same as the status strip's Pause button.
   const [enablingLive, setEnablingLive] = useState(false);
   const handleTranscribeLiveNow = async () => {
     if (!activeRecordingMeetingId || enablingLive) return;
@@ -138,29 +140,34 @@ export function TranscriptPanel({
   // via flex-1/min-h-0), matching the meeting-details layout pattern.
   return (
     <div className="w-full min-h-0 flex-1 border-r border-border bg-paper flex flex-col overflow-hidden">
-      {/* Fixed header — only rendered when there's a status banner to show. The
-          transcription-language picker moved to a single global control in
-          Settings (spec 0038 WS7.d); the old in-recording Language modal is gone. */}
-      {(hasLiveSpeakerLabel || gapMessage) && (
-        <div className="bg-card px-5 py-3 border-border">
-          <div className="flex flex-col space-y-2">
-            {/* Provisional-labels affordance (specs/0011, P3-B): live speaker
-                labels are best-effort and reconciled to the authoritative offline
-                pass when recording stops. Subtle, non-nagging, only while live
-                labels are actually showing. */}
-            {hasLiveSpeakerLabel && (
-              <p className="u-section-label text-brand">
-                Provisional — speaker labels are finalized when you stop recording.
+      {/* Status strip (owner feedback, v0.18): while a recording runs, one line across the
+          top of the transcript — what the transcript is doing on the left, Pause / Resume
+          transcript on the right (it moved here from the header, since it only matters
+          next to the transcript; it sits inside the Transcript view by construction). The
+          provisional-labels sentence (specs/0011, P3-B) is that line once a live speaker
+          label exists: labels are best-effort and reconciled when recording stops. The
+          gap callout (specs/0028 → 0030 WS4) stays underneath, recording or not. */}
+      {(isRecording || gapMessage) && (
+        <div className="flex flex-col gap-2 border-b border-border bg-card px-5 py-2">
+          {isRecording && (
+            <div data-testid="transcript-status-strip" className="flex min-h-7 items-center gap-3">
+              <p className={cn('u-section-label min-w-0 flex-1', hasLiveSpeakerLabel && 'text-brand')}>
+                {hasLiveSpeakerLabel
+                  ? 'Provisional — speaker labels are finalized when you stop recording.'
+                  : liveTranscriptionEnabled
+                    ? 'Live transcript'
+                    : 'Transcript paused'}
               </p>
-            )}
-            {/* Persistent backpressure hint (specs/0028 → 0030 WS4): the transcript has
-                gaps — one banner with a running count instead of a toast per event. */}
-            {gapMessage && (
-              <Callout tone="warn" role="status" size="compact">
-                {gapMessage}
-              </Callout>
-            )}
-          </div>
+              {activeRecordingMeetingId && <TranscriptModeButton meetingId={activeRecordingMeetingId} />}
+            </div>
+          )}
+          {/* Persistent backpressure hint: the transcript has gaps — one banner with a
+              running count instead of a toast per event. */}
+          {gapMessage && (
+            <Callout tone="warn" role="status" size="compact">
+              {gapMessage}
+            </Callout>
+          )}
         </div>
       )}
 

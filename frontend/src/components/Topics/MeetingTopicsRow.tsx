@@ -5,7 +5,7 @@
  * opens the topic page), then Add to topic…. Refreshes on `topics-updated`.
  */
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Plus } from '@/components/ui/icons';
@@ -21,11 +21,9 @@ export interface MeetingTopicsRowProps {
   seriesKey: string | null | undefined;
   /** Replaces the row's default top margin (the record screen's strip sets its own). */
   className?: string;
-  /** Extra controls at the end of the row (the record screen's Add To-Do). */
-  trailing?: ReactNode;
 }
 
-export function MeetingTopicsRow({ meetingId, title, seriesKey, className = 'mt-3', trailing }: MeetingTopicsRowProps) {
+export function MeetingTopicsRow({ meetingId, title, seriesKey, className = 'mt-3' }: MeetingTopicsRowProps) {
   const router = useRouter();
   const [topics, setTopics] = useState<Topic[]>([]);
   const [adding, setAdding] = useState(false);
@@ -72,7 +70,6 @@ export function MeetingTopicsRow({ meetingId, title, seriesKey, className = 'mt-
         linkedIds={topics.map((t) => t.id)}
         seriesAvailable={seriesAvailable}
       />
-      {trailing}
     </div>
   );
 }

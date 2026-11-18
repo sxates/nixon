@@ -11,13 +11,16 @@ import { isRecordView, type RecordView } from '@/lib/record-view';
 export function RecordViewTabs({
   view,
   onViewChange,
+  className,
 }: {
   view: RecordView;
   onViewChange: (view: RecordView) => void;
+  /** On the tab list (the header drops its rule: the band's own bottom rule is under it). */
+  className?: string;
 }) {
   return (
     <Tabs value={view} onValueChange={(v) => isRecordView(v) && onViewChange(v)}>
-      <TabsList aria-label="Recording view">
+      <TabsList aria-label="Recording view" className={className}>
         <TabsTrigger value="transcript" aria-controls={undefined}>
           Transcript
         </TabsTrigger>

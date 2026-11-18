@@ -1,11 +1,12 @@
 import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import userEvent from '@testing-library/user-event';
 
 // The Transcript / Focus switch (owner feedback, v0.18) restyles the notes column; it must
 // not remount the REAL notepad. Text typed just before a switch is still in the same editor
-// node afterwards and reaches the debounced autosave, and the Topics row + Add To-Do key
-// render once a meeting row exists.
+// node afterwards and reaches the debounced autosave. In Transcript the rail also carries the
+// Topics row and a To-Dos tab; in Focus both live in the To-Do sidebar instead.
 
 const saves: Array<{ meetingId: string; notesMarkdown: string | null }> = [];
 vi.mock('@tauri-apps/api/core', () => ({
@@ -22,15 +23,21 @@ vi.mock('@/hooks/usePrepAvailability', () => ({
   usePrepAvailability: () => ({ hasPrep: false, openItemCount: 0, refresh: vi.fn() }),
 }));
 vi.mock('@/components/Topics/MeetingTopicsRow', () => ({
-  MeetingTopicsRow: ({ meetingId, title, trailing }: { meetingId: string; title: string | null; trailing?: React.ReactNode }) => (
+  MeetingTopicsRow: ({ meetingId, title }: { meetingId: string; title: string | null }) => (
     <div data-testid="topics-row">
-      topics for {meetingId} ({title ?? 'untitled'}){trailing}
+      topics for {meetingId} ({title ?? 'untitled'})
+    </div>
+  ),
+}));
+vi.mock('@/components/Record/RecordTodoRail', () => ({
+  RecordTodos: ({ meetingId, heading }: { meetingId: string; heading?: boolean }) => (
+    <div data-testid="record-todos" data-heading={String(heading)}>
+      todos for {meetingId}
     </div>
   ),
 }));
 
 import { RecordRail } from '@/components/Record/RecordRail';
-import { OPEN_QUICK_ADD_EVENT } from '@/components/QuickAdd/QuickAddShortcut';
 
 afterEach(() => {
   saves.length = 0;
@@ -72,26 +79,41 @@ describe('RecordRail across the view switch', () => {
     await screen.findByRole('textbox');
   });
 
-  it('shows the Topics row with Add To-Do in Transcript, which opens the quick-add dialog', async () => {
-    const opened = vi.fn();
-    window.addEventListener(OPEN_QUICK_ADD_EVENT, opened);
+  it('Transcript: Topics row above the tabs and a To-Dos tab; Focus: neither', async () => {
+    const user = userEvent.setup();
     const { rerender } = render(<RecordRail meetingId="m-1" view="transcript" meetingTitle="Weekly sync" />);
     expect(screen.getByTestId('topics-row')).toHaveTextContent('topics for m-1 (Weekly sync)');
-    fireEvent.click(screen.getByRole('button', { name: /add to-do/i }));
-    expect(opened).toHaveBeenCalledTimes(1);
-
-    // Focus: the Topics row stays, the To-Do rail's own field replaces the key.
-    rerender(<RecordRail meetingId="m-1" view="focus" meetingTitle="Weekly sync" />);
-    expect(screen.getByTestId('topics-row')).toBeInTheDocument();
+    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['My Notes', 'Agenda', 'To-Dos']);
+    // The Topics row sits above the tab strip.
+    expect(
+      screen.getByTestId('topics-row').compareDocumentPosition(screen.getByRole('tablist')) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
     expect(screen.queryByRole('button', { name: /add to-do/i })).toBeNull();
-    window.removeEventListener(OPEN_QUICK_ADD_EVENT, opened);
-    await screen.findByRole('textbox');
+
+    await user.click(screen.getByRole('tab', { name: 'To-Dos' }));
+    expect(screen.getByTestId('record-todos')).toHaveAttribute('data-heading', 'false');
+    expect(screen.getByTestId('record-todos').closest('[role="tabpanel"]')).not.toHaveAttribute('hidden');
+    // The notepad stays mounted behind the To-Dos tab.
+    const editor = await screen.findByRole('textbox', { hidden: true });
+
+    // Focus: My Notes / Agenda only; a rail left on To-Dos falls back to My Notes.
+    rerender(<RecordRail meetingId="m-1" view="focus" meetingTitle="Weekly sync" />);
+    expect(screen.queryByTestId('topics-row')).toBeNull();
+    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['My Notes', 'Agenda']);
+    expect(screen.getByRole('tab', { name: 'My Notes' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.queryByTestId('record-todos')).toBeNull();
+
+    // Back to Transcript: the To-Dos tab is where it was left.
+    rerender(<RecordRail meetingId="m-1" view="transcript" meetingTitle="Weekly sync" />);
+    expect(screen.getByRole('tab', { name: 'To-Dos' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('textbox', { hidden: true })).toBe(editor);
   });
 
   it('hides the Topics row before the meeting row exists', async () => {
     render(<RecordRail meetingId={null} view="transcript" />);
     expect(screen.queryByTestId('topics-row')).toBeNull();
-    expect(screen.queryByRole('button', { name: /add to-do/i })).toBeNull();
+    expect(screen.queryByRole('tab', { name: 'To-Dos' })).toBeNull();
     await screen.findByRole('textbox');
   });
 });

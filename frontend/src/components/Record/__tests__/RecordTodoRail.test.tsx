@@ -13,7 +13,7 @@ vi.mock('@/lib/safe-listen', () => ({ safeListen: () => () => {} }));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
 vi.mock('sonner', () => ({ toast: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() }) }));
 
-import { RecordTodoRail } from '../RecordTodoRail';
+import { RecordTodoRail, RecordTodos } from '../RecordTodoRail';
 
 const topic = (id: string, name: string, status: 'open' | 'closed' = 'open') =>
   ({ id, name, status, description: '' }) as unknown as Topic;
@@ -124,5 +124,22 @@ describe('RecordTodoRail', () => {
     );
     expect(invokeMock).not.toHaveBeenCalledWith('api_set_action_item_topic', expect.anything());
     expect(await screen.findByText('Send notes')).toBeInTheDocument();
+  });
+
+  it('Focus sidebar: the Topics row sits above the To-Dos', async () => {
+    render(<RecordTodoRail meetingId="m-1" meetingTitle="Weekly sync" />);
+    const topicsLabel = screen.getByText('Topics');
+    const heading = screen.getByRole('heading', { name: 'To-Dos' });
+    expect(topicsLabel.compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Add to Topic/ })).toBeInTheDocument();
+    await screen.findByText('Loose end');
+  });
+
+  it('as the Transcript rail\'s tab: the same list without its own heading or Topics row', async () => {
+    render(<RecordTodos meetingId="m-1" heading={false} />);
+    expect(await screen.findByText('Loose end')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'To-Dos' })).toBeNull();
+    expect(screen.queryByText('Topics')).toBeNull();
+    expect(screen.getByLabelText('Add a To-Do to this Meeting')).toBeInTheDocument();
   });
 });

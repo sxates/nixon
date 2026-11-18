@@ -1,8 +1,10 @@
 'use client';
 
 /**
- * The To-Do rail of the record screen's Focus view (owner feedback, v0.18): the live
- * Meeting's Topic To-Dos, or, when it is on no Topic, your To-Dos that have no Topic.
+ * The record screen's To-Dos (owner feedback, v0.18): the live Meeting's Topic To-Dos, or,
+ * when it is on no Topic, your To-Dos that have no Topic. One implementation in two places:
+ * `RecordTodos` is the To-Dos tab of the Transcript view's rail, and `RecordTodoRail` is the
+ * Focus view's right-hand sidebar (the Topics row on top, then the same `RecordTodos`).
  *
  * - Topics come from `topicsForMeeting` (open ones only: a closed Topic refuses new tags).
  *   With several, a `TopicPicker` chooses which list shows; it defaults to the first, and its
@@ -22,6 +24,7 @@ import { TodoList } from '@/components/ActionItems/TodoList';
 import { TopicPicker } from '@/components/ActionItems/TopicPicker';
 import type { MentionTopic } from '@/components/ActionItems/MentionInput';
 import { Callout } from '@/components/ui/callout';
+import { RecordTopicsStrip } from '@/components/Record/RecordTopicsStrip';
 import { PanelHeader } from '@/components/ui/panel';
 import { useActionItemMutations } from '@/hooks/useActionItemMutations';
 import { usePersonNames } from '@/hooks/usePersonNames';
@@ -31,6 +34,7 @@ import { useTopics } from '@/hooks/useTopics';
 import { safeListen } from '@/lib/safe-listen';
 import { sameOrder } from '@/lib/topic-order';
 import { setActionItemTopic, topicsForMeeting } from '@/lib/topics';
+import { cn } from '@/lib/utils';
 import type { ActionItem, ActionItemStatus, Topic, TodoRow } from '@/types';
 
 const errorText = (err: unknown) => (err instanceof Error ? err.message : String(err));
@@ -62,25 +66,42 @@ function useMeetingOpenTopics(meetingId: string | null): Topic[] | null {
 /** `undefined` = no explicit pick yet (follow the first Topic); `null` = "No Topic". */
 type Pick = string | null | undefined;
 
-export function RecordTodoRail({ meetingId }: { meetingId: string | null }) {
+interface RecordTodoRailProps {
+  meetingId: string | null;
+  /** The live title, for the Topics row's Series option. */
+  meetingTitle?: string | null;
+}
+
+/** Focus view: the right-hand sidebar, Topics row then To-Dos. */
+export function RecordTodoRail({ meetingId, meetingTitle = null }: RecordTodoRailProps) {
   return (
     <aside
       aria-label="To-Dos"
       className="flex w-[32%] min-w-[260px] max-w-[380px] flex-shrink-0 flex-col overflow-hidden border-l border-border bg-background"
     >
-      {meetingId ? (
-        <RailBody key={meetingId} meetingId={meetingId} />
-      ) : (
-        <div className="px-5 py-4">
-          <PanelHeader title="To-Dos" />
-          <p className="u-meta">To-Dos for this Meeting show here once recording starts.</p>
-        </div>
-      )}
+      <RecordTopicsStrip meetingId={meetingId} meetingTitle={meetingTitle} />
+      <RecordTodos meetingId={meetingId} />
     </aside>
   );
 }
 
-function RailBody({ meetingId }: { meetingId: string }) {
+/**
+ * The To-Do list itself. `heading` (default on) draws the "To-Dos" panel heading; the
+ * Transcript rail's To-Dos tab turns it off, since the tab already names it.
+ */
+export function RecordTodos({ meetingId, heading = true }: { meetingId: string | null; heading?: boolean }) {
+  if (!meetingId) {
+    return (
+      <div className="px-5 py-4">
+        {heading && <PanelHeader title="To-Dos" />}
+        <p className="u-meta">To-Dos for this Meeting show here once recording starts.</p>
+      </div>
+    );
+  }
+  return <RailBody key={meetingId} meetingId={meetingId} heading={heading} />;
+}
+
+function RailBody({ meetingId, heading }: { meetingId: string; heading: boolean }) {
   const router = useRouter();
   const topics = useMeetingOpenTopics(meetingId);
   const [pick, setPick] = useState<Pick>(undefined);
@@ -155,21 +176,23 @@ function RailBody({ meetingId }: { meetingId: string }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex-shrink-0 px-5 pb-2 pt-4">
-        <PanelHeader
-          title="To-Dos"
-          count={loaded ? openCount : null}
-          action={
-            several ? (
-              <TopicPicker
-                topics={pickerTopics}
-                value={shown ? { id: shown.id, name: shown.name } : null}
-                onChange={(t) => setPick(t ? t.id : null)}
-              />
-            ) : null
-          }
-        />
+        {(heading || several) && (
+          <PanelHeader
+            title={heading ? 'To-Dos' : undefined}
+            count={heading && loaded ? openCount : null}
+            action={
+              several ? (
+                <TopicPicker
+                  topics={pickerTopics}
+                  value={shown ? { id: shown.id, name: shown.name } : null}
+                  onChange={(t) => setPick(t ? t.id : null)}
+                />
+              ) : null
+            }
+          />
+        )}
         {!several && topics !== null ? (
-          <p className="u-row-meta -mt-1 mb-2 truncate">
+          <p className={cn('u-row-meta mb-2 truncate', heading && '-mt-1')}>
             {shown ? `From the Topic ${shown.name}` : 'Your To-Dos with no Topic'}
           </p>
         ) : null}

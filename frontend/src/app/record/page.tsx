@@ -109,9 +109,9 @@ export default function Home() {
 
       <div className="relative flex flex-1 overflow-hidden">
         {/* Transcript view: live transcript (left) + Notes / Prep rail (right, ~40% / max
-            440px; specs/0056 W4). Focus view: the same notes column full width, a To-Do rail
-            on the right, and the transcript kept mounted but hidden: laid out behind the
-            panes (`invisible`, so it is neither painted nor focusable nor read out) so its
+            440px; specs/0056 W4), with Topics on top and a To-Dos tab. Focus view: the same
+            notes column full width (My Notes / Agenda), a Topics + To-Dos sidebar on the
+            right, and the transcript kept mounted but hidden: laid out behind the panes (`invisible`, so it is neither painted nor focusable nor read out) so its
             virtualized rows stay measured and its follow-the-tail scroll keeps up, ready the
             moment the view switches back. Neither column changes parent between views, so
             nothing in them remounts. */}
@@ -134,7 +134,12 @@ export default function Home() {
             view={view}
             meetingTitle={meetingTitle === TITLE_PLACEHOLDER ? null : meetingTitle}
           />
-          {focus && <RecordTodoRail meetingId={activeRecordingMeetingId ?? null} />}
+          {focus && (
+            <RecordTodoRail
+              meetingId={activeRecordingMeetingId ?? null}
+              meetingTitle={meetingTitle === TITLE_PLACEHOLDER ? null : meetingTitle}
+            />
+          )}
         </div>
 
         {/* Status Overlays - Processing and Saving */}
