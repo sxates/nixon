@@ -5,14 +5,11 @@ import { PageHeader } from '@/components/ui/page-header';
 import { MeetingTitleField } from '@/components/MeetingDetails/MeetingTitleField';
 import { TITLE_PLACEHOLDER } from '@/hooks/useRecordingTitleEdit';
 import { cn } from '@/lib/utils';
-import { ParticipantsPopover } from '@/components/Participants/ParticipantsPopover';
 import { VU_DEFAULT_HEIGHT, VuMeter } from '@/components/Transport/VuMeter';
 import { useRecordingLevel } from '@/hooks/useRecordingLevel';
 import { useRecordEmptyPhase } from '@/hooks/useRecordEmptyPhase';
 import { rmsToVu } from '@/lib/transport/vu-ballistics';
 import type { UseRecordingTitleEditReturn } from '@/hooks/useRecordingTitleEdit';
-import { PromptPicker } from '@/components/SummaryPrompts/PromptPicker';
-import { CustomPromptFlow, type PromptsApi } from '@/components/SummaryPrompts/CustomPromptFlow';
 import { useBack } from '@/hooks/useBack';
 import type { RecordView } from '@/lib/record-view';
 import { RecordViewTabs } from './RecordViewTabs';
@@ -28,8 +25,6 @@ interface RecordingHeaderProps {
   isRecordingActive: boolean;
   activeRecordingMeetingId: string | null;
   titleEdit: UseRecordingTitleEditReturn;
-  /** Per-meeting prompt picker's slice of useSummaryPrompts (specs/0079). */
-  promptsApi: PromptsApi;
   /** Transcript / Focus (owner feedback, v0.18); the switch is hidden without a handler. */
   view?: RecordView;
   onViewChange?: (view: RecordView) => void;
@@ -37,9 +32,9 @@ interface RecordingHeaderProps {
 
 /**
  * Recording header, specs/0057 Plan 2: a control-panel faceplate. Left column: back · title,
- * then one row with the Transcript / Focus tabs on the header's left edge and Participants ·
- * summary prompt right-aligned (owner feedback, v0.18), so the title has the full width
- * beside the two channel VU meters on the right. The transport rail (mounted in the app
+ * then the Transcript / Focus tabs on the header's left edge (owner feedback, v0.18); the
+ * two channel VU meters on the right. Participants and the summary prompt live in the
+ * panes' top strips (RecordMeetingControls), Pause transcript in the transcript's. The transport rail (mounted in the app
  * layout) owns REC/HOLD/STOP, the reels and the tape counter, so nothing here duplicates a
  * control or a clock any more.
  */
@@ -48,7 +43,6 @@ export function RecordingHeader({
   isRecordingActive,
   activeRecordingMeetingId,
   titleEdit,
-  promptsApi,
   view = 'transcript',
   onViewChange,
 }: RecordingHeaderProps) {
@@ -62,7 +56,6 @@ export function RecordingHeader({
     commitTitleEdit,
     cancelTitleEdit,
   } = titleEdit;
-  const [customFlowOpen, setCustomFlowOpen] = useState(false);
   const level = useRecordingLevel(isRecordingActive);
   // Starting or saving is not idle: the idle subhead would flash on the way in and out.
   const transition = useRecordEmptyPhase();
@@ -100,45 +93,6 @@ export function RecordingHeader({
   // rail says exactly that. The idle line stays: an idle header DOES need to say what
   // pressing REC will do.
   const subtitle = !isRecordingActive && !transition ? 'Recording locally on your Mac' : undefined;
-
-  // Per-meeting controls, right-aligned in the tabs row (owner feedback, v0.18): who is
-  // here, then what the summary will look like.
-  const controls =
-    isRecordingActive || activeRecordingMeetingId ? (
-      <>
-        {/* Participants for the in-progress meeting (specs/0017). Use the authoritative
-            SQLite meeting id (`activeRecordingMeetingId`, set at recording start), NOT the
-            fabricated `currentMeetingId` from TranscriptContext (a `meeting-<timestamp>`
-            IndexedDB id) — adds made against that orphan id are lost at stop (specs/0024
-            WS3.1). The roster row + its calendar_event_id already exist from Join & Record,
-            so seeding works live; an ad-hoc recording starts empty and is hand-added. */}
-        {activeRecordingMeetingId && <ParticipantsPopover meetingId={activeRecordingMeetingId} />}
-        {/* Per-meeting summary prompt picker (specs/0079): persisted against the
-            recording's SQLite id; the eventual summary uses it. */}
-        {isRecordingActive && (
-          <>
-            <PromptPicker
-              prompts={promptsApi.prompts}
-              promptState={promptsApi.state}
-              onPromptSelect={(id) => {
-                void promptsApi.selectPrompt(id);
-              }}
-              onCustomPrompt={() => setCustomFlowOpen(true)}
-              onClearCustomPrompt={() => {
-                void promptsApi.clearOneOff();
-              }}
-              title="Summary prompt — used when this Meeting is summarized"
-              className="h-8 max-w-[180px] text-muted-foreground"
-            />
-            <CustomPromptFlow
-              open={customFlowOpen}
-              onClose={() => setCustomFlowOpen(false)}
-              promptsApi={promptsApi}
-            />
-          </>
-        )}
-      </>
-    ) : null;
 
   // The control panel's meter bridge (specs/0057 §3.2): one needle per channel — CH1 is the
   // owner's mic, CH2 is system audio (the other side of the call) — read from the clean
@@ -186,15 +140,10 @@ export function RecordingHeader({
             }
             subtitle={subtitle}
           />
-          {(onViewChange || controls) && (
+          {onViewChange && (
             // The tabs' underline lands on the band's bottom rule, so they draw none of
             // their own; -ml-3 cancels the first tab's padding so its label sits on the edge.
-            <div className="mt-2.5 flex items-center gap-4">
-              {onViewChange && (
-                <RecordViewTabs view={view} onViewChange={onViewChange} className="-ml-3 border-b-0" />
-              )}
-              {controls && <div className="ml-auto flex min-w-0 items-center gap-2">{controls}</div>}
-            </div>
+            <RecordViewTabs view={view} onViewChange={onViewChange} className="-ml-3 mt-2.5 border-b-0" />
           )}
         </div>
       </div>

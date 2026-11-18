@@ -74,7 +74,7 @@ describe('RecordRail across the view switch', () => {
     const root = () => container.querySelector('[data-record-view]') as HTMLElement;
     expect(root().className).toContain('w-[40%]');
     // The tab strip is the record strip height, so in Focus its rule meets the Topics strip's.
-    expect(screen.getByRole('tablist').className).toContain('min-h-11');
+    expect(screen.getByTestId('record-rail-strip').className).toContain('min-h-11');
     rerender(<RecordRail meetingId="m-1" view="focus" />);
     expect(root().className).toContain('flex-1');
     expect(root().className).not.toContain('w-[40%]');
@@ -110,6 +110,14 @@ describe('RecordRail across the view switch', () => {
     rerender(<RecordRail meetingId="m-1" view="transcript" meetingTitle="Weekly sync" />);
     expect(screen.getByRole('tab', { name: 'To-Dos' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByRole('textbox', { hidden: true })).toBe(editor);
+  });
+
+  it('Focus: the tab strip carries the given keys at its far right, on the same rule', async () => {
+    render(<RecordRail meetingId="m-1" view="focus" tabsTrailing={<button type="button">Participants</button>} />);
+    const strip = screen.getByTestId('record-rail-strip');
+    expect(strip).toContainElement(screen.getByRole('button', { name: 'Participants' }));
+    expect(strip).toContainElement(screen.getByRole('tablist'));
+    await screen.findByRole('textbox');
   });
 
   it('hides the Topics row before the meeting row exists', async () => {

@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/tooltip';
 import { useProcessingMode } from '@/hooks/useProcessingMode';
 import { modeChipDisplay } from '@/lib/processing-mode';
+import { STRIP_KEY_CLASS } from './RecordMeetingControls';
 
 /**
  * Compact per-meeting live/defer mode chip (low-power-mode spec §5). Driven by
@@ -63,7 +64,7 @@ export function TranscriptModeButton({ meetingId }: { meetingId: string }) {
       // eye reads (specs/0071 W1). It used to announce the mode and then the switch, which is
       // the same trap in longer form.
       aria-label={label}
-      className="bg-card"
+      className={STRIP_KEY_CLASS}
     >
       {/* The only carrier of WHY the transcript is paused (on battery): functional, not
           decorative, so it stays. */}

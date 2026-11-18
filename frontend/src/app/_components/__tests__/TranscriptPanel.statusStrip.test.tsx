@@ -85,4 +85,14 @@ describe('TranscriptPanel status strip', () => {
     expect(screen.queryByRole('button', { name: /transcript$/i })).toBeNull();
     expect(screen.getByRole('status')).toHaveTextContent(/fell behind/);
   });
+
+  it('puts the page\'s keys after Pause transcript, at the far right', () => {
+    render(
+      <TranscriptPanel isProcessingStop={false} isStopping={false} stripTrailing={<button type="button">Participants</button>} />,
+    );
+    const pause = screen.getByRole('button', { name: 'Pause transcript' });
+    const participants = screen.getByRole('button', { name: 'Participants' });
+    expect(strip()).toContainElement(participants);
+    expect(pause.compareDocumentPosition(participants) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
 });

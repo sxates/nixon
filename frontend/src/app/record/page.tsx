@@ -19,6 +19,7 @@ import { useSummaryPrompts } from '@/hooks/meeting-details/useSummaryPrompts';
 import { RecordingHeader } from '@/components/Record/RecordingHeader';
 import { RecordRail } from '@/components/Record/RecordRail';
 import { RecordTodoRail } from '@/components/Record/RecordTodoRail';
+import { RecordMeetingControls } from '@/components/Record/RecordMeetingControls';
 import { useRecordView } from '@/hooks/useRecordView';
 import { TITLE_PLACEHOLDER } from '@/hooks/useRecordingTitleEdit';
 import { cn } from '@/lib/utils';
@@ -76,6 +77,17 @@ export default function Home() {
   // Header chrome state. The elapsed clock lives on the transport rail's tape counter now.
   const isRecordingActive = recordingState.isRecording;
 
+  // Participants + summary prompt (owner feedback, v0.18): one instance, handed to the strip
+  // that is on screen — the transcript's status strip in Transcript, the notes column's tab
+  // strip in Focus — so there is never a second popover or a second roster fetch.
+  const meetingControls = (
+    <RecordMeetingControls
+      meetingId={activeRecordingMeetingId ?? null}
+      isRecordingActive={isRecordingActive}
+      promptsApi={promptsApi}
+    />
+  );
+
   return (
     <div className="flex flex-col h-page bg-background">
       {/* All Modals supported*/}
@@ -102,7 +114,6 @@ export default function Home() {
         isRecordingActive={isRecordingActive}
         activeRecordingMeetingId={activeRecordingMeetingId}
         titleEdit={titleEdit}
-        promptsApi={promptsApi}
         view={view}
         onViewChange={setView}
       />
@@ -127,12 +138,14 @@ export default function Home() {
             <TranscriptPanel
               isProcessingStop={isProcessingStop}
               isStopping={isStopping}
+              stripTrailing={focus ? undefined : meetingControls}
             />
           </div>
           <RecordRail
             meetingId={activeRecordingMeetingId ?? null}
             view={view}
             meetingTitle={meetingTitle === TITLE_PLACEHOLDER ? null : meetingTitle}
+            tabsTrailing={focus ? meetingControls : undefined}
           />
           {focus && (
             <RecordTodoRail

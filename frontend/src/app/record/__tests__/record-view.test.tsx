@@ -54,15 +54,22 @@ vi.mock('@/components/Record/RecordingHeader', async () => {
 
 // Stateful stand-ins: a remount would reset the typed draft and bump the mount count.
 vi.mock('@/app/_components/TranscriptPanel', () => ({
-  TranscriptPanel: () => {
+  TranscriptPanel: ({ stripTrailing }: { stripTrailing?: React.ReactNode }) => {
     useEffect(() => {
       mounts.transcript += 1;
     }, []);
-    return <div data-testid="transcript">transcript</div>;
+    return (
+      <div data-testid="transcript">
+        transcript<div data-testid="transcript-strip">{stripTrailing}</div>
+      </div>
+    );
   },
 }));
+vi.mock('@/components/Record/RecordMeetingControls', () => ({
+  RecordMeetingControls: () => <div data-testid="meeting-controls" />,
+}));
 vi.mock('@/components/Record/RecordRail', () => ({
-  RecordRail: ({ view }: { view: string }) => {
+  RecordRail: ({ view, tabsTrailing }: { view: string; tabsTrailing?: React.ReactNode }) => {
     const [draft, setDraft] = useState('');
     useEffect(() => {
       mounts.rail += 1;
@@ -70,6 +77,7 @@ vi.mock('@/components/Record/RecordRail', () => ({
     return (
       <div data-testid="rail" data-view={view}>
         <textarea aria-label="notes" value={draft} onChange={(e) => setDraft(e.target.value)} />
+        <div data-testid="rail-strip">{tabsTrailing}</div>
       </div>
     );
   },
@@ -93,6 +101,18 @@ afterEach(() => {
 const tab = (name: RegExp) => screen.getByRole('tab', { name });
 
 describe('record screen view switch', () => {
+  it('mounts one Participants + prompt group, in the strip that is on screen', () => {
+    render(<Home />);
+    expect(screen.getAllByTestId('meeting-controls')).toHaveLength(1);
+    expect(screen.getByTestId('transcript-strip')).toContainElement(screen.getByTestId('meeting-controls'));
+
+    fireEvent.mouseDown(tab(/focus/i));
+    fireEvent.click(tab(/focus/i));
+    expect(screen.getAllByTestId('meeting-controls')).toHaveLength(1);
+    expect(screen.getByTestId('rail-strip')).toContainElement(screen.getByTestId('meeting-controls'));
+    expect(screen.getByTestId('transcript-strip')).toBeEmptyDOMElement();
+  });
+
   it('defaults to Transcript: transcript shown, no To-Do rail', () => {
     render(<Home />);
     expect(tab(/transcript/i)).toHaveAttribute('aria-selected', 'true');

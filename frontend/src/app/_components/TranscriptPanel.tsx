@@ -13,7 +13,7 @@ import { useProcessingMode } from '@/hooks/useProcessingMode';
 import { useSidebar } from '@/components/Sidebar/SidebarProvider';
 import { useRecordEmptyPhase } from '@/hooks/useRecordEmptyPhase';
 import { effectiveLiveTranscription, transcriptEmptyStateVariant } from '@/lib/processing-mode';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { TranscriptModeButton } from '@/components/Record/TranscriptModeButton';
 import { RECORD_STRIP_HEIGHT } from '@/lib/record-view';
 import { cn } from '@/lib/utils';
@@ -29,11 +29,15 @@ interface TranscriptPanelProps {
   // indicates stop-processing state for transcripts; derived from backend statuses.
   isProcessingStop: boolean;
   isStopping: boolean;
+  /** Keys after Pause transcript at the strip's far right (the record page's Participants +
+   *  summary prompt, owner feedback v0.18). */
+  stripTrailing?: ReactNode;
 }
 
 export function TranscriptPanel({
   isProcessingStop,
   isStopping,
+  stripTrailing,
 }: TranscriptPanelProps) {
   // Contexts
   const { transcripts, transcriptGaps } = useTranscripts();
@@ -128,6 +132,13 @@ export function TranscriptPanel({
     return `${seg(skipped)} could not be transcribed (speech model unavailable) and may be missing from this transcript.`;
   }, [transcriptGaps, isRecording]);
 
+  // The status strip's line (owner feedback, v0.18).
+  const statusLine = hasLiveSpeakerLabel
+    ? 'Provisional — speaker labels are finalized when you stop recording.'
+    : liveTranscriptionEnabled
+      ? 'Live transcript'
+      : 'Transcript paused';
+
   // Which record-only empty-state to show, if any (low-power-mode spec §5): null once
   // live transcription is on or a transcript has content.
   const emptyStateVariant = useMemo(
@@ -155,14 +166,15 @@ export function TranscriptPanel({
           data-testid="transcript-status-strip"
           className={cn('flex flex-shrink-0 items-center gap-3 border-b border-border bg-card px-5 py-1.5', RECORD_STRIP_HEIGHT)}
         >
-          <p className={cn('u-section-label min-w-0 flex-1', hasLiveSpeakerLabel && 'text-brand')}>
-            {hasLiveSpeakerLabel
-              ? 'Provisional — speaker labels are finalized when you stop recording.'
-              : liveTranscriptionEnabled
-                ? 'Live transcript'
-                : 'Transcript paused'}
+          {/* One line, truncated (the full sentence in its tooltip): with three keys beside it a
+              wrap would make this strip taller than the Topics strip it lines up with. */}
+          <p title={statusLine} className={cn('u-section-label min-w-0 flex-1 truncate', hasLiveSpeakerLabel && 'text-brand')}>
+            {statusLine}
           </p>
-          {activeRecordingMeetingId && <TranscriptModeButton meetingId={activeRecordingMeetingId} />}
+          <div className="flex min-w-0 flex-shrink-0 items-center gap-2">
+            {activeRecordingMeetingId && <TranscriptModeButton meetingId={activeRecordingMeetingId} />}
+            {stripTrailing}
+          </div>
         </div>
       )}
       {/* Persistent backpressure hint: the transcript has gaps — one banner with a running

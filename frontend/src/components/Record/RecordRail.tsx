@@ -28,7 +28,7 @@
  * My Notes there and returns to To-Dos with Transcript.
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import dynamic from 'next/dynamic';
 import { PrepPanel } from '@/components/MeetingDetails/PrepPanel';
 import { RecordAgendaPanel } from '@/components/Record/RecordAgendaPanel';
@@ -60,9 +60,11 @@ interface RecordRailProps {
   view?: RecordView;
   /** The live title, for the Topics row's Series option. */
   meetingTitle?: string | null;
+  /** Keys at the tab strip's far right (Focus: Participants + summary prompt). */
+  tabsTrailing?: ReactNode;
 }
 
-export function RecordRail({ meetingId, view = 'transcript', meetingTitle = null }: RecordRailProps) {
+export function RecordRail({ meetingId, view = 'transcript', meetingTitle = null, tabsTrailing }: RecordRailProps) {
   const [activeTab, setActiveTab] = useState<RecordTabKey>('notes');
   const { openItemCount, refresh: refreshPrepCount } = usePrepAvailability(meetingId);
 
@@ -119,17 +121,20 @@ export function RecordRail({ meetingId, view = 'transcript', meetingTitle = null
           Radix: the panels below keep their own lifecycle (always-mounted Notes, lazy Prep),
           so each trigger names its panel explicitly. The arrow-key handler is ours and calls
           `preventDefault`, which Radix's own roving focus defers to. */}
+      {/* The strip is RECORD_STRIP_HEIGHT tall with the tabs on its rule, so in Focus its
+          rule lines up with the Topics strip's across the screen (owner feedback, v0.18).
+          The rule is the strip's, not the tab list's, so `tabsTrailing` (Focus's Participants
+          + prompt keys) sits on the same line at the far right. px-2 + the tab's px-3 puts the
+          first label on the panels' px-5 gutter line; pr-5 puts the last key on it too. */}
       <Tabs
         value={effectiveTab}
         onValueChange={(value) => setActiveTab(value as RecordTabKey)}
-        className="flex-shrink-0"
+        data-testid="record-rail-strip"
+        className={cn('flex flex-shrink-0 items-stretch gap-3 border-b border-border bg-background pl-2 pr-5', RECORD_STRIP_HEIGHT)}
       >
         <TabsList
           aria-label="Recording side panel"
-          // px-2 + the tab's px-3 puts the first label on the panels' px-5 gutter line. The
-          // strip is RECORD_STRIP_HEIGHT tall with the tabs on its rule, so in Focus its rule
-          // lines up with the Topics strip's across the screen (owner feedback, v0.18).
-          className={cn('items-end bg-background px-2', RECORD_STRIP_HEIGHT)}
+          className="flex-shrink-0 items-end border-b-0"
         >
           {tabs.map(({ key, label }, index) => (
             <TabsTrigger
@@ -158,6 +163,7 @@ export function RecordRail({ meetingId, view = 'transcript', meetingTitle = null
             </TabsTrigger>
           ))}
         </TabsList>
+        {tabsTrailing ? <div className="ml-auto flex min-w-0 items-center">{tabsTrailing}</div> : null}
       </Tabs>
 
       {/* NOTES — pinned agenda strip + live notepad. Always mounted (see header comment). */}
