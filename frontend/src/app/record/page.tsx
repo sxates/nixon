@@ -21,6 +21,7 @@ import { RecordRail } from '@/components/Record/RecordRail';
 import { RecordTodoRail } from '@/components/Record/RecordTodoRail';
 import { RecordMeetingControls } from '@/components/Record/RecordMeetingControls';
 import { useRecordView } from '@/hooks/useRecordView';
+import { isMainColumnView } from '@/lib/record-view';
 import { TITLE_PLACEHOLDER } from '@/hooks/useRecordingTitleEdit';
 import { cn } from '@/lib/utils';
 
@@ -49,9 +50,12 @@ export default function Home() {
   // recorder never runs a stop or a save of its own, and stays here when one finishes.
   useTranscriptionErrorListeners();
 
-  // Transcript / Focus (owner feedback, v0.18), remembered across recordings.
-  const [view, setView] = useRecordView();
-  const focus = view === 'focus';
+  // Transcript · My Notes · Agenda (owner feedback, v0.18), remembered across recordings.
+  // Agenda needs the meeting row (its prep lives on it): until the row exists it shows My
+  // Notes, and the header doesn't offer it; the stored choice is kept for when it does.
+  const [storedView, setView] = useRecordView();
+  const view = storedView === 'agenda' && !activeRecordingMeetingId ? 'notes' : storedView;
+  const focus = isMainColumnView(view);
 
   // Rename-while-recording (specs/0029 WS4.3) — inline click-to-edit title state.
   const titleEdit = useRecordingTitleEdit();
@@ -79,7 +83,7 @@ export default function Home() {
 
   // Participants + summary prompt (owner feedback, v0.18): one instance, handed to the strip
   // that is on screen — the transcript's status strip in Transcript, the notes column's tab
-  // strip in Focus — so there is never a second popover or a second roster fetch.
+  // strip in My Notes / Agenda — so there is never a second popover or a second roster fetch.
   const meetingControls = (
     <RecordMeetingControls
       meetingId={activeRecordingMeetingId ?? null}
@@ -119,13 +123,13 @@ export default function Home() {
       />
 
       <div className="relative flex flex-1 overflow-hidden">
-        {/* Transcript view: live transcript (left) + Notes / Prep rail (right, ~40% / max
-            440px; specs/0056 W4), with Topics on top and a To-Dos tab. Focus view: the same
-            notes column full width (My Notes / Agenda), a Topics + To-Dos sidebar on the
-            right, and the transcript kept mounted but hidden: laid out behind the panes (`invisible`, so it is neither painted nor focusable nor read out) so its
-            virtualized rows stay measured and its follow-the-tail scroll keeps up, ready the
-            moment the view switches back. Neither column changes parent between views, so
-            nothing in them remounts. */}
+        {/* Transcript view: live transcript (left) + Notes / Agenda / To-Dos rail (right,
+            ~40% / max 440px; specs/0056 W4) with Topics on top. My Notes / Agenda views: that
+            panel as the full-width main column, a Topics + To-Dos sidebar on the right, and the
+            transcript kept mounted but hidden: laid out behind the panes (`invisible`, so it is
+            neither painted nor focusable nor read out) so its virtualized rows stay measured
+            and its follow-the-tail scroll keeps up, ready the moment the view switches back.
+            Neither column changes parent between views, so nothing in them remounts. */}
         <div className="flex flex-1 min-w-0 overflow-hidden">
           <div
             data-testid="record-transcript-pane"

@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import userEvent from '@testing-library/user-event';
 import type { Topic, TodoRow } from '@/types';
 
-// Focus view's To-Do rail (owner feedback, v0.18): the live Meeting's Topic To-Dos when it
+// The My Notes / Agenda views' To-Do sidebar (owner feedback, v0.18): the live Meeting's Topic To-Dos when it
 // is on a Topic (a picker for several), else your To-Dos with no Topic; the add field creates
 // the To-Do on the live Meeting and tags it to the Topic shown, and never writes to the notes.
 
@@ -126,7 +126,7 @@ describe('RecordTodoRail', () => {
     expect(await screen.findByText('Send notes')).toBeInTheDocument();
   });
 
-  it('Focus sidebar: the Topics row sits above the To-Dos', async () => {
+  it('My Notes / Agenda sidebar: the Topics row sits above the To-Dos', async () => {
     render(<RecordTodoRail meetingId="m-1" meetingTitle="Weekly sync" />);
     const topicsLabel = screen.getByText('Topics');
     const heading = screen.getByRole('heading', { name: 'To-Dos' });

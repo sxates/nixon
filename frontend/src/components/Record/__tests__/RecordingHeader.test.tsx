@@ -87,7 +87,7 @@ describe('RecordingHeader', () => {
     expect(screen.queryByRole('button', { name: /pause|resume|stop/i })).toBeNull();
   });
 
-  // Owner feedback v0.18 (round 4): under the title, only the Transcript / Focus tabs.
+  // Owner feedback v0.18 (round 4): under the title, only the Transcript · My Notes · Agenda tabs.
   // Participants and the summary prompt moved into the panes' top strips
   // (RecordMeetingControls), Pause transcript into the transcript's.
   it('only the view tabs under the title; meters on the right; no per-meeting keys', () => {
@@ -98,7 +98,7 @@ describe('RecordingHeader', () => {
         isRecordingActive
         activeRecordingMeetingId="m1"
         titleEdit={titleEdit}
-        view="focus"
+        view="notes"
         onViewChange={vi.fn()}
       />,
     );
@@ -108,7 +108,8 @@ describe('RecordingHeader', () => {
     const following = (a: Node, b: Node) => !!(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
     expect((title.closest('header') as HTMLElement).contains(tabs)).toBe(false);
     expect(following(title, tabs) && following(tabs, meter)).toBe(true);
-    expect(screen.getByRole('tab', { name: 'Focus' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Transcript', 'My Notes', 'Agenda']);
+    expect(screen.getByRole('tab', { name: 'My Notes' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.queryByRole('button', { name: 'Participants' })).toBeNull();
     expect(screen.queryByRole('button', { name: /summary prompt/i })).toBeNull();
     expect(screen.queryByRole('button', { name: /pause transcript|resume transcript/i })).toBeNull();
@@ -116,6 +117,20 @@ describe('RecordingHeader', () => {
 
   // The channel name used to be a `u-section-label` span UNDER each meter, costing the
   // header a text row per channel. It is now engraved inside the well.
+  it('leaves Agenda out until the meeting row exists (prep lives on it)', () => {
+    render(
+      <RecordingHeader
+        meetingTitle="Q3 planning"
+        isRecordingActive={false}
+        activeRecordingMeetingId={null}
+        titleEdit={titleEdit}
+        view="transcript"
+        onViewChange={vi.fn()}
+      />,
+    );
+    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Transcript', 'My Notes']);
+  });
+
   it('each meter carries its channel label inside its own svg', () => {
     renderHeader(true);
     const meters = screen.getAllByRole('img', { name: /VU$/ });

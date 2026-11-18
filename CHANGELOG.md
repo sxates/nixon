@@ -21,7 +21,7 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 ### Added
 
-- Switch the recording screen to **Focus** to put the transcript away and give your agenda and notes the whole window. A To-Do list sits beside them: the To-Dos for this Meeting's Topic, or your To-Dos with no Topic. Add To-Dos there as the Meeting goes. Your notes stay exactly as they were when you switch back.
+- While recording, switch from **Transcript** to **My Notes** or **Agenda** to put the transcript away and give your notes or agenda the whole window. A To-Do list sits beside them: the To-Dos for this Meeting's Topic, or your To-Dos with no Topic. Add To-Dos there as the Meeting goes. Your notes stay exactly as they were when you switch back.
 - Add a Meeting to a Topic while it's still recording, and keep your To-Dos in their own tab next to My Notes and Agenda.
 - Find People and To-Dos from ⌘K search.
 - Claude Code and Claude desktop chats can now read your To-Dos and Topics, alongside your Meetings, when agent access is on.
@@ -31,7 +31,7 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 - When you add points to a Topic's timeline, Enter starts the next point and ⌘Enter saves.
 - On a Topic page, the linked Series now sit just above the timeline, and their remove button appears when you point at one.
 - Starred Topics and People show a gold star.
-- On the recording screen, Transcript and Focus sit under the title with Participants and the summary prompt beside them, and Pause transcript sits at the top of the transcript.
+- On the recording screen, Transcript, My Notes and Agenda sit under the title, and Pause transcript, Participants and the summary prompt sit together at the top of the pane you're looking at.
 - The default summary prompt is called "Auto" everywhere.
 - Back arrows line up with page titles more consistently.
 - A To-Do added while recording no longer adds a line to your notes. It shows in your To-Do list instead, linked to the Meeting.

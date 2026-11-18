@@ -25,14 +25,14 @@ interface RecordingHeaderProps {
   isRecordingActive: boolean;
   activeRecordingMeetingId: string | null;
   titleEdit: UseRecordingTitleEditReturn;
-  /** Transcript / Focus (owner feedback, v0.18); the switch is hidden without a handler. */
+  /** Transcript · My Notes · Agenda (owner feedback, v0.18); hidden without a handler. */
   view?: RecordView;
   onViewChange?: (view: RecordView) => void;
 }
 
 /**
  * Recording header, specs/0057 Plan 2: a control-panel faceplate. Left column: back · title,
- * then the Transcript / Focus tabs on the header's left edge (owner feedback, v0.18); the
+ * then the Transcript · My Notes · Agenda tabs on the header's left edge (owner feedback, v0.18); the
  * two channel VU meters on the right. Participants and the summary prompt live in the
  * panes' top strips (RecordMeetingControls), Pause transcript in the transcript's. The transport rail (mounted in the app
  * layout) owns REC/HOLD/STOP, the reels and the tape counter, so nothing here duplicates a
@@ -143,7 +143,12 @@ export function RecordingHeader({
           {onViewChange && (
             // The tabs' underline lands on the band's bottom rule, so they draw none of
             // their own; -ml-3 cancels the first tab's padding so its label sits on the edge.
-            <RecordViewTabs view={view} onViewChange={onViewChange} className="-ml-3 mt-2.5 border-b-0" />
+            <RecordViewTabs
+              view={view}
+              onViewChange={onViewChange}
+              agendaAvailable={!!activeRecordingMeetingId}
+              className="-ml-3 mt-2.5 border-b-0"
+            />
           )}
         </div>
       </div>

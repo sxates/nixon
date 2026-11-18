@@ -3,8 +3,8 @@
 /**
  * The live Meeting's per-meeting keys, at the far right of the record screen's top strip
  * (owner feedback, v0.18): Participants, then the summary prompt picker. Transcript puts
- * them in the transcript's status strip after Pause transcript; Focus in the notes column's
- * My Notes / Agenda strip. The page mounts ONE instance, in whichever strip is on screen,
+ * them in the transcript's status strip after Pause transcript; My Notes and Agenda in the
+ * main column's top strip. The page mounts ONE instance, in whichever strip is on screen,
  * so there is never a second popover or a second roster fetch.
  *
  * Every key is drawn like Pause transcript (`TranscriptModeButton`): an `xs` outline key on

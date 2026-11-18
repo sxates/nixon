@@ -2,17 +2,24 @@ import React, { useEffect, useState } from 'react';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// The record screen's Transcript / Focus switch (owner feedback, v0.18). Locks in:
-// (a) Transcript is the default and Focus is remembered in localStorage;
-// (b) switching never remounts the transcript or the notes column (the notepad's
-//     editor, undo history and debounced autosave live there), it only restyles them;
-// (c) the To-Do rail exists only in Focus;
-// (d) a blocked localStorage still renders (and switches) the screen.
+// The record screen's Transcript · My Notes · Agenda views (owner feedback, v0.18). Locks in:
+// (a) Transcript is the default and the choice is remembered in localStorage (v0.18's
+//     first-cut 'focus' reads as My Notes);
+// (b) switching among all three never remounts the transcript or the notes column (the
+//     notepad's editor, undo history and debounced autosave live there), it only restyles;
+// (c) the To-Do sidebar exists only in My Notes / Agenda;
+// (d) Agenda isn't offered before the meeting row exists;
+// (e) a blocked localStorage still renders (and switches) the screen.
 
 const mounts = { transcript: 0, rail: 0 };
+const sidebar = { activeRecordingMeetingId: 'm-1' as string | null };
 
 vi.mock('@/components/Sidebar/SidebarProvider', () => ({
-  useSidebar: () => ({ setIsMeetingActive: vi.fn(), isContentInsetCollapsed: false, activeRecordingMeetingId: 'm-1' }),
+  useSidebar: () => ({
+    setIsMeetingActive: vi.fn(),
+    isContentInsetCollapsed: false,
+    activeRecordingMeetingId: sidebar.activeRecordingMeetingId,
+  }),
 }));
 vi.mock('@/contexts/RecordingStateContext', () => ({
   useRecordingState: () => ({ status: 'recording', isStopping: false, isProcessing: false, isRecording: true }),
@@ -46,9 +53,15 @@ vi.mock('@/hooks/meeting-details/useSummaryPrompts', () => ({ useSummaryPrompts:
 vi.mock('@/components/Record/RecordingHeader', async () => {
   const { RecordViewTabs } = await import('@/components/Record/RecordViewTabs');
   return {
-    RecordingHeader: ({ view, onViewChange }: { view: 'transcript' | 'focus'; onViewChange: (v: 'transcript' | 'focus') => void }) => (
-      <RecordViewTabs view={view} onViewChange={onViewChange} />
-    ),
+    RecordingHeader: ({
+      view,
+      onViewChange,
+      activeRecordingMeetingId,
+    }: {
+      view: RecordView;
+      onViewChange: (v: RecordView) => void;
+      activeRecordingMeetingId: string | null;
+    }) => <RecordViewTabs view={view} onViewChange={onViewChange} agendaAvailable={!!activeRecordingMeetingId} />,
   };
 });
 
@@ -87,11 +100,12 @@ vi.mock('@/components/Record/RecordTodoRail', () => ({
 }));
 
 import Home from '@/app/record/page';
-import { RECORD_VIEW_KEY } from '@/lib/record-view';
+import { RECORD_VIEW_KEY, type RecordView } from '@/lib/record-view';
 
 beforeEach(() => {
   mounts.transcript = 0;
   mounts.rail = 0;
+  sidebar.activeRecordingMeetingId = 'm-1';
   window.localStorage.clear();
 });
 afterEach(() => {
@@ -100,20 +114,32 @@ afterEach(() => {
 
 const tab = (name: RegExp) => screen.getByRole('tab', { name });
 
-describe('record screen view switch', () => {
+const go = (name: RegExp) => {
+  fireEvent.mouseDown(tab(name));
+  fireEvent.click(tab(name));
+};
+
+describe('record screen views', () => {
+  it('offers Transcript · My Notes · Agenda (no Focus)', () => {
+    render(<Home />);
+    expect(screen.getByRole('tablist', { name: 'Recording view' })).toBeInTheDocument();
+    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Transcript', 'My Notes', 'Agenda']);
+  });
+
   it('mounts one Participants + prompt group, in the strip that is on screen', () => {
     render(<Home />);
     expect(screen.getAllByTestId('meeting-controls')).toHaveLength(1);
     expect(screen.getByTestId('transcript-strip')).toContainElement(screen.getByTestId('meeting-controls'));
 
-    fireEvent.mouseDown(tab(/focus/i));
-    fireEvent.click(tab(/focus/i));
-    expect(screen.getAllByTestId('meeting-controls')).toHaveLength(1);
-    expect(screen.getByTestId('rail-strip')).toContainElement(screen.getByTestId('meeting-controls'));
-    expect(screen.getByTestId('transcript-strip')).toBeEmptyDOMElement();
+    for (const name of [/my notes/i, /agenda/i]) {
+      go(name);
+      expect(screen.getAllByTestId('meeting-controls')).toHaveLength(1);
+      expect(screen.getByTestId('rail-strip')).toContainElement(screen.getByTestId('meeting-controls'));
+      expect(screen.getByTestId('transcript-strip')).toBeEmptyDOMElement();
+    }
   });
 
-  it('defaults to Transcript: transcript shown, no To-Do rail', () => {
+  it('defaults to Transcript: transcript shown, no To-Do sidebar', () => {
     render(<Home />);
     expect(tab(/transcript/i)).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByTestId('record-transcript-pane').className).not.toContain('invisible');
@@ -121,37 +147,55 @@ describe('record screen view switch', () => {
     expect(screen.queryByTestId('todo-rail')).toBeNull();
   });
 
-  it('Focus hides the transcript without unmounting anything, shows the To-Do rail, and is remembered', () => {
+  it('Transcript → My Notes → Agenda → Transcript: nothing remounts, typed text survives, each is remembered', () => {
     render(<Home />);
     fireEvent.change(screen.getByLabelText('notes'), { target: { value: 'typed just before the switch' } });
 
-    fireEvent.mouseDown(tab(/focus/i));
-    fireEvent.click(tab(/focus/i));
+    for (const [name, value] of [
+      [/my notes/i, 'notes'],
+      [/agenda/i, 'agenda'],
+    ] as const) {
+      go(name);
+      expect(tab(name)).toHaveAttribute('aria-selected', 'true');
+      const pane = screen.getByTestId('record-transcript-pane');
+      expect(pane.className).toContain('invisible');
+      expect(pane).toHaveAttribute('aria-hidden', 'true');
+      expect(screen.getByTestId('transcript')).toBeInTheDocument();
+      expect(screen.getByTestId('rail')).toHaveAttribute('data-view', value);
+      expect(screen.getByTestId('todo-rail')).toHaveTextContent('m-1');
+      expect(window.localStorage.getItem(RECORD_VIEW_KEY)).toBe(value);
+      expect(screen.getByLabelText('notes')).toHaveValue('typed just before the switch');
+    }
 
-    expect(tab(/focus/i)).toHaveAttribute('aria-selected', 'true');
-    const pane = screen.getByTestId('record-transcript-pane');
-    expect(pane.className).toContain('invisible');
-    expect(pane).toHaveAttribute('aria-hidden', 'true');
-    expect(screen.getByTestId('transcript')).toBeInTheDocument();
-    expect(screen.getByTestId('rail')).toHaveAttribute('data-view', 'focus');
-    expect(screen.getByTestId('todo-rail')).toHaveTextContent('m-1');
-    expect(window.localStorage.getItem(RECORD_VIEW_KEY)).toBe('focus');
-
-    // Back again: still the first mount of both, and the typed text is intact.
-    fireEvent.mouseDown(tab(/transcript/i));
-    fireEvent.click(tab(/transcript/i));
+    go(/transcript/i);
     expect(screen.getByLabelText('notes')).toHaveValue('typed just before the switch');
     expect(mounts).toEqual({ transcript: 1, rail: 1 });
     expect(screen.queryByTestId('todo-rail')).toBeNull();
     expect(window.localStorage.getItem(RECORD_VIEW_KEY)).toBe('transcript');
   });
 
-  it('opens in the remembered view', async () => {
-    window.localStorage.setItem(RECORD_VIEW_KEY, 'focus');
+  it.each([
+    ['notes', /my notes/i],
+    ['agenda', /agenda/i],
+    ['focus', /my notes/i],
+  ] as const)('opens in the remembered view (stored %s)', async (stored, name) => {
+    window.localStorage.setItem(RECORD_VIEW_KEY, stored);
     render(<Home />);
     await act(async () => {});
-    expect(tab(/focus/i)).toHaveAttribute('aria-selected', 'true');
+    expect(tab(name)).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByTestId('todo-rail')).toBeInTheDocument();
+  });
+
+  it('before the meeting row exists: no Agenda tab, and a stored Agenda shows My Notes', async () => {
+    sidebar.activeRecordingMeetingId = null;
+    window.localStorage.setItem(RECORD_VIEW_KEY, 'agenda');
+    render(<Home />);
+    await act(async () => {});
+    expect(screen.queryByRole('tab', { name: /agenda/i })).toBeNull();
+    expect(tab(/my notes/i)).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByTestId('rail')).toHaveAttribute('data-view', 'notes');
+    // The choice itself is kept for when the row exists.
+    expect(window.localStorage.getItem(RECORD_VIEW_KEY)).toBe('agenda');
   });
 
   it('ignores an unknown stored value, and still works when storage throws', async () => {
@@ -170,8 +214,7 @@ describe('record screen view switch', () => {
     render(<Home />);
     await act(async () => {});
     expect(tab(/transcript/i)).toHaveAttribute('aria-selected', 'true');
-    fireEvent.mouseDown(tab(/focus/i));
-    fireEvent.click(tab(/focus/i));
+    go(/my notes/i);
     expect(screen.getByTestId('todo-rail')).toBeInTheDocument();
   });
 });

@@ -4,7 +4,7 @@
  * The record screen's To-Dos (owner feedback, v0.18): the live Meeting's Topic To-Dos, or,
  * when it is on no Topic, your To-Dos that have no Topic. One implementation in two places:
  * `RecordTodos` is the To-Dos tab of the Transcript view's rail, and `RecordTodoRail` is the
- * Focus view's right-hand sidebar (the Topics row on top, then the same `RecordTodos`).
+ * My Notes / Agenda views' right-hand sidebar (the Topics row on top, then the same `RecordTodos`).
  *
  * - Topics come from `topicsForMeeting` (open ones only: a closed Topic refuses new tags).
  *   With several, a `TopicPicker` chooses which list shows; it defaults to the first, and its
@@ -72,7 +72,7 @@ interface RecordTodoRailProps {
   meetingTitle?: string | null;
 }
 
-/** Focus view: the right-hand sidebar, Topics row then To-Dos. */
+/** My Notes / Agenda views: the right-hand sidebar, Topics row then To-Dos. */
 export function RecordTodoRail({ meetingId, meetingTitle = null }: RecordTodoRailProps) {
   return (
     <aside
