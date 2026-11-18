@@ -36,10 +36,12 @@ interface RecordingHeaderProps {
 }
 
 /**
- * Recording header, specs/0057 Plan 2: a control-panel faceplate — back · title · the
- * Transcript / Focus tabs under it (v0.18) · participants · prompt · two channel VU meters. The transport rail (mounted in
- * the app layout) owns REC/HOLD/STOP, the reels and the tape counter, so nothing here
- * duplicates a control or a clock any more.
+ * Recording header, specs/0057 Plan 2: a control-panel faceplate. Left column: back · title,
+ * then one row with the Transcript / Focus tabs on the header's left edge and Participants ·
+ * summary prompt right-aligned (owner feedback, v0.18), so the title has the full width
+ * beside the two channel VU meters on the right. The transport rail (mounted in the app
+ * layout) owns REC/HOLD/STOP, the reels and the tape counter, so nothing here duplicates a
+ * control or a clock any more.
  */
 export function RecordingHeader({
   meetingTitle,
@@ -65,21 +67,21 @@ export function RecordingHeader({
   // Starting or saving is not idle: the idle subhead would flash on the way in and out.
   const transition = useRecordEmptyPhase();
 
-  // The meters take the title column's height (never under their 57px default), so they
+  // The meters take the left column's height (never under their 57px default), so they
   // fill the header instead of floating in it without making it any taller (owner
   // feedback 2026-09-23). Measured, because a CSS stretch lets the meters' own
-  // aspect-derived height feed back into the row they are sizing themselves from.
-  const titleColumnRef = useRef<HTMLDivElement>(null);
+  // aspect-derived height feed back into the row they are sizing themselves from. The
+  // measured box is the left column's content (title row + tabs row), which the band's
+  // stretch never touches.
+  const leftColumnRef = useRef<HTMLDivElement>(null);
   const [meterHeight, setMeterHeight] = useState(VU_DEFAULT_HEIGHT);
   const hasViewTabs = !!onViewChange;
   useEffect(() => {
+    // With the tabs row, the tabs sit on the band's bottom rule and the meters stop 16px
+    // above it (their own pb-4), so both columns end on the same line.
     const gap = hasViewTabs ? METER_BOTTOM_GAP : 0;
-    // The ref sits on the subtitle node; PageHeader wraps it once (the `.u-meta` box), and
-    // that box's parent is the title column (the h1 plus the subtitle) the meters follow.
-    const el = titleColumnRef.current?.parentElement?.parentElement;
+    const el = leftColumnRef.current;
     if (!el || typeof ResizeObserver === 'undefined') return;
-    // Less the band's bottom gap: the view tabs sit on the band's bottom rule, the meters
-    // stop 16px above it (the right cluster's pb-4), so both columns end on the same line.
     const observer = new ResizeObserver(([entry]) => {
       setMeterHeight(Math.max(VU_DEFAULT_HEIGHT, Math.round(entry.contentRect.height) - gap));
     });
@@ -94,27 +96,13 @@ export function RecordingHeader({
   // row id exists — there is nothing to rename before that.
   const canRename = isRecordingActive && !!activeRecordingMeetingId;
 
-  const subtitle = (
-    // Measured: the meters take the title column's height (see above).
-    <div ref={titleColumnRef}>
-      {/* No "On the reel" subhead while recording (owner feedback 2026-09-21): the
-          transport rail says exactly that, in the same words, a few inches below — and
-          the only way to be looking at this header at all is with a recording in
-          progress, so the line carried no information for the height it took. The idle
-          line stays: an idle header DOES need to say what pressing REC will do. */}
-      {!isRecordingActive && !transition && <p>Recording locally on your Mac</p>}
-      {/* The view tabs sit under the title, like every other page's tabs (owner feedback,
-          v0.18); the per-meeting controls that used to live here moved to the right-hand
-          cluster, and Pause transcript into the transcript's own status strip. Their
-          underline lands on the band's bottom rule, so they draw no rule of their own. */}
-      {onViewChange && (
-        <RecordViewTabs view={view} onViewChange={onViewChange} className="mt-2.5 border-b-0" />
-      )}
-    </div>
-  );
+  // No "On the reel" subhead while recording (owner feedback 2026-09-21): the transport
+  // rail says exactly that. The idle line stays: an idle header DOES need to say what
+  // pressing REC will do.
+  const subtitle = !isRecordingActive && !transition ? 'Recording locally on your Mac' : undefined;
 
-  // Per-meeting controls, right of the title and left of the meters (owner feedback, v0.18):
-  // who is here, then what the summary will look like.
+  // Per-meeting controls, right-aligned in the tabs row (owner feedback, v0.18): who is
+  // here, then what the summary will look like.
   const controls =
     isRecordingActive || activeRecordingMeetingId ? (
       <>
@@ -164,47 +152,53 @@ export function RecordingHeader({
   // never wraps: wrapped under the controls, the meters' size fed back into the title
   // column's height they are sized from, and they flickered between the two positions.
   const meters = (
-    <div className="record-meters flex-shrink-0 items-start gap-2.5">
+    <div className="record-meters flex-shrink-0 items-start gap-2.5 py-4 pr-4">
       <VuMeter db={rmsToVu(level.mic.rms)} active={isRecordingActive} label="CH1 Mic" height={meterHeight} />
       <VuMeter db={rmsToVu(level.sys.rms)} active={isRecordingActive} label="CH2 Sys" height={meterHeight} />
     </div>
   );
 
   // The same PageHeader + MeetingTitleField as the meeting page (one back/title header),
-  // on the recorder's faceplate band: bg-panel, a hairline below, the panel bevel.
+  // on the recorder's faceplate band: bg-panel, a hairline below, the panel bevel. The band
+  // owns the padding: 16px all round (the owner wanted less room left of the back key than
+  // the page gutter's 28px), so the back glyph and the first tab label share the x = 16px
+  // edge. The meters sit outside PageHeader so they can span both rows of the left column.
   return (
-    <PageHeader
-      // pr-4: the meters sit 16px from the right edge, matching the 16px above and below
-      // them (owner feedback 2026-09-23).
-      // pb-0: the view tabs' underline sits on the band's bottom rule; the right cluster
-      // keeps its own 16px (pb-4) below the meters.
-      className={cn(
-        'record-header border-b border-border bg-panel pr-4 pt-4 min-[900px]:pr-4',
-        hasViewTabs ? 'pb-0' : 'pb-4',
-        FACEPLATE_BEVEL,
-      )}
-      back={{ label: 'Back', onClick: back }}
-      title={
-        <MeetingTitleField
-          title={realTitle}
-          placeholder={isRecordingActive ? 'Untitled Meeting' : 'New Meeting'}
-          editable={canRename}
-          isEditing={isEditingTitle}
-          draft={titleDraft}
-          onDraftChange={setTitleDraft}
-          onStartEditing={startEditingTitle}
-          onCommit={commitTitleEdit}
-          onCancel={cancelTitleEdit}
-          inputRef={titleInputRef}
-        />
-      }
-      subtitle={subtitle}
-      actions={
-        <div className={cn('flex items-center gap-2.5', hasViewTabs && 'pb-4')}>
-          {controls}
-          {meters}
+    <div className={cn('record-header flex flex-shrink-0 border-b border-border bg-panel', FACEPLATE_BEVEL)}>
+      <div className="flex min-w-0 flex-1 flex-col justify-end">
+        <div ref={leftColumnRef} className={cn('pl-4 pr-4 pt-4', hasViewTabs ? 'pb-0' : 'pb-4')}>
+          <PageHeader
+            className="p-0 min-[900px]:px-0"
+            back={{ label: 'Back', onClick: back }}
+            title={
+              <MeetingTitleField
+                title={realTitle}
+                placeholder={isRecordingActive ? 'Untitled Meeting' : 'New Meeting'}
+                editable={canRename}
+                isEditing={isEditingTitle}
+                draft={titleDraft}
+                onDraftChange={setTitleDraft}
+                onStartEditing={startEditingTitle}
+                onCommit={commitTitleEdit}
+                onCancel={cancelTitleEdit}
+                inputRef={titleInputRef}
+              />
+            }
+            subtitle={subtitle}
+          />
+          {(onViewChange || controls) && (
+            // The tabs' underline lands on the band's bottom rule, so they draw none of
+            // their own; -ml-3 cancels the first tab's padding so its label sits on the edge.
+            <div className="mt-2.5 flex items-center gap-4">
+              {onViewChange && (
+                <RecordViewTabs view={view} onViewChange={onViewChange} className="-ml-3 border-b-0" />
+              )}
+              {controls && <div className="ml-auto flex min-w-0 items-center gap-2">{controls}</div>}
+            </div>
+          )}
         </div>
-      }
-    />
+      </div>
+      {meters}
+    </div>
   );
 }

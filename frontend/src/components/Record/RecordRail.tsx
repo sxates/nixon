@@ -36,7 +36,7 @@ import { RecordTodos } from '@/components/Record/RecordTodoRail';
 import { RecordTopicsStrip } from '@/components/Record/RecordTopicsStrip';
 import { usePrepAvailability } from '@/hooks/usePrepAvailability';
 import { Badge } from '@/components/ui/badge';
-import type { RecordView } from '@/lib/record-view';
+import { RECORD_STRIP_HEIGHT, type RecordView } from '@/lib/record-view';
 import { cn } from '@/lib/utils';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
@@ -126,8 +126,10 @@ export function RecordRail({ meetingId, view = 'transcript', meetingTitle = null
       >
         <TabsList
           aria-label="Recording side panel"
-          // px-2 + the tab's px-3 puts the first label on the panels' px-5 gutter line.
-          className="bg-background px-2 pt-2"
+          // px-2 + the tab's px-3 puts the first label on the panels' px-5 gutter line. The
+          // strip is RECORD_STRIP_HEIGHT tall with the tabs on its rule, so in Focus its rule
+          // lines up with the Topics strip's across the screen (owner feedback, v0.18).
+          className={cn('items-end bg-background px-2', RECORD_STRIP_HEIGHT)}
         >
           {tabs.map(({ key, label }, index) => (
             <TabsTrigger

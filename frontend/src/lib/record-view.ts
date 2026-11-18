@@ -28,3 +28,10 @@ export function writeRecordView(view: RecordView): void {
     // Storage blocked (private window, cleared site data): the choice just won't stick.
   }
 }
+
+/**
+ * The height every top strip of the record screen's panes shares (border included), so the
+ * rules under them line up across the screen: the Topics strip, the notes tab strip and the
+ * transcript's status strip. A minimum: a strip whose content wraps grows rather than clips.
+ */
+export const RECORD_STRIP_HEIGHT = 'min-h-11';

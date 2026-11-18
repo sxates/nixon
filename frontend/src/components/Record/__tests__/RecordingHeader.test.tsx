@@ -104,11 +104,11 @@ describe('RecordingHeader', () => {
     expect(screen.queryByRole('button', { name: /pause|resume|stop/i })).toBeNull();
   });
 
-  // Owner feedback v0.18: the Transcript / Focus tabs sit under the title, like every other
-  // page's tabs; Participants and the summary prompt move to the right-hand cluster, left of
-  // the meters; Pause transcript leaves the header for the transcript's status strip.
+  // Owner feedback v0.18 (round 3): one row under the title carries the Transcript / Focus
+  // tabs (left edge) and Participants → Prompt (right-aligned), so the title row has the
+  // full width beside the meters; Pause transcript lives in the transcript's status strip.
   // Asserted on DOM order and containment rather than coordinates so it survives a restyle.
-  it('view tabs under the title; Participants → Prompt → meters on the right; no Pause', () => {
+  it('tabs + Participants → Prompt share the row under the title; meters on the right; no Pause', () => {
     mode.liveTranscription = true;
     const onViewChange = vi.fn();
     render(
@@ -129,17 +129,24 @@ describe('RecordingHeader', () => {
 
     const tabs = screen.getByRole('tablist', { name: 'Recording view' });
     const title = screen.getByRole('heading', { level: 1 });
-    // Same title column as the h1 (PageHeader's subtitle slot), after it.
-    expect(title.parentElement?.contains(tabs)).toBe(true);
-    expect(title.compareDocumentPosition(tabs) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(screen.getByRole('tab', { name: 'Focus' })).toHaveAttribute('aria-selected', 'true');
-
     const participants = screen.getByRole('button', { name: 'Participants' });
     const template = screen.getByRole('button', { name: /Standup/ });
     const meter = screen.getAllByRole('img', { name: /VU$/ })[0];
-    expect(title.parentElement?.contains(participants)).toBe(false);
-    expect(participants.compareDocumentPosition(template) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(template.compareDocumentPosition(meter) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const following = (a: Node, b: Node) => !!(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+
+    // Nothing but the title in the title row.
+    const titleRow = title.closest('header') as HTMLElement;
+    expect(titleRow.contains(tabs)).toBe(false);
+    expect(titleRow.contains(participants)).toBe(false);
+    // The tabs row: tabs, then Participants, then the prompt — all in one row element.
+    const row = tabs.closest('div.mt-2\\.5') as HTMLElement;
+    expect(row).not.toBeNull();
+    expect(row.contains(participants) && row.contains(template)).toBe(true);
+    expect(following(title, tabs) && following(tabs, participants) && following(participants, template)).toBe(true);
+    // The meters come after the whole left column.
+    expect(row.contains(meter)).toBe(false);
+    expect(following(template, meter)).toBe(true);
+    expect(screen.getByRole('tab', { name: 'Focus' })).toHaveAttribute('aria-selected', 'true');
     expect(template.className).toMatch(/\bh-8\b/);
 
     expect(screen.queryByRole('button', { name: /pause transcript|resume transcript/i })).toBeNull();

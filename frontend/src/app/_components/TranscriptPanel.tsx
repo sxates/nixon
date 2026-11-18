@@ -15,6 +15,7 @@ import { useRecordEmptyPhase } from '@/hooks/useRecordEmptyPhase';
 import { effectiveLiveTranscription, transcriptEmptyStateVariant } from '@/lib/processing-mode';
 import { useEffect, useMemo, useState } from 'react';
 import { TranscriptModeButton } from '@/components/Record/TranscriptModeButton';
+import { RECORD_STRIP_HEIGHT } from '@/lib/record-view';
 import { cn } from '@/lib/utils';
 
 /**
@@ -147,27 +148,30 @@ export function TranscriptPanel({
           provisional-labels sentence (specs/0011, P3-B) is that line once a live speaker
           label exists: labels are best-effort and reconciled when recording stops. The
           gap callout (specs/0028 → 0030 WS4) stays underneath, recording or not. */}
-      {(isRecording || gapMessage) && (
-        <div className="flex flex-col gap-2 border-b border-border bg-card px-5 py-2">
-          {isRecording && (
-            <div data-testid="transcript-status-strip" className="flex min-h-7 items-center gap-3">
-              <p className={cn('u-section-label min-w-0 flex-1', hasLiveSpeakerLabel && 'text-brand')}>
-                {hasLiveSpeakerLabel
-                  ? 'Provisional — speaker labels are finalized when you stop recording.'
-                  : liveTranscriptionEnabled
-                    ? 'Live transcript'
-                    : 'Transcript paused'}
-              </p>
-              {activeRecordingMeetingId && <TranscriptModeButton meetingId={activeRecordingMeetingId} />}
-            </div>
-          )}
-          {/* Persistent backpressure hint: the transcript has gaps — one banner with a
-              running count instead of a toast per event. */}
-          {gapMessage && (
-            <Callout tone="warn" role="status" size="compact">
-              {gapMessage}
-            </Callout>
-          )}
+      {isRecording && (
+        // RECORD_STRIP_HEIGHT: the same 44px band as the Topics strip at the top of the rail
+        // beside it, so the two rules line up across the screen (owner feedback, v0.18).
+        <div
+          data-testid="transcript-status-strip"
+          className={cn('flex flex-shrink-0 items-center gap-3 border-b border-border bg-card px-5 py-1.5', RECORD_STRIP_HEIGHT)}
+        >
+          <p className={cn('u-section-label min-w-0 flex-1', hasLiveSpeakerLabel && 'text-brand')}>
+            {hasLiveSpeakerLabel
+              ? 'Provisional — speaker labels are finalized when you stop recording.'
+              : liveTranscriptionEnabled
+                ? 'Live transcript'
+                : 'Transcript paused'}
+          </p>
+          {activeRecordingMeetingId && <TranscriptModeButton meetingId={activeRecordingMeetingId} />}
+        </div>
+      )}
+      {/* Persistent backpressure hint: the transcript has gaps — one banner with a running
+          count instead of a toast per event. Below the strip, so the strip keeps its height. */}
+      {gapMessage && (
+        <div className="flex-shrink-0 border-b border-border bg-card px-5 py-2">
+          <Callout tone="warn" role="status" size="compact">
+            {gapMessage}
+          </Callout>
         </div>
       )}
 

@@ -77,7 +77,9 @@ export function RecordTodoRail({ meetingId, meetingTitle = null }: RecordTodoRai
   return (
     <aside
       aria-label="To-Dos"
-      className="flex w-[32%] min-w-[260px] max-w-[380px] flex-shrink-0 flex-col overflow-hidden border-l border-border bg-background"
+      // The Transcript view's rail width (RecordRail), so the right column doesn't change
+      // size between views (owner feedback, v0.18).
+      className="flex w-[40%] max-w-[440px] flex-shrink-0 flex-col overflow-hidden border-l border-border bg-background"
     >
       <RecordTopicsStrip meetingId={meetingId} meetingTitle={meetingTitle} />
       <RecordTodos meetingId={meetingId} />

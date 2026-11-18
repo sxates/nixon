@@ -328,7 +328,9 @@ export default function PageContent({
       <div data-testid="meeting-header" className="w-full flex-shrink-0">
             <MeetingIdentityHeader
               width="page"
-              className="pb-0 pt-6"
+              // The default pt-7, like every other page with a back key (owner feedback,
+              // v0.18: back keys sat at different heights across the app).
+              className="pb-0"
               onBack={() => {
                 // Return to wherever the user came from (day view, All meetings,
                 // People, a topic) — `useBack` falls back to Home on a cold deep link.

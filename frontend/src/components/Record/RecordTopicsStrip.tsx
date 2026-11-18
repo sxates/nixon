@@ -1,6 +1,8 @@
 'use client';
 
 import { MeetingTopicsRow } from '@/components/Topics/MeetingTopicsRow';
+import { RECORD_STRIP_HEIGHT } from '@/lib/record-view';
+import { cn } from '@/lib/utils';
 
 /**
  * The live Meeting's Topics row at the top of the record screen's right-hand panel (owner
@@ -18,8 +20,10 @@ export function RecordTopicsStrip({
 }) {
   if (!meetingId) return null;
   return (
-    <div className="flex-shrink-0 border-b border-border px-5 py-2">
-      <MeetingTopicsRow meetingId={meetingId} title={meetingTitle} seriesKey={null} className="" />
+    // RECORD_STRIP_HEIGHT: the same 44px band as the row beside it (the notes column's tab
+    // strip in Focus, the transcript's status strip in Transcript), so the rules line up.
+    <div className={cn('flex flex-shrink-0 items-center border-b border-border px-5 py-1.5', RECORD_STRIP_HEIGHT)}>
+      <MeetingTopicsRow meetingId={meetingId} title={meetingTitle} seriesKey={null} className="min-w-0 flex-1" />
     </div>
   );
 }

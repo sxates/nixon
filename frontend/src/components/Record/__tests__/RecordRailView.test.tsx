@@ -73,6 +73,8 @@ describe('RecordRail across the view switch', () => {
     const { rerender, container } = render(<RecordRail meetingId="m-1" view="transcript" />);
     const root = () => container.querySelector('[data-record-view]') as HTMLElement;
     expect(root().className).toContain('w-[40%]');
+    // The tab strip is the record strip height, so in Focus its rule meets the Topics strip's.
+    expect(screen.getByRole('tablist').className).toContain('min-h-11');
     rerender(<RecordRail meetingId="m-1" view="focus" />);
     expect(root().className).toContain('flex-1');
     expect(root().className).not.toContain('w-[40%]');

@@ -142,4 +142,13 @@ describe('RecordTodoRail', () => {
     expect(screen.queryByText('Topics')).toBeNull();
     expect(screen.getByLabelText('Add a To-Do to this Meeting')).toBeInTheDocument();
   });
+
+  it('is the Transcript rail\'s width, and its Topics strip shares the record strip height', async () => {
+    const { container } = render(<RecordTodoRail meetingId="m-1" />);
+    const aside = screen.getByRole('complementary', { name: 'To-Dos' });
+    expect(aside.className).toContain('w-[40%]');
+    expect(aside.className).toContain('max-w-[440px]');
+    expect(container.querySelector('.border-b.min-h-11')).not.toBeNull();
+    await screen.findByText('Loose end');
+  });
 });
