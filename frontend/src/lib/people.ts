@@ -13,3 +13,8 @@ import type { Person } from '@/types';
 export function getPerson(id: string): Promise<Person | null> {
   return invoke<Person | null>('api_get_person', { id });
 }
+
+/** Every Person in the directory (`api_list_people`), unranked. */
+export function listPeople(): Promise<Person[]> {
+  return invoke<Person[]>('api_list_people');
+}

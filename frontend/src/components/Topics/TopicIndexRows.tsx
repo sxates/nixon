@@ -78,7 +78,7 @@ export function TopicIndexRows({ topics, onOpen, onReorder, onToggleStar }: Topi
                     }
                     className={
                       t.starred
-                        ? 'text-brand hover:text-brand'
+                        ? 'text-star hover:text-star'
                         : 'opacity-0 focus-visible:opacity-100 group-hover/row:opacity-100'
                     }
                   />

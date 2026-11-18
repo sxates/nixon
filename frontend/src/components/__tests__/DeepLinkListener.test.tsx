@@ -21,7 +21,7 @@ vi.mock('@tauri-apps/plugin-deep-link', () => ({
   onOpenUrl: h.onOpenUrlMock,
 }));
 
-import { DeepLinkListener } from '../DeepLinkListener';
+import { DeepLinkListener, parseTopicLink } from '../DeepLinkListener';
 
 const resolve = (exists: boolean, segmentId: string | null) =>
   h.invokeMock.mockResolvedValue({ exists, segmentId });
@@ -97,5 +97,32 @@ describe('DeepLinkListener', () => {
     await act(async () => h.openUrlHandler!(['nixon://meeting/abc?t=1', 'nixon://record']));
     await waitFor(() => expect(h.pushMock).toHaveBeenCalled());
     for (const call of h.invokeMock.mock.calls) expect(call[0]).toBe('api_resolve_meeting_link');
+  });
+
+  // specs/0091 — the MCP server formats `<scheme>://topic/<id>` with the id percent-encoded
+  // (agent_access/links.rs `topic_link`; its test pins "nixon-dev://topic/a%20b%2Fc" for
+  // id "a b/c"). These are those exact strings, so producer and consumer agree.
+  it('opens a Topic link on the Topic page without calling the backend', async () => {
+    render(<DeepLinkListener />);
+    await waitFor(() => expect(h.openUrlHandler).not.toBeNull());
+    await act(async () => h.openUrlHandler!(['nixon://topic/topic-1']));
+    await waitFor(() => expect(h.pushMock).toHaveBeenCalledWith('/topics/topic?id=topic-1'));
+    expect(h.invokeMock).not.toHaveBeenCalled();
+    expect(h.toastError).not.toHaveBeenCalled();
+  });
+
+  it('decodes the dev scheme and an encoded Topic id', async () => {
+    render(<DeepLinkListener />);
+    await waitFor(() => expect(h.openUrlHandler).not.toBeNull());
+    await act(async () => h.openUrlHandler!(['nixon-dev://topic/a%20b%2Fc']));
+    await waitFor(() => expect(h.pushMock).toHaveBeenCalledWith('/topics/topic?id=a%20b%2Fc'));
+  });
+
+  it('refuses malformed Topic links', () => {
+    expect(parseTopicLink('nixon-dev://topic/a%20b%2Fc')).toBe('a b/c');
+    expect(parseTopicLink('nixon://topic/')).toBeNull();
+    expect(parseTopicLink('nixon://topic/a/b')).toBeNull();
+    expect(parseTopicLink('https://topic/a')).toBeNull();
+    expect(parseTopicLink('nixon://meeting/a')).toBeNull();
   });
 });

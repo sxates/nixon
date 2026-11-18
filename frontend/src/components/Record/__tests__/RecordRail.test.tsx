@@ -38,6 +38,10 @@ vi.mock('@/components/Record/RecordAgendaPanel', () => ({
   ),
 }));
 
+vi.mock('@/components/Topics/MeetingTopicsRow', () => ({
+  MeetingTopicsRow: () => <div data-testid="topics-row" />,
+}));
+
 vi.mock('@/hooks/usePrepAvailability', () => ({
   usePrepAvailability: () => ({ hasPrep: true, openItemCount: 3 }),
 }));

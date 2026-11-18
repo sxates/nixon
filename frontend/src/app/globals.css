@@ -54,6 +54,9 @@
     --lamp-amber: 38 90% 50%;
     --lamp-red: 4 82% 50%;
     --lamp-ink: 24 30% 12%;
+    /* A starred Topic / Person / pinned default: gold, deeper than --lamp-amber so the filled
+       glyph holds its shape on putty and card. Only ever an icon fill, never text. */
+    --star: 43 90% 42%;                /* #CB950B */
     --record-foreground: 40 39% 97%;
     --success: 131 39% 30%;            /* #2F6B3A READY */
     --success-foreground: 40 39% 97%;
@@ -195,6 +198,7 @@
     --lamp-red: 5 88% 58%;
     --lamp-ink: 30 10% 8%;             /* specs/0063 W1-W2 review: same ink as --brand-foreground —
                                            the near-white default was ~1.85:1 on the amber HOLD face */
+    --star: 45 92% 58%;                /* #F6C333 — gold, distinct from the dark --brand amber */
     --record-foreground: 40 30% 96%;
     --success: 127 29% 50%;            /* #5AA362 */
     --success-foreground: 30 10% 8%;

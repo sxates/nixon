@@ -39,6 +39,7 @@ const READ_TIMEOUT: Duration = Duration::from_secs(20);
 async fn data_dir(enabled: bool) -> tempfile::TempDir {
     use sqlx::Connection;
     let (_stage, db) = agent_access_fixture::setup().await;
+    agent_access_fixture::topics_fixture(db.pool()).await;
     let dir = tempfile::tempdir().unwrap();
     sqlx::query("VACUUM INTO ?")
         .bind(db_path(dir.path()).to_str().unwrap())
@@ -232,7 +233,17 @@ async fn initialize_then_list_tools() {
     let tools = r["result"]["tools"].as_array().expect("tools array");
     let mut names: Vec<&str> = tools.iter().map(|t| t["name"].as_str().unwrap()).collect();
     names.sort();
-    assert_eq!(names, ["get_meeting", "list_meetings", "search_meetings"]);
+    assert_eq!(
+        names,
+        [
+            "get_meeting",
+            "get_topic",
+            "list_meetings",
+            "list_todos",
+            "list_topics",
+            "search_meetings"
+        ]
+    );
     let desc = |n: &str| {
         tools.iter().find(|t| t["name"] == n).unwrap()["description"]
             .as_str()
@@ -344,6 +355,64 @@ async fn bad_arguments_are_error_results_and_unknown_id_is_not() {
     assert_eq!(outcomes, ["error", "error", "ok"]);
 }
 
+/// specs/0091: the To-Do and Topic tools answer with linked text, and are refused and
+/// logged like the meeting tools when access is off.
+#[tokio::test]
+async fn todo_and_topic_tools_link_and_log() {
+    let dir = data_dir(true).await;
+    let mut s = Server::spawn(dir.path());
+    s.handshake();
+    let (todos, is_error) = s.call("list_todos", json!({}));
+    assert!(!is_error, "{todos}");
+    assert!(todos.contains("nixon-dev://topic/tp-alpha"), "{todos}");
+    assert!(todos.contains("nixon-dev://meeting/m-standup"), "{todos}");
+    let (topics, _) = s.call("list_topics", json!({}));
+    assert!(topics.contains("nixon-dev://topic/tp-alpha"), "{topics}");
+    let (topic, is_error) = s.call("get_topic", json!({"name": "alpha", "entries": 5}));
+    assert!(!is_error, "{topic}");
+    assert!(topic.contains("No Topic matches"), "{topic}");
+    let (topic, _) = s.call("get_topic", json!({"id": "tp-alpha"}));
+    assert!(
+        topic.contains("nixon-dev://meeting/m-pricing?t=754.2"),
+        "{topic}"
+    );
+    set_enabled(dir.path(), false);
+    for (tool, args) in [
+        ("list_todos", json!({"topic": "none"})),
+        ("list_topics", json!({})),
+        ("get_topic", json!({"id": "tp-alpha"})),
+    ] {
+        let (text, is_error) = s.call(tool, args);
+        assert_eq!(text, OFF, "{tool}");
+        assert!(!is_error, "{tool}");
+    }
+    s.finish();
+    let log = log_entries(dir.path()).await;
+    assert_eq!(log.len(), 7, "{log:?}");
+    let off: Vec<&str> = log
+        .iter()
+        .filter(|e| e.outcome == "off")
+        .map(|e| e.tool.as_str())
+        .collect();
+    assert_eq!(off.len(), 3, "{log:?}");
+    for tool in ["list_todos", "list_topics", "get_topic"] {
+        assert!(off.contains(&tool), "{tool}: {log:?}");
+    }
+    let get = log
+        .iter()
+        .find(|e| e.tool == "get_topic" && e.outcome == "ok" && e.args["id"] == "tp-alpha")
+        .unwrap();
+    assert!(
+        get.meeting_ids.contains(&"m-pricing".to_string()),
+        "{get:?}"
+    );
+    let todo_off = log
+        .iter()
+        .find(|e| e.tool == "list_todos" && e.outcome == "off")
+        .unwrap();
+    assert_eq!(todo_off.args["topic"], "none");
+}
+
 #[tokio::test]
 async fn toggle_takes_effect_without_restart() {
     let dir = data_dir(true).await;
@@ -421,6 +490,9 @@ async fn never_writes_meetings_db() {
     s.call("search_meetings", json!({"query": "pricing"}));
     s.call("list_meetings", json!({}));
     s.call("get_meeting", json!({"meeting_id": "m-pricing"}));
+    s.call("list_todos", json!({"include_done": true}));
+    s.call("list_topics", json!({"include_archived": true}));
+    s.call("get_topic", json!({"name": "project alpha"}));
     s.finish();
     assert_eq!(sha256(&db_path(dir.path())), before);
 }

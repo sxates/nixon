@@ -10,6 +10,7 @@ pub mod log;
 pub mod log_export;
 pub mod queries;
 mod queries_search;
+pub mod queries_topics;
 pub mod register;
 mod server;
 pub mod settings;

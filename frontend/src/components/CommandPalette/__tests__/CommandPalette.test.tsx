@@ -499,3 +499,107 @@ describe('CommandPalette — topics (specs/0089)', () => {
     expect(headings()).toEqual(['Actions', 'Topics', 'Meetings']);
   });
 });
+
+describe('CommandPalette — People and To-Dos (v0.18 feedback)', () => {
+  const person = (id: string, displayName: string, role: string | null = null) => ({
+    id,
+    displayName,
+    email: null,
+    role,
+    notes: null,
+    voiceprintOptOut: false,
+    starred: false,
+    createdAt: '2026-10-01T10:00:00Z',
+    updatedAt: '2026-10-01T10:00:00Z',
+  });
+  const PEOPLE = [
+    person('p-1', 'Kira Okafor', 'Design lead'),
+    person('p-2', 'Sam Rivera'),
+    ...Array.from({ length: 7 }, (_, i) => person(`p-k${i}`, `Kim ${i}`)),
+  ];
+  const todo = (id: string, description: string) => ({ id, description, meetingId: null });
+  const TODOS = [
+    todo('a-1', 'Send the kickoff deck to @[Sam Rivera](person:p-2)'),
+    todo('a-2', 'Book the venue'),
+  ];
+  const withEntities = () =>
+    invokeMock.mockImplementation((command: unknown, args?: { view?: string }) => {
+      if (command === 'api_get_meetings') return Promise.resolve(MEETINGS);
+      if (command === 'api_list_people') return Promise.resolve(PEOPLE);
+      if (command === 'api_list_todo_view') {
+        return Promise.resolve(args?.view === 'list' ? TODOS : []);
+      }
+      if (command === 'api_search_meetings') return Promise.resolve([]);
+      return Promise.resolve(null);
+    });
+  const headings = () =>
+    Array.from(document.querySelectorAll('[cmdk-group-heading]')).map((el) => el.textContent);
+
+  it('fetches People and the To-Do List view on open, but shows neither for an empty query', async () => {
+    withEntities();
+    await openPalette();
+    await waitFor(() =>
+      expect(invokeMock).toHaveBeenCalledWith('api_list_todo_view', { view: 'list' }),
+    );
+    expect(invokeMock).toHaveBeenCalledWith('api_list_people');
+    expect(headings()).toEqual(['Actions', 'Meetings']);
+    expect(screen.queryByText('Kira Okafor')).toBeNull();
+  });
+
+  it('a typed query shows matching People and opens the person page', async () => {
+    withEntities();
+    await openPalette();
+    typeQuery('kira');
+    const row = await screen.findByText('Kira Okafor');
+    expect(headings()).toContain('People');
+    expect(screen.getByText('Design lead')).toBeInTheDocument();
+    expect(screen.queryByText('Sam Rivera')).toBeNull();
+    fireEvent.click(row);
+    expect(pushMock).toHaveBeenCalledWith('/person-details?id=p-1');
+  });
+
+  it('caps the People group at its best five matches', async () => {
+    withEntities();
+    await openPalette();
+    typeQuery('kim');
+    await screen.findByText('Kim 0');
+    const peopleGroup = Array.from(document.querySelectorAll('[cmdk-group]')).find(
+      (g) => g.querySelector('[cmdk-group-heading]')?.textContent === 'People',
+    );
+    expect(peopleGroup?.querySelectorAll('[cmdk-item]')).toHaveLength(5);
+  });
+
+  it('a typed query shows matching To-Dos with mention markup stripped, and opens the detail', async () => {
+    withEntities();
+    await openPalette();
+    typeQuery('deck');
+    const row = await screen.findByText('Send the kickoff deck to @Sam Rivera');
+    expect(headings()).toContain('To-Dos');
+    expect(document.body.textContent).not.toContain('person:p-2');
+    expect(screen.queryByText('Book the venue')).toBeNull();
+    fireEvent.click(row);
+    expect(pushMock).toHaveBeenCalledWith('/tasks/item?id=a-1');
+  });
+
+  it('a 1-character query (cmdk filtering) shows the groups too', async () => {
+    withEntities();
+    await openPalette();
+    typeQuery('v');
+    expect(await screen.findByText('Book the venue')).toBeInTheDocument();
+  });
+
+  it('a failed fetch leaves the palette working', async () => {
+    invokeMock.mockImplementation((command: unknown) => {
+      if (command === 'api_get_meetings') return Promise.resolve(MEETINGS);
+      if (command === 'api_list_people' || command === 'api_list_todo_view') {
+        return Promise.reject(new Error('db locked'));
+      }
+      return Promise.resolve([]);
+    });
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    await openPalette();
+    typeQuery('design');
+    expect(await screen.findByText('Design sync')).toBeInTheDocument();
+    expect(headings()).not.toContain('People');
+  });
+});

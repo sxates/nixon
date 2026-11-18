@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, type ReactNode } from 'react';
+import { Fragment, useState, useEffect, useCallback, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { invoke } from '@tauri-apps/api/core';
 // cmdk's own scorer (command-score fuzzy subsequence) — reused by our manual
@@ -32,6 +32,14 @@ import {
 import { formatMeetingDate } from '@/lib/format-date';
 import { listTopics } from '@/lib/topics';
 import type { TopicSummary } from '@/types';
+import {
+  PeopleGroup,
+  TodosGroup,
+  personSurface,
+  todoSurface,
+  topMatches,
+  usePaletteEntities,
+} from './PeopleTodoGroups';
 
 // Shape returned by `api_get_meetings` (mirrors app/page.tsx DashboardMeeting).
 // `gist`/`durationSeconds` may be absent.
@@ -128,6 +136,8 @@ export default function CommandPalette() {
   // Topics (specs/0089): a typed query puts matching topics first, so a topic is a few
   // keystrokes and Enter away.
   const [topics, setTopics] = useState<TopicSummary[]>([]);
+  // People + the To-Do list: shown for a typed query only (PeopleTodoGroups.tsx).
+  const { people, todos } = usePaletteEntities(open);
   // Controlled cmdk input — drives the debounced backend search (specs/0033).
   const [query, setQuery] = useState('');
   const [hits, setHits] = useState<MeetingSearchHit[]>([]);
@@ -333,6 +343,27 @@ export default function CommandPalette() {
   // Typing: topics lead, so type-then-Enter opens one. Empty query: Actions stay first
   // (Enter still starts nothing surprising) and topics follow them.
   const topicsFirst = trimmedQuery.length > 0;
+  // People and To-Dos follow Topics, typed queries only, best few of each.
+  const visiblePeople = topMatches(people, trimmedQuery, personSurface);
+  const visibleTodos = topMatches(todos, trimmedQuery, todoSurface);
+  const peopleGroup = (
+    <PeopleGroup
+      people={visiblePeople}
+      onOpen={(id) => runCommand(() => router.push(`/person-details?id=${encodeURIComponent(id)}`))}
+    />
+  );
+  const todosGroup = (
+    <TodosGroup
+      todos={visibleTodos}
+      onOpen={(id) => runCommand(() => router.push(`/tasks/item?id=${encodeURIComponent(id)}`))}
+    />
+  );
+  const leading: Array<{ key: string; node: ReactNode }> = [];
+  if (topicsFirst) {
+    if (topicsGroup) leading.push({ key: 'topics', node: topicsGroup });
+    if (visiblePeople.length > 0) leading.push({ key: 'people', node: peopleGroup });
+    if (visibleTodos.length > 0) leading.push({ key: 'todos', node: todosGroup });
+  }
 
   const visibleMeetings = meetings.filter((m) => {
     const title = m.title?.trim() || 'Untitled Meeting';
@@ -349,8 +380,13 @@ export default function CommandPalette() {
         onValueChange={setQuery}
       />
       <CommandList>
-        {topicsFirst && topicsGroup}
-        {topicsFirst && topicsGroup && visibleActions.length > 0 && <CommandSeparator />}
+        {leading.map((g, i) => (
+          <Fragment key={g.key}>
+            {i > 0 && <CommandSeparator />}
+            {g.node}
+          </Fragment>
+        ))}
+        {leading.length > 0 && visibleActions.length > 0 && <CommandSeparator />}
         {visibleActions.length > 0 && (
           <CommandGroup heading="Actions">
             {visibleActions.map((a) => (
@@ -452,6 +488,8 @@ export default function CommandPalette() {
         {backendSearchActive &&
           visibleActions.length === 0 &&
           visibleTopics.length === 0 &&
+          visiblePeople.length === 0 &&
+          visibleTodos.length === 0 &&
           visibleMeetings.length === 0 &&
           hits.length === 0 && (
             <div className="py-6 text-center text-sm text-muted-foreground">

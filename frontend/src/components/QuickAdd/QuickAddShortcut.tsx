@@ -6,6 +6,8 @@
  *        navigates with `?add=1`, which the page turns into the same focus once loaded.
  *   ⌘⇧T  quick-add dialog over the current page; while recording, it can link the to-do
  *        to the live meeting and note it in that meeting's My Notes.
+ * `openQuickAdd()` opens the same dialog from a button (the record screen's Add To-Do), so
+ * there is one dialog and one notion of the live meeting.
  */
 
 import { useEffect, useState } from 'react';
@@ -17,6 +19,12 @@ import { QuickAddDialog } from './QuickAddDialog';
 
 export const FOCUS_QUICK_ADD_EVENT = 'nixon:focus-quick-add';
 export const QUICK_ADD_LABEL = 'New To-Do';
+export const OPEN_QUICK_ADD_EVENT = 'nixon:open-quick-add';
+
+/** Open the ⌘⇧T quick-add dialog (mounted once, in the app shell). */
+export function openQuickAdd(): void {
+  window.dispatchEvent(new Event(OPEN_QUICK_ADD_EVENT));
+}
 
 export function QuickAddShortcut() {
   const router = useRouter();
@@ -48,6 +56,12 @@ export function QuickAddShortcut() {
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [pathname, router]);
+
+  useEffect(() => {
+    const open = () => setDialogOpen(true);
+    window.addEventListener(OPEN_QUICK_ADD_EVENT, open);
+    return () => window.removeEventListener(OPEN_QUICK_ADD_EVENT, open);
+  }, []);
 
   return <QuickAddDialog open={dialogOpen} onOpenChange={setDialogOpen} liveMeeting={liveMeeting} />;
 }

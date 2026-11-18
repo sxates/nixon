@@ -18,14 +18,27 @@
  *   for during a recording they never opened prep on (same rule as meeting-details).
  * - The Prep tab exists whenever there is a meeting row; before that (permissions
  *   pending, recording not yet started) only Notes shows.
+ *
+ * `view` (owner feedback, v0.18) changes only this column's classes: the right-hand rail
+ * in Transcript, the full-width notes column in Focus. The element tree is the same in both,
+ * so the notepad keeps its editor, its undo history and its caret across a switch. Above the
+ * tabs, once the meeting row exists, sits the Topics row (add this Meeting to a Topic while
+ * it records) and, in Transcript, the Add To-Do key that opens ⌘⇧T quick add; in Focus the
+ * To-Do rail's own add field does that job.
  */
 
 import { useEffect, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { PrepPanel } from '@/components/MeetingDetails/PrepPanel';
 import { RecordAgendaPanel } from '@/components/Record/RecordAgendaPanel';
+import { openQuickAdd } from '@/components/QuickAdd/QuickAddShortcut';
+import { MeetingTopicsRow } from '@/components/Topics/MeetingTopicsRow';
 import { usePrepAvailability } from '@/hooks/usePrepAvailability';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Plus } from '@/components/ui/icons';
+import type { RecordView } from '@/lib/record-view';
+import { cn } from '@/lib/utils';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 // Client-only: NotepadPanel's editor is a contentEditable that touches `document`,
@@ -42,7 +55,15 @@ interface RecordTab {
   label: string;
 }
 
-export function RecordRail({ meetingId }: { meetingId: string | null }) {
+interface RecordRailProps {
+  meetingId: string | null;
+  /** Transcript (default): the right-hand rail. Focus: the full-width notes column. */
+  view?: RecordView;
+  /** The live title, for the Topics row's Series option. */
+  meetingTitle?: string | null;
+}
+
+export function RecordRail({ meetingId, view = 'transcript', meetingTitle = null }: RecordRailProps) {
   const [activeTab, setActiveTab] = useState<RecordTabKey>('notes');
   const { openItemCount, refresh: refreshPrepCount } = usePrepAvailability(meetingId);
 
@@ -81,7 +102,31 @@ export function RecordRail({ meetingId }: { meetingId: string | null }) {
   };
 
   return (
-    <div className="min-w-0 flex w-[40%] max-w-[440px] flex-col overflow-hidden border-l border-border">
+    <div
+      data-record-view={view}
+      className={cn(
+        'min-w-0 flex flex-col overflow-hidden',
+        view === 'focus' ? 'flex-1' : 'w-[40%] max-w-[440px] border-l border-border',
+      )}
+    >
+      {meetingId && (
+        <div className="flex-shrink-0 border-b border-border px-5 py-2">
+          <MeetingTopicsRow
+            meetingId={meetingId}
+            title={meetingTitle}
+            seriesKey={null}
+            className=""
+            trailing={
+              view === 'transcript' ? (
+                <Button variant="outline" size="xs" className="ml-auto" onClick={openQuickAdd}>
+                  <Plus />
+                  Add To-Do
+                </Button>
+              ) : null
+            }
+          />
+        </div>
+      )}
       {/* The `ui/tabs` underline strip (the same one as meeting details). Only the strip is
           Radix: the panels below keep their own lifecycle (always-mounted Notes, lazy Prep),
           so each trigger names its panel explicitly. The arrow-key handler is ours and calls

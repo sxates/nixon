@@ -17,6 +17,9 @@ fn tool_label(tool: &str) -> &str {
         "search_meetings" => "Searched",
         "list_meetings" => "Listed meetings",
         "get_meeting" => "Read a meeting",
+        "list_todos" => "Listed To-Dos",
+        "list_topics" => "Listed Topics",
+        "get_topic" => "Read a Topic",
         other => other,
     }
 }

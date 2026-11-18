@@ -17,7 +17,7 @@ vi.mock('@/lib/topics', async (orig) => ({
   unlinkTopic: (...a: unknown[]) => unlinkTopic(...a),
 }));
 
-import { TopicHeader, TopicMeta } from '@/components/Topics/TopicHeader';
+import { TopicHeader, TopicMeta, TopicSeriesLinks } from '@/components/Topics/TopicHeader';
 import type { TopicDetail } from '@/types';
 import { detail, entry } from './fixtures';
 
@@ -25,6 +25,7 @@ const Both = ({ d }: { d: TopicDetail }) => (
   <>
     <TopicHeader detail={d} />
     <TopicMeta detail={d} />
+    <TopicSeriesLinks detail={d} />
   </>
 );
 
@@ -76,6 +77,15 @@ describe('TopicHeader', () => {
     fireEvent.click(star);
     expect(screen.getByRole('button', { name: 'Unstar Topic' })).toHaveAttribute('aria-pressed', 'true');
     await waitFor(() => expect(updateTopic).toHaveBeenCalledWith('topic-1', { starred: true }));
+  });
+
+  it('a starred Topic shows a gold star (the star token, not brand)', () => {
+    render(<TopicHeader detail={detail({ topic: { ...linked().topic, starred: true } })} />);
+    const star = screen.getByRole('button', { name: 'Unstar Topic' });
+    // On the glyph: PageHeader recolours ghost buttons, so a class on the button loses.
+    const glyph = star.querySelector('svg')!;
+    expect(glyph.getAttribute('class')).toContain('text-star');
+    expect(star.className).not.toContain('text-brand');
   });
 
   it('a failed star reverts', async () => {

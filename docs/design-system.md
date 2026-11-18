@@ -46,6 +46,7 @@ override `disabled:` on a lamp variant.
 | `bg-destructive-wash` / `border-destructive-edge` (5% / 30%) | error callout |
 | `bg-success-wash` / `border-success-edge` (10% / 30%) | granted badge; success callout (a topic's Decision) |
 | `bg-highlight-yellow` / `bg-highlight-green` | To-do highlighter pens (⌘4 / ⌘5) behind title text; opaque, tuned per theme |
+| `text-star` | A starred Topic or Person (and a pinned default): the filled star glyph, gold in both themes. Icons only, never text |
 
 Hover states come from the primitive's variant. `bg-brand/90` in a screen means someone
 hand-rolled a button.

@@ -5,11 +5,12 @@
  * opens the topic page), then Add to topic…. Refreshes on `topics-updated`.
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Plus } from '@/components/ui/icons';
 import { safeListen } from '@/lib/safe-listen';
+import { cn } from '@/lib/utils';
 import { topicsForMeeting } from '@/lib/topics';
 import type { Topic } from '@/types';
 import { AddToTopicDialog } from './AddToTopicDialog';
@@ -18,9 +19,13 @@ export interface MeetingTopicsRowProps {
   meetingId: string;
   title: string | null | undefined;
   seriesKey: string | null | undefined;
+  /** Replaces the row's default top margin (the record screen's strip sets its own). */
+  className?: string;
+  /** Extra controls at the end of the row (the record screen's Add To-Do). */
+  trailing?: ReactNode;
 }
 
-export function MeetingTopicsRow({ meetingId, title, seriesKey }: MeetingTopicsRowProps) {
+export function MeetingTopicsRow({ meetingId, title, seriesKey, className = 'mt-3', trailing }: MeetingTopicsRowProps) {
   const router = useRouter();
   const [topics, setTopics] = useState<Topic[]>([]);
   const [adding, setAdding] = useState(false);
@@ -44,7 +49,7 @@ export function MeetingTopicsRow({ meetingId, title, seriesKey }: MeetingTopicsR
   const seriesAvailable = !!seriesKey || !!title?.trim();
 
   return (
-    <div className="mt-3 flex flex-wrap items-center gap-2">
+    <div className={cn('flex flex-wrap items-center gap-2', className)}>
       <span className="text-xs font-semibold text-muted-foreground">Topics</span>
       {topics.map((t) => (
         <Button
@@ -67,6 +72,7 @@ export function MeetingTopicsRow({ meetingId, title, seriesKey }: MeetingTopicsR
         linkedIds={topics.map((t) => t.id)}
         seriesAvailable={seriesAvailable}
       />
+      {trailing}
     </div>
   );
 }

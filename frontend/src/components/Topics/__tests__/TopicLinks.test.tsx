@@ -72,3 +72,20 @@ describe('TopicLinks — linking several series', () => {
     expect(screen.getByRole('button', { name: 'Link 1 Series' })).toBeEnabled();
   });
 });
+
+describe('TopicLinks — the unlink ✕', () => {
+  it('is hidden until the chip is hovered or holds keyboard focus', () => {
+    render(
+      <TopicLinks
+        topicId="topic-1"
+        links={[{ topicId: 'topic-1', kind: 'series', ref: 's-1', title: 'product sync', label: 'Product sync' }]}
+        meetingCount={1}
+      />,
+    );
+    const unlink = screen.getByRole('button', { name: 'Unlink Product sync' });
+    expect(unlink.className).toMatch(/(^|\s)opacity-0(\s|$)/);
+    expect(unlink.className).toContain('group-hover/chip:opacity-100');
+    expect(unlink.className).toContain('group-focus-within/chip:opacity-100');
+    expect(unlink.parentElement?.className).toContain('group/chip');
+  });
+});

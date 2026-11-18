@@ -18,6 +18,10 @@ import { TranscriptRecovery } from '@/components/TranscriptRecovery';
 import { useSummaryPrompts } from '@/hooks/meeting-details/useSummaryPrompts';
 import { RecordingHeader } from '@/components/Record/RecordingHeader';
 import { RecordRail } from '@/components/Record/RecordRail';
+import { RecordTodoRail } from '@/components/Record/RecordTodoRail';
+import { useRecordView } from '@/hooks/useRecordView';
+import { TITLE_PLACEHOLDER } from '@/hooks/useRecordingTitleEdit';
+import { cn } from '@/lib/utils';
 
 export default function Home() {
   // Local page state (not moved to contexts)
@@ -43,6 +47,10 @@ export default function Home() {
   // error event could be dropped. See specs/0014. Stopping is Rust's (specs/0083): the
   // recorder never runs a stop or a save of its own, and stays here when one finishes.
   useTranscriptionErrorListeners();
+
+  // Transcript / Focus (owner feedback, v0.18), remembered across recordings.
+  const [view, setView] = useRecordView();
+  const focus = view === 'focus';
 
   // Rename-while-recording (specs/0029 WS4.3) — inline click-to-edit title state.
   const titleEdit = useRecordingTitleEdit();
@@ -95,19 +103,38 @@ export default function Home() {
         activeRecordingMeetingId={activeRecordingMeetingId}
         titleEdit={titleEdit}
         promptsApi={promptsApi}
+        view={view}
+        onViewChange={setView}
       />
 
       <div className="relative flex flex-1 overflow-hidden">
-        {/* Split layout: live transcript (left) + Notes / Prep rail (right, ~40% / max 440px;
-            specs/0056 W4). */}
+        {/* Transcript view: live transcript (left) + Notes / Prep rail (right, ~40% / max
+            440px; specs/0056 W4). Focus view: the same notes column full width, a To-Do rail
+            on the right, and the transcript kept mounted but hidden: laid out behind the
+            panes (`invisible`, so it is neither painted nor focusable nor read out) so its
+            virtualized rows stay measured and its follow-the-tail scroll keeps up, ready the
+            moment the view switches back. Neither column changes parent between views, so
+            nothing in them remounts. */}
         <div className="flex flex-1 min-w-0 overflow-hidden">
-          <div className="min-w-0 flex flex-1 flex-col overflow-hidden">
+          <div
+            data-testid="record-transcript-pane"
+            aria-hidden={focus || undefined}
+            className={cn(
+              'min-w-0 flex flex-col overflow-hidden',
+              focus ? 'invisible absolute inset-0' : 'flex-1',
+            )}
+          >
             <TranscriptPanel
               isProcessingStop={isProcessingStop}
               isStopping={isStopping}
             />
           </div>
-          <RecordRail meetingId={activeRecordingMeetingId ?? null} />
+          <RecordRail
+            meetingId={activeRecordingMeetingId ?? null}
+            view={view}
+            meetingTitle={meetingTitle === TITLE_PLACEHOLDER ? null : meetingTitle}
+          />
+          {focus && <RecordTodoRail meetingId={activeRecordingMeetingId ?? null} />}
         </div>
 
         {/* Status Overlays - Processing and Saving */}

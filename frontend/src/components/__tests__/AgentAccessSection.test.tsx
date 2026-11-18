@@ -140,6 +140,21 @@ describe('AgentAccessSection', () => {
     expect(screen.getByText(/120s/)).toHaveTextContent('120s \u2192 300.5s');
   });
 
+  it('log_rows_label_todo_and_topic_tools', async () => {
+    log = [
+      entry({ tool: 'list_todos', args: { topic: 'none', include_done: true }, meetingIds: [], meetings: [] }),
+      entry({ tool: 'list_topics', args: { include_archived: true }, meetingIds: [], meetings: [] }),
+      entry({ tool: 'get_topic', args: { name: 'Q4 release', entries: 5 }, meetingIds: [], meetings: [] }),
+    ];
+    render(<AgentAccessSection />);
+    expect(await screen.findByText('Listed To-Dos')).toBeInTheDocument();
+    expect(screen.getByText('Listed Topics')).toBeInTheDocument();
+    expect(screen.getByText('Read a Topic')).toBeInTheDocument();
+    expect(screen.getByText(/none/)).toHaveTextContent('Topic \u201Cnone\u201D \u00B7 with done');
+    expect(screen.getByText('with archived')).toBeInTheDocument();
+    expect(screen.getByText(/Q4 release/)).toHaveTextContent('Topic \u201CQ4 release\u201D');
+  });
+
   it('refused_calls_are_labelled', async () => {
     log = [entry({ outcome: 'off', meetingIds: [], meetings: [] })];
     render(<AgentAccessSection />);

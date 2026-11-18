@@ -60,7 +60,7 @@ export function SummaryLanguageSettings() {
                   >
                     <DeckIcon
                       icon={Star}
-                      className={isPinned ? 'fill-current text-brand' : 'text-muted-foreground'}
+                      className={isPinned ? 'fill-current text-star' : 'text-muted-foreground'}
                     />
                     {labelForCode(code)}
                   </Button>

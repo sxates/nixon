@@ -27,6 +27,8 @@ import type { UseRecordingTitleEditReturn } from '@/hooks/useRecordingTitleEdit'
 import { PromptPicker } from '@/components/SummaryPrompts/PromptPicker';
 import { CustomPromptFlow, type PromptsApi } from '@/components/SummaryPrompts/CustomPromptFlow';
 import { useBack } from '@/hooks/useBack';
+import type { RecordView } from '@/lib/record-view';
+import { RecordViewTabs } from './RecordViewTabs';
 
 /**
  * Compact per-meeting live/defer mode chip (low-power-mode spec §5). Driven by
@@ -107,6 +109,9 @@ interface RecordingHeaderProps {
   titleEdit: UseRecordingTitleEditReturn;
   /** Per-meeting prompt picker's slice of useSummaryPrompts (specs/0079). */
   promptsApi: PromptsApi;
+  /** Transcript / Focus (owner feedback, v0.18); the switch is hidden without a handler. */
+  view?: RecordView;
+  onViewChange?: (view: RecordView) => void;
 }
 
 /**
@@ -121,6 +126,8 @@ export function RecordingHeader({
   activeRecordingMeetingId,
   titleEdit,
   promptsApi,
+  view = 'transcript',
+  onViewChange,
 }: RecordingHeaderProps) {
   const back = useBack('/');
   const {
@@ -263,7 +270,14 @@ export function RecordingHeader({
         />
       }
       subtitle={subtitle}
-      actions={meters}
+      actions={
+        // The view switch leads the right-hand cluster: it changes the whole screen below,
+        // so it sits on the band that spans it, not inside one of the panes.
+        <>
+          {onViewChange && <RecordViewTabs view={view} onViewChange={onViewChange} />}
+          {meters}
+        </>
+      }
     />
   );
 }
