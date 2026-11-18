@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useRef } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { sanitizeEditorHtml } from '@/lib/notes-html';
@@ -33,15 +33,8 @@ interface NoteEditorProps {
    * `Panel` — title on the panel, toolbar in its `action` slot). `label` is ignored then.
    */
   frame?: (parts: { toolbar: React.ReactNode; body: React.ReactNode }) => React.ReactNode;
-  /** Imperative hooks for the owning panel (quick-add appends a "☐ To-do:" line). */
-  apiRef?: React.MutableRefObject<NoteEditorApi | null>;
   /** Accessible name of the editable body. */
   ariaLabel?: string;
-}
-
-export interface NoteEditorApi {
-  /** Add `text` as a new last paragraph and report the change through `onChange`. */
-  appendParagraph: (text: string) => void;
 }
 
 export function NoteEditor({
@@ -53,7 +46,6 @@ export function NoteEditor({
   className = '',
   bodyClassName = '',
   frame,
-  apiRef,
   ariaLabel = 'Meeting notes',
 }: NoteEditorProps) {
   const elRef = useRef<HTMLDivElement | null>(null);
@@ -73,23 +65,6 @@ export function NoteEditor({
   const emit = useCallback(() => {
     if (elRef.current) onChange(elRef.current.innerHTML);
   }, [onChange]);
-
-  useEffect(() => {
-    if (!apiRef) return;
-    apiRef.current = {
-      appendParagraph: (text: string) => {
-        const el = elRef.current;
-        if (!el) return;
-        const p = document.createElement('p');
-        p.textContent = text;
-        el.appendChild(p);
-        emit();
-      },
-    };
-    return () => {
-      apiRef.current = null;
-    };
-  }, [apiRef, emit]);
 
   // Toolbar commands run on the live selection; preventDefault keeps focus/selection
   // in the editor. execCommand also fires 'input', but we emit explicitly to be safe.

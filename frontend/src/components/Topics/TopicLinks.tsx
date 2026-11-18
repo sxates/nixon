@@ -2,7 +2,7 @@
 
 /**
  * The topic's link chips (specs/0089 §UI): each linked series or meeting, with an unlink ✕
- * that confirms first; Link a series…, which searches recorded meetings and links each
+ * that shows on hover or focus and confirms first; Link a series…, which searches recorded meetings and links each
  * picked one's whole series (several at once; optionally backfilling 90 days); and the
  * meeting count.
  */
@@ -54,14 +54,15 @@ export function TopicLinks({ topicId, links, meetingCount, onChanged }: TopicLin
       {links.map((l) => (
         <span
           key={`${l.kind}:${l.ref}`}
-          className="inline-flex h-7 items-center gap-0.5 rounded-sm border border-border bg-card pl-2 text-caption font-semibold text-foreground"
+          className="group/chip inline-flex h-7 items-center gap-0.5 rounded-sm border border-border bg-card pl-2 text-caption font-semibold text-foreground"
         >
           {l.label}
           <IconButton
             size="sm"
             label={`Unlink ${l.label}`}
             icon={<DeckIcon icon={X} size={12} />}
-            className="h-6 w-6"
+            // Revealed on chip hover or keyboard focus, like ListRow's hover menu.
+            className="h-6 w-6 opacity-0 transition-opacity group-focus-within/chip:opacity-100 group-hover/chip:opacity-100"
             onClick={() => setUnlinking(l)}
           />
         </span>

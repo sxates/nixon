@@ -6,13 +6,37 @@ import { getCurrent, onOpenUrl } from '@tauri-apps/plugin-deep-link'
 import { toast } from 'sonner'
 import { parseMeetingLink, openMeetingMoment } from '@/lib/meetingLink'
 
-// specs/0087 — opens `nixon://meeting/<id>?t=<s>` links. Links only navigate: the single
-// command called is the read-only resolver, and navigation is a plain router.push exactly
-// like clicking a meeting in the sidebar (a recording in progress carries on).
+// specs/0087 — opens `nixon://meeting/<id>?t=<s>` links, and (specs/0091)
+// `nixon://topic/<id>` links to the Topic page. Links only navigate: the single command
+// called is the read-only meeting resolver, and navigation is a plain router.push exactly
+// like clicking a meeting or Topic in the sidebar (a recording in progress carries on).
 //
 // A cold start delivers the URL through onOpenUrl (getCurrent() can be empty), so both
 // paths are wired and an identical URL seen twice within DEDUPE_MS opens once.
 const DEDUPE_MS = 2000
+
+const SCHEMES = new Set(['nixon:', 'nixon-dev:'])
+
+/**
+ * The Topic id from `nixon://topic/<id>` (or `nixon-dev://`), as the MCP server's
+ * `agent_access::links::topic_link` formats it; null for anything else.
+ */
+export function parseTopicLink(url: string): string | null {
+  let parsed: URL
+  try {
+    parsed = new URL(url)
+  } catch {
+    return null
+  }
+  if (!SCHEMES.has(parsed.protocol) || parsed.hostname !== 'topic') return null
+  const segments = parsed.pathname.split('/').slice(1)
+  if (segments.length !== 1 || segments[0] === '') return null
+  try {
+    return decodeURIComponent(segments[0]) || null
+  } catch {
+    return null
+  }
+}
 
 export function DeepLinkListener() {
   const router = useRouter()
@@ -30,6 +54,11 @@ export function DeepLinkListener() {
       if (last !== undefined && now - last < DEDUPE_MS) return
       seen.current.set(url, now)
 
+      const topicId = parseTopicLink(url)
+      if (topicId) {
+        routerRef.current.push(`/topics/topic?id=${encodeURIComponent(topicId)}`)
+        return
+      }
       const link = parseMeetingLink(url)
       if (!link) {
         toast.error("Nixon couldn't open that link.")

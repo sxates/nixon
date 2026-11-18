@@ -43,6 +43,9 @@ const TOOL_LABELS: Record<string, string> = {
   search_meetings: 'Searched',
   list_meetings: 'Listed Meetings',
   get_meeting: 'Read a Meeting',
+  list_todos: 'Listed To-Dos',
+  list_topics: 'Listed Topics',
+  get_topic: 'Read a Topic',
 };
 
 const REFUSALS: Record<string, string> = {
@@ -63,6 +66,11 @@ function describeArgs(args: AccessEntry['args']): string {
   if (title) parts.push(`title “${title}”`);
   const person = str(args.person);
   if (person) parts.push(person);
+  // specs/0091: list_todos `topic`, get_topic `name` / `id`.
+  const topic = str(args.topic) ?? str(args.name) ?? str(args.id);
+  if (topic) parts.push(`Topic “${topic}”`);
+  if (args.include_done === true) parts.push('with done');
+  if (args.include_archived === true) parts.push('with archived');
   const from = str(args.from_date);
   const to = str(args.to_date);
   if (from && to) parts.push(`${from} → ${to}`);
@@ -164,7 +172,7 @@ export function AgentAccessSection() {
       <SettingsGroup>
         <SettingsRow
           label="Let Claude read your Meetings"
-          description="Claude Code and the Claude desktop app can search and read all of your Meetings — transcripts, summaries, notes and action items. It can't change anything. Whatever Claude reads becomes part of your Claude conversation and is sent to Anthropic, like anything else you show Claude."
+          description="Claude Code and the Claude desktop app can search and read all of your Meetings — transcripts, summaries, notes and action items — and your To-Dos and Topics. It can't change anything. Whatever Claude reads becomes part of your Claude conversation and is sent to Anthropic, like anything else you show Claude."
           control={
             <Switch
               checked={enabled}

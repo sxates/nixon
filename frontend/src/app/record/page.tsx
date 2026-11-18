@@ -18,6 +18,12 @@ import { TranscriptRecovery } from '@/components/TranscriptRecovery';
 import { useSummaryPrompts } from '@/hooks/meeting-details/useSummaryPrompts';
 import { RecordingHeader } from '@/components/Record/RecordingHeader';
 import { RecordRail } from '@/components/Record/RecordRail';
+import { RecordTodoRail } from '@/components/Record/RecordTodoRail';
+import { RecordMeetingControls } from '@/components/Record/RecordMeetingControls';
+import { useRecordView } from '@/hooks/useRecordView';
+import { isMainColumnView } from '@/lib/record-view';
+import { TITLE_PLACEHOLDER } from '@/hooks/useRecordingTitleEdit';
+import { cn } from '@/lib/utils';
 
 export default function Home() {
   // Local page state (not moved to contexts)
@@ -44,6 +50,13 @@ export default function Home() {
   // recorder never runs a stop or a save of its own, and stays here when one finishes.
   useTranscriptionErrorListeners();
 
+  // Transcript · My Notes · Agenda (owner feedback, v0.18), remembered across recordings.
+  // Agenda needs the meeting row (its prep lives on it): until the row exists it shows My
+  // Notes, and the header doesn't offer it; the stored choice is kept for when it does.
+  const [storedView, setView] = useRecordView();
+  const view = storedView === 'agenda' && !activeRecordingMeetingId ? 'notes' : storedView;
+  const focus = isMainColumnView(view);
+
   // Rename-while-recording (specs/0029 WS4.3) — inline click-to-edit title state.
   const titleEdit = useRecordingTitleEdit();
 
@@ -67,6 +80,19 @@ export default function Home() {
 
   // Header chrome state. The elapsed clock lives on the transport rail's tape counter now.
   const isRecordingActive = recordingState.isRecording;
+
+  // The meeting bar — Topics · Participants · summary prompt (owner feedback, v0.18): one
+  // instance, heading whichever left column is on screen (the transcript in Transcript, the
+  // main column in My Notes / Agenda), so there is never a second popover or a second fetch.
+  const liveTitle = meetingTitle === TITLE_PLACEHOLDER ? null : meetingTitle;
+  const meetingControls = (
+    <RecordMeetingControls
+      meetingId={activeRecordingMeetingId ?? null}
+      meetingTitle={liveTitle}
+      isRecordingActive={isRecordingActive}
+      promptsApi={promptsApi}
+    />
+  );
 
   return (
     <div className="flex flex-col h-page bg-background">
@@ -94,20 +120,42 @@ export default function Home() {
         isRecordingActive={isRecordingActive}
         activeRecordingMeetingId={activeRecordingMeetingId}
         titleEdit={titleEdit}
-        promptsApi={promptsApi}
+        view={view}
+        onViewChange={setView}
       />
 
       <div className="relative flex flex-1 overflow-hidden">
-        {/* Split layout: live transcript (left) + Notes / Prep rail (right, ~40% / max 440px;
-            specs/0056 W4). */}
+        {/* Transcript view: live transcript (left, the meeting bar on top and the transcription
+            bar at the bottom) + Notes / Agenda / To-Dos rail (right, ~40% / max 440px; specs/0056
+            W4). My Notes / Agenda views: that panel as the full-width main column under the
+            meeting bar, a To-Dos sidebar on the right, and the
+            transcript kept mounted but hidden: laid out behind the panes (`invisible`, so it is
+            neither painted nor focusable nor read out) so its virtualized rows stay measured
+            and its follow-the-tail scroll keeps up, ready the moment the view switches back.
+            Neither column changes parent between views, so nothing in them remounts. */}
         <div className="flex flex-1 min-w-0 overflow-hidden">
-          <div className="min-w-0 flex flex-1 flex-col overflow-hidden">
+          <div
+            data-testid="record-transcript-pane"
+            aria-hidden={focus || undefined}
+            className={cn(
+              'min-w-0 flex flex-col overflow-hidden',
+              focus ? 'invisible absolute inset-0' : 'flex-1',
+            )}
+          >
             <TranscriptPanel
               isProcessingStop={isProcessingStop}
               isStopping={isStopping}
+              topBar={focus ? undefined : meetingControls}
             />
           </div>
-          <RecordRail meetingId={activeRecordingMeetingId ?? null} />
+          <RecordRail
+            meetingId={activeRecordingMeetingId ?? null}
+            view={view}
+            topBar={focus ? meetingControls : undefined}
+          />
+          {focus && (
+            <RecordTodoRail meetingId={activeRecordingMeetingId ?? null} />
+          )}
         </div>
 
         {/* Status Overlays - Processing and Saving */}

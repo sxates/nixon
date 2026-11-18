@@ -21,6 +21,26 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 _(nothing yet)_
 
+## [0.18.2] - 2026-11-18
+
+### Added
+
+- **A better way to record a Meeting.** The recording screen now has three views. **Transcript** follows the conversation live. **My Notes** and **Agenda** put the transcript away and give your notes or your agenda the whole window. Switch between them as the Meeting goes; your notes stay exactly as you left them.
+- **Your To-Dos, right beside the Meeting.** While you record, your To-Do list sits next to your notes and agenda, with its own tab in Transcript. It shows the To-Dos for this Meeting's Topic, or your To-Dos with no Topic, and you can add new ones as they come up.
+- Add a Meeting to a Topic while it's still recording.
+- Find People and To-Dos from ⌘K search.
+- Claude Code and Claude desktop chats can now read your To-Dos and Topics, alongside your Meetings, when agent access is on.
+
+### Changed
+
+- When you add points to a Topic's timeline, Enter starts the next point and ⌘Enter saves.
+- On a Topic page, the linked Series now sit just above the timeline, and their remove button appears when you point at one.
+- Starred Topics and People show a gold star.
+- On the recording screen, Transcript, My Notes and Agenda sit under the title. A bar across the top holds the Meeting's Topics, Add Topic, Participants and the summary prompt. In Transcript, a bar along the bottom shows whether the transcript is live, takes you back to the latest line, and pauses the transcript.
+- The default summary prompt is called "Auto" everywhere.
+- Back arrows line up with page titles more consistently.
+- A To-Do added while recording no longer adds a line to your notes. It shows in your To-Do list instead, linked to the Meeting.
+
 ## [0.18.1] - 2026-11-16
 
 ### Added

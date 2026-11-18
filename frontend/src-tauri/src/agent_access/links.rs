@@ -17,6 +17,12 @@ pub fn meeting_link(scheme: &str, meeting_id: &str) -> String {
     )
 }
 
+/// `<scheme>://topic/<id>`, opened by the app's DeepLinkListener as the Topic page
+/// (specs/0091).
+pub fn topic_link(scheme: &str, topic_id: &str) -> String {
+    format!("{scheme}://topic/{}", utf8_percent_encode(topic_id, ID_SET))
+}
+
 /// Link to a moment in the meeting; `None` (no audio time) falls back to the meeting link.
 /// Seconds are floored to tenths, so the link never lands after the segment starts.
 pub fn moment_link(scheme: &str, meeting_id: &str, audio_start_time: Option<f64>) -> String {
@@ -79,6 +85,15 @@ mod tests {
         assert_eq!(
             meeting_link("nixon", "meeting-1_x"),
             "nixon://meeting/meeting-1_x"
+        );
+    }
+
+    #[test]
+    fn topic_link_encodes_id() {
+        assert_eq!(topic_link("nixon", "topic-1"), "nixon://topic/topic-1");
+        assert_eq!(
+            topic_link("nixon-dev", "a b/c"),
+            "nixon-dev://topic/a%20b%2Fc"
         );
     }
 

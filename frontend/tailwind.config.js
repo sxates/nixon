@@ -114,6 +114,8 @@ module.exports = {
   			'lamp-amber': 'hsl(var(--lamp-amber))',
   			'lamp-red': 'hsl(var(--lamp-red))',
   			'lamp-ink': 'hsl(var(--lamp-ink))',
+  			// Starred / pinned glyphs (gold), per theme.
+  			star: 'hsl(var(--star))',
   			paper: {
   				DEFAULT: 'hsl(var(--paper))',
   				ink: 'hsl(var(--paper-ink))'

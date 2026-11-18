@@ -41,46 +41,15 @@ vi.mock('@/components/Sidebar/SidebarProvider', () => ({
   useSidebar: () => ({ currentMeeting: null, activeRecordingMeetingId: 'm1', isCollapsed: false }),
 }));
 
-import { RecordingHeader } from '@/components/Record/RecordingHeader';
 import { TransportStatus } from '@/components/Transport/TransportStatus';
+import { TranscriptModeButton } from '@/components/Record/TranscriptModeButton';
 import { VirtualizedTranscriptView } from '@/components/VirtualizedTranscriptView';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import type { TranscriptSegmentData } from '@/types';
 
-const titleEdit = {
-  isEditingTitle: false,
-  titleDraft: '',
-  setTitleDraft: vi.fn(),
-  titleInputRef: { current: null },
-  startEditingTitle: vi.fn(),
-  commitTitleEdit: vi.fn(),
-  cancelTitleEdit: vi.fn(),
-} as unknown as React.ComponentProps<typeof RecordingHeader>['titleEdit'];
-
-const promptsApi = {
-  prompts: [],
-  state: null,
-  selectPrompt: vi.fn(),
-  saveOneOff: vi.fn(),
-  clearOneOff: vi.fn(),
-  saveFollowup: vi.fn(),
-} as unknown as React.ComponentProps<typeof RecordingHeader>['promptsApi'];
-
 const SEGMENTS: TranscriptSegmentData[] = [
   { id: 's1', timestamp: 0, text: 'first line', speaker: 'spk_0', speakerName: 'You' },
 ];
-
-function renderHeader() {
-  return render(
-    <RecordingHeader
-      meetingTitle="Q3 planning"
-      isRecordingActive
-      activeRecordingMeetingId="m1"
-      titleEdit={titleEdit}
-      promptsApi={promptsApi}
-    />,
-  );
-}
 
 function renderTranscript(liveTranscription?: boolean) {
   return render(
@@ -100,10 +69,14 @@ beforeEach(() => {
   micMuted.value = false;
 });
 
+// The chip left the header for the transcript's status strip in v0.18 (owner feedback);
+// the rule is the button's, wherever it sits.
+const renderChip = () => render(<TranscriptModeButton meetingId="m1" />);
+
 describe('W1 — the chip is labelled with the action', () => {
   it('offers to pause while the transcript is running', () => {
     mode.liveTranscription = true;
-    renderHeader();
+    renderChip();
     const chip = screen.getByRole('button', { name: 'Pause transcript' });
     expect(chip).toBeInTheDocument();
     // The old labels were the session's own state; a button may not be named that.
@@ -113,7 +86,7 @@ describe('W1 — the chip is labelled with the action', () => {
 
   it('offers to resume while the transcript is paused', () => {
     mode.liveTranscription = false;
-    renderHeader();
+    renderChip();
     expect(screen.getByRole('button', { name: 'Resume transcript' })).toBeInTheDocument();
   });
 
@@ -121,7 +94,7 @@ describe('W1 — the chip is labelled with the action', () => {
   // and then the switch, which is the same trap in longer form.
   it('reads the same to a screen reader as to an eye', () => {
     mode.liveTranscription = true;
-    renderHeader();
+    renderChip();
     const chip = screen.getByRole('button', { name: 'Pause transcript' });
     expect(chip.getAttribute('aria-label')).toBe('Pause transcript');
     expect(chip.textContent).toContain('Pause transcript');

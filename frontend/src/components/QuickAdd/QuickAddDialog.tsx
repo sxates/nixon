@@ -4,7 +4,8 @@
  * ⌘⇧T quick add (specs/0088): a small dialog over whatever page you are on. Type the to-do
  * (@mentions and a trailing "(Friday)" work as in the To-do page's quick-add), Enter adds
  * it to your list and closes. While a recording runs, "Add to ‹meeting›" (on by default)
- * links the to-do to that meeting and appends a "☐ To-do: …" line to its My Notes.
+ * links the to-do to that meeting. It no longer writes a "☐ To-do: …" line into My Notes:
+ * the record screen's To-Dos list shows the item (owner feedback, v0.18).
  */
 
 import { useEffect, useState } from 'react';
@@ -26,9 +27,7 @@ import { TopicPicker } from '@/components/ActionItems/TopicPicker';
 import { useTopics } from '@/hooks/useTopics';
 import { setActionItemTopic } from '@/lib/topics';
 import { keptOffTopic, toastKeptOff } from '@/components/ActionItems/keptOffToast';
-import { friendlyDue } from '@/lib/due-label';
-import { appendLineToMeetingNotes, todoNoteLine } from '@/lib/notes-append';
-import { deserializeMentions, parseTodoText } from '@/lib/todo-parse';
+import { parseTodoText } from '@/lib/todo-parse';
 
 export interface LiveMeeting {
   id: string;
@@ -89,22 +88,10 @@ export function QuickAddDialog({ open, onOpenChange, liveMeeting }: QuickAddDial
     }
     setBusy(false);
     onOpenChange(false);
-    if (tagFailed) toast.error('Added, but not to the Topic', { description: tagFailed });
-
-    if (meeting) {
-      const plain = deserializeMentions(description).text;
-      const due = title && dueDate ? friendlyDue(dueDate, new Date()).label : null;
-      try {
-        await appendLineToMeetingNotes(meeting.id, todoNoteLine(plain, due));
-      } catch (err) {
-        console.error('Failed to add the to-do line to the meeting notes:', err);
-        toast.error('To-Do added, but not to the Meeting notes', {
-          description: err instanceof Error ? err.message : String(err),
-        });
-        return;
-      }
+    if (tagFailed) {
+      toast.error('Added, but not to the Topic', { description: tagFailed });
+      return;
     }
-    if (tagFailed) return;
     const keptOff = keptOffTopic(openTopics, topic?.id);
     if (keptOff) {
       toastKeptOff('added', keptOff, (id) => router.push(`/topics/topic?id=${encodeURIComponent(id)}`), 'your To-Do list');
@@ -142,7 +129,7 @@ export function QuickAddDialog({ open, onOpenChange, liveMeeting }: QuickAddDial
           <Checkbox
             checked={linkMeeting}
             onCheckedChange={(v) => setLinkMeeting(v === true)}
-            label={`Add to “${liveMeeting.title}” and its notes`}
+            label={`Add to “${liveMeeting.title}”`}
           />
         )}
         <DialogFooter>

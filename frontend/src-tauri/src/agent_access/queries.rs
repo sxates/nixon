@@ -1,5 +1,6 @@
 //! specs/0087 — the three read-only queries behind the `nixon --mcp` tools
-//! (`search_meetings`, `list_meetings`, `get_meeting`).
+//! (`search_meetings`, `list_meetings`, `get_meeting`). The To-Do and Topic tools
+//! (specs/0091) live in `queries_topics.rs`.
 //!
 //! The output text is what an outside agent reads, so it is compact, line-oriented and
 //! stable: every meeting carries its `<scheme>://meeting/<id>` link and every transcript
@@ -375,6 +376,7 @@ pub async fn get_meeting(pool: &SqlitePool, scheme: &str, args: GetArgs) -> Resu
     if cursor == 0 {
         if wants("summary") {
             body.push_str(&section("Summary", summary_text(pool, id).await?));
+            body.push_str(&super::queries_topics::meeting_topics_line(pool, scheme, id).await?);
         }
         if wants("notes") {
             let (notes, enhanced) = notes_text(pool, id).await?;
@@ -469,7 +471,7 @@ async fn action_items_text(pool: &SqlitePool, id: &str) -> Result<Option<String>
     Ok(Some(lines))
 }
 
-fn action_item_line(item: &ActionItem, names: &[(String, String)]) -> String {
+pub(crate) fn action_item_line(item: &ActionItem, names: &[(String, String)]) -> String {
     let owner = if item.assignee_is_self {
         Some("You".to_string())
     } else {

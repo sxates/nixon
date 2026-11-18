@@ -76,8 +76,9 @@ export function MeetingTitleField({
             onCancel();
           }
         }}
-        // -ml-2 + px-2 keeps the text where the display button draws it.
-        className="u-page-title -ml-2 h-auto bg-muted px-2 py-0.5 text-title shadow-none md:text-title"
+        // -ml-2 + px-2 keeps the text where the display button draws it; -my-0.5 + py-0.5
+        // keeps the line box a plain title's, so PageHeader's back key centres on it.
+        className="u-page-title -my-0.5 -ml-2 h-auto bg-muted px-2 py-0.5 text-title shadow-none md:text-title"
       />
     );
   }
@@ -93,7 +94,10 @@ export function MeetingTitleField({
       onClick={onStartEditing}
       title="Click to rename"
       className={cn(
-        'group -ml-2 h-auto max-w-full justify-start px-2 py-0.5 text-left font-display text-title font-semibold',
+        // -my-0.5 cancels py-0.5: the hover box grows outward, the line box stays a plain
+        // title's, so PageHeader's back key (centred on a 24px first line) lines up with it
+        // on every page — it sat 2px high beside an editable title (owner feedback, v0.18).
+        'group -my-0.5 -ml-2 h-auto max-w-full justify-start px-2 py-0.5 text-left font-display text-title font-semibold',
         tone,
       )}
     >

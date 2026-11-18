@@ -262,3 +262,211 @@ pub async fn setup() -> (
     fixture(db.pool()).await;
     (dir, db)
 }
+
+// ---------------------------------------------------------------------------
+// specs/0091 — Topics and To-Dos
+// ---------------------------------------------------------------------------
+
+pub async fn topic(
+    pool: &SqlitePool,
+    id: &str,
+    name: &str,
+    status: &str,
+    sort: i64,
+    starred: bool,
+    hide_from_todo: bool,
+) {
+    sqlx::query(
+        "INSERT INTO topics (id, name, description, status, created_at, updated_at, sort_order,
+                             starred, hide_from_todo)
+         VALUES (?, ?, '', ?, ?, ?, ?, ?, ?)",
+    )
+    .bind(id)
+    .bind(name)
+    .bind(status)
+    .bind(NOW)
+    .bind(NOW)
+    .bind(sort)
+    .bind(starred)
+    .bind(hide_from_todo)
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+pub async fn topic_link(pool: &SqlitePool, topic_id: &str, kind: &str, ref_: &str) {
+    sqlx::query(
+        "INSERT INTO topic_links (topic_id, kind, ref, title, created_at) VALUES (?, ?, ?, ?, ?)",
+    )
+    .bind(topic_id)
+    .bind(kind)
+    .bind(ref_)
+    .bind(ref_)
+    .bind(NOW)
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+pub async fn topic_entry(
+    pool: &SqlitePool,
+    id: &str,
+    topic_id: &str,
+    meeting_id: Option<&str>,
+    occurred_at: &str,
+    body: serde_json::Value,
+) {
+    sqlx::query(
+        "INSERT INTO topic_entries (id, topic_id, meeting_id, kind, occurred_at, body_json,
+                                    created_at)
+         VALUES (?, ?, ?, 'meeting', ?, ?, ?)",
+    )
+    .bind(id)
+    .bind(topic_id)
+    .bind(meeting_id)
+    .bind(occurred_at)
+    .bind(body.to_string())
+    .bind(NOW)
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+/// A To-Do: an action item with the given triage/status, Topic, order and highlight.
+#[allow(clippy::too_many_arguments)]
+pub async fn todo(
+    pool: &SqlitePool,
+    id: &str,
+    meeting_id: Option<&str>,
+    desc: &str,
+    triage: &str,
+    status: &str,
+    topic_id: Option<&str>,
+    sort: Option<i64>,
+    highlight: Option<&str>,
+) {
+    sqlx::query(
+        "INSERT INTO action_items (id, meeting_id, description, assignee_is_self, status,
+                                   source, content_key, created_at, updated_at, completed_at,
+                                   triage, topic_id, sort_order, highlight)
+         VALUES (?, ?, ?, 1, ?, 'manual', ?, ?, ?, ?, ?, ?, ?, ?)",
+    )
+    .bind(id)
+    .bind(meeting_id)
+    .bind(desc)
+    .bind(status)
+    .bind(id)
+    .bind(NOW)
+    .bind(NOW)
+    .bind((status == "completed").then_some(NOW))
+    .bind(triage)
+    .bind(topic_id)
+    .bind(sort)
+    .bind(highlight)
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+/// Four Topics in manual order: "Project Alpha" (starred, linked to m-pricing and a series,
+/// two timeline entries, notes), "Alpine trip", "Hidden work" (kept off the To-Do list) and
+/// "Old project" (archived). To-Dos: two on the List (one on Alpha, one with no Topic, the
+/// second ordered first), one on Hidden work, one completed on Alpha and one Inbox
+/// suggestion that is never on the List.
+pub async fn topics_fixture(pool: &SqlitePool) {
+    topic(pool, "tp-alpha", "Project Alpha", "open", 0, true, false).await;
+    topic(pool, "tp-alps", "Alpine trip", "open", 1, false, false).await;
+    topic(pool, "tp-hidden", "Hidden work", "open", 2, false, true).await;
+    topic(pool, "tp-old", "Old project", "closed", 3, false, false).await;
+    sqlx::query(
+        "UPDATE topics SET description = 'Ship the alpha build\nSecond line',
+                notes_markdown = 'Remember the launch checklist' WHERE id = 'tp-alpha'",
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    topic_link(pool, "tp-alpha", "meeting", "m-pricing").await;
+    topic_link(pool, "tp-alpha", "series", "series-weekly").await;
+    topic_entry(
+        pool,
+        "te-1",
+        "tp-alpha",
+        Some("m-pricing"),
+        "2026-11-03T12:00:00Z",
+        serde_json::json!({
+            "bullets": [{"text": "Pro tier priced too low", "t": 800.0}],
+            "decisions": [{"id": "d1", "text": "Raise the pro price", "t": 754.29}]
+        }),
+    )
+    .await;
+    topic_entry(
+        pool,
+        "te-2",
+        "tp-alpha",
+        None,
+        "2026-11-06T12:00:00Z",
+        serde_json::json!({"bullets": [{"text": "Hand-written follow-up"}]}),
+    )
+    .await;
+
+    todo(
+        pool,
+        "td-alpha",
+        Some("m-standup"),
+        "Email @[Dana Ruiz](person:person-dana) the plan",
+        "listed",
+        "open",
+        Some("tp-alpha"),
+        Some(1),
+        Some("yellow"),
+    )
+    .await;
+    todo(
+        pool,
+        "td-loose",
+        None,
+        "Book the venue",
+        "listed",
+        "open",
+        None,
+        Some(0),
+        None,
+    )
+    .await;
+    todo(
+        pool,
+        "td-hidden",
+        None,
+        "Private chore",
+        "listed",
+        "open",
+        Some("tp-hidden"),
+        Some(2),
+        None,
+    )
+    .await;
+    todo(
+        pool,
+        "td-done",
+        None,
+        "Finished alpha task",
+        "listed",
+        "completed",
+        Some("tp-alpha"),
+        Some(3),
+        None,
+    )
+    .await;
+    todo(
+        pool,
+        "td-inbox",
+        None,
+        "Suggested thing",
+        "suggested",
+        "open",
+        Some("tp-alpha"),
+        None,
+        None,
+    )
+    .await;
+}

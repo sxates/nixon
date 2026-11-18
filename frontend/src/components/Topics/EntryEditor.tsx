@@ -5,9 +5,12 @@
  * rows. Each row keeps its `t` (and a decision its `id`), so time links and attached
  * revisions survive an edit; a new decision goes up with an empty id and the backend
  * mints one. Without `entry` it writes a new manual entry.
+ *
+ * Keys: Enter in a row adds an empty row right after it and focuses it; Backspace in an
+ * empty row removes it and focuses the one above; ⌘Enter (Ctrl+Enter) saves, as Save does.
  */
 
-import { useState } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { DeckIcon } from '@/components/ui/deck-icon';
@@ -66,12 +69,22 @@ export function EntryEditor({ topicId, entry, onDone }: EntryEditorProps) {
     }
   };
 
+  const submit = () => {
+    if (!empty && !saving) void save();
+  };
+
   return (
     <form
       className="flex flex-col gap-3"
       onSubmit={(e) => {
         e.preventDefault();
-        if (!empty && !saving) void save();
+        submit();
+      }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+          e.preventDefault();
+          submit();
+        }
       }}
     >
       <RowList label="Points" noun="point" rows={bullets} onChange={setBullets} addLabel="Add point" />
@@ -89,6 +102,7 @@ export function EntryEditor({ topicId, entry, onDone }: EntryEditorProps) {
         <Button type="button" size="sm" variant="outline" disabled={saving} onClick={onDone}>
           Cancel
         </Button>
+        <p className="ml-auto text-caption text-muted-foreground">↵ new row · ⌘↵ save</p>
       </div>
     </form>
   );
@@ -107,15 +121,52 @@ function RowList({
   onChange: (rows: Row[]) => void;
   addLabel: string;
 }) {
+  const inputs = useRef(new Map<number, HTMLInputElement>());
+  // The row to focus once it has rendered (a row just added, or the one above a removed row).
+  const [focusKey, setFocusKey] = useState<number | null>(null);
+  useEffect(() => {
+    if (focusKey === null) return;
+    const el = inputs.current.get(focusKey);
+    if (el) {
+      el.focus();
+      el.setSelectionRange(el.value.length, el.value.length);
+    }
+    setFocusKey(null);
+  }, [focusKey, rows]);
+
+  const insertAfter = (i: number) => {
+    const fresh = row('');
+    onChange([...rows.slice(0, i + 1), fresh, ...rows.slice(i + 1)]);
+    setFocusKey(fresh.key);
+  };
+
+  const onRowKeyDown = (e: KeyboardEvent<HTMLInputElement>, r: Row, i: number) => {
+    // ⌘Enter / Ctrl+Enter bubble to the form, which saves; IME composition keeps its Enter.
+    if (e.metaKey || e.ctrlKey || e.altKey || e.nativeEvent.isComposing) return;
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      insertAfter(i);
+    } else if (e.key === 'Backspace' && r.text === '' && i > 0) {
+      e.preventDefault();
+      onChange(rows.filter((x) => x.key !== r.key));
+      setFocusKey(rows[i - 1].key);
+    }
+  };
+
   return (
     <fieldset className="flex flex-col gap-1.5">
       <legend className="u-section-label pb-1">{label}</legend>
       {rows.map((r, i) => (
         <div key={r.key} className="flex items-center gap-1">
           <Input
+            ref={(el) => {
+              if (el) inputs.current.set(r.key, el);
+              else inputs.current.delete(r.key);
+            }}
             value={r.text}
             aria-label={`${noun[0].toUpperCase()}${noun.slice(1)} ${i + 1}`}
             onChange={(e) => onChange(rows.map((x) => (x.key === r.key ? { ...x, text: e.target.value } : x)))}
+            onKeyDown={(e) => onRowKeyDown(e, r, i)}
           />
           <IconButton
             type="button"
@@ -127,7 +178,16 @@ function RowList({
         </div>
       ))}
       <div>
-        <Button type="button" size="xs" variant="dashed" onClick={() => onChange([...rows, row('')])}>
+        <Button
+          type="button"
+          size="xs"
+          variant="dashed"
+          onClick={() => {
+            const fresh = row('');
+            onChange([...rows, fresh]);
+            setFocusKey(fresh.key);
+          }}
+        >
           {addLabel}
         </Button>
       </div>

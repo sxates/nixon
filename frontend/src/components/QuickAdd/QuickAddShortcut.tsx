@@ -5,7 +5,7 @@
  *   ⌘T   open the To-do tab (on it already: focus its new-item field). Elsewhere it
  *        navigates with `?add=1`, which the page turns into the same focus once loaded.
  *   ⌘⇧T  quick-add dialog over the current page; while recording, it can link the to-do
- *        to the live meeting and note it in that meeting's My Notes.
+ *        to the live meeting.
  */
 
 import { useEffect, useState } from 'react';

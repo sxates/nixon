@@ -52,7 +52,7 @@ describe('QuickAddShortcut', () => {
     render(<QuickAddShortcut />);
     fireEvent.keyDown(window, { key: 'T', metaKey: true, shiftKey: true });
     expect(await screen.findByLabelText('Quick add To-Do')).toBeInTheDocument();
-    expect(screen.getByRole('checkbox', { name: /Add to “Weekly sync” and its notes/ })).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: "Add to “Weekly sync”" })).toBeChecked();
     expect(pushMock).not.toHaveBeenCalled();
   });
 

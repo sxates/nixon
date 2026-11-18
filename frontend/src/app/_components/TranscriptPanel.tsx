@@ -13,7 +13,11 @@ import { useProcessingMode } from '@/hooks/useProcessingMode';
 import { useSidebar } from '@/components/Sidebar/SidebarProvider';
 import { useRecordEmptyPhase } from '@/hooks/useRecordEmptyPhase';
 import { effectiveLiveTranscription, transcriptEmptyStateVariant } from '@/lib/processing-mode';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { TranscriptModeButton } from '@/components/Record/TranscriptModeButton';
+import { STRIP_KEY_CLASS } from '@/components/Record/RecordMeetingControls';
+import { RECORD_STRIP_HEIGHT } from '@/lib/record-view';
+import { cn } from '@/lib/utils';
 
 /**
  * TranscriptPanel Component
@@ -26,11 +30,15 @@ interface TranscriptPanelProps {
   // indicates stop-processing state for transcripts; derived from backend statuses.
   isProcessingStop: boolean;
   isStopping: boolean;
+  /** The bar across the top of the transcript (the record page's meeting bar: Topics,
+   *  Participants, summary prompt; owner feedback v0.18). */
+  topBar?: ReactNode;
 }
 
 export function TranscriptPanel({
   isProcessingStop,
   isStopping,
+  topBar,
 }: TranscriptPanelProps) {
   // Contexts
   const { transcripts, transcriptGaps } = useTranscripts();
@@ -44,7 +52,7 @@ export function TranscriptPanel({
   // (record-only mode) the backend never emits transcript updates, so instead of a
   // dead empty transcript we show a quiet explanatory state. Prefer the live value
   // from useProcessingMode()'s `processing-mode-changed` event — it reflects
-  // mid-meeting overrides (e.g. the header chip, or plugging in) — and fall back to
+  // mid-meeting overrides (e.g. the status strip's Pause button, or plugging in) — and fall back to
   // the stored preference until the first event of this session arrives.
   const { liveTranscription: liveTranscriptionEvent, onBattery } = useProcessingMode();
   const [liveTranscriptionPref, setLiveTranscriptionPref] = useState(true);
@@ -67,7 +75,7 @@ export function TranscriptPanel({
 
   // Per-meeting "go live" override from the low-power empty state (low-power-mode
   // spec §5). On error, toast and revert nothing — the real state comes back via the
-  // next `processing-mode-changed` event, same as the header chip.
+  // next `processing-mode-changed` event, same as the status strip's Pause button.
   const [enablingLive, setEnablingLive] = useState(false);
   const handleTranscribeLiveNow = async () => {
     if (!activeRecordingMeetingId || enablingLive) return;
@@ -125,6 +133,30 @@ export function TranscriptPanel({
     return `${seg(skipped)} could not be transcribed (speech model unavailable) and may be missing from this transcript.`;
   }, [transcriptGaps, isRecording]);
 
+  // The transcription bar's status (owner feedback, v0.18: keep it short). The tooltip carries
+  // the full sentence, including the provisional-labels note (specs/0011, P3-B): live labels
+  // are best-effort and reconciled to the offline pass when recording stops.
+  const pausedOnBattery = !liveTranscriptionEnabled && onBattery === true;
+  const statusLine = liveTranscriptionEnabled
+    ? hasLiveSpeakerLabel
+      ? 'Live · labels provisional'
+      : 'Live'
+    : pausedOnBattery
+      ? 'Paused — on battery'
+      : 'Paused';
+  const statusTooltip = liveTranscriptionEnabled
+    ? hasLiveSpeakerLabel
+      ? 'Live transcript. Provisional — speaker labels are finalized when you stop recording.'
+      : 'Live transcript'
+    : pausedOnBattery
+      ? 'Transcript paused — Low Power Mode, on battery. It is transcribed after the Meeting.'
+      : 'Transcript paused — it is transcribed after the Meeting.';
+
+  // "Jump to latest" lives in the bar (owner feedback, v0.18): the transcript view reports the
+  // jump while you're scrolled up from the tail, and null when you're following it.
+  const [jumpToLatest, setJumpToLatest] = useState<(() => void) | null>(null);
+  const onJumpToLatestChange = useCallback((jump: (() => void) | null) => setJumpToLatest(() => jump), []);
+
   // Which record-only empty-state to show, if any (low-power-mode spec §5): null once
   // live transcription is on or a transcript has content.
   const emptyStateVariant = useMemo(
@@ -138,31 +170,8 @@ export function TranscriptPanel({
   // via flex-1/min-h-0), matching the meeting-details layout pattern.
   return (
     <div className="w-full min-h-0 flex-1 border-r border-border bg-paper flex flex-col overflow-hidden">
-      {/* Fixed header — only rendered when there's a status banner to show. The
-          transcription-language picker moved to a single global control in
-          Settings (spec 0038 WS7.d); the old in-recording Language modal is gone. */}
-      {(hasLiveSpeakerLabel || gapMessage) && (
-        <div className="bg-card px-5 py-3 border-border">
-          <div className="flex flex-col space-y-2">
-            {/* Provisional-labels affordance (specs/0011, P3-B): live speaker
-                labels are best-effort and reconciled to the authoritative offline
-                pass when recording stops. Subtle, non-nagging, only while live
-                labels are actually showing. */}
-            {hasLiveSpeakerLabel && (
-              <p className="u-section-label text-brand">
-                Provisional — speaker labels are finalized when you stop recording.
-              </p>
-            )}
-            {/* Persistent backpressure hint (specs/0028 → 0030 WS4): the transcript has
-                gaps — one banner with a running count instead of a toast per event. */}
-            {gapMessage && (
-              <Callout tone="warn" role="status" size="compact">
-                {gapMessage}
-              </Callout>
-            )}
-          </div>
-        </div>
-      )}
+      {/* The meeting bar (Topics · Participants · summary prompt), from the page. */}
+      {topBar}
 
       {/* Permission Warning - Not needed on Linux */}
       {!isRecording && !isChecking && !isLinux && (
@@ -237,7 +246,49 @@ export function TranscriptPanel({
             // than "Listening…" while VAD/STT are detached. Already resolved above with the
             // stored-preference fallback, so it is correct before the first event lands.
             liveTranscription={liveTranscriptionEnabled}
+            onJumpToLatestChange={onJumpToLatestChange}
           />
+        </div>
+      )}
+
+      {/* Persistent backpressure hint: the transcript has gaps — one banner with a running
+          count instead of a toast per event. Just above the transcription bar it is about. */}
+      {gapMessage && (
+        <div className="flex-shrink-0 border-t border-border bg-card px-5 py-2">
+          <Callout tone="warn" role="status" size="compact">
+            {gapMessage}
+          </Callout>
+        </div>
+      )}
+
+      {/* Transcription bar (owner feedback, v0.18), fixed at the bottom of the transcript while
+          recording: status left, Jump to latest in the middle (only while scrolled up from
+          the tail), Pause / Resume transcript right. RECORD_STRIP_HEIGHT like the bars above,
+          its rule on top. */}
+      {isRecording && (
+        <div
+          data-testid="transcript-status-strip"
+          className={cn(
+            'grid flex-shrink-0 grid-cols-3 items-center gap-3 border-t border-border bg-card px-5 py-1.5',
+            RECORD_STRIP_HEIGHT,
+          )}
+        >
+          <p
+            title={statusTooltip}
+            className={cn('u-section-label min-w-0 truncate', hasLiveSpeakerLabel && liveTranscriptionEnabled && 'text-brand')}
+          >
+            {statusLine}
+          </p>
+          <div className="flex justify-center">
+            {jumpToLatest && (
+              <Button type="button" variant="outline" size="xs" className={STRIP_KEY_CLASS} onClick={jumpToLatest}>
+                Jump to latest
+              </Button>
+            )}
+          </div>
+          <div className="flex justify-end">
+            {activeRecordingMeetingId && <TranscriptModeButton meetingId={activeRecordingMeetingId} />}
+          </div>
         </div>
       )}
     </div>

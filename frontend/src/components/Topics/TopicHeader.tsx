@@ -5,8 +5,8 @@
  * click-to-rename name, a star (lists the topic in the sidebar while open; specs/0090), and
  * an overflow menu with Archive / Unarchive topic and Delete topic. (Whether its to-dos show
  * on the To-do list is the "Show in To-Do" switch on its action items card.)
- * `TopicMeta` sits under it and scrolls with the page: the link chips, Link a series…, the
- * meeting count, and the Description.
+ * `TopicMeta` sits under it and scrolls with the page: the Description. `TopicSeriesLinks`
+ * (the link chips, Link a Series…, the Meeting count) sits further down, above the timeline.
  *
  * Archived is the user-facing name of the stored `closed` status.
  */
@@ -102,8 +102,10 @@ export function TopicHeader({ detail, onChanged }: TopicHeaderProps) {
         label={starred ? 'Unstar Topic' : 'Star Topic'}
         aria-pressed={starred}
         onClick={() => void toggleStar()}
-        icon={<DeckIcon icon={Star} size={14} className={starred ? 'fill-current' : undefined} />}
-        className={starred ? 'text-brand hover:text-brand' : undefined}
+        // The gold goes on the glyph, not the button: PageHeader's actions slot recolours
+        // every ghost button (`[&_[data-variant=ghost]]:text-foreground/80`), which beats a
+        // class on the button itself.
+        icon={<DeckIcon icon={Star} size={14} className={starred ? 'fill-current text-star' : undefined} />}
       />
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
@@ -173,14 +175,16 @@ export function TopicHeader({ detail, onChanged }: TopicHeaderProps) {
   );
 }
 
-/** The links row and the Description, under the pinned title row (scrolls with the body). */
+/** The Description, under the pinned title row (scrolls with the body). */
 export function TopicMeta({ detail, onChanged }: TopicHeaderProps) {
+  const { topic } = detail;
+  return <TopicDescription topicId={topic.id} description={topic.description} onChanged={onChanged} />;
+}
+
+/** The linked Series chips, Link a Series…, and the Meeting count: sits directly above the
+ *  timeline those Series feed (v0.18 feedback). */
+export function TopicSeriesLinks({ detail, onChanged }: TopicHeaderProps) {
   const { topic, links, entries } = detail;
   const meetingCount = new Set(entries.map((e) => e.meetingId).filter(Boolean)).size;
-  return (
-    <div className="flex flex-col gap-2">
-      <TopicLinks topicId={topic.id} links={links} meetingCount={meetingCount} onChanged={onChanged} />
-      <TopicDescription topicId={topic.id} description={topic.description} onChanged={onChanged} />
-    </div>
-  );
+  return <TopicLinks topicId={topic.id} links={links} meetingCount={meetingCount} onChanged={onChanged} />;
 }

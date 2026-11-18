@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
 
 const { level, mode } = vi.hoisted(() => ({
   level: { rms: 0, peak: 0, peakLatched: false, mic: { rms: 0, peak: 0 }, sys: { rms: 0, peak: 0 } },
@@ -12,9 +11,6 @@ vi.mock('@/hooks/useRecordingLevel', () => ({ useRecordingLevel: () => level }))
 vi.mock('@/hooks/useProcessingMode', () => ({ useProcessingMode: () => mode }));
 let transition: 'starting' | 'saving' | undefined = undefined;
 vi.mock('@/hooks/useRecordEmptyPhase', () => ({ useRecordEmptyPhase: () => transition }));
-vi.mock('@/components/Participants/ParticipantsPopover', () => ({
-  ParticipantsPopover: () => <button type="button">Participants</button>,
-}));
 vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn() }));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
 
@@ -30,26 +26,13 @@ const titleEdit = {
   cancelTitleEdit: vi.fn(),
 } as unknown as React.ComponentProps<typeof RecordingHeader>['titleEdit'];
 
-const promptsApi = {
-  prompts: [],
-  state: null,
-  selectPrompt: vi.fn(),
-  saveOneOff: vi.fn(),
-  clearOneOff: vi.fn(),
-  saveFollowup: vi.fn(),
-} as unknown as React.ComponentProps<typeof RecordingHeader>['promptsApi'];
-
-function renderHeader(
-  recording: boolean,
-  overrides?: Partial<React.ComponentProps<typeof RecordingHeader>['promptsApi']>,
-) {
+function renderHeader(recording: boolean) {
   return render(
     <RecordingHeader
       meetingTitle="Q3 planning"
       isRecordingActive={recording}
       activeRecordingMeetingId={recording ? 'm1' : null}
       titleEdit={titleEdit}
-      promptsApi={{ ...promptsApi, ...overrides }}
     />,
   );
 }
@@ -104,55 +87,48 @@ describe('RecordingHeader', () => {
     expect(screen.queryByRole('button', { name: /pause|resume|stop/i })).toBeNull();
   });
 
-  // Owner feedback 2026-09-21: "A better order: Participants, then Live, then Prompt" —
-  // and the three used to be h-9 / h-9 / h-7, so the row stepped. Asserted on DOM order
-  // rather than coordinates so it survives a restyle.
-  //
-  // The middle control is found by its ACTION label since specs/0071 W1: it used to be
-  // named "Transcription mode: Live…", i.e. its own state, which is what made the owner
-  // press it expecting to go live.
-  it('per-meeting controls run Participants → transcript toggle → Prompt, same height', () => {
+  // Owner feedback v0.18 (round 4): under the title, only the Transcript · My Notes · Agenda tabs.
+  // Participants and the summary prompt moved into the panes' top strips
+  // (RecordMeetingControls), Pause transcript into the transcript's.
+  it('only the view tabs under the title; meters on the right; no per-meeting keys', () => {
     mode.liveTranscription = true;
-    renderHeader(true, {
-      prompts: [{ id: 'p1', name: 'Standup' }],
-      state: { source: 'meeting', prompt_id: 'p1', prompt_name: 'Standup', has_series: false },
-    } as unknown as React.ComponentProps<typeof RecordingHeader>['promptsApi']);
-
-    const participants = screen.getByRole('button', { name: 'Participants' });
-    const live = screen.getByRole('button', { name: 'Pause transcript' });
-    const template = screen.getByRole('button', { name: /Standup/ });
-
-    // compareDocumentPosition: FOLLOWING (0x04) means the argument comes after the node.
-    expect(participants.compareDocumentPosition(live) & Node.DOCUMENT_POSITION_FOLLOWING)
-      .toBeTruthy();
-    expect(live.compareDocumentPosition(template) & Node.DOCUMENT_POSITION_FOLLOWING)
-      .toBeTruthy();
-
-    expect(live.className).toMatch(/\bh-8\b/);
-    expect(template.className).toMatch(/\bh-8\b/);
-    expect(live.className).not.toMatch(/\bh-9\b/);
+    render(
+      <RecordingHeader
+        meetingTitle="Q3 planning"
+        isRecordingActive
+        activeRecordingMeetingId="m1"
+        titleEdit={titleEdit}
+        view="notes"
+        onViewChange={vi.fn()}
+      />,
+    );
+    const tabs = screen.getByRole('tablist', { name: 'Recording view' });
+    const title = screen.getByRole('heading', { level: 1 });
+    const meter = screen.getAllByRole('img', { name: /VU$/ })[0];
+    const following = (a: Node, b: Node) => !!(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+    expect((title.closest('header') as HTMLElement).contains(tabs)).toBe(false);
+    expect(following(title, tabs) && following(tabs, meter)).toBe(true);
+    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Transcript', 'My Notes', 'Agenda']);
+    expect(screen.getByRole('tab', { name: 'My Notes' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.queryByRole('button', { name: 'Participants' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /summary prompt/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /pause transcript|resume transcript/i })).toBeNull();
   });
 
   // The channel name used to be a `u-section-label` span UNDER each meter, costing the
   // header a text row per channel. It is now engraved inside the well.
-  it('prompt picker selects a saved prompt and offers the one-off dialog', async () => {
-    const selectPrompt = vi.fn();
-    renderHeader(true, {
-      prompts: [
-        { id: 'p1', name: 'Standup' },
-        { id: 'p2', name: 'Retro' },
-      ],
-      state: { source: 'meeting', prompt_id: 'p1', prompt_name: 'Standup', has_series: false },
-      selectPrompt,
-    } as unknown as React.ComponentProps<typeof RecordingHeader>['promptsApi']);
-
-    await userEvent.click(screen.getByRole('button', { name: 'Summary prompt: Standup' }));
-    await userEvent.click(screen.getByRole('menuitem', { name: 'Retro' }));
-    expect(selectPrompt).toHaveBeenCalledWith('p2');
-
-    await userEvent.click(screen.getByRole('button', { name: /summary prompt/i }));
-    await userEvent.click(screen.getByRole('menuitem', { name: /custom for this Meeting/i }));
-    expect(await screen.findByRole('dialog', { name: /custom prompt for this Meeting/i })).toBeInTheDocument();
+  it('leaves Agenda out until the meeting row exists (prep lives on it)', () => {
+    render(
+      <RecordingHeader
+        meetingTitle="Q3 planning"
+        isRecordingActive={false}
+        activeRecordingMeetingId={null}
+        titleEdit={titleEdit}
+        view="transcript"
+        onViewChange={vi.fn()}
+      />,
+    );
+    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Transcript', 'My Notes']);
   });
 
   it('each meter carries its channel label inside its own svg', () => {

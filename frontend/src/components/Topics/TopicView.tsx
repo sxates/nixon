@@ -2,9 +2,9 @@
 
 /**
  * The Topic page body (specs/0089 §UI, the approved layout), top to bottom: the pinned
- * title row, then a scrolling body of the links + Description, My notes and My open action
- * items side by side (the to-dos use `TodoList`'s compact two-line rows to fit the half
- * column), the Suggested notes strip, and the timeline. Data comes from `useTopic`, which
+ * title row, then a scrolling body of the Description, My notes and My open action items
+ * side by side (the to-dos use `TodoList`'s compact two-line rows to fit the half column),
+ * the Suggested notes strip, the linked Series chips, and the timeline they feed. Data comes from `useTopic`, which
  * refetches on `topics-updated`.
  */
 
@@ -18,7 +18,7 @@ import { PAGE_CONTENT_WIDTH, PAGE_GUTTER } from '@/lib/page-width';
 import { cn } from '@/lib/utils';
 import { SuggestionStrip } from './SuggestionStrip';
 import { Timeline } from './Timeline';
-import { TopicHeader, TopicMeta } from './TopicHeader';
+import { TopicHeader, TopicMeta, TopicSeriesLinks } from './TopicHeader';
 import { TopicNotesCard } from './TopicNotesCard';
 import { TopicTodosCard } from './TopicTodosCard';
 
@@ -56,7 +56,7 @@ export function TopicView({ id }: { id: string }) {
   return (
     <div className="flex h-page animate-fade-in flex-col bg-background">
       <TopicHeader detail={data} onChanged={refresh} />
-      {/* pt-1: the scroll box clips overflow, and a chip's focus ring sits outside it. */}
+      {/* pt-1: the scroll box clips overflow, and a focus ring on the first row sits outside it. */}
       <div data-testid="topic-scroll" className={cn('flex-1 overflow-y-auto pb-12 pt-1', PAGE_GUTTER)}>
         <div className={cn('mx-auto flex w-full flex-col gap-3', PAGE_CONTENT_WIDTH)}>
           <TopicMeta detail={data} onChanged={refresh} />
@@ -70,6 +70,7 @@ export function TopicView({ id }: { id: string }) {
             />
           </div>
           <SuggestionStrip suggestions={data.suggestions} onChanged={refresh} />
+          <TopicSeriesLinks detail={data} onChanged={refresh} />
           <Timeline topicId={data.topic.id} entries={data.entries} onChanged={refresh} />
         </div>
       </div>
