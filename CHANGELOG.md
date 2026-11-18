@@ -19,6 +19,10 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 ## [Unreleased]
 
+_(nothing yet)_
+
+## [0.18.2] - 2026-11-18
+
 ### Added
 
 - **A better way to record a Meeting.** The recording screen now has three views. **Transcript** follows the conversation live. **My Notes** and **Agenda** put the transcript away and give your notes or your agenda the whole window. Switch between them as the Meeting goes; your notes stay exactly as you left them.
