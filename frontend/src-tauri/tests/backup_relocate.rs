@@ -106,3 +106,30 @@ fn gives_up_after_1000_collisions() {
     assert!(matches!(err, BackupError::Io(_)), "{err:?}");
     assert!(staging.join("A/a.txt").exists());
 }
+
+#[test]
+fn keeps_existing_folder_of_the_same_meeting() {
+    let tmp = tempfile::tempdir().unwrap();
+    let staging = tmp.path().join("staging");
+    let root = tmp.path().join("root");
+    fs::create_dir_all(root.join("A")).unwrap();
+    fs::write(root.join("A/metadata.json"), r#"{"meeting_id":"m1"}"#).unwrap();
+    fs::write(root.join("A/audio.opus"), "audio").unwrap();
+    stage(&staging, "A", "metadata.json", r#"{"meeting_id":"m1"}"#);
+    stage(&staging, "B", "metadata.json", r#"{"meeting_id":"other"}"#);
+    fs::create_dir_all(root.join("B")).unwrap();
+    fs::write(root.join("B/metadata.json"), r#"{"meeting_id":"mX"}"#).unwrap();
+
+    let placed = place_folders(&staging, &root, &[rref("m1", "A"), rref("m2", "B")]).unwrap();
+
+    assert_eq!(placed[0].path, root.join("A"));
+    assert!(root.join("A/audio.opus").exists(), "original audio is untouched");
+    assert!(!root.join("A (2)").exists());
+    assert!(!staging.join("A").exists(), "staged copy discarded");
+    // A different meeting's folder with the same name still gets a suffix.
+    assert_eq!(placed[1].path, root.join("B (2)"));
+    // Undo only moves back what was really moved.
+    undo(&placed, &staging).unwrap();
+    assert!(root.join("A/audio.opus").exists());
+    assert!(staging.join("B").exists());
+}

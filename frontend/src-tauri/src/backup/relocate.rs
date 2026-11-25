@@ -15,6 +15,8 @@ pub struct Placed {
     pub meeting_id: String,
     pub path: PathBuf,
     pub original: String,
+    /// The folder already on disk was kept (same meeting); nothing was moved, so undo skips it.
+    pub kept: bool,
 }
 
 fn is_plain_name(name: &str) -> bool {
@@ -42,6 +44,17 @@ fn free_target(root: &Path, name: &str) -> Result<PathBuf, BackupError> {
     )))
 }
 
+/// Whether `dir/metadata.json` names `meeting_id` (the same meeting's own folder).
+fn is_folder_of(dir: &Path, meeting_id: &str) -> bool {
+    let Ok(text) = fs::read_to_string(dir.join("metadata.json")) else {
+        return false;
+    };
+    serde_json::from_str::<serde_json::Value>(&text)
+        .ok()
+        .and_then(|v| v.get("meeting_id").and_then(|m| m.as_str()).map(|m| m == meeting_id))
+        .unwrap_or(false)
+}
+
 fn place_one(staging: &Path, root: &Path, r: &RecordingRef) -> Result<Option<Placed>, BackupError> {
     if !is_plain_name(&r.folder) {
         return Err(BackupError::Io(format!(
@@ -53,12 +66,24 @@ fn place_one(staging: &Path, root: &Path, r: &RecordingRef) -> Result<Option<Pla
     if !from.is_dir() {
         return Ok(None);
     }
+    let existing = root.join(&r.folder);
+    if existing.is_dir() && is_folder_of(&existing, &r.meeting_id) {
+        // Same meeting, same Mac: keep the folder (and any audio) that is already here.
+        fs::remove_dir_all(&from)?;
+        return Ok(Some(Placed {
+            meeting_id: r.meeting_id.clone(),
+            path: existing,
+            original: r.folder.clone(),
+            kept: true,
+        }));
+    }
     let to = free_target(root, &r.folder)?;
     fs::rename(&from, &to)?;
     Ok(Some(Placed {
         meeting_id: r.meeting_id.clone(),
         path: to,
         original: r.folder.clone(),
+        kept: false,
     }))
 }
 
@@ -93,7 +118,7 @@ pub fn undo(placed: &[Placed], staging: &Path) -> Result<(), BackupError> {
     if let Err(e) = fs::create_dir_all(staging) {
         first_err = Some(BackupError::from(e));
     }
-    for p in placed {
+    for p in placed.iter().filter(|p| !p.kept) {
         if let Err(e) = fs::rename(&p.path, staging.join(&p.original)) {
             first_err.get_or_insert(BackupError::from(e));
         }

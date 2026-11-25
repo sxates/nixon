@@ -38,6 +38,8 @@ struct PlacedRec {
     meeting_id: String,
     path: String,
     original: String,
+    #[serde(default)]
+    kept: bool,
 }
 
 impl From<&Placed> for PlacedRec {
@@ -46,6 +48,7 @@ impl From<&Placed> for PlacedRec {
             meeting_id: p.meeting_id.clone(),
             path: p.path.to_string_lossy().into_owned(),
             original: p.original.clone(),
+            kept: p.kept,
         }
     }
 }
@@ -56,6 +59,7 @@ impl From<&PlacedRec> for Placed {
             meeting_id: p.meeting_id.clone(),
             path: PathBuf::from(&p.path),
             original: p.original.clone(),
+            kept: p.kept,
         }
     }
 }
