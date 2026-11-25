@@ -161,8 +161,21 @@ pub async fn run_once(
         Err(BackupError::Cancelled) => {}
         Err(e) => s.last_error = Some(e.to_string()),
     }
-    // A failed save must not hide a backup that was written (it would be retried hourly).
-    if let Err(e) = settings::save(app_data_dir, &s) {
+    // Patch only this run's own fields into whatever backup.json holds now: the user may have
+    // changed the settings while the export ran. A result for a folder (or audio choice) that
+    // is no longer current is dropped. A failed save must not hide a backup that was written
+    // (it would be retried hourly).
+    let patched = settings::update(app_data_dir, |cur| {
+        if cur.folder.as_ref() != Some(&folder) || cur.include_audio != s.include_audio {
+            return;
+        }
+        cur.last_attempt_at = s.last_attempt_at.clone();
+        cur.last_success_at = s.last_success_at.clone();
+        cur.last_fingerprint = s.last_fingerprint.clone();
+        cur.last_size = s.last_size;
+        cur.last_error = s.last_error.clone();
+    });
+    if let Err(e) = patched {
         log::warn!("backup: could not save backup.json: {e}");
     }
     outcome

@@ -253,10 +253,7 @@ pub fn api_backup_set_settings(
     include_audio: bool,
 ) -> Result<BackupSettings, BackupError> {
     let dir = crate::app_paths::app_data_dir();
-    let mut s = settings::load(&dir);
-    s.apply_ui(enabled, folder, include_audio);
-    settings::save(&dir, &s)?;
-    Ok(s)
+    settings::update(&dir, |s| s.apply_ui(enabled, folder, include_audio))
 }
 
 #[tauri::command]

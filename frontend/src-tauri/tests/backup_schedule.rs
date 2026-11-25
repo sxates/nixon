@@ -212,3 +212,50 @@ async fn save_failure_does_not_hide_a_written_backup() {
     assert!(matches!(r, Ok(RunResult::Written(_))));
     assert_eq!(zips(dest.path()).len(), 1);
 }
+
+#[tokio::test]
+async fn settings_changed_during_a_run_survive_its_save() {
+    let (dir, db) = fresh_db().await;
+    let dest = tempfile::tempdir().unwrap();
+    let other = tempfile::tempdir().unwrap();
+    settings::save(dir.path(), &enabled(dest.path())).unwrap();
+    let app_data = dir.path().to_path_buf();
+    let other_path = other.path().to_path_buf();
+    // The user edits the settings while the export is running (abort_if is polled mid-export).
+    let rec: Arc<dyn Fn() -> bool + Send + Sync> = Arc::new(move || {
+        let o = other_path.clone();
+        settings::update(&app_data, |s| {
+            s.enabled = false;
+            s.folder = Some(o);
+        })
+        .unwrap();
+        false
+    });
+
+    let r = run_once(db.pool(), dir.path(), at(2026, 11, 24, 9, 0), rec, true, vec![]).await;
+    assert!(matches!(r, Ok(RunResult::Written(_))));
+    let s = settings::load(dir.path());
+    assert!(!s.enabled, "the user's change survives");
+    assert_eq!(s.folder.as_deref(), Some(other.path()));
+    assert!(s.last_success_at.is_none(), "a result for the old folder is not recorded");
+}
+
+#[test]
+fn update_serializes_concurrent_changes() {
+    let dir = tempfile::tempdir().unwrap();
+    let handles: Vec<_> = (0..8u32)
+        .map(|i| {
+            let p = dir.path().to_path_buf();
+            std::thread::spawn(move || {
+                for _ in 0..20 {
+                    settings::update(&p, |s| s.keep += 1).unwrap();
+                }
+                i
+            })
+        })
+        .collect();
+    for h in handles {
+        h.join().unwrap();
+    }
+    assert_eq!(settings::load(dir.path()).keep, 7 + 8 * 20);
+}

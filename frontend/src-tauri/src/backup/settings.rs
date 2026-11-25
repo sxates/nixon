@@ -65,6 +65,21 @@ pub fn load(app_data_dir: &Path) -> BackupSettings {
         .unwrap_or_default()
 }
 
+/// Serializes every load-modify-save of `backup.json` (UI changes and scheduler results).
+static UPDATE_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+/// Load, change and save `backup.json` under the process-wide lock; returns the saved value.
+pub fn update(
+    app_data_dir: &Path,
+    f: impl FnOnce(&mut BackupSettings),
+) -> Result<BackupSettings, BackupError> {
+    let _guard = UPDATE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let mut s = load(app_data_dir);
+    f(&mut s);
+    save(app_data_dir, &s)?;
+    Ok(s)
+}
+
 pub fn save(app_data_dir: &Path, settings: &BackupSettings) -> Result<(), BackupError> {
     let json = serde_json::to_vec_pretty(settings)
         .map_err(|e| BackupError::Io(format!("backup settings: {e}")))?;
