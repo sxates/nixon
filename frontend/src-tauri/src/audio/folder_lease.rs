@@ -52,6 +52,8 @@ pub enum LeaseHolder {
     Delete,
     /// Discarding an interrupted recording (rewrites its `metadata.json` status).
     Discard,
+    /// Reading the folder into a backup archive (specs/0092).
+    Backup,
 }
 
 impl LeaseHolder {
@@ -67,6 +69,7 @@ impl LeaseHolder {
             LeaseHolder::FolderPathWrite => "saving the transcript",
             LeaseHolder::Delete => "deleting the meeting",
             LeaseHolder::Discard => "discarding the recording",
+            LeaseHolder::Backup => "backing up",
         }
     }
 }
