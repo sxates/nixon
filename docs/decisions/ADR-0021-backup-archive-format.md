@@ -47,7 +47,9 @@ recordings/<meeting-folder>/...     media files only when audio is included
 ## Consequences
 
 - The format is versioned (`format: 1`); a different layout bumps it and old readers refuse it.
-- Replacing never touches recording folders already on disk, and pruning only deletes files that
-  match Nixon's own backup name pattern.
+- Replacing never touches recording folders already on disk. Pruning only deletes automatic
+  backups (`Nixon Auto Backup YYYY-MM-DD HHMM.zip`, newest five kept); a backup made by hand
+  (`Nixon Backup …`) stays until the user deletes it from the list, which only accepts a backup
+  file directly inside the backup folder.
 - Adding a setting that should travel means adding it to the allowlist and, if it is a new table,
   classifying it. Both are visible in review.

@@ -4,21 +4,19 @@
 //! file I/O inside async fns, so each job body runs on a blocking thread (`blocking`).
 
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 
-use chrono::Local;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Runtime, State};
 use tauri_plugin_dialog::DialogExt;
 
 use super::add::import_add;
 use super::archive::read_manifest;
-use super::export::{default_file_name, export_to_file, ExportOptions};
+use super::export::{export_to, ExportOptions};
 use super::job::{self, blocking, EmitProgress, Finished, JobGuard, JobKind, JobStatus, EVENT_FINISHED};
+use super::library::{self, BackupFile};
 use super::manifest::{build_schema_version, validate};
 use super::merge::MergeCounts;
 use super::replace::{stage, RESULT_NAME};
-use super::schedule::{run_once, RunResult};
 use super::settings::{self, BackupSettings};
 use super::BackupError;
 use crate::state::AppState;
@@ -31,46 +29,60 @@ fn emit_finished<R: Runtime>(app: &AppHandle<R>, kind: JobKind, result: &Result<
     let _ = app.emit(EVENT_FINISHED, payload);
 }
 
+/// The folder backups go to: the one chosen in Settings, else the recordings folder.
+fn backup_folder() -> PathBuf {
+    settings::load(&crate::app_paths::app_data_dir())
+        .folder_or(&crate::audio::recording_preferences::recordings_root())
+}
+
+/// "Back up now": a backup made by hand, written into the backup folder (kept until deleted),
+/// with or without audio per the Include audio switch. Returns the file's path.
 #[tauri::command]
 pub async fn api_backup_export<R: Runtime>(
     app: AppHandle<R>,
     state: State<'_, AppState>,
-    include_audio: bool,
 ) -> Result<Option<String>, BackupError> {
-    let dialog_app = app.clone();
-    let picked = tauri::async_runtime::spawn_blocking(move || {
-        dialog_app
-            .dialog()
-            .file()
-            .set_file_name(default_file_name())
-            .add_filter("Zip", &["zip"])
-            .blocking_save_file()
-    })
-    .await
-    .map_err(|e| BackupError::Io(format!("save dialog failed: {e}")))?;
-    let Some(picked) = picked else { return Ok(None) };
-    let dest = picked
-        .into_path()
-        .map_err(|e| BackupError::Io(format!("bad destination: {e}")))?;
-
     let guard = job::try_begin(JobKind::Export)?;
+    let app_data_dir = crate::app_paths::app_data_dir();
+    let include_audio = settings::load(&app_data_dir).include_audio;
+    let dest = backup_folder();
     let pool = state.db_manager.pool().clone();
     let progress = EmitProgress::new(app.clone());
     let token = guard.token().clone();
     let opts = ExportOptions {
         include_audio,
-        app_data_dir: crate::app_paths::app_data_dir(),
+        app_data_dir,
         abort_if: None,
         allowed_roots: crate::audio::recording_preferences::known_recording_roots(),
     };
     let result = blocking(async move {
-        let summary = export_to_file(&pool, &dest, &opts, &progress, &token).await?;
+        let summary = export_to(&pool, &dest, &opts, &progress, &token).await?;
         Ok(summary.path.to_string_lossy().into_owned())
     })
     .await;
     drop(guard);
     emit_finished(&app, JobKind::Export, &result.as_ref().map(|_| ()).map_err(Clone::clone), result.as_ref().ok().cloned());
     result.map(Some)
+}
+
+/// The backups in the backup folder, newest first.
+#[tauri::command]
+pub async fn api_backup_list() -> Vec<BackupFile> {
+    tauri::async_runtime::spawn_blocking(|| library::list(&backup_folder()))
+        .await
+        .unwrap_or_default()
+}
+
+/// Delete one backup from the backup folder (only a backup file directly inside it).
+#[tauri::command]
+pub fn api_backup_delete(path: String) -> Result<(), BackupError> {
+    library::delete(&backup_folder(), Path::new(&path))
+}
+
+/// Show one backup from the backup folder in Finder.
+#[tauri::command]
+pub fn api_backup_reveal(path: String) -> Result<(), BackupError> {
+    library::reveal(&backup_folder(), Path::new(&path))
 }
 
 #[tauri::command]
@@ -229,19 +241,27 @@ async fn restart_into_restore<R: Runtime>(
     app.restart()
 }
 
+/// The settings, with `folder` always filled in (the recordings folder when none is chosen).
 #[tauri::command]
 pub fn api_backup_get_settings() -> BackupSettings {
-    settings::load(&crate::app_paths::app_data_dir())
+    let mut s = settings::load(&crate::app_paths::app_data_dir());
+    s.folder = Some(backup_folder());
+    s
 }
 
 #[tauri::command]
-pub fn api_backup_set_settings(
-    enabled: bool,
-    folder: Option<String>,
-    include_audio: bool,
-) -> Result<BackupSettings, BackupError> {
+pub fn api_backup_set_settings(enabled: bool, include_audio: bool) -> Result<BackupSettings, BackupError> {
     let dir = crate::app_paths::app_data_dir();
-    settings::update(&dir, |s| s.apply_ui(enabled, folder, include_audio))
+    settings::update(&dir, |s| s.apply_ui(enabled, include_audio))?;
+    Ok(api_backup_get_settings())
+}
+
+/// Choose where backups go. Existing backups stay where they are.
+#[tauri::command]
+pub fn api_backup_set_folder(folder: String) -> Result<BackupSettings, BackupError> {
+    let dir = crate::app_paths::app_data_dir();
+    settings::update(&dir, |s| s.set_folder(Some(folder)))?;
+    Ok(api_backup_get_settings())
 }
 
 #[tauri::command]
@@ -250,54 +270,6 @@ pub async fn api_backup_pick_folder<R: Runtime>(app: AppHandle<R>) -> Result<Opt
         .await
         .map_err(|e| BackupError::Io(format!("folder picker failed: {e}")))?;
     Ok(picked.map(|p| p.to_string()))
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub enum RunOutcome {
-    Written,
-    Skipped,
-    NotDue,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct RunResultDto {
-    pub result: RunOutcome,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub path: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub bytes: Option<u64>,
-}
-
-#[tauri::command]
-pub async fn api_backup_run_now(state: State<'_, AppState>) -> Result<RunResultDto, BackupError> {
-    let guard = job::try_begin(JobKind::Scheduled)?;
-    let pool = state.db_manager.pool().clone();
-    let app_data = crate::app_paths::app_data_dir();
-    let roots = crate::audio::recording_preferences::known_recording_roots();
-    let result = blocking(async move {
-        run_once(
-            &pool,
-            &app_data,
-            Local::now(),
-            Arc::new(crate::audio::recording_commands::is_recording_now),
-            true,
-            roots,
-        )
-        .await
-    })
-    .await;
-    drop(guard);
-    Ok(match result? {
-        RunResult::Written(sum) => RunResultDto {
-            result: RunOutcome::Written,
-            path: Some(sum.path.to_string_lossy().into_owned()),
-            bytes: Some(sum.bytes),
-        },
-        RunResult::Skipped => RunResultDto { result: RunOutcome::Skipped, path: None, bytes: None },
-        RunResult::NotDue => RunResultDto { result: RunOutcome::NotDue, path: None, bytes: None },
-    })
 }
 
 /// What `restore-result.json` holds, as the UI wants it.
@@ -354,8 +326,6 @@ mod tests {
 
     #[test]
     fn dto_shapes_are_camel_case() {
-        let dto = RunResultDto { result: RunOutcome::NotDue, path: None, bytes: None };
-        assert_eq!(serde_json::to_string(&dto).unwrap(), r#"{"result":"notDue"}"#);
         let m: ImportMode = serde_json::from_str(r#""add""#).unwrap();
         assert_eq!(m, ImportMode::Add);
     }

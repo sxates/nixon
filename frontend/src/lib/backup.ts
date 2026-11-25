@@ -12,11 +12,25 @@ export type BackupJobKind = 'export' | 'import' | 'scheduled';
 
 export interface BackupSettings {
   enabled: boolean;
-  folder: string | null;
+  /** Always set: the chosen folder, or the recordings folder by default. */
+  folder: string;
   includeAudio: boolean;
   lastSuccessAt: string | null;
   lastError: string | null;
   lastSize: number | null;
+}
+
+/** Automatic backups kept in the folder (`AUTO_KEEP` in `backup/schedule.rs`). */
+export const AUTO_BACKUPS_KEPT = 5;
+
+/** One backup in the backup folder (`api_backup_list`, newest first). */
+export interface BackupFile {
+  path: string;
+  name: string;
+  /** Made by the daily schedule; only these are pruned. */
+  auto: boolean;
+  bytes: number;
+  modifiedAt: string;
 }
 
 export interface BackupProgress {
@@ -48,12 +62,6 @@ export interface MergeCounts {
   topics: number;
   actionItems: number;
   alreadyHere: number;
-}
-
-export interface RunNowResult {
-  result: 'written' | 'skipped' | 'notDue';
-  path?: string;
-  bytes?: number;
 }
 
 export interface RestoreResult {

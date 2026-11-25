@@ -10,13 +10,12 @@ use super::BackupError;
 
 pub const SETTINGS_FILE: &str = "backup.json";
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct BackupSettings {
     pub enabled: bool,
     pub folder: Option<PathBuf>,
     pub include_audio: bool,
-    pub keep: u32,
     /// RFC 3339 with the local offset.
     pub last_success_at: Option<String>,
     pub last_attempt_at: Option<String>,
@@ -26,45 +25,37 @@ pub struct BackupSettings {
     pub last_size: Option<u64>,
 }
 
-impl Default for BackupSettings {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            folder: None,
-            include_audio: false,
-            keep: 7,
-            last_success_at: None,
-            last_attempt_at: None,
-            last_error: None,
-            last_fingerprint: None,
-            last_size: None,
-        }
-    }
-}
-
 impl BackupSettings {
-    /// What the settings screen controls. A different folder forgets the last backup, so the
-    /// next run writes a fresh one there instead of skipping as "unchanged".
-    pub fn apply_ui(&mut self, enabled: bool, folder: Option<String>, include_audio: bool) {
+    /// The two switches on the settings screen.
+    pub fn apply_ui(&mut self, enabled: bool, include_audio: bool) {
+        self.enabled = enabled;
+        self.include_audio = include_audio;
+    }
+
+    /// Choose the backup folder (`None` = the recordings folder). A different folder forgets
+    /// the last backup, so the next run writes a fresh one there instead of skipping as
+    /// "unchanged".
+    pub fn set_folder(&mut self, folder: Option<String>) {
         let folder = folder.filter(|f| !f.trim().is_empty()).map(PathBuf::from);
         if folder != self.folder {
             self.last_fingerprint = None;
             self.last_success_at = None;
         }
-        self.enabled = enabled;
         self.folder = folder;
-        self.include_audio = include_audio;
+    }
+
+    /// The folder backups go to: the one chosen, else `default_folder` (the recordings folder).
+    pub fn folder_or(&self, default_folder: &Path) -> PathBuf {
+        self.folder.clone().unwrap_or_else(|| default_folder.to_path_buf())
     }
 }
 
 /// Read `backup.json`; missing or unreadable means defaults.
 pub fn load(app_data_dir: &Path) -> BackupSettings {
-    let mut s: BackupSettings = std::fs::read(app_data_dir.join(SETTINGS_FILE))
+    std::fs::read(app_data_dir.join(SETTINGS_FILE))
         .ok()
         .and_then(|b| serde_json::from_slice(&b).ok())
-        .unwrap_or_default();
-    s.keep = s.keep.max(1); // never "keep 0": that would delete every backup
-    s
+        .unwrap_or_default()
 }
 
 /// Serializes every load-modify-save of `backup.json` (UI changes and scheduler results).

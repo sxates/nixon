@@ -45,7 +45,7 @@ If you choose to use external LLM providers for summarization:
 ### Data Control
 - **Access**: View all data stored locally on your device
 - **Export**: Export your data in standard formats
-- **Backups**: Backups are written only where you choose, as plain unencrypted zip files; a synced folder stores them with that service.
+- **Backups**: Backups are written only to your backup folder (your recordings folder unless you choose another), as plain unencrypted zip files; a synced folder stores them with that service.
 - **Delete**: Remove all data from your device
 
 ## Data Security

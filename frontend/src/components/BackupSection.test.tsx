@@ -13,13 +13,35 @@ import { BackupSection } from '@/components/BackupSection';
 
 const baseSettings = {
   enabled: false,
-  folder: null as string | null,
+  folder: '/Users/x/Movies/nixon-recordings',
   includeAudio: false,
-  keep: 7,
   lastSuccessAt: null as string | null,
   lastError: null as string | null,
   lastSize: null as number | null,
 };
+
+const today = (h: number, m: number) => {
+  const d = new Date();
+  d.setHours(h, m, 0, 0);
+  return d.toISOString();
+};
+
+const backupFiles = () => [
+  {
+    path: '/Users/x/Movies/nixon-recordings/Nixon Auto Backup 2026-11-24 0930.zip',
+    name: 'Nixon Auto Backup 2026-11-24 0930.zip',
+    auto: true,
+    bytes: 48_000_000,
+    modifiedAt: today(9, 30),
+  },
+  {
+    path: '/Users/x/Movies/nixon-recordings/Nixon Backup 2026-11-24 0800.zip',
+    name: 'Nixon Backup 2026-11-24 0800.zip',
+    auto: false,
+    bytes: 47_000_000,
+    modifiedAt: today(8, 0),
+  },
+];
 
 const previewOf = (localMeetings: number) => ({
   createdAt: '2026-11-24T10:00:00Z',
@@ -31,10 +53,12 @@ const previewOf = (localMeetings: number) => ({
 });
 
 let settings = { ...baseSettings };
+let files = backupFiles();
 let overrides: Record<string, (args: unknown) => unknown> = {};
 
 beforeEach(() => {
   settings = { ...baseSettings };
+  files = backupFiles();
   overrides = {};
   Object.values(toast).forEach((f) => f.mockReset());
   invoke.mockReset();
@@ -42,9 +66,19 @@ beforeEach(() => {
     if (overrides[cmd]) return overrides[cmd](args);
     if (cmd === 'api_backup_get_settings') return settings;
     if (cmd === 'api_backup_status') return null;
+    if (cmd === 'api_backup_list') return files;
+    if (cmd === 'api_backup_delete') {
+      const { path } = args as { path: string };
+      files = files.filter((f) => f.path !== path);
+      return null;
+    }
     if (cmd === 'api_backup_set_settings') {
-      const a = args as { enabled: boolean; folder: string | null; includeAudio: boolean };
+      const a = args as { enabled: boolean; includeAudio: boolean };
       settings = { ...settings, ...a };
+      return settings;
+    }
+    if (cmd === 'api_backup_set_folder') {
+      settings = { ...settings, folder: (args as { folder: string }).folder };
       return settings;
     }
     return undefined;
@@ -59,53 +93,116 @@ async function renderLoaded() {
 }
 
 describe('BackupSection', () => {
-  it('shows Never when there is no last backup', async () => {
+  it('always shows the backup folder, defaulting to the recordings folder', async () => {
     await renderLoaded();
-    expect(screen.queryByText('Last backup')).not.toBeInTheDocument();
+    expect(screen.getByText('Backup folder')).toBeInTheDocument();
+    expect(screen.getByText('~/Movies/nixon-recordings')).toBeInTheDocument();
   });
 
-  it('renders the last-backup line from settings', async () => {
-    const at = new Date();
-    at.setHours(9, 30, 0, 0);
-    settings = {
-      ...baseSettings,
-      enabled: true,
-      folder: '/Users/x/Backups',
-      lastSuccessAt: at.toISOString(),
-      lastSize: 48_000_000,
-    };
-    await renderLoaded();
-    expect(screen.getByText('Today 09:30 · 48 MB')).toBeInTheDocument();
-  });
-
-  it('shows the last error on its own line', async () => {
-    settings = { ...baseSettings, enabled: true, folder: '/b', lastError: 'The folder is full' };
-    await renderLoaded();
-    expect(screen.getByText('The folder is full')).toBeInTheDocument();
-    expect(screen.getByText('Never')).toBeInTheDocument();
-  });
-
-  it('opens the folder picker when the schedule is switched on without a folder', async () => {
+  it('changes the folder and reloads the list', async () => {
     overrides.api_backup_pick_folder = () => '/Users/x/Nixon Backups';
     await renderLoaded();
-    fireEvent.click(screen.getByRole('switch', { name: 'Back up automatically every day' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Change…' }));
     await waitFor(() =>
-      expect(invoke).toHaveBeenCalledWith('api_backup_set_settings', {
-        enabled: true,
-        folder: '/Users/x/Nixon Backups',
-        includeAudio: false,
-      }),
+      expect(invoke).toHaveBeenCalledWith('api_backup_set_folder', { folder: '/Users/x/Nixon Backups' }),
     );
-    expect(invoke).toHaveBeenCalledWith('api_backup_pick_folder');
+    expect(await screen.findByText('~/Nixon Backups')).toBeInTheDocument();
   });
 
-  it('stays off when the folder picker is cancelled', async () => {
-    overrides.api_backup_pick_folder = () => null;
+  it('lists manual and automatic backups, newest first', async () => {
     await renderLoaded();
+    const list = await screen.findByRole('list', { name: 'Backups' });
+    const items = list.querySelectorAll('li');
+    expect(items).toHaveLength(2);
+    expect(items[0]).toHaveTextContent('Today 09:30 · 48 MB');
+    expect(items[0]).toHaveTextContent('Automatic');
+    expect(items[1]).toHaveTextContent('Today 08:00 · 47 MB');
+    expect(items[1]).toHaveTextContent('Manual');
+  });
+
+  it('says so when the folder has no backups', async () => {
+    files = [];
+    await renderLoaded();
+    expect(await screen.findByText('No backups in this folder yet.')).toBeInTheDocument();
+  });
+
+  it('deletes a backup after confirming', async () => {
+    await renderLoaded();
+    await screen.findByRole('list', { name: 'Backups' });
+    fireEvent.click(screen.getAllByRole('button', { name: 'Delete backup' })[1]);
+    expect(
+      await screen.findByText(
+        "Nixon Backup 2026-11-24 0800.zip is deleted from the backup folder. This can't be undone.",
+      ),
+    ).toBeInTheDocument();
+    expect(invoke).not.toHaveBeenCalledWith('api_backup_delete', expect.anything());
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith('api_backup_delete', {
+        path: '/Users/x/Movies/nixon-recordings/Nixon Backup 2026-11-24 0800.zip',
+      }),
+    );
+    await waitFor(() => expect(screen.getAllByRole('button', { name: 'Delete backup' })).toHaveLength(1));
+  });
+
+  it('shows a backup in Finder', async () => {
+    await renderLoaded();
+    await screen.findByRole('list', { name: 'Backups' });
+    fireEvent.click(screen.getAllByRole('button', { name: 'Show in Finder' })[0]);
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith('api_backup_reveal', {
+        path: '/Users/x/Movies/nixon-recordings/Nixon Auto Backup 2026-11-24 0930.zip',
+      }),
+    );
+  });
+
+  it('one switch turns on daily backups and says how many it keeps', async () => {
+    await renderLoaded();
+    expect(
+      screen.getByText(
+        'Keeps the 5 most recent automatic backups. Backups you make yourself are kept until you delete them.',
+      ),
+    ).toBeInTheDocument();
     fireEvent.click(screen.getByRole('switch', { name: 'Back up automatically every day' }));
-    await waitFor(() => expect(invoke).toHaveBeenCalledWith('api_backup_pick_folder'));
-    expect(invoke).not.toHaveBeenCalledWith('api_backup_set_settings', expect.anything());
-    expect(screen.getByRole('switch', { name: 'Back up automatically every day' })).not.toBeChecked();
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith('api_backup_set_settings', { enabled: true, includeAudio: false }),
+    );
+    expect(invoke).not.toHaveBeenCalledWith('api_backup_pick_folder');
+  });
+
+  it('one switch covers audio for every backup', async () => {
+    await renderLoaded();
+    fireEvent.click(screen.getByRole('switch', { name: 'Include audio' }));
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith('api_backup_set_settings', { enabled: false, includeAudio: true }),
+    );
+  });
+
+  it('Back up now writes into the folder and refreshes the list', async () => {
+    overrides.api_backup_export = () => {
+      files = [
+        {
+          path: '/Users/x/Movies/nixon-recordings/Nixon Backup 2026-11-24 1000.zip',
+          name: 'Nixon Backup 2026-11-24 1000.zip',
+          auto: false,
+          bytes: 49_000_000,
+          modifiedAt: today(10, 0),
+        },
+        ...files,
+      ];
+      return files[0].path;
+    };
+    await renderLoaded();
+    fireEvent.click(screen.getByRole('button', { name: 'Back up now' }));
+    await waitFor(() => expect(invoke).toHaveBeenCalledWith('api_backup_export'));
+    await waitFor(() => expect(screen.getAllByRole('button', { name: 'Delete backup' })).toHaveLength(3));
+    expect(toast.success).toHaveBeenCalledWith('Backup saved', expect.anything());
+  });
+
+  it('shows the last automatic-backup error', async () => {
+    settings = { ...baseSettings, enabled: true, lastError: 'The folder is full' };
+    await renderLoaded();
+    expect(screen.getByText('The folder is full')).toBeInTheDocument();
   });
 
   it('offers only Replace when this Mac has no meetings', async () => {

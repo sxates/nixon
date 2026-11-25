@@ -452,7 +452,10 @@ pub fn invoke_handler() -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Sen
         backup::commands::api_backup_get_settings,
         backup::commands::api_backup_set_settings,
         backup::commands::api_backup_pick_folder,
-        backup::commands::api_backup_run_now,
+        backup::commands::api_backup_set_folder,
+        backup::commands::api_backup_list,
+        backup::commands::api_backup_delete,
+        backup::commands::api_backup_reveal,
         backup::commands::api_backup_last_restore_result,
     ]
 }

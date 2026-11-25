@@ -9,7 +9,7 @@ use sqlx::SqlitePool;
 use tauri::{AppHandle, Emitter, Manager};
 use tokio_util::sync::CancellationToken;
 
-use super::export::{export_to, ExportOptions, ExportSummary};
+use super::export::{export_auto_to, ExportOptions, ExportSummary};
 use super::files::settings_entries;
 use super::job::{self, blocking, Finished, JobKind, EVENT_FINISHED};
 use super::progress::NoProgress;
@@ -20,6 +20,8 @@ use super::BackupError;
 const FIRST_CHECK_DELAY: Duration = Duration::from_secs(120);
 const TICK: Duration = Duration::from_secs(3600);
 const DEAD_PARTIAL_AGE: Duration = Duration::from_secs(24 * 3600);
+/// Automatic backups kept in the folder; backups made by hand are never pruned.
+pub const AUTO_KEEP: u32 = 5;
 
 #[derive(Debug)]
 pub enum RunResult {
@@ -29,9 +31,9 @@ pub enum RunResult {
     NotDue,
 }
 
-/// Enabled, a folder is set, and no success yet on `now`'s local date.
+/// Enabled, and no success yet on `now`'s local date.
 pub fn is_due(now: DateTime<Local>, s: &BackupSettings) -> bool {
-    if !s.enabled || s.folder.is_none() {
+    if !s.enabled {
         return false;
     }
     match s
@@ -44,24 +46,30 @@ pub fn is_due(now: DateTime<Local>, s: &BackupSettings) -> bool {
     }
 }
 
-/// `Nixon Backup YYYY-MM-DD HHMM.zip`, exactly (no suffixed copies).
-fn is_backup_name(name: &str) -> bool {
-    static RE: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
-    RE.get_or_init(|| regex::Regex::new(r"^Nixon Backup \d{4}-\d{2}-\d{2} \d{4}\.zip$").unwrap())
-        .is_match(name)
-}
-
-/// Dead leftovers of our own exports: `Nixon Backup YYYY-MM-DD HHMM.zip.partial`.
-fn is_partial_name(name: &str) -> bool {
+/// `Nixon Auto Backup YYYY-MM-DD HHMM.zip`, exactly (no suffixed copies): the only files
+/// pruning deletes.
+fn is_auto_backup_name(name: &str) -> bool {
     static RE: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
     RE.get_or_init(|| {
-        regex::Regex::new(r"^Nixon Backup \d{4}-\d{2}-\d{2} \d{4}\.zip\.partial$").unwrap()
+        regex::Regex::new(r"^Nixon Auto Backup \d{4}-\d{2}-\d{2} \d{4}\.zip$").unwrap()
     })
     .is_match(name)
 }
 
-/// Delete backups beyond the newest `keep` (by name = time) and `.partial` files older than a
-/// day. Touches nothing else. Returns what was deleted.
+/// Dead leftovers of our own exports, manual or automatic:
+/// `Nixon [Auto ]Backup YYYY-MM-DD HHMM[ N].zip.partial`.
+fn is_partial_name(name: &str) -> bool {
+    static RE: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
+    RE.get_or_init(|| {
+        regex::Regex::new(r"^Nixon (Auto )?Backup \d{4}-\d{2}-\d{2} \d{4}( \d+)?\.zip\.partial$")
+            .unwrap()
+    })
+    .is_match(name)
+}
+
+/// Delete automatic backups beyond the newest `keep` (by name = time) and `.partial` files
+/// older than a day. Backups made by hand and anything else are never touched. Returns what
+/// was deleted.
 pub fn prune(folder: &Path, keep: u32) -> Result<Vec<PathBuf>, BackupError> {
     let mut backups: Vec<(String, PathBuf)> = Vec::new();
     let mut dead: Vec<PathBuf> = Vec::new();
@@ -71,7 +79,7 @@ pub fn prune(folder: &Path, keep: u32) -> Result<Vec<PathBuf>, BackupError> {
         if !ft.is_file() {
             continue;
         }
-        if is_backup_name(&name) {
+        if is_auto_backup_name(&name) {
             backups.push((name, entry.path()));
         } else if is_partial_name(&name) {
             let old = entry
@@ -97,10 +105,10 @@ pub fn prune(folder: &Path, keep: u32) -> Result<Vec<PathBuf>, BackupError> {
     Ok(deleted)
 }
 
-/// Whether `folder` holds at least one backup file of ours.
+/// Whether `folder` holds at least one automatic backup.
 fn has_backup(folder: &Path) -> bool {
     std::fs::read_dir(folder).is_ok_and(|rd| {
-        rd.flatten().any(|e| is_backup_name(&e.file_name().to_string_lossy()))
+        rd.flatten().any(|e| is_auto_backup_name(&e.file_name().to_string_lossy()))
     })
 }
 
@@ -135,7 +143,9 @@ async fn current_fingerprint(
     result.map(|fp| hex(&fp))
 }
 
-/// One scheduled-backup attempt. `force` ignores "due" and "enabled" but still needs a folder.
+/// One scheduled-backup attempt. `force` ignores "due" and "enabled". With no folder chosen,
+/// backups go to `default_folder` (the recordings folder), created if needed.
+#[allow(clippy::too_many_arguments)]
 pub async fn run_once(
     pool: &SqlitePool,
     app_data_dir: &Path,
@@ -143,14 +153,17 @@ pub async fn run_once(
     is_recording: Arc<dyn Fn() -> bool + Send + Sync>,
     force: bool,
     allowed_roots: Vec<PathBuf>,
+    default_folder: &Path,
 ) -> Result<RunResult, BackupError> {
     let mut s = settings::load(app_data_dir);
     if !force && !is_due(now, &s) {
         return Ok(RunResult::NotDue);
     }
-    let Some(folder) = s.folder.clone() else {
-        return Err(BackupError::Io("Choose a backup folder first".into()));
-    };
+    let chosen = s.folder.clone();
+    let folder = s.folder_or(default_folder);
+    if chosen.is_none() {
+        let _ = std::fs::create_dir_all(&folder);
+    }
     s.last_attempt_at = Some(now.to_rfc3339());
 
     let outcome =
@@ -166,7 +179,7 @@ pub async fn run_once(
     // is no longer current is dropped. A failed save must not hide a backup that was written
     // (it would be retried hourly).
     let patched = settings::update(app_data_dir, |cur| {
-        if cur.folder.as_ref() != Some(&folder) || cur.include_audio != s.include_audio {
+        if cur.folder != chosen || cur.include_audio != s.include_audio {
             return;
         }
         cur.last_attempt_at = s.last_attempt_at.clone();
@@ -214,12 +227,13 @@ async fn attempt(
         abort_if: Some(is_recording),
         allowed_roots,
     };
-    let summary = export_to(pool, folder, &opts, &NoProgress, &CancellationToken::new()).await?;
+    let summary =
+        export_auto_to(pool, folder, &opts, &NoProgress, &CancellationToken::new()).await?;
     s.last_success_at = Some(now.to_rfc3339());
     s.last_fingerprint = Some(fingerprint);
     s.last_size = Some(summary.bytes);
     // The backup is written; a prune failure must not turn it into an error.
-    let _ = prune(folder, s.keep);
+    let _ = prune(folder, AUTO_KEEP);
     Ok(RunResult::Written(summary))
 }
 
@@ -263,6 +277,7 @@ async fn tick(app: &AppHandle) {
             Arc::new(crate::audio::recording_commands::is_recording_now),
             false,
             crate::audio::recording_preferences::known_recording_roots(),
+            &crate::audio::recording_preferences::recordings_root(),
         )
         .await
     })

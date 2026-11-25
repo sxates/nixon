@@ -8,7 +8,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
-use app_lib::backup::schedule::{is_due, prune, run_once, RunResult};
+use app_lib::backup::schedule::{is_due, prune, run_once, RunResult, AUTO_KEEP};
 use app_lib::backup::settings::{self, BackupSettings};
 use app_lib::backup::BackupError;
 use chrono::{DateTime, Local, TimeZone};
@@ -24,6 +24,11 @@ fn enabled(folder: &Path) -> BackupSettings {
         folder: Some(folder.to_path_buf()),
         ..Default::default()
     }
+}
+
+/// A default folder the tests never expect to be used (each sets its own folder).
+fn unused() -> std::path::PathBuf {
+    std::path::PathBuf::from("/nonexistent/nixon-default-backups")
 }
 
 fn never() -> Arc<dyn Fn() -> bool + Send + Sync> {
@@ -57,46 +62,51 @@ fn due_once_per_local_day() {
     assert!(!is_due(at(2026, 11, 24, 9, 0), &off));
     let mut nofolder = enabled(dir.path());
     nofolder.folder = None;
-    assert!(!is_due(at(2026, 11, 24, 9, 0), &nofolder));
+    assert!(is_due(at(2026, 11, 24, 9, 0), &nofolder), "no folder chosen = the default folder");
 }
 
 #[test]
-fn prune_keeps_newest_and_ignores_lookalikes() {
+fn prune_keeps_newest_auto_backups_and_never_manual_ones() {
     let dir = tempfile::tempdir().unwrap();
     let f = dir.path();
     for d in 10..19 {
-        fs::write(f.join(format!("Nixon Backup 2026-11-{d} 0930.zip")), b"z").unwrap();
+        fs::write(f.join(format!("Nixon Auto Backup 2026-11-{d} 0930.zip")), b"z").unwrap();
     }
     let others = [
-        "Nixon Backup 2026-11-24 0930 (1).zip",
+        "Nixon Backup 2026-11-01 0930.zip",
+        "Nixon Backup 2026-11-02 0930 2.zip",
+        "Nixon Auto Backup 2026-11-24 0930 (1).zip",
         "Nixon Backup 2026-11-24 0930 (before restore).zip",
         "notes.zip",
-        "Nixon Backup 2026-11-24 0930.zip.partial",
+        "Nixon Auto Backup 2026-11-24 0930.zip.partial",
     ];
     for o in others {
         fs::write(f.join(o), b"x").unwrap();
     }
-    let old = "Nixon Backup 2026-11-01 0930.zip.partial";
+    let old = "Nixon Auto Backup 2026-11-01 0930.zip.partial";
+    let old_manual = "Nixon Backup 2026-11-01 0930 2.zip.partial";
     let lookalike = "Nixon Backup foo.zip.partial";
-    for name in [old, lookalike] {
+    for name in [old, old_manual, lookalike] {
         fs::write(f.join(name), b"x").unwrap();
         let file = fs::File::options().write(true).open(f.join(name)).unwrap();
         file.set_modified(SystemTime::now() - Duration::from_secs(2 * 24 * 3600))
             .unwrap();
     }
 
-    let deleted = prune(f, 7).unwrap();
-    assert_eq!(deleted.len(), 3);
+    let deleted = prune(f, AUTO_KEEP).unwrap();
+    assert_eq!(AUTO_KEEP, 5);
+    assert_eq!(deleted.len(), 4 + 2);
     let left = zips(f);
-    assert!(!left.contains(&"Nixon Backup 2026-11-10 0930.zip".to_string()));
-    assert!(!left.contains(&"Nixon Backup 2026-11-11 0930.zip".to_string()));
-    assert!(!left.contains(&old.to_string()));
-    assert!(left.contains(&"Nixon Backup 2026-11-12 0930.zip".to_string()));
+    for d in 10..14 {
+        assert!(!left.contains(&format!("Nixon Auto Backup 2026-11-{d} 0930.zip")));
+    }
+    assert!(!left.contains(&old.to_string()) && !left.contains(&old_manual.to_string()));
+    assert!(left.contains(&"Nixon Auto Backup 2026-11-14 0930.zip".to_string()));
     for o in others {
         assert!(left.contains(&o.to_string()), "{o} must survive");
     }
     assert!(left.contains(&lookalike.to_string()));
-    assert_eq!(left.len(), 7 + others.len() + 1);
+    assert_eq!(left.len(), 5 + others.len() + 1);
 }
 
 #[tokio::test]
@@ -106,14 +116,14 @@ async fn run_skips_when_unchanged() {
     settings::save(dir.path(), &enabled(dest.path())).unwrap();
     let now = at(2026, 11, 24, 9, 0);
 
-    let first = run_once(db.pool(), dir.path(), now, never(), true, vec![]).await.unwrap();
+    let first = run_once(db.pool(), dir.path(), now, never(), true, vec![], &unused()).await.unwrap();
     assert!(matches!(first, RunResult::Written(_)));
     // Not due again today without force.
-    let same_day = run_once(db.pool(), dir.path(), now, never(), false, vec![]).await.unwrap();
+    let same_day = run_once(db.pool(), dir.path(), now, never(), false, vec![], &unused()).await.unwrap();
     assert!(matches!(same_day, RunResult::NotDue));
     // Next day, nothing changed and the backup is still in the folder: skipped.
     let next = at(2026, 11, 25, 9, 0);
-    let second = run_once(db.pool(), dir.path(), next, never(), false, vec![]).await.unwrap();
+    let second = run_once(db.pool(), dir.path(), next, never(), false, vec![], &unused()).await.unwrap();
     assert!(matches!(second, RunResult::Skipped));
     assert_eq!(zips(dest.path()).len(), 1);
     let s = settings::load(dir.path());
@@ -125,11 +135,11 @@ async fn unchanged_data_is_still_backed_up_when_the_folder_has_no_backup() {
     let (dir, db) = fresh_db().await;
     let dest = tempfile::tempdir().unwrap();
     settings::save(dir.path(), &enabled(dest.path())).unwrap();
-    run_once(db.pool(), dir.path(), at(2026, 11, 24, 9, 0), never(), true, vec![]).await.unwrap();
+    run_once(db.pool(), dir.path(), at(2026, 11, 24, 9, 0), never(), true, vec![], &unused()).await.unwrap();
     for z in zips(dest.path()) {
         fs::remove_file(dest.path().join(z)).unwrap(); // user deleted the files
     }
-    let r = run_once(db.pool(), dir.path(), at(2026, 11, 25, 9, 0), never(), false, vec![]).await;
+    let r = run_once(db.pool(), dir.path(), at(2026, 11, 25, 9, 0), never(), false, vec![], &unused()).await;
     assert!(matches!(r, Ok(RunResult::Written(_))));
     assert_eq!(zips(dest.path()).len(), 1);
 }
@@ -139,8 +149,8 @@ async fn back_up_now_always_writes_even_when_unchanged() {
     let (dir, db) = fresh_db().await;
     let dest = tempfile::tempdir().unwrap();
     settings::save(dir.path(), &enabled(dest.path())).unwrap();
-    run_once(db.pool(), dir.path(), at(2026, 11, 24, 9, 0), never(), true, vec![]).await.unwrap();
-    let r = run_once(db.pool(), dir.path(), at(2026, 11, 24, 9, 5), never(), true, vec![]).await;
+    run_once(db.pool(), dir.path(), at(2026, 11, 24, 9, 0), never(), true, vec![], &unused()).await.unwrap();
+    let r = run_once(db.pool(), dir.path(), at(2026, 11, 24, 9, 5), never(), true, vec![], &unused()).await;
     assert!(matches!(r, Ok(RunResult::Written(_))));
     assert_eq!(zips(dest.path()).len(), 2);
 }
@@ -151,15 +161,18 @@ fn changing_the_folder_forgets_the_last_backup() {
     let mut s = enabled(dir.path());
     s.last_fingerprint = Some("abc".into());
     s.last_success_at = Some("2026-11-24T09:00:00+00:00".into());
-    s.apply_ui(true, Some("/other".into()), false);
+    s.set_folder(Some("/other".into()));
     assert!(s.last_fingerprint.is_none() && s.last_success_at.is_none());
     assert_eq!(s.folder.as_deref(), Some(Path::new("/other")));
 
-    // Same folder: results are kept.
+    // Same folder, or only the switches changing: results are kept.
     s.last_fingerprint = Some("abc".into());
-    s.apply_ui(false, Some("/other".into()), true);
+    s.set_folder(Some("/other".into()));
+    s.apply_ui(false, true);
     assert_eq!(s.last_fingerprint.as_deref(), Some("abc"));
     assert!(!s.enabled && s.include_audio);
+    assert_eq!(s.folder_or(Path::new("/rec")), Path::new("/other"));
+    assert_eq!(BackupSettings::default().folder_or(Path::new("/rec")), Path::new("/rec"));
 }
 
 #[tokio::test]
@@ -172,7 +185,7 @@ async fn run_aborts_when_recording_starts() {
     let rec: Arc<dyn Fn() -> bool + Send + Sync> =
         Arc::new(move || c.fetch_add(1, Ordering::SeqCst) >= 1);
 
-    let r = run_once(db.pool(), dir.path(), at(2026, 11, 24, 9, 0), rec, true, vec![]).await;
+    let r = run_once(db.pool(), dir.path(), at(2026, 11, 24, 9, 0), rec, true, vec![], &unused()).await;
     assert_eq!(r.unwrap_err(), BackupError::Cancelled);
     assert!(zips(dest.path()).is_empty(), "no zip and no .partial");
     assert!(settings::load(dir.path()).last_success_at.is_none());
@@ -185,7 +198,7 @@ async fn run_records_error_for_missing_folder() {
     let folder = dest.path().join("gone");
     settings::save(dir.path(), &enabled(&folder)).unwrap();
 
-    let r = run_once(db.pool(), dir.path(), at(2026, 11, 24, 9, 0), never(), false, vec![]).await;
+    let r = run_once(db.pool(), dir.path(), at(2026, 11, 24, 9, 0), never(), false, vec![], &unused()).await;
     assert!(r.is_err());
     let json: serde_json::Value =
         serde_json::from_slice(&fs::read(dir.path().join("backup.json")).unwrap()).unwrap();
@@ -194,10 +207,20 @@ async fn run_records_error_for_missing_folder() {
 }
 
 #[tokio::test]
-async fn force_without_folder_is_an_error() {
+async fn no_folder_chosen_backs_up_into_the_default_folder() {
     let (dir, db) = fresh_db().await;
-    let r = run_once(db.pool(), dir.path(), at(2026, 11, 24, 9, 0), never(), true, vec![]).await;
-    assert!(r.is_err());
+    let rec = tempfile::tempdir().unwrap();
+    let default = rec.path().join("recordings");
+    let s = BackupSettings { enabled: true, ..Default::default() };
+    settings::save(dir.path(), &s).unwrap();
+    let r = run_once(db.pool(), dir.path(), at(2026, 11, 24, 9, 0), never(), false, vec![], &default)
+        .await
+        .unwrap();
+    assert!(matches!(r, RunResult::Written(_)));
+    let names = zips(&default);
+    assert_eq!(names.len(), 1);
+    assert!(names[0].starts_with("Nixon Auto Backup "), "{names:?}");
+    assert!(settings::load(dir.path()).last_success_at.is_some());
 }
 
 #[tokio::test]
@@ -208,7 +231,7 @@ async fn save_failure_does_not_hide_a_written_backup() {
     // write_atomic stages through backup.json.tmp; a directory there makes every save fail.
     fs::create_dir(dir.path().join("backup.json.tmp")).unwrap();
 
-    let r = run_once(db.pool(), dir.path(), at(2026, 11, 24, 9, 0), never(), false, vec![]).await;
+    let r = run_once(db.pool(), dir.path(), at(2026, 11, 24, 9, 0), never(), false, vec![], &unused()).await;
     assert!(matches!(r, Ok(RunResult::Written(_))));
     assert_eq!(zips(dest.path()).len(), 1);
 }
@@ -232,7 +255,7 @@ async fn settings_changed_during_a_run_survive_its_save() {
         false
     });
 
-    let r = run_once(db.pool(), dir.path(), at(2026, 11, 24, 9, 0), rec, true, vec![]).await;
+    let r = run_once(db.pool(), dir.path(), at(2026, 11, 24, 9, 0), rec, true, vec![], &unused()).await;
     assert!(matches!(r, Ok(RunResult::Written(_))));
     let s = settings::load(dir.path());
     assert!(!s.enabled, "the user's change survives");
@@ -248,7 +271,7 @@ fn update_serializes_concurrent_changes() {
             let p = dir.path().to_path_buf();
             std::thread::spawn(move || {
                 for _ in 0..20 {
-                    settings::update(&p, |s| s.keep += 1).unwrap();
+                    settings::update(&p, |s| s.last_size = Some(s.last_size.unwrap_or(0) + 1)).unwrap();
                 }
                 i
             })
@@ -257,19 +280,15 @@ fn update_serializes_concurrent_changes() {
     for h in handles {
         h.join().unwrap();
     }
-    assert_eq!(settings::load(dir.path()).keep, 7 + 8 * 20);
+    assert_eq!(settings::load(dir.path()).last_size, Some(8 * 20));
 }
 
 #[test]
-fn keep_is_at_least_one() {
-    let dir = tempfile::tempdir().unwrap();
-    fs::write(dir.path().join("backup.json"), br#"{"keep":0}"#).unwrap();
-    assert_eq!(settings::load(dir.path()).keep, 1);
-
+fn prune_keeps_at_least_one() {
     let f = tempfile::tempdir().unwrap();
     for d in 10..13 {
-        fs::write(f.path().join(format!("Nixon Backup 2026-11-{d} 0930.zip")), b"z").unwrap();
+        fs::write(f.path().join(format!("Nixon Auto Backup 2026-11-{d} 0930.zip")), b"z").unwrap();
     }
     prune(f.path(), 0).unwrap();
-    assert_eq!(zips(f.path()), ["Nixon Backup 2026-11-12 0930.zip"]);
+    assert_eq!(zips(f.path()), ["Nixon Auto Backup 2026-11-12 0930.zip"]);
 }

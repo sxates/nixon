@@ -35,13 +35,13 @@ pub struct ExportSummary {
 
 /// `Nixon Backup YYYY-MM-DD HHMM` in local time (no extension).
 pub(crate) fn default_stem() -> String {
-    format!("Nixon Backup {}", chrono::Local::now().format("%Y-%m-%d %H%M"))
+    format!("{MANUAL_PREFIX} {}", chrono::Local::now().format("%Y-%m-%d %H%M"))
 }
 
-/// The save dialog's default file name.
-pub(crate) fn default_file_name() -> String {
-    format!("{}.zip", default_stem())
-}
+/// File-name prefixes: a backup made by hand, and one the daily schedule made (only those are
+/// pruned).
+pub const MANUAL_PREFIX: &str = "Nixon Backup";
+pub const AUTO_PREFIX: &str = "Nixon Auto Backup";
 
 /// Export into `dest_dir` as `Nixon Backup YYYY-MM-DD HHMM.zip` (suffixed ` 2`, ` 3`… if taken).
 pub async fn export_to(
@@ -51,8 +51,30 @@ pub async fn export_to(
     progress: &dyn Progress,
     cancel: &CancellationToken,
 ) -> Result<ExportSummary, BackupError> {
+    export_named(pool, dest_dir, &default_stem(), opts, progress, cancel).await
+}
+
+/// Export into `dest_dir` as `Nixon Auto Backup YYYY-MM-DD HHMM.zip` (the daily schedule).
+pub async fn export_auto_to(
+    pool: &SqlitePool,
+    dest_dir: &Path,
+    opts: &ExportOptions,
+    progress: &dyn Progress,
+    cancel: &CancellationToken,
+) -> Result<ExportSummary, BackupError> {
+    let stem = format!("{AUTO_PREFIX} {}", chrono::Local::now().format("%Y-%m-%d %H%M"));
+    export_named(pool, dest_dir, &stem, opts, progress, cancel).await
+}
+
+async fn export_named(
+    pool: &SqlitePool,
+    dest_dir: &Path,
+    stem: &str,
+    opts: &ExportOptions,
+    progress: &dyn Progress,
+    cancel: &CancellationToken,
+) -> Result<ExportSummary, BackupError> {
     std::fs::create_dir_all(dest_dir)?;
-    let stem = default_stem();
     let mut dest = dest_dir.join(format!("{stem}.zip"));
     let mut n = 2;
     while dest.exists() {

@@ -18,6 +18,7 @@ pub mod commands;
 pub mod export;
 pub mod files;
 pub mod job;
+pub mod library;
 pub mod manifest;
 pub mod merge;
 pub mod progress;

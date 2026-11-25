@@ -62,5 +62,7 @@ export {
 // - BatteryLow: the recorder's mode chip, the one carrier of "paused because on battery".
 // - Link2: the Prep tab's icon-only "Link previous meeting…" button.
 export { BatteryLow, Link2 } from 'lucide-react';
+// Settings › Backup (specs/0092): show a backup file in Finder.
+export { FolderOpen } from 'lucide-react';
 
 export type { LucideIcon } from 'lucide-react';
