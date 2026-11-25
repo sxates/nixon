@@ -389,3 +389,90 @@ async fn apply_without_marker_is_noop() {
     assert_eq!(apply_pending(&b.app_data).await.unwrap(), None);
     assert!(!b.app_data.join(RESULT_NAME).exists());
 }
+
+fn aside_count(app_data: &Path) -> usize {
+    dir_names(app_data).iter().filter(|n| n.contains(".replaced-")).count()
+}
+
+#[tokio::test]
+async fn replace_rollback_after_db_swap_when_settings_step_fails() {
+    let a = old_mac().await;
+    let b = new_mac().await;
+    let out = tempfile::tempdir().unwrap();
+    let zip = export_a(&a, out.path()).await;
+    stage_into(&b, &zip).await.unwrap();
+    b.db.pool().close().await;
+    // The settings step cannot write preferences.json (a directory is in the way).
+    fs::remove_file(b.app_data.join("preferences.json")).unwrap();
+    fs::create_dir(b.app_data.join("preferences.json")).unwrap();
+
+    assert!(apply_pending(&b.app_data).await.is_err());
+
+    let db = reopen(&b).await;
+    assert_eq!(ids(db.pool(), "SELECT id FROM meetings").await, ["b1"]);
+    assert_eq!(ids(db.pool(), "SELECT id FROM settings").await, ["b-settings"]);
+    assert_eq!(aside_count(&b.app_data), 0);
+    assert!(!b.app_data.join(MARKER_NAME).exists());
+    assert_eq!(result_json(&b.app_data)["ok"], false);
+    assert_eq!(dir_names(&b.root).into_iter().filter(|n| n != ".nixon-restore-staging").collect::<Vec<_>>(), ["Local_1"]);
+    // The restored DB is kept in staging for diagnosis.
+    assert!(b.app_data.join("restore-staging/db/meeting_minutes.sqlite").is_file());
+}
+
+/// Arrange a launch that died after moving only the main DB file aside.
+async fn half_swapped(b: &Profile, zip: &Path) {
+    stage_into(b, zip).await.unwrap();
+    b.db.pool().close().await;
+    assert!(apply_until(&b.app_data, 3).await.unwrap().is_none());
+    let state_path = b.app_data.join("restore-staging/apply-state.json");
+    let mut st: serde_json::Value = serde_json::from_slice(&fs::read(&state_path).unwrap()).unwrap();
+    st["swap_ts"] = serde_json::json!("T1");
+    fs::write(&state_path, serde_json::to_vec(&st).unwrap()).unwrap();
+    // An (empty, hence harmless) WAL/SHM pair left next to the original.
+    fs::write(b.app_data.join("meeting_minutes.sqlite-wal"), b"").unwrap();
+    fs::write(b.app_data.join("meeting_minutes.sqlite-shm"), b"").unwrap();
+    fs::rename(
+        b.app_data.join("meeting_minutes.sqlite"),
+        b.app_data.join("meeting_minutes.sqlite.replaced-T1"),
+    )
+    .unwrap();
+}
+
+#[tokio::test]
+async fn half_swapped_launch_completes_the_restore() {
+    let a = old_mac().await;
+    let b = new_mac().await;
+    let out = tempfile::tempdir().unwrap();
+    let zip = export_a(&a, out.path()).await;
+    half_swapped(&b, &zip).await;
+
+    assert!(apply_pending(&b.app_data).await.unwrap().is_some());
+    let db = reopen(&b).await;
+    assert_eq!(ids(db.pool(), "SELECT id FROM meetings ORDER BY id").await, ["m1", "m2"]);
+    assert_eq!(ids(db.pool(), "SELECT id FROM settings").await, ["b-settings"]);
+    // Original main, WAL and SHM are all aside (none left to confuse the new DB).
+    let names = dir_names(&b.app_data);
+    for n in ["meeting_minutes.sqlite.replaced-T1", "meeting_minutes.sqlite-wal.replaced-T1", "meeting_minutes.sqlite-shm.replaced-T1"] {
+        assert!(names.contains(&n.to_string()), "{n} in {names:?}");
+    }
+    cleanup_replaced(&b.app_data);
+    assert_eq!(aside_count(&b.app_data), 0);
+}
+
+#[tokio::test]
+async fn half_swapped_launch_that_then_fails_restores_the_original() {
+    let a = old_mac().await;
+    let b = new_mac().await;
+    let out = tempfile::tempdir().unwrap();
+    let zip = export_a(&a, out.path()).await;
+    half_swapped(&b, &zip).await;
+    fs::remove_file(b.app_data.join("preferences.json")).unwrap();
+    fs::create_dir(b.app_data.join("preferences.json")).unwrap();
+
+    assert!(apply_pending(&b.app_data).await.is_err());
+    let db = reopen(&b).await;
+    assert_eq!(ids(db.pool(), "SELECT id FROM meetings").await, ["b1"]);
+    assert_eq!(ids(db.pool(), "SELECT id FROM settings").await, ["b-settings"]);
+    assert_eq!(aside_count(&b.app_data), 0);
+    assert!(!b.app_data.join(MARKER_NAME).exists());
+}
