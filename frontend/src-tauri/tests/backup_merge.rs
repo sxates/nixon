@@ -511,3 +511,39 @@ async fn detach_failure_after_commit_keeps_the_import() {
     }
     assert_clean(&b);
 }
+
+// 0092 final review C1: a backup person whose email already exists here (different id) is
+// dropped by the unique email index; everything that referenced them must follow the local one.
+#[tokio::test]
+async fn add_remaps_people_and_prompts_that_collide_by_email_and_name() {
+    let a = profile().await;
+    let p = a.db.pool();
+    add_meeting(p, "m1", Some(&make_folder(&a.root, "Alpha_1"))).await;
+    exec(p, "INSERT INTO people (id, display_name, email, created_at, updated_at) VALUES ('pa','Pat','pat@x.com','t','t')").await;
+    exec(p, "INSERT INTO speakers (id, meeting_id, speaker_key, display_name, person_id, created_at, updated_at) VALUES ('sp1','m1','s1','Pat','pa','t','t')").await;
+    exec(p, "INSERT INTO meeting_participants (meeting_id, person_id, source, created_at) VALUES ('m1','pa','manual','t')").await;
+    exec(p, "INSERT INTO voiceprints (id, person_id, embedding, embedding_dim, embedding_model, created_at) VALUES ('vp1','pa',x'00',1,'m','t')").await;
+    exec(p, "INSERT INTO action_items (id, meeting_id, description, content_key, assignee_person_id, created_at, updated_at) VALUES ('ai1','m1','do it','k','pa','t','t')").await;
+    exec(p, "INSERT INTO action_item_people (action_item_id, person_id) VALUES ('ai1','pa')").await;
+    exec(p, "INSERT INTO summary_prompts (id, name, body) VALUES ('pr-a','Weekly Review','body a')").await;
+    exec(p, "INSERT INTO series_summary_prompts (series_key, prompt_id) VALUES ('series-1','pr-a')").await;
+    exec(p, "UPDATE meetings SET summary_prompt_id = 'pr-a' WHERE id = 'm1'").await;
+
+    let b = local_mac().await;
+    let lp = b.db.pool();
+    exec(lp, "INSERT INTO people (id, display_name, email, created_at, updated_at) VALUES ('pb','Pat B','pat@x.com','t','t')").await;
+    exec(lp, "INSERT INTO summary_prompts (id, name, body) VALUES ('pr-b','weekly review','body b')").await;
+
+    let out = tempfile::tempdir().unwrap();
+    let zip = export(&a, out.path()).await;
+    add_into(&b, &zip).await.unwrap();
+
+    assert_eq!(count(lp, "SELECT COUNT(*) FROM people WHERE email='pat@x.com'").await, 1);
+    assert_eq!(count(lp, "SELECT COUNT(*) FROM speakers WHERE id='sp1' AND person_id='pb'").await, 1);
+    assert_eq!(count(lp, "SELECT COUNT(*) FROM meeting_participants WHERE meeting_id='m1' AND person_id='pb'").await, 1);
+    assert_eq!(count(lp, "SELECT COUNT(*) FROM voiceprints WHERE id='vp1' AND person_id='pb'").await, 1);
+    assert_eq!(count(lp, "SELECT COUNT(*) FROM action_items WHERE id='ai1' AND assignee_person_id='pb'").await, 1);
+    assert_eq!(count(lp, "SELECT COUNT(*) FROM action_item_people WHERE action_item_id='ai1' AND person_id='pb'").await, 1);
+    assert_eq!(count(lp, "SELECT COUNT(*) FROM series_summary_prompts WHERE series_key='series-1' AND prompt_id='pr-b'").await, 1);
+    assert_eq!(count(lp, "SELECT COUNT(*) FROM meetings WHERE id='m1' AND summary_prompt_id='pr-b'").await, 1);
+}

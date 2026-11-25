@@ -259,9 +259,36 @@ fn insert_order(
     Ok(order)
 }
 
+/// The temp map (`backup_id` -> `local_id`) a column's value is rewritten through, if any.
+/// Backup people dropped by the unique email index, and backup prompts dropped by the unique
+/// name index, are stood in for by this Mac's row; their ids never exist here.
+fn map_table_for(table: &str, column: &str, refs: &[&Ref]) -> Option<&'static str> {
+    if table == "meetings" && column == "summary_prompt_id" {
+        return Some("prompt_map");
+    }
+    let r = refs.iter().find(|r| r.column == column)?;
+    match (r.target_table.as_str(), r.target_column.as_str()) {
+        ("people", "id") => Some("person_map"),
+        ("summary_prompts", "id") => Some("prompt_map"),
+        _ => None,
+    }
+}
+
+/// `b.col`, rewritten through its map when the column points at a mapped entity.
+fn value_expr(table: &str, column: &str, refs: &[&Ref]) -> String {
+    let col = format!("b.{}", q(column));
+    match map_table_for(table, column, refs) {
+        Some(m) => format!(
+            "COALESCE((SELECT local_id FROM temp.{m} WHERE backup_id = {col}), {col})"
+        ),
+        None => col,
+    }
+}
+
 fn insert_sql(table: &str, class: TableClass, cols: &[String], refs: &[&Ref]) -> String {
     let col_list = cols.iter().map(|c| q(c)).collect::<Vec<_>>().join(", ");
-    let sel_list = cols.iter().map(|c| format!("b.{}", q(c))).collect::<Vec<_>>().join(", ");
+    let sel_list =
+        cols.iter().map(|c| value_expr(table, c, refs)).collect::<Vec<_>>().join(", ");
     let mut conds: Vec<String> = Vec::new();
     match class {
         Meeting => conds.push("b.id NOT IN (SELECT id FROM main.meetings)".into()),
@@ -274,7 +301,7 @@ fn insert_sql(table: &str, class: TableClass, cols: &[String], refs: &[&Ref]) ->
         if class == MeetingChild && r.column == "meeting_id" {
             continue; // covered by the scope above
         }
-        let col = format!("b.{}", q(&r.column));
+        let col = value_expr(table, &r.column, refs);
         conds.push(format!(
             "({col} IS NULL OR EXISTS (SELECT 1 FROM main.{} WHERE {} = {col}))",
             q(&r.target_table),
@@ -338,7 +365,7 @@ pub async fn end(conn: &mut SqliteConnection, commit: bool) -> Result<bool, Back
     } else {
         let _ = sqlx::query("ROLLBACK").execute(&mut *conn).await;
     }
-    for t in ["new_meetings", "new_action_items", "new_topics"] {
+    for t in ["new_meetings", "new_action_items", "new_topics", "person_map", "prompt_map"] {
         let _ = sqlx::query(&format!("DROP TABLE IF EXISTS temp.{t}")).execute(&mut *conn).await;
     }
     let forced = detach_forced_to_fail(conn).await;
@@ -373,6 +400,26 @@ pub async fn insert_missing(conn: &mut SqliteConnection) -> Result<MergeCounts, 
         ))
         .execute(&mut *conn)
         .await?;
+    }
+    // Backup people / prompts that the unique email / name index would drop, mapped to the
+    // local row that already holds that email / name.
+    for (tmp, sql) in [
+        (
+            "person_map",
+            "SELECT b.id AS backup_id, m.id AS local_id FROM backup.people AS b \
+             JOIN main.people AS m ON m.email = b.email \
+             WHERE b.email IS NOT NULL AND b.id NOT IN (SELECT id FROM main.people)",
+        ),
+        (
+            "prompt_map",
+            "SELECT b.id AS backup_id, m.id AS local_id FROM backup.summary_prompts AS b \
+             JOIN main.summary_prompts AS m ON m.name = b.name COLLATE NOCASE \
+             AND m.in_library = 1 \
+             WHERE b.in_library = 1 AND b.id NOT IN (SELECT id FROM main.summary_prompts)",
+        ),
+    ] {
+        sqlx::query(&format!("DROP TABLE IF EXISTS temp.{tmp}")).execute(&mut *conn).await?;
+        sqlx::query(&format!("CREATE TEMP TABLE {tmp} AS {sql}")).execute(&mut *conn).await?;
     }
     let mut base: HashMap<&str, i64> = HashMap::new();
     for t in ["action_items", "topics"] {
