@@ -42,6 +42,21 @@ impl Default for BackupSettings {
     }
 }
 
+impl BackupSettings {
+    /// What the settings screen controls. A different folder forgets the last backup, so the
+    /// next run writes a fresh one there instead of skipping as "unchanged".
+    pub fn apply_ui(&mut self, enabled: bool, folder: Option<String>, include_audio: bool) {
+        let folder = folder.filter(|f| !f.trim().is_empty()).map(PathBuf::from);
+        if folder != self.folder {
+            self.last_fingerprint = None;
+            self.last_success_at = None;
+        }
+        self.enabled = enabled;
+        self.folder = folder;
+        self.include_audio = include_audio;
+    }
+}
+
 /// Read `backup.json`; missing or unreadable means defaults.
 pub fn load(app_data_dir: &Path) -> BackupSettings {
     std::fs::read(app_data_dir.join(SETTINGS_FILE))

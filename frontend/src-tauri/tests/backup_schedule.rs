@@ -108,14 +108,58 @@ async fn run_skips_when_unchanged() {
 
     let first = run_once(db.pool(), dir.path(), now, never(), true, vec![]).await.unwrap();
     assert!(matches!(first, RunResult::Written(_)));
-    let second = run_once(db.pool(), dir.path(), now, never(), true, vec![]).await.unwrap();
+    // Not due again today without force.
+    let same_day = run_once(db.pool(), dir.path(), now, never(), false, vec![]).await.unwrap();
+    assert!(matches!(same_day, RunResult::NotDue));
+    // Next day, nothing changed and the backup is still in the folder: skipped.
+    let next = at(2026, 11, 25, 9, 0);
+    let second = run_once(db.pool(), dir.path(), next, never(), false, vec![]).await.unwrap();
     assert!(matches!(second, RunResult::Skipped));
     assert_eq!(zips(dest.path()).len(), 1);
     let s = settings::load(dir.path());
     assert!(s.last_fingerprint.is_some() && s.last_error.is_none());
-    // Not due again today without force.
-    let third = run_once(db.pool(), dir.path(), now, never(), false, vec![]).await.unwrap();
-    assert!(matches!(third, RunResult::NotDue));
+}
+
+#[tokio::test]
+async fn unchanged_data_is_still_backed_up_when_the_folder_has_no_backup() {
+    let (dir, db) = fresh_db().await;
+    let dest = tempfile::tempdir().unwrap();
+    settings::save(dir.path(), &enabled(dest.path())).unwrap();
+    run_once(db.pool(), dir.path(), at(2026, 11, 24, 9, 0), never(), true, vec![]).await.unwrap();
+    for z in zips(dest.path()) {
+        fs::remove_file(dest.path().join(z)).unwrap(); // user deleted the files
+    }
+    let r = run_once(db.pool(), dir.path(), at(2026, 11, 25, 9, 0), never(), false, vec![]).await;
+    assert!(matches!(r, Ok(RunResult::Written(_))));
+    assert_eq!(zips(dest.path()).len(), 1);
+}
+
+#[tokio::test]
+async fn back_up_now_always_writes_even_when_unchanged() {
+    let (dir, db) = fresh_db().await;
+    let dest = tempfile::tempdir().unwrap();
+    settings::save(dir.path(), &enabled(dest.path())).unwrap();
+    run_once(db.pool(), dir.path(), at(2026, 11, 24, 9, 0), never(), true, vec![]).await.unwrap();
+    let r = run_once(db.pool(), dir.path(), at(2026, 11, 24, 9, 5), never(), true, vec![]).await;
+    assert!(matches!(r, Ok(RunResult::Written(_))));
+    assert_eq!(zips(dest.path()).len(), 2);
+}
+
+#[test]
+fn changing_the_folder_forgets_the_last_backup() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut s = enabled(dir.path());
+    s.last_fingerprint = Some("abc".into());
+    s.last_success_at = Some("2026-11-24T09:00:00+00:00".into());
+    s.apply_ui(true, Some("/other".into()), false);
+    assert!(s.last_fingerprint.is_none() && s.last_success_at.is_none());
+    assert_eq!(s.folder.as_deref(), Some(Path::new("/other")));
+
+    // Same folder: results are kept.
+    s.last_fingerprint = Some("abc".into());
+    s.apply_ui(false, Some("/other".into()), true);
+    assert_eq!(s.last_fingerprint.as_deref(), Some("abc"));
+    assert!(!s.enabled && s.include_audio);
 }
 
 #[tokio::test]

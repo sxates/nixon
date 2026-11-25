@@ -245,9 +245,7 @@ pub fn api_backup_set_settings(
 ) -> Result<BackupSettings, BackupError> {
     let dir = crate::app_paths::app_data_dir();
     let mut s = settings::load(&dir);
-    s.enabled = enabled;
-    s.folder = folder.filter(|f| !f.trim().is_empty()).map(PathBuf::from);
-    s.include_audio = include_audio;
+    s.apply_ui(enabled, folder, include_audio);
     settings::save(&dir, &s)?;
     Ok(s)
 }

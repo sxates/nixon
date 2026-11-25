@@ -97,6 +97,13 @@ pub fn prune(folder: &Path, keep: u32) -> Result<Vec<PathBuf>, BackupError> {
     Ok(deleted)
 }
 
+/// Whether `folder` holds at least one backup file of ours.
+fn has_backup(folder: &Path) -> bool {
+    std::fs::read_dir(folder).is_ok_and(|rd| {
+        rd.flatten().any(|e| is_backup_name(&e.file_name().to_string_lossy()))
+    })
+}
+
 fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
@@ -146,7 +153,8 @@ pub async fn run_once(
     };
     s.last_attempt_at = Some(now.to_rfc3339());
 
-    let outcome = attempt(pool, app_data_dir, &folder, &mut s, now, is_recording, allowed_roots).await;
+    let outcome =
+        attempt(pool, app_data_dir, &folder, &mut s, now, is_recording, allowed_roots, force).await;
     match &outcome {
         Ok(_) => s.last_error = None,
         // A recording starting is not a failure; the next tick retries quietly.
@@ -168,6 +176,7 @@ async fn attempt(
     now: DateTime<Local>,
     is_recording: Arc<dyn Fn() -> bool + Send + Sync>,
     allowed_roots: Vec<PathBuf>,
+    force: bool,
 ) -> Result<RunResult, BackupError> {
     if !folder.is_dir() {
         return Err(BackupError::Io(format!(
@@ -176,7 +185,12 @@ async fn attempt(
         )));
     }
     let fingerprint = current_fingerprint(pool, app_data_dir, s.include_audio).await?;
-    if s.last_fingerprint.as_deref() == Some(fingerprint.as_str()) {
+    // "Unchanged" only counts while a backup is really there to point at, and never for an
+    // explicit Back up now.
+    if !force
+        && s.last_fingerprint.as_deref() == Some(fingerprint.as_str())
+        && has_backup(folder)
+    {
         s.last_success_at = Some(now.to_rfc3339());
         return Ok(RunResult::Skipped);
     }
