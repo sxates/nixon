@@ -13,8 +13,10 @@
 
 pub mod add;
 pub mod archive;
+pub mod commands;
 pub mod export;
 pub mod files;
+pub mod job;
 pub mod manifest;
 pub mod merge;
 pub mod progress;

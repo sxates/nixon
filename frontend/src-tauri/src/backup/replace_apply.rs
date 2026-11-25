@@ -7,6 +7,7 @@
 //!   can still rewrite their `folder_path`;
 //! - `swap_ts` is written before the first file is moved aside; once set, steps 1-3 never run
 //!   again and the swap is completed from whatever is on disk.
+//!
 //! Any failure puts everything back (folders, old DB, replaced settings) and drops the marker.
 
 use std::collections::HashSet;

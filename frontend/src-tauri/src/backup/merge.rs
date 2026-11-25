@@ -125,6 +125,7 @@ pub const LOGICAL_REFS: &[(&str, &str, &str, &str)] = &[
 
 /// What an Add import did.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct MergeCounts {
     /// Meetings inserted.
     pub meetings: u32,

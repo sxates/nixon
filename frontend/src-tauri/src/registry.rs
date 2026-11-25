@@ -10,7 +10,7 @@
 // matching section below.
 
 use crate::{
-    action_items, agent_access, aggregation, anthropic, audio, calendar, cli_llm, database,
+    action_items, agent_access, aggregation, anthropic, audio, backup, calendar, cli_llm, database,
     diarization, fs_guard, groq, llm_activity, meetings, notifications, ollama, onboarding,
     onboarding_disk, openai, openrouter, parakeet_engine, people, power, search, settings, summary,
     topics, transcripts, updater, utils, whisper_engine, zoom,
@@ -442,5 +442,17 @@ pub fn invoke_handler() -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Sen
         llm_activity::commands::api_llm_activity_dismiss_task,
         llm_activity::commands::api_llm_activity_clear_finished,
         llm_activity::commands::api_llm_activity_retry_task,
+        // Backup (specs/0092)
+        backup::commands::api_backup_export,
+        backup::commands::api_backup_cancel,
+        backup::commands::api_backup_status,
+        backup::commands::api_backup_pick_file,
+        backup::commands::api_backup_preview,
+        backup::commands::api_backup_import,
+        backup::commands::api_backup_get_settings,
+        backup::commands::api_backup_set_settings,
+        backup::commands::api_backup_pick_folder,
+        backup::commands::api_backup_run_now,
+        backup::commands::api_backup_last_restore_result,
     ]
 }

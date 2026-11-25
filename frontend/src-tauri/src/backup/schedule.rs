@@ -5,13 +5,13 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
 use chrono::{DateTime, Local};
-use serde::Serialize;
 use sqlx::SqlitePool;
 use tauri::{AppHandle, Emitter, Manager};
 use tokio_util::sync::CancellationToken;
 
 use super::export::{export_to, ExportOptions, ExportSummary};
 use super::files::settings_entries;
+use super::job::{self, Finished, JobKind, EVENT_FINISHED};
 use super::progress::NoProgress;
 use super::settings::{self, BackupSettings};
 use super::snapshot::{logical_fingerprint, snapshot_db};
@@ -195,17 +195,6 @@ async fn attempt(
     Ok(RunResult::Written(summary))
 }
 
-#[derive(Serialize, Clone)]
-#[serde(rename_all = "camelCase")]
-struct Finished {
-    kind: &'static str,
-    ok: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    path: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    error: Option<String>,
-}
-
 /// First check after 2 minutes, then hourly. Skips a tick while a recording is active.
 pub fn spawn(app: AppHandle) {
     tauri::async_runtime::spawn(async move {
@@ -224,6 +213,10 @@ async fn tick(app: &AppHandle) {
     let Some(state) = app.try_state::<crate::state::AppState>() else {
         return;
     };
+    // Another job is running: skip this tick quietly; the next one retries.
+    let Ok(_guard) = job::try_begin(JobKind::Scheduled) else {
+        return;
+    };
     let result = run_once(
         state.db_manager.pool(),
         &crate::app_paths::app_data_dir(),
@@ -234,19 +227,12 @@ async fn tick(app: &AppHandle) {
     )
     .await;
     let payload = match result {
-        Ok(RunResult::Written(sum)) => Finished {
-            kind: "scheduled",
-            ok: true,
-            path: Some(sum.path.to_string_lossy().into_owned()),
-            error: None,
-        },
+        Ok(RunResult::Written(sum)) => Finished::ok(
+            JobKind::Scheduled,
+            Some(sum.path.to_string_lossy().into_owned()),
+        ),
         Err(BackupError::Cancelled) | Ok(_) => return,
-        Err(e) => Finished {
-            kind: "scheduled",
-            ok: false,
-            path: None,
-            error: Some(e.to_string()),
-        },
+        Err(e) => Finished::err(JobKind::Scheduled, &e),
     };
-    let _ = app.emit("backup-finished", payload);
+    let _ = app.emit(EVENT_FINISHED, payload);
 }

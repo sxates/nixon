@@ -33,6 +33,16 @@ pub struct ExportSummary {
     pub manifest: Manifest,
 }
 
+/// `Nixon Backup YYYY-MM-DD HHMM` in local time (no extension).
+pub(crate) fn default_stem() -> String {
+    format!("Nixon Backup {}", chrono::Local::now().format("%Y-%m-%d %H%M"))
+}
+
+/// The save dialog's default file name.
+pub(crate) fn default_file_name() -> String {
+    format!("{}.zip", default_stem())
+}
+
 /// Export into `dest_dir` as `Nixon Backup YYYY-MM-DD HHMM.zip` (suffixed ` 2`, ` 3`… if taken).
 pub async fn export_to(
     pool: &SqlitePool,
@@ -42,7 +52,7 @@ pub async fn export_to(
     cancel: &CancellationToken,
 ) -> Result<ExportSummary, BackupError> {
     std::fs::create_dir_all(dest_dir)?;
-    let stem = format!("Nixon Backup {}", chrono::Local::now().format("%Y-%m-%d %H%M"));
+    let stem = default_stem();
     let mut dest = dest_dir.join(format!("{stem}.zip"));
     let mut n = 2;
     while dest.exists() {
