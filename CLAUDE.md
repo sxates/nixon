@@ -51,6 +51,7 @@ The app lives under `frontend/` (Tauri 2 + Next.js 14 + React 18). ~44k LOC of R
 |---|---|---|
 | Tauri entry / commands | `frontend/src-tauri/src/lib.rs` + `registry.rs` | `lib.rs` = stable setup only; **new commands register in `registry.rs`** (specs/0042) |
 | Meetings / settings commands | `frontend/src-tauri/src/meetings/`, `settings/`, `search.rs`, `transcripts.rs` | former `api/api.rs`, dispersed by domain (specs/0042) |
+| Backup / restore | `frontend/src-tauri/src/backup/` | export/import/scheduled backups (specs/0092, ADR-0021) |
 | Audio capture (macOS) | `frontend/src-tauri/src/audio/capture/core_audio.rs`, `capture/system.rs` | **Core Audio process tap — no BlackHole required**; needs audio-capture permission |
 | Audio mixing + VAD | `frontend/src-tauri/src/audio/pipeline.rs`, `audio/vad.rs` | RMS ducking; Silero VAD drops silence |
 | Transcription (STT) | `frontend/src-tauri/src/whisper_engine/`, `parakeet_engine/`, `audio/transcription/` | Whisper.cpp (whisper-rs) + Nvidia Parakeet; real-time/streaming |

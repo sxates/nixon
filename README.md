@@ -86,6 +86,8 @@ instead, which get new features first and may have more bugs.
 If you turn on Agent access in Settings, Claude Code and the Claude desktop app can read your meetings on request, and
 what it reads goes to its provider; it is off by default and every access is logged.
 
+Backups are written only where you choose, as plain unencrypted zip files; a synced folder stores them with that service.
+
 Full detail in [`PRIVACY_POLICY.md`](PRIVACY_POLICY.md).
 
 ---
