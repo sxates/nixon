@@ -3,7 +3,6 @@
 //! Every job takes the one lock in [`super::job`]. Export, extraction and merge do synchronous
 //! file I/O inside async fns, so each job body runs on a blocking thread (`blocking`).
 
-use std::future::Future;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -15,7 +14,7 @@ use tauri_plugin_dialog::DialogExt;
 use super::add::import_add;
 use super::archive::read_manifest;
 use super::export::{default_file_name, export_to_file, ExportOptions};
-use super::job::{self, EmitProgress, Finished, JobGuard, JobKind, JobStatus, EVENT_FINISHED};
+use super::job::{self, blocking, EmitProgress, Finished, JobGuard, JobKind, JobStatus, EVENT_FINISHED};
 use super::manifest::{build_schema_version, validate};
 use super::merge::MergeCounts;
 use super::replace::{stage, RESULT_NAME};
@@ -23,17 +22,6 @@ use super::schedule::{run_once, RunResult};
 use super::settings::{self, BackupSettings};
 use super::BackupError;
 use crate::state::AppState;
-
-/// Run a job body off the async executor's worker threads and wait for it.
-async fn blocking<T, F>(fut: F) -> Result<T, BackupError>
-where
-    T: Send + 'static,
-    F: Future<Output = Result<T, BackupError>> + Send + 'static,
-{
-    tauri::async_runtime::spawn_blocking(move || tauri::async_runtime::block_on(fut))
-        .await
-        .map_err(|e| BackupError::Io(format!("backup task failed: {e}")))?
-}
 
 fn emit_finished<R: Runtime>(app: &AppHandle<R>, kind: JobKind, result: &Result<(), BackupError>, path: Option<String>) {
     let payload = match result {

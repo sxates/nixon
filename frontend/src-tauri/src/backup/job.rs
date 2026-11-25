@@ -2,6 +2,7 @@
 //! import, scheduled runs and "Back up now". Also the live status snapshot (for a Settings
 //! page that mounts mid-job) and the `backup-progress` / `backup-finished` events.
 
+use std::future::Future;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
@@ -56,6 +57,17 @@ impl Finished {
     pub fn err(kind: JobKind, e: &BackupError) -> Self {
         Self { kind, ok: false, path: None, error: Some(e.to_string()) }
     }
+}
+
+/// Run a job body off the async executor's worker threads and wait for it.
+pub async fn blocking<T, F>(fut: F) -> Result<T, BackupError>
+where
+    T: Send + 'static,
+    F: Future<Output = Result<T, BackupError>> + Send + 'static,
+{
+    tauri::async_runtime::spawn_blocking(move || tauri::async_runtime::block_on(fut))
+        .await
+        .map_err(|e| BackupError::Io(format!("backup task failed: {e}")))?
 }
 
 struct Slot {

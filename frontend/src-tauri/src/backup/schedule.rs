@@ -11,7 +11,7 @@ use tokio_util::sync::CancellationToken;
 
 use super::export::{export_to, ExportOptions, ExportSummary};
 use super::files::settings_entries;
-use super::job::{self, Finished, JobKind, EVENT_FINISHED};
+use super::job::{self, blocking, Finished, JobKind, EVENT_FINISHED};
 use super::progress::NoProgress;
 use super::settings::{self, BackupSettings};
 use super::snapshot::{logical_fingerprint, snapshot_db};
@@ -244,14 +244,19 @@ async fn tick(app: &AppHandle) {
     let Ok(_guard) = job::try_begin(JobKind::Scheduled) else {
         return;
     };
-    let result = run_once(
-        state.db_manager.pool(),
-        &crate::app_paths::app_data_dir(),
-        Local::now(),
-        Arc::new(crate::audio::recording_commands::is_recording_now),
-        false,
-        crate::audio::recording_preferences::known_recording_roots(),
-    )
+    let pool = state.db_manager.pool().clone();
+    // Export does synchronous file I/O: keep it off the async worker threads.
+    let result = blocking(async move {
+        run_once(
+            &pool,
+            &crate::app_paths::app_data_dir(),
+            Local::now(),
+            Arc::new(crate::audio::recording_commands::is_recording_now),
+            false,
+            crate::audio::recording_preferences::known_recording_roots(),
+        )
+        .await
+    })
     .await;
     let payload = match result {
         Ok(RunResult::Written(sum)) => Finished::ok(
