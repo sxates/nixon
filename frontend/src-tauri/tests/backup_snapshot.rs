@@ -179,3 +179,36 @@ async fn fingerprint_covers_settings_files_and_folders() {
         .unwrap();
     assert_ne!(b, c);
 }
+
+#[tokio::test]
+async fn snapshot_rebuilds_a_desynced_fts_index() {
+    let (dir, db) = fresh_db().await;
+    add_meeting(db.pool(), "m1", "realword").await;
+    // Desync the index from its content table, bypassing the triggers: drop every indexed
+    // entry, then plant a stale one for text no transcript holds.
+    sqlx::query("INSERT INTO transcripts_fts(transcripts_fts) VALUES('delete-all')")
+        .execute(db.pool())
+        .await
+        .unwrap();
+    sqlx::query("INSERT INTO transcripts_fts(rowid, transcript, meeting_id) VALUES (9999, 'ghostword', 'ghost')")
+        .execute(db.pool())
+        .await
+        .unwrap();
+    let dest = dir.path().join("snap.sqlite");
+    snapshot_db(db.pool(), &dest).await.unwrap();
+    let mut c = open(&dest).await;
+    let real: Vec<String> = sqlx::query_scalar(
+        "SELECT meeting_id FROM transcripts_fts WHERE transcripts_fts MATCH 'realword'",
+    )
+    .fetch_all(&mut c)
+    .await
+    .unwrap();
+    assert_eq!(real, vec!["m1".to_string()], "rebuild re-indexes the content table");
+    let ghost: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM transcripts_fts WHERE transcripts_fts MATCH 'ghostword'",
+    )
+    .fetch_one(&mut c)
+    .await
+    .unwrap();
+    assert_eq!(ghost, 0, "rebuild drops stale index entries");
+}
