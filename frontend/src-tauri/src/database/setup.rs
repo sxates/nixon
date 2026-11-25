@@ -62,6 +62,9 @@ pub async fn initialize_database_on_startup(app: &AppHandle) -> Result<(), Strin
         Ok(None) => {}
         Err(e) => log::error!("Restore from backup failed and was rolled back: {e}"),
     }
+    // Leftovers of an interrupted backup/import (the recordings-folder ones are swept by the
+    // scheduler once the recordings root is known).
+    crate::backup::sweep::sweep_leftovers(&crate::app_paths::app_data_dir(), &[]);
 
     // Check if this is the first launch (no database exists yet)
     let is_first_launch = DatabaseManager::is_first_launch(app)

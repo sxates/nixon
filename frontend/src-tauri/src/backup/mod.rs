@@ -9,6 +9,7 @@
 //! - `relocate.rs`: moving staged recording folders into the recordings root.
 //! - `replace.rs` / `replace_apply.rs`: Replace restore, staged now and applied at launch.
 //! - `settings.rs` / `schedule.rs`: `backup.json` and the daily scheduled backup.
+//! - `sweep.rs`: removing leftovers of interrupted jobs.
 //! - `snapshot.rs`: the consistent DB copy and the logical fingerprint.
 
 pub mod add;
@@ -26,6 +27,7 @@ mod replace_apply;
 pub mod schedule;
 pub mod settings;
 pub mod snapshot;
+pub mod sweep;
 
 pub use snapshot::MACHINE_BOUND_TABLES;
 

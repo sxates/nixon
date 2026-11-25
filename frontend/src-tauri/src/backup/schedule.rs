@@ -226,6 +226,14 @@ async fn attempt(
 pub fn spawn(app: AppHandle) {
     tauri::async_runtime::spawn(async move {
         tokio::time::sleep(FIRST_CHECK_DELAY).await;
+        // Sweep the recordings-folder staging dirs, with the job lock held so a job the user
+        // just started is never swept from under itself.
+        if let Ok(_guard) = job::try_begin(JobKind::Scheduled) {
+            super::sweep::sweep_leftovers(
+                &crate::app_paths::app_data_dir(),
+                &crate::audio::recording_preferences::known_recording_roots(),
+            );
+        }
         loop {
             tick(&app).await;
             tokio::time::sleep(TICK).await;
