@@ -29,6 +29,7 @@ macro_rules! perf_trace {
 pub mod action_items;
 pub mod agent_access;
 pub mod aggregation;
+pub mod backup;
 pub mod anthropic;
 pub mod api_response;
 pub mod app_paths;
@@ -356,6 +357,9 @@ pub fn run() {
             // specs/0072: audio lifecycle — finish meetings a quit interrupted mid-processing,
             // then enforce the retention policy (+60 s, then hourly). After database init.
             audio::lifecycle::spawn(_app.handle().clone());
+
+            // specs/0092: daily scheduled backup (+120 s, then hourly). After database init.
+            backup::schedule::spawn(_app.handle().clone());
 
             // spec 0051 WS2: return meetings stranded at processing_mode='live' (a
             // stop-time handoff that never completed) to the deferred backlog. Spawned

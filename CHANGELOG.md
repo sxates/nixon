@@ -19,7 +19,13 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 ## [Unreleased]
 
-_(nothing yet)_
+### Added
+
+- **Back up and restore.** Settings › General › Backup exports everything to a zip you keep — meetings, notes, To-Dos, Topics and People, with or without audio — and imports it on another Mac, either replacing what's there or adding what's missing. Turn on daily backups to a folder you choose; Nixon keeps the newest seven. Backups aren't encrypted, so keep them somewhere you trust.
+
+### Internal
+
+- New `backup/` module (export, import, scheduled backups; specs/0092) and ADR-0021 for the archive format.
 
 ## [0.18.2] - 2026-11-18
 

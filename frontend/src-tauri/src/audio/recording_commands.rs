@@ -1064,6 +1064,11 @@ pub async fn stop_recording<R: Runtime>(
 
 /// Check if recording is active
 pub async fn is_recording() -> bool {
+    is_recording_now()
+}
+
+/// Synchronous form of [`is_recording`] (specs/0092: a scheduled backup polls it mid-run).
+pub fn is_recording_now() -> bool {
     IS_RECORDING.load(Ordering::SeqCst)
 }
 

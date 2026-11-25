@@ -51,6 +51,21 @@ pub async fn initialize_database_on_startup(app: &AppHandle) -> Result<(), Strin
     // for either the first-launch or normal path (specs/0033).
     assert_fts5_available().await?;
 
+    // specs/0092: a Replace restore staged by the previous run is applied here, before
+    // anything opens the DB. It never fails startup: on error it rolls itself back and
+    // leaves `restore-result.json` for the UI.
+    match crate::backup::replace::apply_pending(&crate::app_paths::app_data_dir()).await {
+        Ok(Some(outcome)) => info!(
+            "Restore applied: {} meetings from {}",
+            outcome.meetings, outcome.from
+        ),
+        Ok(None) => {}
+        Err(e) => log::error!("Restore from backup failed and was rolled back: {e}"),
+    }
+    // Leftovers of an interrupted backup/import (the recordings-folder ones are swept by the
+    // scheduler once the recordings root is known).
+    crate::backup::sweep::sweep_leftovers(&crate::app_paths::app_data_dir(), &[]);
+
     // Check if this is the first launch (no database exists yet)
     let is_first_launch = DatabaseManager::is_first_launch(app)
         .await
@@ -73,6 +88,9 @@ pub async fn initialize_database_on_startup(app: &AppHandle) -> Result<(), Strin
         let db_manager = DatabaseManager::new_from_app_handle(app)
             .await
             .map_err(|e| format!("Failed to initialize database manager: {}", e))?;
+
+        // The DB opened, so whatever a restore moved aside is no longer needed (specs/0092).
+        crate::backup::replace::cleanup_replaced(&crate::app_paths::app_data_dir());
 
         // One-time (idempotent) move of any cleartext API keys into the Keychain
         // (spec 0030 WS1 / ADR-0009). Best-effort: failures leave keys readable
