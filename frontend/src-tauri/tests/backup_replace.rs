@@ -476,3 +476,23 @@ async fn half_swapped_launch_that_then_fails_restores_the_original() {
     assert_eq!(aside_count(&b.app_data), 0);
     assert!(!b.app_data.join(MARKER_NAME).exists());
 }
+
+#[tokio::test]
+async fn cancel_pending_removes_marker_and_staging() {
+    let a = old_mac().await;
+    let b = new_mac().await;
+    let out = tempfile::tempdir().unwrap();
+    let zip = export_a(&a, out.path()).await;
+    stage_into(&b, &zip).await.unwrap();
+    assert!(b.app_data.join(MARKER_NAME).is_file());
+    assert!(b.app_data.join("restore-staging").is_dir());
+
+    app_lib::backup::replace::cancel_pending(&b.app_data);
+
+    assert!(!b.app_data.join(MARKER_NAME).exists());
+    assert!(!b.app_data.join("restore-staging").exists());
+    assert!(!b.root.join(".nixon-restore-staging").exists());
+    // Nothing else is touched, and a second call is harmless.
+    assert_eq!(count(b.db.pool(), "SELECT COUNT(*) FROM meetings").await, 1);
+    app_lib::backup::replace::cancel_pending(&b.app_data);
+}

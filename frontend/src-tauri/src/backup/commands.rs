@@ -179,10 +179,12 @@ pub async fn api_backup_import<R: Runtime>(
     path: String,
     mode: ImportMode,
 ) -> Result<Option<MergeCounts>, BackupError> {
-    if mode == ImportMode::Replace && crate::audio::recording_commands::is_recording().await {
-        return Err(BackupError::Io("Stop the recording before restoring a backup".into()));
-    }
     let guard = job::try_begin(JobKind::Import)?;
+    // Checked after the lock is taken (nothing else can start a job) and again after staging:
+    // a recording that began meanwhile must not be cut by the restart.
+    if mode == ImportMode::Replace && crate::audio::recording_commands::is_recording().await {
+        return Err(BackupError::RecordingActive);
+    }
     let pool = state.db_manager.pool().clone();
     let zip = PathBuf::from(&path);
     let app_data = crate::app_paths::app_data_dir();
@@ -207,6 +209,13 @@ pub async fn api_backup_import<R: Runtime>(
             .await;
             if let Err(e) = result {
                 drop(guard);
+                emit_finished(&app, JobKind::Import, &Err(e.clone()), Some(path));
+                return Err(e);
+            }
+            if crate::audio::recording_commands::is_recording().await {
+                super::replace::cancel_pending(&crate::app_paths::app_data_dir());
+                drop(guard);
+                let e = BackupError::RecordingActive;
                 emit_finished(&app, JobKind::Import, &Err(e.clone()), Some(path));
                 return Err(e);
             }

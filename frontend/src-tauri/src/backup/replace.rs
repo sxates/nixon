@@ -69,6 +69,19 @@ fn remove_dir_if_exists(p: &Path) -> Result<(), BackupError> {
     }
 }
 
+/// Undo a successful [`stage`] that will not be applied: remove the marker and both staging
+/// dirs it names. Best effort; a missing marker is fine.
+pub fn cancel_pending(app_data_dir: &Path) {
+    let marker_path = app_data_dir.join(MARKER_NAME);
+    if let Ok(bytes) = fs::read(&marker_path) {
+        if let Ok(m) = serde_json::from_slice::<Marker>(&bytes) {
+            let _ = fs::remove_dir_all(&m.staging_dir);
+            let _ = fs::remove_dir_all(&m.recordings_staging);
+        }
+    }
+    let _ = fs::remove_file(&marker_path);
+}
+
 /// Export the current data to `pre-restore/<stem> (before restore).zip`, keep the newest 3.
 async fn write_safety_copy(
     pool: &SqlitePool,

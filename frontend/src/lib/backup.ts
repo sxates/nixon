@@ -88,6 +88,8 @@ export function backupErrorText(error: unknown): string {
     }
     case 'notABackup':
       return "This isn't a Nixon backup.";
+    case 'recordingActive':
+      return 'Stop the recording before replacing your data.';
     case 'busy':
       return 'A backup is already running.';
     default:
