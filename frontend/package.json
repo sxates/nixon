@@ -1,6 +1,6 @@
 {
     "name": "nixon",
-    "version": "0.18.2",
+    "version": "0.18.3",
     "private": true,
     "packageManager": "pnpm@12.5.1",
     "engines": {

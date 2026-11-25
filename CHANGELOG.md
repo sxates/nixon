@@ -19,6 +19,10 @@ redesign has been through real use. Git tags are plain `vX.Y.Z`.
 
 ## [Unreleased]
 
+_(nothing yet)_
+
+## [0.18.3] - 2026-11-24
+
 ### Added
 
 - **Back up and restore.** Settings › General › Backup exports everything to a zip — meetings, notes, To-Dos, Topics and People, with or without audio — into a backup folder (your recordings folder unless you pick another), lists every backup there with Show in Finder and Delete, and imports one on another Mac, either replacing what's there or adding what's missing. Turn on daily backups and Nixon keeps the newest five automatic ones; backups you make yourself stay until you delete them. Backups aren't encrypted, so keep them somewhere you trust.
