@@ -5,6 +5,7 @@
 //! - `archive.rs`: the zip writer and the safe extractor.
 //! - `export.rs`: snapshot + settings + meeting folders into one archive.
 //! - `progress.rs`: the progress sink trait.
+//! - `relocate.rs`: moving staged recording folders into the recordings root.
 //! - `snapshot.rs`: the consistent DB copy and the logical fingerprint.
 
 pub mod archive;
@@ -12,6 +13,7 @@ pub mod export;
 pub mod files;
 pub mod manifest;
 pub mod progress;
+pub mod relocate;
 pub mod snapshot;
 
 pub use snapshot::MACHINE_BOUND_TABLES;
