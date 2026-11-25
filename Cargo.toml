@@ -22,3 +22,11 @@ tokio = { version = "1.32.0", features = ["full"] }
 # GC can't keep up with this tree's fingerprint churn. Costs some rebuild speed.
 [profile.dev]
 incremental = false
+
+# No stripping in release. With Xcode 27.2's strip, cargo's default release strip
+# ("debuginfo") plus the `-mmacosx-version-min=14.2` link-arg the Tauri build passes
+# produces Mach-O files dyld refuses to load ("mis-aligned LINKEDIT string pool").
+# Proc-macro dylibs then fail with E0463 "can't find crate", and a stripped app
+# binary would risk the same at launch. Costs only std's debug info in the binary.
+[profile.release]
+strip = false
