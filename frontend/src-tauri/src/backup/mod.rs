@@ -2,9 +2,13 @@
 //!
 //! - `manifest.rs`: the archive's `manifest.json`, its validation and the build's schema version.
 //! - `files.rs`: which settings files and meeting-folder files travel.
+//! - `snapshot.rs`: the consistent DB copy and the logical fingerprint.
 
 pub mod files;
 pub mod manifest;
+pub mod snapshot;
+
+pub use snapshot::MACHINE_BOUND_TABLES;
 
 use std::fmt;
 
