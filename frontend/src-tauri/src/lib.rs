@@ -358,6 +358,9 @@ pub fn run() {
             // then enforce the retention policy (+60 s, then hourly). After database init.
             audio::lifecycle::spawn(_app.handle().clone());
 
+            // specs/0092: daily scheduled backup (+120 s, then hourly). After database init.
+            backup::schedule::spawn(_app.handle().clone());
+
             // spec 0051 WS2: return meetings stranded at processing_mode='live' (a
             // stop-time handoff that never completed) to the deferred backlog. Spawned
             // AFTER database init; best-effort, retried on the next launch.

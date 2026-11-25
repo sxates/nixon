@@ -8,6 +8,7 @@
 //! - `progress.rs`: the progress sink trait.
 //! - `relocate.rs`: moving staged recording folders into the recordings root.
 //! - `replace.rs` / `replace_apply.rs`: Replace restore, staged now and applied at launch.
+//! - `settings.rs` / `schedule.rs`: `backup.json` and the daily scheduled backup.
 //! - `snapshot.rs`: the consistent DB copy and the logical fingerprint.
 
 pub mod add;
@@ -20,6 +21,8 @@ pub mod progress;
 pub mod relocate;
 pub mod replace;
 mod replace_apply;
+pub mod schedule;
+pub mod settings;
 pub mod snapshot;
 
 pub use snapshot::MACHINE_BOUND_TABLES;
