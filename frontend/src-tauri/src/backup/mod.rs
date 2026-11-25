@@ -3,16 +3,19 @@
 //! - `manifest.rs`: the archive's `manifest.json`, its validation and the build's schema version.
 //! - `files.rs`: which settings files and meeting-folder files travel.
 //! - `archive.rs`: the zip writer and the safe extractor.
+//! - `merge.rs` / `add.rs`: the Add-what's-missing import (table classification + SQL, orchestration).
 //! - `export.rs`: snapshot + settings + meeting folders into one archive.
 //! - `progress.rs`: the progress sink trait.
 //! - `relocate.rs`: moving staged recording folders into the recordings root.
 //! - `replace.rs` / `replace_apply.rs`: Replace restore, staged now and applied at launch.
 //! - `snapshot.rs`: the consistent DB copy and the logical fingerprint.
 
+pub mod add;
 pub mod archive;
 pub mod export;
 pub mod files;
 pub mod manifest;
+pub mod merge;
 pub mod progress;
 pub mod relocate;
 pub mod replace;

@@ -115,7 +115,7 @@ async fn write_safety_copy(
 }
 
 /// Bring the staged DB's schema up to this build, as a single self-contained file.
-async fn migrate_staged(db: &Path) -> Result<(), BackupError> {
+pub(super) async fn migrate_staged(db: &Path) -> Result<(), BackupError> {
     let opts = SqliteConnectOptions::new()
         .filename(db)
         .create_if_missing(false)
