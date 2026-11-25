@@ -86,7 +86,7 @@ pub fn prune(folder: &Path, keep: u32) -> Result<Vec<PathBuf>, BackupError> {
         }
     }
     backups.sort_by(|a, b| a.0.cmp(&b.0));
-    let excess = backups.len().saturating_sub(keep as usize);
+    let excess = backups.len().saturating_sub(keep.max(1) as usize);
     dead.extend(backups.into_iter().take(excess).map(|(_, p)| p));
     let mut deleted = Vec::new();
     for p in dead {

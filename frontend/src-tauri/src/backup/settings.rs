@@ -59,10 +59,12 @@ impl BackupSettings {
 
 /// Read `backup.json`; missing or unreadable means defaults.
 pub fn load(app_data_dir: &Path) -> BackupSettings {
-    std::fs::read(app_data_dir.join(SETTINGS_FILE))
+    let mut s: BackupSettings = std::fs::read(app_data_dir.join(SETTINGS_FILE))
         .ok()
         .and_then(|b| serde_json::from_slice(&b).ok())
-        .unwrap_or_default()
+        .unwrap_or_default();
+    s.keep = s.keep.max(1); // never "keep 0": that would delete every backup
+    s
 }
 
 /// Serializes every load-modify-save of `backup.json` (UI changes and scheduler results).

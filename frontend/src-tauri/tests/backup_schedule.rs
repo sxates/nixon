@@ -259,3 +259,17 @@ fn update_serializes_concurrent_changes() {
     }
     assert_eq!(settings::load(dir.path()).keep, 7 + 8 * 20);
 }
+
+#[test]
+fn keep_is_at_least_one() {
+    let dir = tempfile::tempdir().unwrap();
+    fs::write(dir.path().join("backup.json"), br#"{"keep":0}"#).unwrap();
+    assert_eq!(settings::load(dir.path()).keep, 1);
+
+    let f = tempfile::tempdir().unwrap();
+    for d in 10..13 {
+        fs::write(f.path().join(format!("Nixon Backup 2026-11-{d} 0930.zip")), b"z").unwrap();
+    }
+    prune(f.path(), 0).unwrap();
+    assert_eq!(zips(f.path()), ["Nixon Backup 2026-11-12 0930.zip"]);
+}
