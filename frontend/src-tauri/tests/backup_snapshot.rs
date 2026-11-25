@@ -212,3 +212,53 @@ async fn snapshot_rebuilds_a_desynced_fts_index() {
     .unwrap();
     assert_eq!(ghost, 0, "rebuild drops stale index entries");
 }
+
+// 0092 final review (privacy): machine-bound tables (API keys, license key) never travel.
+#[tokio::test]
+async fn snapshot_drops_machine_bound_rows_and_their_bytes() {
+    let (dir, db) = fresh_db().await;
+    add_meeting(db.pool(), "m1", "hello snapshot").await;
+    sqlx::query("DELETE FROM settings").execute(db.pool()).await.unwrap();
+    sqlx::query(
+        "INSERT INTO settings (id, provider, model, whisperModel, openaiApiKey) \
+         VALUES ('s','p','m','w','sk-fake-SECRET-KEY-12345')",
+    )
+    .execute(db.pool())
+    .await
+    .unwrap();
+    let dest = dir.path().join("snap.sqlite");
+    snapshot_db(db.pool(), &dest).await.unwrap();
+
+    let mut c = open(&dest).await;
+    let n: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM settings")
+        .fetch_one(&mut c)
+        .await
+        .unwrap();
+    assert_eq!(n, 0);
+    let migrations: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM _sqlx_migrations")
+        .fetch_one(&mut c)
+        .await
+        .unwrap();
+    assert!(migrations > 0, "migration history must stay so restore can migrate");
+    let hits: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM transcripts_fts WHERE transcripts_fts MATCH 'snapshot'",
+    )
+    .fetch_one(&mut c)
+    .await
+    .unwrap();
+    assert_eq!(hits, 1, "FTS rebuilt after the in-place VACUUM");
+    drop(c);
+
+    let raw = std::fs::read(&dest).unwrap();
+    let needle = b"sk-fake-SECRET-KEY-12345";
+    assert!(
+        !raw.windows(needle.len()).any(|w| w == needle),
+        "the key must not survive in free pages"
+    );
+    // The live DB is untouched.
+    let live: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM settings")
+        .fetch_one(db.pool())
+        .await
+        .unwrap();
+    assert_eq!(live, 1);
+}

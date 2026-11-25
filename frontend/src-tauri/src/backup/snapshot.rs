@@ -65,11 +65,30 @@ async fn snapshot_inner(pool: &SqlitePool, dest: &Path) -> Result<SnapshotInfo, 
         .await?;
 
     let mut conn = open(dest, false).await?;
-    let info = describe_and_rebuild(&mut conn).await;
+    let info = scrub_and_describe(&mut conn).await;
     let closed = conn.close().await;
     let info = info?;
     closed?;
     Ok(info)
+}
+
+/// Empty the machine-bound tables (API keys, license key and the like never leave this Mac;
+/// `_sqlx_migrations` stays so a restore can migrate), then `VACUUM` in place so the deleted
+/// pages are gone from the file, then rebuild FTS and describe.
+async fn scrub_and_describe(conn: &mut SqliteConnection) -> Result<SnapshotInfo, BackupError> {
+    sqlx::query("PRAGMA secure_delete = ON").execute(&mut *conn).await?;
+    for t in MACHINE_BOUND_TABLES.iter().filter(|t| **t != "_sqlx_migrations") {
+        let exists: Option<String> =
+            sqlx::query_scalar("SELECT name FROM sqlite_master WHERE type='table' AND name = ?")
+                .bind(t)
+                .fetch_optional(&mut *conn)
+                .await?;
+        if exists.is_some() {
+            sqlx::query(&format!("DELETE FROM {}", quote(t))).execute(&mut *conn).await?;
+        }
+    }
+    sqlx::query("VACUUM").execute(&mut *conn).await?;
+    describe_and_rebuild(conn).await
 }
 
 async fn describe_and_rebuild(conn: &mut SqliteConnection) -> Result<SnapshotInfo, BackupError> {
