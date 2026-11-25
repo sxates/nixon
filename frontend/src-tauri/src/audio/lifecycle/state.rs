@@ -137,6 +137,22 @@ fn is_audio_extension(ext: &str) -> bool {
     ext == "opus" || AUDIO_EXTENSIONS.contains(&ext)
 }
 
+/// A media file the retention sweep purges: any audio extension (which covers the `mic.wav` /
+/// `system.wav` channel files and their `_segNN` resume segments), the decoder's
+/// `.nixon_decode_*.wav` temps, and the compressor's `*.opus.tmp`. Shared with backups
+/// (specs/0092) so "audio" means the same thing in both.
+pub fn is_media_file(path: &Path) -> bool {
+    let name = path
+        .file_name()
+        .map(|n| n.to_string_lossy().to_lowercase())
+        .unwrap_or_default();
+    let ext = path
+        .extension()
+        .map(|e| e.to_string_lossy().to_lowercase())
+        .unwrap_or_default();
+    is_audio_extension(&ext) || name.ends_with(".opus.tmp")
+}
+
 /// The folder's `metadata.json` says the recording is still running (or was interrupted).
 /// A missing or unreadable file is a finalized folder (pre-0037 layouts have none).
 pub fn folder_is_recording(folder: &Path) -> bool {
@@ -163,12 +179,7 @@ pub fn deletable_files(folder: &Path) -> Vec<(PathBuf, u64)> {
         if !meta.is_file() {
             continue;
         }
-        let name = entry.file_name().to_string_lossy().to_lowercase();
-        let ext = path
-            .extension()
-            .map(|e| e.to_string_lossy().to_lowercase())
-            .unwrap_or_default();
-        if is_audio_extension(&ext) || name.ends_with(".opus.tmp") {
+        if is_media_file(&path) {
             out.push((path, meta.len()));
         }
     }

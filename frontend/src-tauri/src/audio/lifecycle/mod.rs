@@ -23,6 +23,7 @@ pub use hooks::{
     reevaluate_after_backlog, reset_for_resume, spawn, spawn_apply, sweep_now, AudioStateChanged,
     FinishOutcome, EVENT_AUDIO_STATE_CHANGED,
 };
+pub use state::is_media_file;
 
 /// A meeting is "not really transcribed" below this many transcript segments (specs/0029
 /// WS7.2): its audio may be the only record of it. Part of the backlog predicate.

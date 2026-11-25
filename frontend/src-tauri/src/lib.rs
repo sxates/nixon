@@ -29,6 +29,7 @@ macro_rules! perf_trace {
 pub mod action_items;
 pub mod agent_access;
 pub mod aggregation;
+pub mod backup;
 pub mod anthropic;
 pub mod api_response;
 pub mod app_paths;
