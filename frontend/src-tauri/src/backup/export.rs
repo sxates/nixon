@@ -179,7 +179,21 @@ async fn run(
 
     let mut recordings = Vec::new();
     for p in &planned {
-        let _lease = folder_lease::acquire(&p.meeting_id, LeaseHolder::Backup).await;
+        // Wait in short slices so cancel / abort_if are honored while another job holds it.
+        let _lease = loop {
+            if cancelled() {
+                return Err(BackupError::Cancelled);
+            }
+            if let Ok(l) = folder_lease::acquire_within(
+                &p.meeting_id,
+                LeaseHolder::Backup,
+                std::time::Duration::from_millis(200),
+            )
+            .await
+            {
+                break l;
+            }
+        };
         // The folder may have moved while we waited; trust the live path if it is usable.
         let live: Option<String> =
             sqlx::query_scalar("SELECT folder_path FROM meetings WHERE id = ?")

@@ -284,3 +284,24 @@ fn extract_rejects_zip_slip() {
     assert!(!d.path().join("evil").exists() && !d.path().join("a/evil").exists());
     assert!(!a.exists() && !b.exists(), "nothing written at all");
 }
+
+#[tokio::test]
+async fn export_cancel_during_lease_wait_returns_promptly() {
+    use app_lib::audio::folder_lease::{acquire, LeaseHolder};
+    let f = fixture().await;
+    let _held = acquire("m1", LeaseHolder::Recording).await;
+    let cancel = CancellationToken::new();
+    let (pool, o, c2) = (f.db.pool().clone(), opts(&f.app_data, false), cancel.clone());
+    let out = f.out.clone();
+    let task = tokio::spawn(async move { export_to(&pool, &out, &o, &NoProgress, &c2).await });
+    tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+    assert!(!task.is_finished(), "should be waiting on the lease");
+    cancel.cancel();
+    let r = tokio::time::timeout(std::time::Duration::from_secs(5), task)
+        .await
+        .expect("export must return promptly after cancel")
+        .unwrap();
+    assert_eq!(r.unwrap_err(), BackupError::Cancelled);
+    assert_eq!(fs::read_dir(&f.out).unwrap().count(), 0);
+    assert!(no_snapshot_left(&f.app_data));
+}
