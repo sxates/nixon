@@ -77,10 +77,13 @@ fn prune_keeps_newest_and_ignores_lookalikes() {
         fs::write(f.join(o), b"x").unwrap();
     }
     let old = "Nixon Backup 2026-11-01 0930.zip.partial";
-    fs::write(f.join(old), b"x").unwrap();
-    let file = fs::File::options().write(true).open(f.join(old)).unwrap();
-    file.set_modified(SystemTime::now() - Duration::from_secs(2 * 24 * 3600))
-        .unwrap();
+    let lookalike = "Nixon Backup foo.zip.partial";
+    for name in [old, lookalike] {
+        fs::write(f.join(name), b"x").unwrap();
+        let file = fs::File::options().write(true).open(f.join(name)).unwrap();
+        file.set_modified(SystemTime::now() - Duration::from_secs(2 * 24 * 3600))
+            .unwrap();
+    }
 
     let deleted = prune(f, 7).unwrap();
     assert_eq!(deleted.len(), 3);
@@ -92,7 +95,8 @@ fn prune_keeps_newest_and_ignores_lookalikes() {
     for o in others {
         assert!(left.contains(&o.to_string()), "{o} must survive");
     }
-    assert_eq!(left.len(), 7 + others.len());
+    assert!(left.contains(&lookalike.to_string()));
+    assert_eq!(left.len(), 7 + others.len() + 1);
 }
 
 #[tokio::test]
@@ -150,4 +154,17 @@ async fn force_without_folder_is_an_error() {
     let (dir, db) = fresh_db().await;
     let r = run_once(db.pool(), dir.path(), at(2026, 11, 24, 9, 0), never(), true, vec![]).await;
     assert!(r.is_err());
+}
+
+#[tokio::test]
+async fn save_failure_does_not_hide_a_written_backup() {
+    let (dir, db) = fresh_db().await;
+    let dest = tempfile::tempdir().unwrap();
+    settings::save(dir.path(), &enabled(dest.path())).unwrap();
+    // write_atomic stages through backup.json.tmp; a directory there makes every save fail.
+    fs::create_dir(dir.path().join("backup.json.tmp")).unwrap();
+
+    let r = run_once(db.pool(), dir.path(), at(2026, 11, 24, 9, 0), never(), false, vec![]).await;
+    assert!(matches!(r, Ok(RunResult::Written(_))));
+    assert_eq!(zips(dest.path()).len(), 1);
 }

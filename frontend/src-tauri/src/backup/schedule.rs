@@ -51,9 +51,13 @@ fn is_backup_name(name: &str) -> bool {
         .is_match(name)
 }
 
-/// Dead leftovers of our own exports: `Nixon Backup ….zip.partial`.
+/// Dead leftovers of our own exports: `Nixon Backup YYYY-MM-DD HHMM.zip.partial`.
 fn is_partial_name(name: &str) -> bool {
-    name.starts_with("Nixon Backup ") && name.ends_with(".zip.partial")
+    static RE: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
+    RE.get_or_init(|| {
+        regex::Regex::new(r"^Nixon Backup \d{4}-\d{2}-\d{2} \d{4}\.zip\.partial$").unwrap()
+    })
+    .is_match(name)
 }
 
 /// Delete backups beyond the newest `keep` (by name = time) and `.partial` files older than a
@@ -149,7 +153,10 @@ pub async fn run_once(
         Err(BackupError::Cancelled) => {}
         Err(e) => s.last_error = Some(e.to_string()),
     }
-    settings::save(app_data_dir, &s)?;
+    // A failed save must not hide a backup that was written (it would be retried hourly).
+    if let Err(e) = settings::save(app_data_dir, &s) {
+        log::warn!("backup: could not save backup.json: {e}");
+    }
     outcome
 }
 
