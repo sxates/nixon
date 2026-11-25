@@ -645,6 +645,47 @@
         hasSummary: !!m.summary_markdown,
       })),
 
+    // backup/commands.rs (camelCase DTOs): the Settings > Backup card renders the scheduled
+    // state with a last backup from this morning; the manual jobs resolve without progress.
+    api_backup_get_settings: () => {
+      const at = new Date();
+      at.setHours(9, 30, 0, 0);
+      return {
+        enabled: true,
+        folder: '~/Library/Mobile Documents/com~apple~CloudDocs/Nixon Backups',
+        includeAudio: false,
+        keep: 7,
+        lastSuccessAt: at.toISOString(),
+        lastError: null,
+        lastSize: 50331648,
+      };
+    },
+    api_backup_set_settings: (a) => ({
+      enabled: !!a.enabled,
+      folder: a.folder ?? null,
+      includeAudio: !!a.includeAudio,
+      keep: 7,
+      lastSuccessAt: null,
+      lastError: null,
+      lastSize: null,
+    }),
+    api_backup_status: () => null,
+    api_backup_cancel: () => false,
+    api_backup_export: () => null,
+    api_backup_pick_file: () => null,
+    api_backup_pick_folder: () => null,
+    api_backup_preview: () => ({
+      createdAt: new Date().toISOString(),
+      appVersion: '0.18.2',
+      includesAudio: false,
+      counts: { meetings: 42, people: 12, topics: 6, actionItems: 31 },
+      bytes: 50331648,
+      localMeetings: 0,
+    }),
+    api_backup_import: () => null,
+    api_backup_run_now: () => ({ result: 'skipped' }),
+    api_backup_last_restore_result: () => null,
+
     // agent_access/commands.rs (#[serde(rename_all = "camelCase")], entry fields flattened):
     // status -> AgentAccessStatus, log -> AccessEntryView[]. Enabled + a few rows so the
     // Settings shot shows the populated section; setters echo the status / resolve.

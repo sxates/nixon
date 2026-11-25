@@ -12,6 +12,7 @@ import { PreferenceSettings } from '@/components/PreferenceSettings';
 import { AudioSettings } from '@/components/AudioSettings';
 import { CalendarSettings } from '@/components/CalendarSettings';
 import { AgentAccessSection } from '@/components/AgentAccessSection';
+import { BackupSection } from '@/components/BackupSection';
 import { OwnerEmailSettings } from '@/components/OwnerEmailSettings';
 import { SummaryModelSettings } from '@/components/SummaryModelSettings';
 import { SummaryModelSection } from '@/components/SummaryModelSection';
@@ -157,6 +158,8 @@ function SettingsPageContent() {
             <PreferenceSettings />
             {/* Claude Code read access (specs/0087) — anchor #agent-access. */}
             <AgentAccessSection />
+            {/* Backup and restore (specs/0092) — anchor #backup. */}
+            <BackupSection />
           </TabsContent>
           <TabsContent value="audio" className="space-y-8">
             {/* Permission AND device per input, one row each (owner, specs/0067). When the

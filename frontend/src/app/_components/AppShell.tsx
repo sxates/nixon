@@ -16,6 +16,7 @@ import VoiceprintRetractionListener from '@/components/People/VoiceprintRetracti
 import PermissionsModal from '@/components/PermissionsModal'
 import { UpdatedNotice } from '@/components/Updates/UpdatedNotice'
 import { RecordingsMoveWatcher } from '@/components/RecordingsMoveWatcher'
+import { RestoreResultToast } from '@/components/RestoreResultToast'
 
 interface AppShellProps {
   showOnboarding: boolean
@@ -85,6 +86,8 @@ export function AppShell({ showOnboarding, onOnboardingComplete, children }: App
       <UpdatedNotice />
       {/* Recordings-folder moves: the finish toast and the first-launch gather question (specs/0073) */}
       <RecordingsMoveWatcher />
+      {/* After a backup Replace restarted the app: say what was restored, once (specs/0092) */}
+      <RestoreResultToast />
     </div>
   )
 }
