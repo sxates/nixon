@@ -304,9 +304,30 @@ pub async fn begin(conn: &mut SqliteConnection, staged_db: &Path) -> Result<(), 
     Ok(())
 }
 
+/// Test hook: while a path fragment is listed, `end` pretends `DETACH` failed for an attached
+/// DB whose file path contains it (keyed so parallel tests do not interfere).
+#[doc(hidden)]
+pub static FAIL_DETACH_FOR_PATHS: std::sync::Mutex<Vec<String>> = std::sync::Mutex::new(Vec::new());
+
+async fn detach_forced_to_fail(conn: &mut SqliteConnection) -> bool {
+    let frags = FAIL_DETACH_FOR_PATHS.lock().map(|g| g.clone()).unwrap_or_default();
+    if frags.is_empty() {
+        return false;
+    }
+    let file: Option<String> =
+        sqlx::query_scalar("SELECT file FROM pragma_database_list WHERE name = 'backup'")
+            .fetch_optional(&mut *conn)
+            .await
+            .ok()
+            .flatten();
+    file.is_some_and(|f| frags.iter().any(|x| f.contains(x.as_str())))
+}
+
 /// `COMMIT` or `ROLLBACK`, drop the temp tables, `DETACH`. Detach and cleanup run even if the
-/// commit fails (after a rollback), so the pooled connection goes back clean.
-pub async fn end(conn: &mut SqliteConnection, commit: bool) -> Result<(), BackupError> {
+/// commit fails (after a rollback). `Err` means the transaction did NOT commit. `Ok(true)` means
+/// the connection is clean; `Ok(false)` means the commit (or rollback) succeeded but `DETACH`
+/// did not, so the connection still has `backup` attached and must not go back to the pool.
+pub async fn end(conn: &mut SqliteConnection, commit: bool) -> Result<bool, BackupError> {
     let mut result = Ok(());
     if commit {
         if let Err(e) = sqlx::query("COMMIT").execute(&mut *conn).await {
@@ -319,10 +340,11 @@ pub async fn end(conn: &mut SqliteConnection, commit: bool) -> Result<(), Backup
     for t in ["new_meetings", "new_action_items", "new_topics"] {
         let _ = sqlx::query(&format!("DROP TABLE IF EXISTS temp.{t}")).execute(&mut *conn).await;
     }
-    let detached = sqlx::query("DETACH DATABASE backup").execute(&mut *conn).await;
+    let forced = detach_forced_to_fail(conn).await;
+    let detached = !forced
+        && sqlx::query("DETACH DATABASE backup").execute(&mut *conn).await.is_ok();
     result?;
-    detached?;
-    Ok(())
+    Ok(detached)
 }
 
 /// Run every insert inside the transaction [`begin`] opened. Does not commit.
@@ -419,7 +441,7 @@ pub async fn merge_add_missing(
     begin(conn, staged_db).await?;
     match insert_missing(conn).await {
         Ok(counts) => {
-            end(conn, true).await?;
+            end(conn, true).await?; // committed; a dirty connection is the caller's to drop
             Ok(counts)
         }
         Err(e) => {

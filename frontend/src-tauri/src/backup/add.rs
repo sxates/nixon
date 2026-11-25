@@ -116,9 +116,18 @@ async fn run(
         let _ = undo(&placed, rec_staging);
         return Err(BackupError::Cancelled);
     }
-    if let Err(e) = merge::end(&mut conn, true).await {
-        let _ = undo(&placed, rec_staging);
-        return Err(e);
+    match merge::end(&mut conn, true).await {
+        // Committed. If DETACH failed the connection still has `backup` attached: close it
+        // instead of returning it to the pool. Never undo anything after a commit.
+        Ok(true) => {}
+        Ok(false) => {
+            log::warn!("backup import: DETACH failed after commit; closing the connection");
+            drop(conn.detach());
+        }
+        Err(e) => {
+            let _ = undo(&placed, rec_staging);
+            return Err(e);
+        }
     }
     Ok(counts)
 }

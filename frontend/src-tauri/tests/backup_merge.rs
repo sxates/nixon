@@ -484,3 +484,30 @@ async fn add_refuses_while_a_replace_is_pending() {
     assert_eq!(add_into(&b, &zip).await.unwrap_err(), BackupError::Busy);
     assert_eq!(count(b.db.pool(), "SELECT COUNT(*) FROM meetings").await, 1);
 }
+
+#[tokio::test]
+async fn detach_failure_after_commit_keeps_the_import() {
+    let a = old_mac().await;
+    let b = local_mac().await;
+    let out = tempfile::tempdir().unwrap();
+    let zip = export(&a, out.path()).await;
+    let frag = b.app_data.to_string_lossy().into_owned();
+    app_lib::backup::merge::FAIL_DETACH_FOR_PATHS.lock().unwrap().push(frag.clone());
+    let res = add_into(&b, &zip).await;
+    app_lib::backup::merge::FAIL_DETACH_FOR_PATHS.lock().unwrap().retain(|f| f != &frag);
+
+    let counts = res.expect("a detach failure after commit must not fail the import");
+    assert_eq!(counts.meetings, 2);
+    let p = b.db.pool();
+    assert_eq!(count(p, "SELECT COUNT(*) FROM meetings").await, 3);
+    for (id, name) in [("m1", "Alpha_1"), ("m2", "Beta_2")] {
+        assert!(b.root.join(name).join("audio.opus").is_file(), "{name} stays in the root");
+        let fp: String = sqlx::query_scalar("SELECT folder_path FROM meetings WHERE id = ?")
+            .bind(id)
+            .fetch_one(p)
+            .await
+            .unwrap();
+        assert_eq!(fp, b.root.join(name).to_string_lossy());
+    }
+    assert_clean(&b);
+}
