@@ -181,6 +181,7 @@ pub async fn run_once(
     outcome
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn attempt(
     pool: &SqlitePool,
     app_data_dir: &Path,
